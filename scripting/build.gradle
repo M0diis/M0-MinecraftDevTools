@@ -1,0 +1,41 @@
+plugins {
+    id 'java-library'
+    id 'com.gradleup.shadow'
+    id 'fabric-loom' version '1.9-SNAPSHOT'
+}
+
+dependencies {
+    implementation project(':core')
+
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
+
+    // Scripting libs moved here from original root
+    implementation 'org.codehaus.groovy:groovy:3.0.21'
+    implementation 'org.jetbrains.kotlin:kotlin-stdlib:1.9.22'
+    implementation 'org.jetbrains.kotlin:kotlin-scripting-jsr223:1.9.22'
+    implementation 'eu.jrie.jetbrains:kotlin-shell-core:0.2.1'
+    implementation 'org.jetbrains.kotlin:kotlin-compiler-embeddable:1.9.22'
+    implementation 'org.jetbrains.kotlin:kotlin-scripting-compiler-embeddable:1.9.22'
+}
+
+configurations {
+    common
+    shadowCommon
+    compileClasspath.extendsFrom common
+    runtimeClasspath.extendsFrom common
+    developmentFabric.extendsFrom common
+}
+
+//shadowJar {
+//    archiveBaseName.set("${project.name}-all")
+//    archiveClassifier.set('')
+//    mergeServiceFiles()
+//    // include core classes in the fat jar by default
+//    // Shadow will include project(':core') because it's on the runtime classpath
+//}
+
+tasks.build.dependsOn tasks.shadowJar
+
+// Optional: produce a normal (non-fat) jar as well; shadow jar is the primary artifact
+
