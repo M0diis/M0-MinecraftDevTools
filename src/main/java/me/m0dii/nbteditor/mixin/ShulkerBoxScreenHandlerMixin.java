@@ -1,0 +1,23 @@
+package me.m0dii.nbteditor.mixin;
+
+import me.m0dii.nbteditor.server.ServerMixinLink;
+import net.minecraft.entity.player.PlayerInventory;
+import net.minecraft.inventory.Inventory;
+import net.minecraft.screen.ShulkerBoxScreenHandler;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+
+@Mixin(ShulkerBoxScreenHandler.class)
+public class ShulkerBoxScreenHandlerMixin {
+    @Inject(method = "<init>(ILnet/minecraft/entity/player/PlayerInventory;Lnet/minecraft/inventory/Inventory;)V", at = @At("HEAD"))
+    private static void initHead(int syncId, PlayerInventory playerInventory, Inventory inventory, CallbackInfo info) {
+        ServerMixinLink.SCREEN_HANDLER_OWNER.put(Thread.currentThread(), playerInventory.player);
+    }
+
+    @Inject(method = "<init>(ILnet/minecraft/entity/player/PlayerInventory;Lnet/minecraft/inventory/Inventory;)V", at = @At("RETURN"))
+    private void initReturn(int syncId, PlayerInventory playerInventory, Inventory inventory, CallbackInfo info) {
+        ServerMixinLink.SCREEN_HANDLER_OWNER.remove(Thread.currentThread());
+    }
+}

@@ -1,0 +1,16 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "me.m0dii.nbteditor.multiversion.networking.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "plugin": "me.m0dii.nbteditor.multiversion.networking.mixin.toggled.NetworkingMixinPlugin",
+  "mixins": [
+    "ClientConnectionMixin"
+  ],
+  "client": [
+    "ClientPlayNetworkHandlerMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

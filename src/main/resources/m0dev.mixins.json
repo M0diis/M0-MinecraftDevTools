@@ -1,0 +1,27 @@
+{
+  "required": true,
+  "package": "me.m0dii.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [],
+  "injectors": {
+    "defaultRequire": 1
+  },
+  "client": [
+    "CommandHistoryMixin",
+    "HandledScreenMoveMixin",
+    "MiddleClickMixin",
+    "MinecraftClientInvMoveMixin",
+    "BlockPlacementMixin",
+    "SecondaryChatCaptureMixin",
+    "MouseSecondaryChatMixin",
+    "AbstractClientPlayerMixin",
+    "ClientPlayerEntityMixin",
+    "WorldRendererMixin",
+    "EntityMixin",
+    "GameRendererMixin",
+    "MouseMixin",
+    "ClientPlayerInteractionManagerMixin",
+    "ItemstackMixin",
+    "SimpleOptionMixin"
+  ]
+}

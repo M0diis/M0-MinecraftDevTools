@@ -1,0 +1,129 @@
+package me.m0dii.nbteditor.multiversion;
+
+import com.mojang.blaze3d.platform.GlStateManager;
+import lombok.Getter;
+import me.m0dii.nbteditor.misc.MixinLink;
+import me.m0dii.nbteditor.util.Reflection;
+import me.m0dii.nbteditor.util.TextUtil;
+import net.minecraft.client.gui.tooltip.Tooltip;
+import net.minecraft.client.util.math.MatrixStack;
+import net.minecraft.text.OrderedText;
+import net.minecraft.text.Text;
+import org.lwjgl.opengl.GL20;
+
+import java.util.Arrays;
+import java.util.List;
+
+@Getter
+public class MVTooltip {
+
+    public static final MVTooltip EMPTY = new MVTooltip(new Text[0]);
+    @Getter
+    private static boolean oneTooltip = false;
+    @Getter
+    private static boolean lastTooltip = false;
+    @Getter
+    private static MVTooltip theOneTooltip;
+    private final List<OrderedText> lines;
+    private final Text combined;
+
+    private MVTooltip(List<OrderedText> lines, Text combined) {
+        this.lines = lines;
+        this.combined = combined;
+    }
+
+    public MVTooltip(List<Text> lines) {
+        this(lines.stream().map(Text::asOrderedText).toList(), combine(lines));
+    }
+
+    public MVTooltip(Text... lines) {
+        this(Arrays.stream(lines).flatMap(line -> TextUtil.splitText(line).stream()).toList());
+    }
+
+    public MVTooltip(String... keys) {
+        this(Arrays.stream(keys).map(TextInst::translatable).toList().toArray(new EditableText[0]));
+    }
+
+    public static MVTooltip setOneTooltip(boolean oneTooltip, boolean lastTooltip) {
+        MVTooltip.oneTooltip = oneTooltip;
+        MVTooltip.lastTooltip = lastTooltip;
+        MVTooltip output = theOneTooltip;
+        theOneTooltip = null;
+        return output;
+    }
+
+    public static boolean setExternalOneTooltip(List<OrderedText> tooltip) {
+        if (isOneTooltip()) {
+            if (lastTooltip || theOneTooltip == null) {
+                theOneTooltip = new MVTooltip(tooltip, null);
+            }
+            return true;
+        }
+        return false;
+    }
+
+    public static boolean renderOneTooltip(MatrixStack matrices, int mouseX, int mouseY) {
+        MVTooltip tooltip = setOneTooltip(false, false);
+        if (tooltip == null) {
+            return false;
+        }
+        tooltip.render(matrices, mouseX, mouseY);
+        return true;
+    }
+
+    private static Text combine(List<Text> lines) {
+        EditableText combined = TextInst.literal("");
+        for (int i = 0; i < lines.size(); i++) {
+            if (i > 0) {
+                combined = combined.append(" ");
+            }
+            combined = combined.append(lines.get(i));
+        }
+        return combined;
+    }
+
+    public boolean isEmpty() {
+        return this == EMPTY || lines.isEmpty();
+    }
+
+    Tooltip toNewTooltip() {
+        if (isEmpty()) {
+            return null;
+        }
+
+        Tooltip output = Tooltip.of(combined);
+        Reflection.getField(Tooltip.class, "field_41103", "Ljava/util/List;").set(output, lines);
+        MixinLink.NEW_TOOLTIPS.put(output, true);
+        return output;
+    }
+
+    public void render(MatrixStack matrices, int mouseX, int mouseY) {
+        if (oneTooltip) {
+            if (lastTooltip || theOneTooltip == null) {
+                theOneTooltip = this;
+            }
+            return;
+        }
+
+        // Undo translations and render at actual position
+        // This allows Screen#renderTooltip to adjust for window height
+        float[] translation = MVMatrix4f.getTranslation(matrices);
+        matrices.push();
+        matrices.translate(-translation[0], -translation[1], 0.0);
+
+        boolean scissor = GlStateManager.SCISSOR.capState.state;
+
+        if (scissor) {
+            GL20.glDisable(GL20.GL_SCISSOR_TEST);
+        }
+
+        DrawableHelper.renderTooltip(matrices, lines, mouseX + (int) translation[0], mouseY + (int) translation[1]);
+
+        if (scissor) {
+            GL20.glEnable(GL20.GL_SCISSOR_TEST);
+        }
+
+        matrices.pop();
+    }
+
+}

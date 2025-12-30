@@ -1,0 +1,47 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "me.m0dii.nbteditor.mixin",
+  "compatibilityLevel": "JAVA_16",
+  "plugin": "me.m0dii.nbteditor.mixin.toggled.NBTEditorMixinPlugin",
+  "mixins": [
+    "ServerPlayNetworkHandlerMixin",
+    "ServerPlayerEntityMixin",
+    "ShulkerBoxSlotMixin",
+    "ShulkerBoxScreenHandlerMixin",
+    "HorseScreenHandlerMixin",
+    "HorseScreenHandler1Mixin",
+    "HorseScreenHandler2Mixin",
+    "DataTrackerMixin",
+    "ThreadExecutorMixin",
+    "ClickSlotC2SPacketMixin"
+  ],
+  "client": [
+    "ChatScreenMixin",
+    "ChatScreenAccessor",
+    "ClientConnectionMixin",
+    "ClientPlayNetworkHandlerMixin",
+    "NbtStringMixin",
+    "StringNbtWriterAccessor",
+    "CreativeInventoryScreenMixin",
+    "ItemStackMixin",
+    "HandledScreenAccessor",
+    "TextFieldWidgetMixin",
+    "MinecraftClientMixin",
+    "StringNbtReaderMixin",
+    "ScreenMixin",
+    "HandledScreenMixin",
+    "NativeImageMixin",
+    "ScreenshotRecorderMixin",
+    "UtilMixin",
+    "KeyboardMixin",
+    "ChatInputSuggestorMixin",
+    "ClientPlayerEntityMixin",
+    "EnchantmentMixin",
+    "SplashOverlayMixin",
+    "ScreenHandlerMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

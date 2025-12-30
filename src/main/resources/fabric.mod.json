@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "id": "m0-dev-tools",
+  "version": "${version}",
+  "name": "m0-dev-tools",
+  "description": "M0-Dev-Tools is a collection of useful development tools for Minecraft modders using Fabric.",
+  "authors": [
+    "M0dii"
+  ],
+  "contact": {
+    "homepage": "https://m0dii-dev.xyz/"
+  },
+  "license": "CC0-1.0",
+  "icon": "assets/m0-dev-tools/icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "me.m0dii.M0DevTools"
+    ],
+    "client": [
+      "me.m0dii.M0DevToolsClient"
+    ]
+  },
+
+  "accessWidener": "m0dev.accesswidener",
+
+  "mixins": [
+    "m0dev.mixins.json",
+    "nbt.mixins.json",
+    "nbt-multiversion.mixins.json",
+    "nbt-multiversion-networkingapi.mixins.json"
+  ],
+
+  "depends": {
+    "fabricloader": "0.16.10",
+    "minecraft": "1.21.4",
+    "java": ">=21",
+    "fabric-api": "*"
+  },
+
+  "suggests": {
+    "nbt_ac": ">=1.1"
+  },
+  "custom": {
+    "loom:injected_interfaces": {
+      "net/minecraft/class_4068": [
+        "me/m0dii/nbteditor/multiversion/MVDrawableParent"
+      ],
+      "net/minecraft/class_437": [
+        "me/m0dii/nbteditor/multiversion/MVScreenParent"
+      ],
+      "net/minecraft/class_342": [
+        "me/m0dii/nbteditor/screens/InjectableTickable"
+      ],
+      "net/minecraft/class_364": [
+        "me/m0dii/nbteditor/multiversion/MVElementParent"
+      ],
+      "net/minecraft/class_2945": [
+        "me/m0dii/nbteditor/misc/ResetableDataTracker"
+      ],
+      "net/minecraft/class_2540": [
+        "me/m0dii/nbteditor/multiversion/MVPacketByteBufParent"
+      ],
+      "net/minecraft/class_1799": [
+        "me/m0dii/nbteditor/multiversion/nbt/IntegratedNBTManager",
+        "me/m0dii/nbteditor/multiversion/nbt/MVItemStackParent"
+      ],
+      "net/minecraft/class_2813": [
+        "me/m0dii/nbteditor/packets/ClickSlotC2SPacketParent"
+      ]
+    }
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "key.m0-dev-tools.openscripteditor": "Open Groovy Script Editor",
+  "category.m0-dev-tools.scripting": "M0-Dev Tools Scripting",
+
+  "category.m0-dev-tools": "M0-Dev Tools",
+
+  "key.m0-dev-tools.toggle_light_overlay": "Toggle Light Overlay",
+  "key.m0-dev-tools.toggle_redstone_overlay": "Toggle Redstone Overlay",
+  "key.m0-dev-tools.toggle_slime_overlay": "Toggle Slime Chunk Overlay",
+  "key.m0-dev-tools.open_nbt_editor": "Open NBT Editor",
+  "key.m0-dev-tools.toggle_block_inspector": "Toggle Block Inspector",
+  "key.m0-dev-tools.open_macro_gui": "Open Macro Manager",
+
+  "key.m0-dev-tools.add_waypoint": "Add Waypoint",
+  "key.m0-dev-tools.list_waypoints": "List Waypoints",
+  "key.m0-dev-tools.cycle_block_state": "Cycle Block State",
+  "key.m0-dev-tools.teleport_up": "Teleport Up",
+  "key.m0-dev-tools.teleport_down": "Teleport Down",
+  "key.m0-dev-tools.teleport_forward": "Teleport Forward",
+  "key.m0-dev-tools.teleport_left": "Teleport Left",
+  "key.m0-dev-tools.teleport_right": "Teleport Right",
+  "key.m0-dev-tools.toggle_creative": "Toggle Creative Mode",
+  "key.m0-dev-tools.toggle_spectator": "Toggle Spectator Mode",
+  "key.m0-dev-tools.command_history": "Open Command History",
+  "key.m0-dev-tools.toggle_entity_radar": "Toggle Entity Radar",
+  "key.m0-dev-tools.open_entity_radar_screen": "Open Entity Radar Screen",
+  "key.m0-dev-tools.open_modules_screen": "Open Modules Screen",
+  "key.m0-dev-tools.toggle_secondary_chat": "Toggle Secondary Chat",
+  "key.m0-dev-tools.freecam": "Toggle Freecam",
+  "key.m0-dev-tools.zoom": "Toggle Zoom",
+  "key.m0-dev-tools.spectator_toggle": "Toggle Spectator Mode",
+  "key.m0-dev-tools.fullbright": "Toggle Fullbright",
+
+  "m0-dev-tools.nbt_tooltip": "NBT: ",
+
+  "m0-dev-tools.midnightconfig.title": "M0-Dev Tools Config",
+  "m0-dev-tools.midnightconfig.category.Overlay Settings": "Overlay Settings",
+  "m0-dev-tools.midnightconfig.category.Hud Overlay Settings": "Hud Overlay Settings",
+  "m0-dev-tools.midnightconfig.category.Secondary Chat Settings": "Secondary Chat Settings"
+}
+
