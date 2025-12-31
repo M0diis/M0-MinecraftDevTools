@@ -89,9 +89,9 @@ public final class SecondaryChatOverlay {
             ctx.drawBorder(panelX, panelY, panelW, panelH, borderColor);
         }
 
-        int resizeX = panelX + panelW - 12;
-        int resizeY = panelY + panelH - 12;
-        ctx.fill(resizeX, resizeY, resizeX + 12, resizeY + 12, handleColor);
+        int resizeX = panelX + panelW - 6;
+        int resizeY = panelY + panelH - 6;
+        ctx.fill(resizeX, resizeY, resizeX + 6, resizeY + 6, handleColor);
 
         List<Text> lines = SecondaryChatManager.snapshot();
 
@@ -121,7 +121,7 @@ public final class SecondaryChatOverlay {
 
             // Clamp scroll offset
             maxScroll = Math.max(0, wrappedLines.size() - maxLinesVisible);
-            scrollOffset = Math.max(0, Math.min(scrollOffset, maxScroll));
+            scrollOffset = Math.clamp(scrollOffset, 0, maxScroll);
         }
 
         // Show title

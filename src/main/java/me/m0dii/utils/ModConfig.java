@@ -2,12 +2,25 @@ package me.m0dii.utils;
 
 
 import eu.midnightdust.lib.config.MidnightConfig;
+import me.m0dii.M0DevToolsClient;
 
 import java.util.ArrayList;
 import java.util.List;
 
 @SuppressWarnings({"CanBeFinal", "unused", "java:S1444"})
 public class ModConfig extends MidnightConfig {
+
+    public static void save() {
+        ModConfig.write(M0DevToolsClient.MOD_ID);
+    }
+
+    public static void updateAndSave(Runnable change) {
+        if (change == null) {
+            return;
+        }
+        change.run();
+        save();
+    }
 
     public static final String CATEGORY_GENERAL = "General Settings";
 
@@ -16,7 +29,6 @@ public class ModConfig extends MidnightConfig {
 
     @MidnightConfig.Entry(name = "Command History Limit", category = CATEGORY_GENERAL, isSlider = true, min = 10, max = 500)
     public static int commandHistoryLimit = 500;
-
 
     public static final String CATEGORY_OVERLAY = "Overlay Settings";
 

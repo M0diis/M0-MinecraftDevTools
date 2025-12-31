@@ -62,9 +62,9 @@ public final class SecondaryChatInteraction {
         }
 
         // Check for resize handle
-        int resizeX = x + w - 12;
-        int resizeY = y + h - 12;
-        if (isInside(mouseX, mouseY, resizeX, resizeY, 12, 12)) {
+        int resizeX = x + w - 6;
+        int resizeY = y + h - 6;
+        if (isInside(mouseX, mouseY, resizeX, resizeY, 6, 6)) {
             resizing = true;
             dragging = false;
             dragStartX = (int) mouseX;

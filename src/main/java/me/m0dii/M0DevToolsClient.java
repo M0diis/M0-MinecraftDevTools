@@ -38,14 +38,14 @@ import java.io.File;
 
 public class M0DevToolsClient implements ClientModInitializer {
     public static final String MOD_ID = "m0-dev-tools";
-
     public static final File SETTINGS_FOLDER = new File("m0-dev-tools");
+
     public static NBTInfoHudOverlayModule.NBTEditorServerConn SERVER_CONN;
     public static CursorManager CURSOR_MANAGER;
 
     @Override
     public void onInitializeClient() {
-        MidnightConfig.init("m0-dev-tools", ModConfig.class);
+        MidnightConfig.init(MOD_ID, ModConfig.class);
 
         // Modules
         // XrayModule.INSTANCE.register(); // Not ready yet
