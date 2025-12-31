@@ -58,8 +58,8 @@ public final class SecondaryChatOverlay {
 
         int screenW = client.getWindow().getScaledWidth();
         int screenH = client.getWindow().getScaledHeight();
-        panelX = clamp(panelX, 0, Math.max(0, screenW - 5));
-        panelY = clamp(panelY, 0, Math.max(0, screenH - 5));
+        panelX = Math.clamp(panelX, 0, Math.max(0, screenW - 5));
+        panelY = Math.clamp(panelY, 0, Math.max(0, screenH - 5));
 
         // Fade alpha
         int alpha = (ModConfig.secondaryChatBackgroundColor >> 24) & 0xFF;
@@ -179,7 +179,4 @@ public final class SecondaryChatOverlay {
         ctx.getMatrices().pop();
     }
 
-    private static int clamp(int v, int min, int max) {
-        return Math.max(min, Math.min(max, v));
-    }
 }

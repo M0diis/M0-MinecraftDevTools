@@ -18,6 +18,8 @@ public final class SecondaryChatInteraction {
     private static int dragOffsetX;
     private static int dragOffsetY;
 
+    private static boolean configDirty = false;
+
     private static Screen lastScreen = null;
 
     public static void register() {
@@ -29,26 +31,33 @@ public final class SecondaryChatInteraction {
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             if (client.currentScreen != lastScreen) {
+                if (configDirty) {
+                    ModConfig.save();
+                    configDirty = false;
+                }
+
                 if (client.currentScreen == null) {
                     dragging = false;
                     resizing = false;
                 }
+
                 lastScreen = client.currentScreen;
             }
         });
     }
 
-    private static boolean handleMouseClick(Screen screen, double mouseX, double mouseY, int button) {
+    private static void handleMouseClick(Screen screen, double mouseX, double mouseY, int button) {
         if (!ModConfig.secondaryChatEnabled || !ModConfig.secondaryChatShowOverlay) {
-            return false;
+            return;
         }
+
         if (button != 0) {
-            return false; // Left
+            return; // Left
         }
 
         MinecraftClient client = MinecraftClient.getInstance();
         if (client == null) {
-            return false;
+            return;
         }
 
         int x = ModConfig.secondaryChatX;
@@ -58,7 +67,7 @@ public final class SecondaryChatInteraction {
 
         // Check if clicking in the secondary chat box area
         if (!isInside(mouseX, mouseY, x, y, w, h)) {
-            return false;
+            return;
         }
 
         // Check for resize handle
@@ -71,17 +80,14 @@ public final class SecondaryChatInteraction {
             dragStartY = (int) mouseY;
             dragOffsetX = w;
             dragOffsetY = h;
-            return true;
+        } else {
+            dragging = true;
+            resizing = false;
+            dragStartX = (int) mouseX;
+            dragStartY = (int) mouseY;
+            dragOffsetX = x;
+            dragOffsetY = y;
         }
-
-        // Drag
-        dragging = true;
-        resizing = false;
-        dragStartX = (int) mouseX;
-        dragStartY = (int) mouseY;
-        dragOffsetX = x;
-        dragOffsetY = y;
-        return true;
     }
 
     public static void handleMouseMove(double mouseX, double mouseY) {
@@ -97,9 +103,11 @@ public final class SecondaryChatInteraction {
         if (dragging) {
             ModConfig.secondaryChatX = dragOffsetX + dx;
             ModConfig.secondaryChatY = dragOffsetY + dy;
+            configDirty = true;
         } else if (resizing) {
             ModConfig.secondaryChatWidth = Math.max(100, dragOffsetX + dx);
             ModConfig.secondaryChatHeight = Math.max(50, dragOffsetY + dy);
+            configDirty = true;
         }
     }
 
@@ -113,6 +121,13 @@ public final class SecondaryChatInteraction {
 
         dragging = false;
         resizing = false;
+
+        // Persist any pending changes once the user finishes interacting
+        if (configDirty) {
+            ModConfig.save();
+            configDirty = false;
+        }
+
         return true;
     }
 
@@ -144,4 +159,3 @@ public final class SecondaryChatInteraction {
         return mx >= x && mx <= x + w && my >= y && my <= y + h;
     }
 }
-

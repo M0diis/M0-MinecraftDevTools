@@ -21,10 +21,6 @@ public final class SecondaryChatManager {
     private static String lastRegex = null;
     private static Pattern lastPattern = null;
 
-    // Cached compiled regex list
-    private static String lastRegexList = null;
-    private static List<Pattern> lastPatternList = null;
-
     @Getter
     private static long lastMessageTime = System.currentTimeMillis();
 
