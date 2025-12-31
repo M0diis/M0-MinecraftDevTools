@@ -66,7 +66,7 @@ public final class SecondaryChatOverlay {
         int textAlpha = (ModConfig.secondaryChatTextColor >> 24) & 0xFF;
         if (ModConfig.secondaryChatFadeEnabled) {
             long now = System.currentTimeMillis();
-            long lastMsg = SecondaryChatManager.getLastMessageTime();
+            long lastMsg = SecondaryChatManager.getLastAlphaReset();
             long dt = now - lastMsg;
             if (dt > 0) {
                 int fadeMs = Math.max(1000, ModConfig.secondaryChatFadeDurationMs);

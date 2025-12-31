@@ -91,7 +91,16 @@ public final class SecondaryChatInteraction {
     }
 
     public static void handleMouseMove(double mouseX, double mouseY) {
+        int x = ModConfig.secondaryChatX;
+        int y = ModConfig.secondaryChatY;
+        int w = Math.max(50, ModConfig.secondaryChatWidth);
+        int h = Math.max(30, ModConfig.secondaryChatHeight);
+
+
         if (!dragging && !resizing) {
+            if (ModConfig.resetTransparencyWhenHovered && isInside(mouseX, mouseY, x, y, w, h)) {
+                SecondaryChatManager.setLastAlphaReset(System.currentTimeMillis());
+            }
             return;
         }
 

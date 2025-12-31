@@ -11,7 +11,7 @@ import java.util.List;
 public class ModConfig extends MidnightConfig {
 
     public static void save() {
-        ModConfig.write(M0DevToolsClient.MOD_ID);
+        MidnightConfig.write(M0DevToolsClient.MOD_ID);
     }
 
     public static void updateAndSave(Runnable change) {
@@ -171,4 +171,7 @@ public class ModConfig extends MidnightConfig {
 
     @MidnightConfig.Entry(name = "Secondary Chat Minimum Alpha", category = CATEGORY_SECONDARY_CHAT, isSlider = true, min = 0, max = 255)
     public static int secondaryChatMinAlpha = 40; // 0-255, minimum alpha when faded
+
+    @MidnightConfig.Entry(name = "Reset transparency when hovered", category = CATEGORY_SECONDARY_CHAT)
+    public static boolean resetTransparencyWhenHovered = true;
 }

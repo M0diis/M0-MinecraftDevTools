@@ -1,6 +1,7 @@
 package me.m0dii.modules.chat;
 
 import lombok.Getter;
+import lombok.Setter;
 import me.m0dii.utils.ModConfig;
 import net.minecraft.text.Text;
 
@@ -22,7 +23,8 @@ public final class SecondaryChatManager {
     private static Pattern lastPattern = null;
 
     @Getter
-    private static long lastMessageTime = System.currentTimeMillis();
+    @Setter
+    private static long lastAlphaReset = System.currentTimeMillis();
 
     public static void clear() {
         buffer.clear();
@@ -46,14 +48,11 @@ public final class SecondaryChatManager {
 
         // Reset scroll to show latest messages
         SecondaryChatOverlay.resetScroll();
-        lastMessageTime = System.currentTimeMillis();
+        lastAlphaReset = System.currentTimeMillis();
     }
 
     public static boolean matchesFilter(Text text) {
-        if (!ModConfig.secondaryChatEnabled) {
-            return false;
-        }
-        if (text == null) {
+        if (!ModConfig.secondaryChatEnabled || text == null) {
             return false;
         }
 
