@@ -34,10 +34,7 @@ public class SecondaryChatCaptureMixin {
     @Unique
     private void handleMessage(Text message, CallbackInfo ci) {
         try {
-            if (!ModConfig.secondaryChatEnabled) {
-                return;
-            }
-            if (message == null) {
+            if (!ModConfig.secondaryChatEnabled || message == null) {
                 return;
             }
 

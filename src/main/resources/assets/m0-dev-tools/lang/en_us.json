@@ -34,8 +34,9 @@
   "m0-dev-tools.nbt_tooltip": "NBT: ",
 
   "m0-dev-tools.midnightconfig.title": "M0-Dev Tools Config",
-  "m0-dev-tools.midnightconfig.category.Overlay Settings": "Overlay Settings",
-  "m0-dev-tools.midnightconfig.category.Hud Overlay Settings": "Hud Overlay Settings",
-  "m0-dev-tools.midnightconfig.category.Secondary Chat Settings": "Secondary Chat Settings"
+  "m0-dev-tools.midnightconfig.category.General": "General",
+  "m0-dev-tools.midnightconfig.category.Overlay": "Overlay",
+  "m0-dev-tools.midnightconfig.category.Hud": "Hud",
+  "m0-dev-tools.midnightconfig.category.Secondary Chat": "Secondary Chat"
 }
 

@@ -22,7 +22,7 @@ public class ModConfig extends MidnightConfig {
         save();
     }
 
-    public static final String CATEGORY_GENERAL = "General Settings";
+    public static final String CATEGORY_GENERAL = "General";
 
     @MidnightConfig.Entry(name = "Fullbright Gamma", category = CATEGORY_GENERAL, isSlider = true, min = 1, max = 100)
     public static int fullbrightGamma = 100;
@@ -30,7 +30,7 @@ public class ModConfig extends MidnightConfig {
     @MidnightConfig.Entry(name = "Command History Limit", category = CATEGORY_GENERAL, isSlider = true, min = 10, max = 500)
     public static int commandHistoryLimit = 500;
 
-    public static final String CATEGORY_OVERLAY = "Overlay Settings";
+    public static final String CATEGORY_OVERLAY = "Overlay";
 
     @MidnightConfig.Entry(name = "Overlay XZ Radius", category = CATEGORY_OVERLAY, isSlider = true, min = 1, max = 64)
     public static int overlayXZradius = 16;
@@ -42,7 +42,7 @@ public class ModConfig extends MidnightConfig {
     public static int entityRadarRadius = 64;
 
     // --- Inspector-specific HUD overlay settings ---
-    public static final String CATEGORY_HUD_OVERLAY = "Hud Overlay Settings";
+    public static final String CATEGORY_HUD_OVERLAY = "Hud";
 
     public enum OverlayAnchor {
         TOP_LEFT,
@@ -105,7 +105,7 @@ public class ModConfig extends MidnightConfig {
     public static OverlayAnchor pendingMacrosAnchor = OverlayAnchor.TOP_LEFT;
 
     // --- Secondary chat box ---
-    public static final String CATEGORY_SECONDARY_CHAT = "Secondary Chat Settings";
+    public static final String CATEGORY_SECONDARY_CHAT = "Secondary Chat";
 
     public enum ChatInterceptMode {
         COPY,
@@ -174,4 +174,7 @@ public class ModConfig extends MidnightConfig {
 
     @MidnightConfig.Entry(name = "Reset transparency when hovered", category = CATEGORY_SECONDARY_CHAT)
     public static boolean resetTransparencyWhenHovered = true;
+
+    @MidnightConfig.Entry(name = "No transparency when chat is open", category = CATEGORY_SECONDARY_CHAT)
+    public static boolean noTransparencyWhenChatOpen = true;
 }

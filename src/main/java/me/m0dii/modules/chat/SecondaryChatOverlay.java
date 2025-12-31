@@ -5,6 +5,7 @@ import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
+import net.minecraft.client.gui.screen.ChatScreen;
 import net.minecraft.client.render.RenderTickCounter;
 import net.minecraft.text.OrderedText;
 import net.minecraft.text.Text;
@@ -45,6 +46,9 @@ public final class SecondaryChatOverlay {
             return;
         }
 
+        boolean noTransparency = client.currentScreen instanceof ChatScreen
+                && ModConfig.noTransparencyWhenChatOpen;
+
         TextRenderer tr = client.textRenderer;
 
         final float scale = (float) Math.max(0.1, ModConfig.secondaryChatScale);
@@ -64,7 +68,7 @@ public final class SecondaryChatOverlay {
         // Fade alpha
         int alpha = (ModConfig.secondaryChatBackgroundColor >> 24) & 0xFF;
         int textAlpha = (ModConfig.secondaryChatTextColor >> 24) & 0xFF;
-        if (ModConfig.secondaryChatFadeEnabled) {
+        if (ModConfig.secondaryChatFadeEnabled && !noTransparency) {
             long now = System.currentTimeMillis();
             long lastMsg = SecondaryChatManager.getLastAlphaReset();
             long dt = now - lastMsg;
