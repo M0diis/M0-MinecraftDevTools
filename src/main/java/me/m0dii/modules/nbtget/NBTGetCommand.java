@@ -1,17 +1,8 @@
 package me.m0dii.modules.nbtget;
 
-import com.google.gson.GsonBuilder;
-import com.google.gson.JsonElement;
 import com.mojang.brigadier.CommandDispatcher;
-import com.mojang.brigadier.StringReader;
 import com.mojang.brigadier.context.CommandContext;
-import com.mojang.brigadier.exceptions.CommandSyntaxException;
-import com.mojang.serialization.Dynamic;
-import com.mojang.serialization.JsonOps;
-import me.m0dii.M0DevTools;
-import me.m0dii.nbteditor.misc.MixinLink;
 import me.m0dii.nbteditor.multiversion.nbt.NBTManagers;
-import me.m0dii.nbteditor.screens.util.TextAreaScreen;
 import me.m0dii.nbteditor.util.MiscUtil;
 import me.m0dii.nbteditor.util.NbtFormatter;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
@@ -19,8 +10,6 @@ import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallba
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.nbt.NbtCompound;
-import net.minecraft.nbt.NbtElement;
-import net.minecraft.nbt.NbtOps;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 import net.minecraft.util.hit.BlockHitResult;

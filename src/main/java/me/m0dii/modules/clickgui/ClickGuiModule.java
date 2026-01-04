@@ -1,5 +1,6 @@
 package me.m0dii.modules.clickgui;
 
+import lombok.Getter;
 import me.m0dii.modules.Module;
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 import net.minecraft.client.util.InputUtil;
@@ -9,6 +10,7 @@ public class ClickGuiModule extends Module {
 
     public static final ClickGuiModule INSTANCE = new ClickGuiModule();
 
+    @Getter
     private final ClickGuiRenderer renderer = new ClickGuiRenderer();
 
     private ClickGuiModule() {
@@ -27,8 +29,5 @@ public class ClickGuiModule extends Module {
         );
     }
 
-    public ClickGuiRenderer getRenderer() {
-        return renderer;
-    }
 }
 

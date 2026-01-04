@@ -27,7 +27,7 @@ public class NBTTooltipModule extends Module {
     public static List<Text> getNbtTooltipText(ItemStack itemStack, List<Text> list) {
         List<Text> temp = new ArrayList<>();
         temp.add(Text.translatable("item.nbt_tags", itemStack.manager$getNbt().getKeys().size()).formatted(Formatting.DARK_GRAY));
-        int index = list.indexOf(temp.get(0));
+        int index = list.indexOf(temp.getFirst());
         int indexInsertLocation = index;
         if (index >= 0) {
             list.remove(index);
@@ -85,7 +85,7 @@ public class NBTTooltipModule extends Module {
                 lastIndex = m.start();
             }
 
-            if (singleQuotationMark == Boolean.FALSE) {
+            if (!singleQuotationMark) {
                 if (nbtList.charAt(m.start()) == '{' || nbtList.charAt(m.start()) == '[') {
                     mutableText.append(Text.literal(String.valueOf(nbtList.charAt(m.start()))).formatted(separationColor));
                     currentLineLength += 1;
@@ -131,7 +131,6 @@ public class NBTTooltipModule extends Module {
 
                 if (nbtList.charAt(m.start()) == '"') {
                     if (lastString.equals("\"")) {
-
                         if (currentLineLength + (m.start() - lineStep) > lineStep) {
                             mutableText.append(Text.literal("....").formatted(lstringColor));
                             currentLineLength += 4;
