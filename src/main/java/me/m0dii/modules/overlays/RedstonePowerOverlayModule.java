@@ -21,7 +21,7 @@ public class RedstonePowerOverlayModule extends Module {
     public static final RedstonePowerOverlayModule INSTANCE = new RedstonePowerOverlayModule();
 
     private RedstonePowerOverlayModule() {
-        super("redstone_overlay", "Redstone overlay", false);
+        super("redstone_overlay", "Redstone Overlay", false);
     }
 
     @Override

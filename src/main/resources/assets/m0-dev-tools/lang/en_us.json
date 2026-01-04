@@ -25,6 +25,7 @@
   "key.m0-dev-tools.toggle_entity_radar": "Toggle Entity Radar",
   "key.m0-dev-tools.open_entity_radar_screen": "Open Entity Radar Screen",
   "key.m0-dev-tools.open_modules_screen": "Open Modules Screen",
+  "key.m0-dev-tools.clickgui": "Open ClickGUI",
   "key.m0-dev-tools.toggle_secondary_chat": "Toggle Secondary Chat",
   "key.m0-dev-tools.freecam": "Toggle Freecam",
   "key.m0-dev-tools.zoom": "Toggle Zoom",

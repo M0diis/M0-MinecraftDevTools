@@ -127,6 +127,32 @@ public abstract class Module {
     }
 
     /**
+     * Check if this module has configurable settings that can be shown in the ClickGUI.
+     * Override this to return true if your module has settings.
+     */
+    public boolean hasSettings() {
+        return false;
+    }
+
+    /**
+     * Get a list of setting names and values for display in the ClickGUI.
+     * Override this to provide your module's settings.
+     * Format: ["Setting Name: value", "Another Setting: value"]
+     */
+    public List<String> getSettingsDisplay() {
+        return new ArrayList<>();
+    }
+
+    /**
+     * Called when a setting is selected in the ClickGUI (Enter pressed).
+     * Override this to handle setting changes.
+     * @param settingIndex The index of the selected setting
+     */
+    public void onSettingSelected(int settingIndex) {
+        // Override in subclass to handle setting selection
+    }
+
+    /**
      * Create a ButtonWidget that can be used in the ModulesScreen to toggle this module.
      */
     public ButtonWidget getToggleButton() {

@@ -23,7 +23,7 @@ public class SlimeChunkOverlayModule extends Module {
     public static final SlimeChunkOverlayModule INSTANCE = new SlimeChunkOverlayModule();
 
     private SlimeChunkOverlayModule() {
-        super("slime_chunk_overlay", "Slime chunks overlay", false);
+        super("slime_chunk_overlay", "Slime Chunks Overlay", false);
     }
 
     @Override

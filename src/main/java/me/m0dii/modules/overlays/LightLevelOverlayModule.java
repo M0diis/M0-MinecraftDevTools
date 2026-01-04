@@ -22,7 +22,7 @@ public class LightLevelOverlayModule extends Module {
     public static final LightLevelOverlayModule INSTANCE = new LightLevelOverlayModule();
 
     private LightLevelOverlayModule() {
-        super("light_overlay", "Light overlay", false);
+        super("light_overlay", "Light Overlay", false);
     }
 
     @Override

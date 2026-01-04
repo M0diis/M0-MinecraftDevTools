@@ -1,9 +1,9 @@
 package me.m0dii;
 
 import eu.midnightdust.lib.config.MidnightConfig;
-import me.m0dii.modules.ModulesScreen;
 import me.m0dii.modules.blockstatecycler.BlockStateCycler;
 import me.m0dii.modules.chat.SecondaryChatModule;
+import me.m0dii.modules.clickgui.ClickGuiModule;
 import me.m0dii.modules.commandhistory.CommandHistoryModule;
 import me.m0dii.modules.entityradar.EntityRadarModule;
 import me.m0dii.modules.freecam.FreecamModule;
@@ -70,11 +70,11 @@ public class M0DevToolsClient implements ClientModInitializer {
         NBTTooltipModule.INSTANCE.register();
         FullbrightModule.INSTANCE.register();
         InventoryMoveModule.INSTANCE.register();
+        ClickGuiModule.INSTANCE.register();
 
         KeybindManager.registerPressedKeybind("key.m0-dev-tools.open_modules_screen",
-                InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_O, client -> {
-                    client.setScreen(new ModulesScreen(client.currentScreen));
-                });
+                InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_O,
+                client -> ClickGuiModule.INSTANCE.getRenderer().toggle());
 
         NBTGetCommand.register();
 

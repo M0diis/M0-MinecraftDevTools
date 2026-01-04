@@ -7,6 +7,6 @@ public class InstaBreakModule extends Module {
     public static final InstaBreakModule INSTANCE = new InstaBreakModule();
 
     private InstaBreakModule() {
-        super("instant_break", "Instant break", false);
+        super("instant_break", "Instant Break", false);
     }
 }
