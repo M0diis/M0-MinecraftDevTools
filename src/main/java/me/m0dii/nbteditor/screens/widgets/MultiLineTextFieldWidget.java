@@ -143,8 +143,14 @@ public class MultiLineTextFieldWidget implements MVDrawable, MVElement, Tickable
         return prev;
     }
 
-    public static MultiLineTextFieldWidget create(MultiLineTextFieldWidget prev, int x, int y, int width, int height,
-                                                  String text, boolean newLines, Consumer<String> onChange) {
+    public static MultiLineTextFieldWidget create(MultiLineTextFieldWidget prev,
+                                                  int x,
+                                                  int y,
+                                                  int width,
+                                                  int height,
+                                                  String text,
+                                                  boolean newLines,
+                                                  Consumer<String> onChange) {
         return create(prev, x, y, width, height, text, null, newLines, onChange);
     }
 

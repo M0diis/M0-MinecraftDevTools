@@ -1,6 +1,6 @@
 package me.m0dii.mixin;
 
-import me.m0dii.modules.nbttooltip.NbtTooltipModule;
+import me.m0dii.modules.nbttooltip.NBTTooltipModule;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
@@ -21,12 +21,12 @@ public abstract class ItemstackMixin {
     @Inject(method = "getTooltip", at = @At("RETURN"), cancellable = true)
     protected void injectEditTooltipmethod(Item.TooltipContext context, @Nullable PlayerEntity player, TooltipType type, CallbackInfoReturnable<ArrayList<Text>> info) {
 
-        if (type.isAdvanced() && NbtTooltipModule.INSTANCE.isEnabled()) {
+        if (type.isAdvanced() && NBTTooltipModule.INSTANCE.isEnabled()) {
             ItemStack itemStack = (ItemStack) (Object) this;
             ArrayList<Text> list = info.getReturnValue();
 
             if (itemStack.manager$hasNbt()) {
-                info.setReturnValue(new ArrayList<>(NbtTooltipModule.getNbtTooltipText(itemStack, list)));
+                info.setReturnValue(new ArrayList<>(NBTTooltipModule.getNbtTooltipText(itemStack, list)));
             }
         }
     }

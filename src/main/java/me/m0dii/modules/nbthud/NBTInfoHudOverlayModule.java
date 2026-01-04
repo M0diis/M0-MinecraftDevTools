@@ -1,4 +1,4 @@
-package me.m0dii.modules.waila;
+package me.m0dii.modules.nbthud;
 
 import lombok.Getter;
 import me.m0dii.modules.Module;

@@ -2,7 +2,7 @@ package me.m0dii.nbteditor.screens;
 
 import me.m0dii.nbteditor.commands.ClientCommand;
 import me.m0dii.nbteditor.commands.ClientCommandGroup;
-import me.m0dii.nbteditor.commands.CommandHandler;
+import me.m0dii.nbteditor.commands.NBTEditorCommands;
 import me.m0dii.nbteditor.multiversion.MVMisc;
 import me.m0dii.nbteditor.multiversion.MVTooltip;
 import me.m0dii.nbteditor.multiversion.ScreenTexts;
@@ -80,7 +80,7 @@ public class AliasesScreen extends TickableSupportingScreen {
             close();
         }));
         this.addDrawableChild(MVMisc.newButton(this.width - 134, this.height - 36 - 24 * 2, 100, 20,
-                TextInst.translatable("nbteditor.config.aliases.extreme"), btn -> addExtremeAliases(CommandHandler.COMMANDS.values(), ""),
+                TextInst.translatable("nbteditor.config.aliases.extreme"), btn -> addExtremeAliases(NBTEditorCommands.COMMANDS.values(), ""),
                 new MVTooltip("nbteditor.config.aliases.extreme.desc")));
     }
 

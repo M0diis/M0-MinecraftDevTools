@@ -10,7 +10,7 @@ import net.minecraft.text.Text;
 
 import java.util.HashMap;
 
-public class ClientCommandGroovyScript {
+public class ClientCommandRunScript {
     private static final GroovyScriptManager groovyScriptManager = new GroovyScriptManager();
     private static final KotlinScriptManager kotlinScriptManager = new KotlinScriptManager();
 

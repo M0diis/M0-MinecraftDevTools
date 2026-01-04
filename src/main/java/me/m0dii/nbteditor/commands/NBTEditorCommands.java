@@ -16,9 +16,9 @@ import java.util.stream.Stream;
 
 import static me.m0dii.nbteditor.multiversion.commands.ClientCommandManager.literal;
 
-public class CommandHandler {
+public class NBTEditorCommands {
 
-    private CommandHandler() {
+    private NBTEditorCommands() {
     }
 
     public static final Map<String, ClientCommand> COMMANDS = Stream.of(
@@ -28,7 +28,7 @@ public class CommandHandler {
                     FactoryCommand.INSTANCE)
             .collect(Collectors.toUnmodifiableMap(ClientCommand::getName, cmd -> cmd));
 
-    public static void registerCommands() {
+    public static void register() {
         MVMisc.registerCommands(dispatcher -> {
             for (ClientCommand cmd : COMMANDS.values()) {
                 cmd.registerAll(dispatcher::register, cmd.getName());

@@ -7,11 +7,11 @@ import me.m0dii.modules.instabreak.InstaBreakModule;
 import me.m0dii.modules.inventorymove.InventoryMoveModule;
 import me.m0dii.modules.macros.gui.MacroKeybindOverlayModule;
 import me.m0dii.modules.macros.gui.PendingMacrosOverlayModule;
-import me.m0dii.modules.nbttooltip.NbtTooltipModule;
+import me.m0dii.modules.nbttooltip.NBTTooltipModule;
 import me.m0dii.modules.overlays.LightLevelOverlayModule;
 import me.m0dii.modules.overlays.RedstonePowerOverlayModule;
 import me.m0dii.modules.overlays.SlimeChunkOverlayModule;
-import me.m0dii.modules.waila.NBTInfoHudOverlayModule;
+import me.m0dii.modules.nbthud.NBTInfoHudOverlayModule;
 import me.m0dii.modules.xray.XrayModule;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.Screen;
@@ -53,7 +53,7 @@ public class ModulesScreen extends Screen {
         adder.add(CommandHistoryModule.INSTANCE.getToggleButton());
         adder.add(FreecamModule.INSTANCE.getToggleButton());
         adder.add(InstaBreakModule.INSTANCE.getToggleButton());
-        adder.add(NbtTooltipModule.INSTANCE.getToggleButton());
+        adder.add(NBTTooltipModule.INSTANCE.getToggleButton());
         adder.add(InventoryMoveModule.INSTANCE.getToggleButton());
 
         adder.add(sectionHeader(""), 3);

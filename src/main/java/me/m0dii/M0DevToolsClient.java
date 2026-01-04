@@ -11,16 +11,17 @@ import me.m0dii.modules.fullbright.FullbrightModule;
 import me.m0dii.modules.instabreak.InstaBreakModule;
 import me.m0dii.modules.inventorymove.InventoryMoveModule;
 import me.m0dii.modules.macros.MacrosModule;
-import me.m0dii.modules.nbttooltip.NbtTooltipModule;
+import me.m0dii.modules.nbtget.NBTGetCommand;
+import me.m0dii.modules.nbttooltip.NBTTooltipModule;
 import me.m0dii.modules.overlays.*;
 import me.m0dii.modules.quicktp.QuickTeleportModule;
-import me.m0dii.modules.scripting.ClientCommandGroovyScript;
+import me.m0dii.modules.scripting.ClientCommandRunScript;
 import me.m0dii.modules.scripting.InGameScriptingKeybinds;
 import me.m0dii.modules.spectatortoggle.SpectatorToggleModule;
-import me.m0dii.modules.waila.NBTInfoHudOverlayModule;
+import me.m0dii.modules.nbthud.NBTInfoHudOverlayModule;
 import me.m0dii.modules.waypoints.WaypointModule;
 import me.m0dii.modules.zoom.ZoomModule;
-import me.m0dii.nbteditor.commands.CommandHandler;
+import me.m0dii.nbteditor.commands.NBTEditorCommands;
 import me.m0dii.nbteditor.containers.ContainerIO;
 import me.m0dii.nbteditor.misc.NbtTypeModifier;
 import me.m0dii.nbteditor.multiversion.DynamicRegistryManagerHolder;
@@ -66,7 +67,7 @@ public class M0DevToolsClient implements ClientModInitializer {
         ZoomModule.INSTANCE.register();
         SpectatorToggleModule.INSTANCE.register();
         InstaBreakModule.INSTANCE.register();
-        NbtTooltipModule.INSTANCE.register();
+        NBTTooltipModule.INSTANCE.register();
         FullbrightModule.INSTANCE.register();
         InventoryMoveModule.INSTANCE.register();
 
@@ -75,10 +76,12 @@ public class M0DevToolsClient implements ClientModInitializer {
                     client.setScreen(new ModulesScreen(client.currentScreen));
                 });
 
-        ClientCommandGroovyScript.register();
+        NBTGetCommand.register();
+
+        ClientCommandRunScript.register();
         InGameScriptingKeybinds.register();
 
-        CommandHandler.registerCommands();
+        NBTEditorCommands.register();
         NBTEditorServer.IS_DEDICATED = false;
 
         if (!SETTINGS_FOLDER.exists()) {

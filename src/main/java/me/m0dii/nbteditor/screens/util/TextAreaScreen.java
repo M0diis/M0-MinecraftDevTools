@@ -89,7 +89,9 @@ public class TextAreaScreen extends OverlaySupportingScreen {
 
     @Override
     public void close() {
-        this.client.setScreen(parent);
+        if (this.client != null) {
+            this.client.setScreen(parent);
+        }
     }
 
 }

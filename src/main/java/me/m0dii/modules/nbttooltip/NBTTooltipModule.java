@@ -11,11 +11,11 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public class NbtTooltipModule extends Module {
+public class NBTTooltipModule extends Module {
 
-    public static final NbtTooltipModule INSTANCE = new NbtTooltipModule();
+    public static final NBTTooltipModule INSTANCE = new NBTTooltipModule();
 
-    private NbtTooltipModule() {
+    private NBTTooltipModule() {
         super("nbt_tooltip", "NBT Tooltip", false);
     }
 
