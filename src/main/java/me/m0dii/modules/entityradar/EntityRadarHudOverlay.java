@@ -1,6 +1,8 @@
 package me.m0dii.modules.entityradar;
 
-import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
+import lombok.Getter;
+import lombok.Setter;
+import me.m0dii.modules.Toggleable;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.render.RenderTickCounter;
@@ -8,14 +10,14 @@ import net.minecraft.entity.Entity;
 
 import java.util.List;
 
-public class EntityRadarOverlay {
+public class EntityRadarHudOverlay implements Toggleable {
 
-    public static void register() {
-        HudRenderCallback.EVENT.register(EntityRadarOverlay::onHudRender);
-    }
+    @Getter
+    @Setter
+    private boolean enabled = false;
 
-    private static void onHudRender(DrawContext context, RenderTickCounter tickCounter) {
-        if (!EntityRadarModule.INSTANCE.isEnabled()) {
+    public void onHudRender(DrawContext context, RenderTickCounter tickCounter) {
+        if (!enabled) {
             return;
         }
 

@@ -37,9 +37,6 @@ public class ZoomModule extends Module {
     @Override
     public List<String> getSettingsDisplay() {
         List<String> settings = new ArrayList<>();
-        settings.add("Key: " + (keyBinding != null ? keyBinding.getBoundKeyTranslationKey() : "None"));
-        settings.add("Toggle: " + (isEnabled() ? "ON" : "OFF"));
-
         settings.add("Zoom FOV: " + String.format("%.1f", zoomFov));
         settings.add("Decrease FOV (-5)");
         settings.add("Increase FOV (+5)");
@@ -50,19 +47,19 @@ public class ZoomModule extends Module {
     @Override
     public void onSettingSelected(int settingIndex) {
         switch (settingIndex) {
-            case 2:
+            case 1:
                 zoomFov = Math.max(5f, zoomFov - 5f);
                 if (getClient().player != null) {
                     getClient().player.sendMessage(Text.literal("Zoom FOV: " + String.format("%.1f", zoomFov)), true);
                 }
                 break;
-            case 3:
+            case 2:
                 zoomFov = Math.min(110f, zoomFov + 5f);
                 if (getClient().player != null) {
                     getClient().player.sendMessage(Text.literal("Zoom FOV: " + String.format("%.1f", zoomFov)), true);
                 }
                 break;
-            case 4:
+            case 3:
                 zoomFov = 30f;
                 if (getClient().player != null) {
                     getClient().player.sendMessage(Text.literal("Zoom FOV reset to 30"), true);

@@ -1,5 +1,8 @@
 package me.m0dii.modules.entityradar;
 
+import lombok.Getter;
+import lombok.Setter;
+import me.m0dii.modules.Toggleable;
 import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.*;
@@ -11,7 +14,11 @@ import org.joml.Matrix4f;
 import java.util.List;
 import java.util.OptionalDouble;
 
-public class EntityHighlightRenderer {
+public class EntityHighlightRenderer implements Toggleable {
+
+    @Getter
+    @Setter
+    private boolean enabled = false;
 
     private static final RenderLayer LINES_NO_DEPTH = RenderLayer.of(
             "lines_no_depth",
@@ -28,9 +35,9 @@ public class EntityHighlightRenderer {
                     .build(false)
     );
 
-    public static void register() {
+    public void register() {
         WorldRenderEvents.BEFORE_DEBUG_RENDER.register(context -> {
-            if (!EntityRadarModule.INSTANCE.isEnabled()) {
+            if (!enabled) {
                 return;
             }
 

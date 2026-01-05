@@ -2,6 +2,8 @@ package me.m0dii.modules.overlays;
 
 import me.m0dii.modules.Module;
 import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
+import net.minecraft.block.Block;
+import net.minecraft.block.Blocks;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.render.VertexConsumerProvider;
@@ -15,9 +17,22 @@ import org.jetbrains.annotations.NotNull;
 import org.joml.Matrix4f;
 import org.lwjgl.glfw.GLFW;
 
+import java.util.List;
+
 public class LightLevelOverlayModule extends Module {
     private static final int XZ_RADIUS = 16;
     private static final int Y_RADIUS = 4;
+
+    private static final List<Block> excludedBlocks = List.of(
+        Blocks.SHORT_GRASS,
+        Blocks.TALL_GRASS,
+        Blocks.FERN,
+        Blocks.LARGE_FERN,
+        Blocks.DEAD_BUSH,
+        Blocks.SEAGRASS,
+        Blocks.KELP,
+        Blocks.SUGAR_CANE
+    );
 
     public static final LightLevelOverlayModule INSTANCE = new LightLevelOverlayModule();
 
@@ -72,6 +87,9 @@ public class LightLevelOverlayModule extends Module {
                             continue;
                         }
                         if (state.getLuminance() > 0) {
+                            continue;
+                        }
+                        if (excludedBlocks.contains(state.getBlock())) {
                             continue;
                         }
                         var above = client.world.getBlockState(pos.up());
