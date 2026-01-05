@@ -3,7 +3,6 @@ package me.m0dii.modules;
 import lombok.Getter;
 import me.m0dii.utils.KeybindManager;
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
@@ -13,32 +12,27 @@ import org.jetbrains.annotations.NotNull;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
-import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
 /**
  * Base class with common module utilities.
- * <p>
- * - Provides id/displayName/enabled state and toggle helpers
- * - Provides convenient keybind registration and cleanup
- * - Provides UI helpers (BooleanSupplier + Runnable) for ModulesScreen toggle wiring
  */
 public abstract class Module {
     @Getter
-    private final MinecraftClient client = MinecraftClient.getInstance();
+    protected final MinecraftClient client = MinecraftClient.getInstance();
 
     @Getter
-    private final ClientPlayerEntity player = client.player;
+    protected final ClientPlayerEntity player = client.player;
 
     @Getter
-    private final String id;
+    protected final String id;
     @Getter
-    private final String displayName;
+    protected final String displayName;
     @Getter
-    private boolean enabled;
+    protected boolean enabled;
 
-    // keep keybindings registered by this module so they can be cleaned up
-    private final List<KeyBinding> registeredKeybinds = new ArrayList<>();
+    @Getter
+    protected KeyBinding keyBinding;
 
     protected Module(String id, String displayName, boolean defaultEnabled) {
         this.id = Objects.requireNonNull(id);
@@ -95,7 +89,7 @@ public abstract class Module {
                                                 int defaultKey,
                                                 @NotNull Consumer<@NotNull MinecraftClient> action) {
         KeyBinding kb = KeybindManager.registerPressedKeybind(translationKey, type, defaultKey, action);
-        registeredKeybinds.add(kb);
+        this.keyBinding = kb;
         return kb;
     }
 
@@ -108,22 +102,8 @@ public abstract class Module {
                                              @NotNull Consumer<@NotNull MinecraftClient> heldAction,
                                              @NotNull Consumer<@NotNull MinecraftClient> releasedAction) {
         KeyBinding kb = KeybindManager.registerHeldKeybind(translationKey, type, defaultKey, heldAction, releasedAction);
-        registeredKeybinds.add(kb);
+        this.keyBinding = kb;
         return kb;
-    }
-
-    /**
-     * Helper to produce a BooleanSupplier for UI wiring that returns this module's enabled state.
-     */
-    public BooleanSupplier stateSupplier() {
-        return this::isEnabled;
-    }
-
-    /**
-     * Helper to produce a Runnable for UI wiring that toggles this module.
-     */
-    public Runnable toggleRunnable() {
-        return this::toggleEnabled;
     }
 
     /**
@@ -131,7 +111,7 @@ public abstract class Module {
      * Override this to return true if your module has settings.
      */
     public boolean hasSettings() {
-        return false;
+        return true;
     }
 
     /**
@@ -140,30 +120,23 @@ public abstract class Module {
      * Format: ["Setting Name: value", "Another Setting: value"]
      */
     public List<String> getSettingsDisplay() {
-        return new ArrayList<>();
+        List<String> settings = new ArrayList<>();
+        settings.add("Key: " + (keyBinding != null ? keyBinding.getBoundKeyTranslationKey() : "None"));
+        settings.add("Toggle: " + (isEnabled() ? "ON" : "OFF"));
+        return settings;
     }
 
     /**
      * Called when a setting is selected in the ClickGUI (Enter pressed).
      * Override this to handle setting changes.
+     *
      * @param settingIndex The index of the selected setting
      */
     public void onSettingSelected(int settingIndex) {
-        // Override in subclass to handle setting selection
+        if (settingIndex == 1) {
+            toggleEnabled();
+        }
     }
 
-    /**
-     * Create a ButtonWidget that can be used in the ModulesScreen to toggle this module.
-     */
-    public ButtonWidget getToggleButton() {
-        return ButtonWidget.builder(buttonText(displayName, stateSupplier()), btn -> {
-            toggleRunnable().run();
-            btn.setMessage(buttonText(displayName, stateSupplier()));
-        }).width(150).build();
-    }
-
-    private static Text buttonText(String name, BooleanSupplier state) {
-        return Text.literal(name + ": " + (state.getAsBoolean() ? "ON" : "OFF"));
-    }
 }
 

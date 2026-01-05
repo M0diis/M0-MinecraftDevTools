@@ -53,14 +53,6 @@ public class ClickGuiRenderer {
         visible = !visible;
     }
 
-    public void hide() {
-        visible = false;
-    }
-
-    public void show() {
-        visible = true;
-    }
-
     private void onClientTick(MinecraftClient client) {
         if (!visible || client.player == null) {
             return;

@@ -1,6 +1,6 @@
 package me.m0dii.modules.clickgui;
 
-import me.m0dii.modules.Module;
+import me.m0dii.modules.chat.SecondaryChatModule;
 import me.m0dii.modules.commandhistory.CommandHistoryModule;
 import me.m0dii.modules.entityradar.EntityRadarModule;
 import me.m0dii.modules.freecam.FreecamModule;
@@ -9,13 +9,12 @@ import me.m0dii.modules.instabreak.InstaBreakModule;
 import me.m0dii.modules.inventorymove.InventoryMoveModule;
 import me.m0dii.modules.macros.gui.MacroKeybindOverlayModule;
 import me.m0dii.modules.macros.gui.PendingMacrosOverlayModule;
-import me.m0dii.modules.nbttooltip.NBTTooltipModule;
 import me.m0dii.modules.nbthud.NBTInfoHudOverlayModule;
+import me.m0dii.modules.nbttooltip.NBTTooltipModule;
 import me.m0dii.modules.overlays.*;
-import me.m0dii.modules.chat.SecondaryChatModule;
 import me.m0dii.modules.waypoints.WaypointModule;
-import me.m0dii.modules.zoom.ZoomModule;
 import me.m0dii.modules.xray.XrayModule;
+import me.m0dii.modules.zoom.ZoomModule;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -79,22 +78,5 @@ public class ModuleRegistry {
         return categories.toArray(new ModuleCategory[0]);
     }
 
-    public static void addCategory(ModuleCategory category) {
-        categories.add(category);
-    }
-
-    public static void registerModule(String categoryName, Module module) {
-        for (ModuleCategory category : categories) {
-            if (category.getName().equalsIgnoreCase(categoryName)) {
-                category.addModule(module);
-                return;
-            }
-        }
-
-        // If category doesn't exist, create it
-        ModuleCategory newCategory = new ModuleCategory(categoryName);
-        newCategory.addModule(module);
-        categories.add(newCategory);
-    }
 }
 

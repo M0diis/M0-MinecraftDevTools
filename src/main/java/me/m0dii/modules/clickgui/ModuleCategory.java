@@ -11,6 +11,7 @@ import java.util.List;
  */
 @Getter
 public class ModuleCategory {
+
     private final String name;
     private final List<Module> modules;
 
@@ -22,5 +23,6 @@ public class ModuleCategory {
     public void addModule(Module module) {
         this.modules.add(module);
     }
+
 }
 
