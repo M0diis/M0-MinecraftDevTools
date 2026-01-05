@@ -2,14 +2,17 @@ package me.m0dii.modules.clickgui;
 
 import lombok.Getter;
 import me.m0dii.modules.Module;
+import me.m0dii.utils.ModConfig;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.render.RenderTickCounter;
 import net.minecraft.client.util.InputUtil;
+import org.joml.Matrix4f;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.List;
+import java.util.Objects;
 
 public class ClickGuiRenderer {
     @Getter
@@ -187,18 +190,40 @@ public class ClickGuiRenderer {
 
         int screenHeight = client.getWindow().getScaledHeight();
 
-        renderCategories(context, START_X, START_Y);
+        // Apply text scaling
+        float scale = (float) ModConfig.clickGuiTextScale;
+        if (Float.isNaN(scale) || scale <= 0f) {
+            scale = 0.85f;
+        }
+        scale = Math.clamp(scale, 0.5f, 3.0f);
+
+        context.getMatrices().push();
+        Matrix4f m = new Matrix4f(context.getMatrices().peek().getPositionMatrix());
+        context.getMatrices().peek().getPositionMatrix().set(m.scale(scale, scale, 1.0f));
+
+        // Convert screen coordinates to scaled coordinates
+        int scaledStartX = Math.round(START_X / scale);
+        int scaledStartY = Math.round(START_Y / scale);
+
+        renderCategories(context, scaledStartX, scaledStartY);
 
         if (categories.length > 0 && selectedCategoryIndex < categories.length) {
             ModuleCategory category = categories[selectedCategoryIndex];
-            renderModules(context, START_X + CATEGORY_WIDTH + 10, START_Y, category);
+            // Keep the gap constant in scaled space (10 pixels in scaled coordinates)
+            int modulesX = scaledStartX + CATEGORY_WIDTH + 10;
+            renderModules(context, modulesX, scaledStartY, category);
 
             if (inSettingsView && currentSettingsModule != null) {
-                renderSettings(context, START_X + CATEGORY_WIDTH + MODULE_WIDTH + 20, START_Y);
+                // Keep the gap constant in scaled space (10 pixels in scaled coordinates)
+                int settingsX = scaledStartX + CATEGORY_WIDTH + MODULE_WIDTH + 20;
+                renderSettings(context, settingsX, scaledStartY);
             }
         }
 
-        renderInstructions(context, screenHeight);
+        int scaledScreenHeight = Math.round(screenHeight / scale);
+        renderInstructions(context, scaledScreenHeight);
+
+        context.getMatrices().pop();
     }
 
     private void renderCategories(DrawContext context, int x, int y) {
@@ -242,7 +267,11 @@ public class ClickGuiRenderer {
 
     private void renderModules(DrawContext context, int x, int y, ModuleCategory category) {
         MinecraftClient client = MinecraftClient.getInstance();
-        List<Module> modules = category.getModules();
+        List<Module> modules = category.getModules()
+                .stream()
+                .filter(Objects::nonNull)
+                .toList();
+
         int currentY = y;
 
         for (int i = 0; i < modules.size(); i++) {

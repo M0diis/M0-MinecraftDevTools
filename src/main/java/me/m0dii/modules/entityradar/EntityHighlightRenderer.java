@@ -9,8 +9,9 @@ import net.minecraft.client.render.*;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.entity.Entity;
 import net.minecraft.util.math.Box;
-import org.joml.Matrix4f;
+import net.minecraft.world.chunk.Chunk;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.OptionalDouble;
 
@@ -47,9 +48,6 @@ public class EntityHighlightRenderer implements Toggleable {
             }
 
             List<Entity> entities = EntityRadarModule.INSTANCE.getEntities();
-            if (entities.isEmpty()) {
-                return;
-            }
 
             MatrixStack matrices = context.matrixStack();
             VertexConsumerProvider vertexConsumers = context.consumers();
@@ -67,73 +65,33 @@ public class EntityHighlightRenderer implements Toggleable {
                 if (entity == client.player) {
                     continue;
                 }
-
                 matrices.push();
                 matrices.translate(entity.getX() - cameraX, entity.getY() - cameraY, entity.getZ() - cameraZ);
-
                 Box box = entity.getBoundingBox().offset(-entity.getX(), -entity.getY(), -entity.getZ());
-
-                drawBox(matrices, vertexConsumer, box, 1.0f, 1.0f, 0.0f, 1.0f);
-
+                VertexRendering.drawBox(matrices, vertexConsumer, box, 1.0f, 1.0f, 0.0f, 1.0f);
                 matrices.pop();
             }
+
+            List<Chunk> nearbyChunks = new ArrayList<>();
+            int playerChunkX = client.player.getChunkPos().x;
+            int playerChunkZ = client.player.getChunkPos().z;
+            for (int dx = -2; dx <= 2; dx++) {
+                for (int dz = -2; dz <= 2; dz++) {
+                    Chunk chunk = client.world.getChunk(playerChunkX + dx, playerChunkZ + dz);
+                    nearbyChunks.add(chunk);
+                }
+            }
+
+            nearbyChunks.forEach(chunk ->
+                    chunk.getBlockEntityPositions().forEach(pos -> {
+                        matrices.push();
+                        matrices.translate(pos.getX() - cameraX, pos.getY() - cameraY, pos.getZ() - cameraZ);
+                        Box localBox = new Box(0, 0, 0, 1, 1, 1);
+                        VertexRendering.drawBox(matrices, vertexConsumer, localBox, 0.0f, 1.0f, 1.0f, 1.0f);
+                        matrices.pop();
+                    }));
+
         });
-    }
-
-    private static void drawBox(MatrixStack matrices, VertexConsumer vertexConsumer, Box box, float red, float green, float blue, float alpha) {
-        Matrix4f matrix = matrices.peek().getPositionMatrix();
-
-        float minX = (float) box.minX;
-        float minY = (float) box.minY;
-        float minZ = (float) box.minZ;
-        float maxX = (float) box.maxX;
-        float maxY = (float) box.maxY;
-        float maxZ = (float) box.maxZ;
-
-        // Bottom face
-        line(vertexConsumer, matrix, minX, minY, minZ, maxX, minY, minZ, red, green, blue, alpha);
-        line(vertexConsumer, matrix, maxX, minY, minZ, maxX, minY, maxZ, red, green, blue, alpha);
-        line(vertexConsumer, matrix, maxX, minY, maxZ, minX, minY, maxZ, red, green, blue, alpha);
-        line(vertexConsumer, matrix, minX, minY, maxZ, minX, minY, minZ, red, green, blue, alpha);
-
-        // Top face
-        line(vertexConsumer, matrix, minX, maxY, minZ, maxX, maxY, minZ, red, green, blue, alpha);
-        line(vertexConsumer, matrix, maxX, maxY, minZ, maxX, maxY, maxZ, red, green, blue, alpha);
-        line(vertexConsumer, matrix, maxX, maxY, maxZ, minX, maxY, maxZ, red, green, blue, alpha);
-        line(vertexConsumer, matrix, minX, maxY, maxZ, minX, maxY, minZ, red, green, blue, alpha);
-
-        // Vertical edges
-        line(vertexConsumer, matrix, minX, minY, minZ, minX, maxY, minZ, red, green, blue, alpha);
-        line(vertexConsumer, matrix, maxX, minY, minZ, maxX, maxY, minZ, red, green, blue, alpha);
-        line(vertexConsumer, matrix, maxX, minY, maxZ, maxX, maxY, maxZ, red, green, blue, alpha);
-        line(vertexConsumer, matrix, minX, minY, maxZ, minX, maxY, maxZ, red, green, blue, alpha);
-    }
-
-    private static void line(VertexConsumer vertexConsumer,
-                             Matrix4f matrix,
-                             float x1,
-                             float y1,
-                             float z1,
-                             float x2,
-                             float y2,
-                             float z2,
-                             float red,
-                             float green,
-                             float blue,
-                             float alpha) {
-        // Normal vector
-        float dx = x2 - x1;
-        float dy = y2 - y1;
-        float dz = z2 - z1;
-        float length = (float) Math.sqrt(dx * dx + dy * dy + dz * dz);
-        if (length > 0) {
-            dx /= length;
-            dy /= length;
-            dz /= length;
-        }
-
-        vertexConsumer.vertex(matrix, x1, y1, z1).color(red, green, blue, alpha).normal(dx, dy, dz);
-        vertexConsumer.vertex(matrix, x2, y2, z2).color(red, green, blue, alpha).normal(dx, dy, dz);
     }
 }
 

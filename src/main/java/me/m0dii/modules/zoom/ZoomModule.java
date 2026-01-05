@@ -47,24 +47,27 @@ public class ZoomModule extends Module {
     @Override
     public void onSettingSelected(int settingIndex) {
         switch (settingIndex) {
-            case 1:
+            case 1 -> {
                 zoomFov = Math.max(5f, zoomFov - 5f);
                 if (getClient().player != null) {
                     getClient().player.sendMessage(Text.literal("Zoom FOV: " + String.format("%.1f", zoomFov)), true);
                 }
-                break;
-            case 2:
+            }
+            case 2 -> {
                 zoomFov = Math.min(110f, zoomFov + 5f);
                 if (getClient().player != null) {
                     getClient().player.sendMessage(Text.literal("Zoom FOV: " + String.format("%.1f", zoomFov)), true);
                 }
-                break;
-            case 3:
+            }
+            case 3 -> {
                 zoomFov = 30f;
                 if (getClient().player != null) {
                     getClient().player.sendMessage(Text.literal("Zoom FOV reset to 30"), true);
                 }
-                break;
+            }
+            default -> {
+                // Do nothing
+            }
         }
     }
 

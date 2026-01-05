@@ -12,6 +12,7 @@ import me.m0dii.modules.macros.gui.PendingMacrosOverlayModule;
 import me.m0dii.modules.nbthud.NBTInfoHudOverlayModule;
 import me.m0dii.modules.nbttooltip.NBTTooltipModule;
 import me.m0dii.modules.overlays.*;
+import me.m0dii.modules.uiutilities.UiUtilitiesModule;
 import me.m0dii.modules.waypoints.WaypointModule;
 import me.m0dii.modules.xray.XrayModule;
 import me.m0dii.modules.zoom.ZoomModule;
@@ -49,23 +50,30 @@ public class ModuleRegistry {
         hud.addModule(PendingMacrosOverlayModule.INSTANCE);
         hud.addModule(NBTInfoHudOverlayModule.INSTANCE);
         hud.addModule(EntityRadarModule.INSTANCE);
+        hud.addModule(ClickGuiModule.INSTANCE);
         categories.add(hud);
+
+        // UI Category
+        ModuleCategory ui = new ModuleCategory("UI");
+        ui.addModule(UiUtilitiesModule.INSTANCE);
+        categories.add(ui);
 
         // Utilities Category
         ModuleCategory utilities = new ModuleCategory("Utilities");
         utilities.addModule(XrayModule.INSTANCE);
         utilities.addModule(CommandHistoryModule.INSTANCE);
-        utilities.addModule(FreecamModule.INSTANCE);
         utilities.addModule(InstaBreakModule.INSTANCE);
         utilities.addModule(NBTTooltipModule.INSTANCE);
-        utilities.addModule(InventoryMoveModule.INSTANCE);
         utilities.addModule(FullbrightModule.INSTANCE);
         categories.add(utilities);
 
         // Movement Category
         ModuleCategory movement = new ModuleCategory("Movement");
+        movement.addModule(InventoryMoveModule.INSTANCE);
         movement.addModule(ZoomModule.INSTANCE);
         movement.addModule(WaypointModule.INSTANCE);
+        movement.addModule(InventoryMoveModule.INSTANCE);
+        movement.addModule(FreecamModule.INSTANCE);
         categories.add(movement);
 
         // Chat Category

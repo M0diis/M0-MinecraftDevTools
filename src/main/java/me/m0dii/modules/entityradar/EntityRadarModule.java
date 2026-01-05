@@ -11,6 +11,7 @@ import net.minecraft.entity.passive.PassiveEntity;
 import net.minecraft.util.math.Box;
 import org.lwjgl.glfw.GLFW;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public class EntityRadarModule extends Module {
@@ -36,6 +37,26 @@ public class EntityRadarModule extends Module {
                 client -> client.setScreen(EntityRadarScreen.create(client.currentScreen)));
     }
 
+
+    @Override
+    public List<String> getSettingsDisplay() {
+        List<String> settings = new ArrayList<>();
+        settings.add("World Renderer: " + (worldRenderer.isEnabled() ? "ON" : "OFF"));
+        settings.add("HUD Renderer: " + (hudRenderer.isEnabled() ? "ON" : "OFF"));
+        return settings;
+    }
+
+    @Override
+    public void onSettingSelected(int settingIndex) {
+        switch (settingIndex) {
+            case 0 -> worldRenderer.setEnabled(!worldRenderer.isEnabled());
+            case 1 -> hudRenderer.setEnabled(!hudRenderer.isEnabled());
+            default -> {
+                // Do nothing
+            }
+        }
+    }
+
     @Override
     public void onEnable() {
         hudRenderer.setEnabled(true);
@@ -55,7 +76,7 @@ public class EntityRadarModule extends Module {
 
         Box box = new Box(getClient().player.getPos(), getClient().player.getPos()).expand(ModConfig.entityRadarRadius);
         return getClient().world.getOtherEntities(getClient().player, box).stream()
-                .sorted((a, b) -> (int) (a.distanceTo(getClient().player) - b.distanceTo(getClient().player)))
+                .sorted((a, b) -> Double.compare(a.distanceTo(getClient().player), b.distanceTo(getClient().player)))
                 .toList();
     }
 

@@ -34,10 +34,6 @@ public abstract class GameRendererMixin {
     @Redirect(method = "updateCrosshairTarget", at = @At(value = "INVOKE",
             target = "Lnet/minecraft/client/MinecraftClient;getCameraEntity()Lnet/minecraft/entity/Entity;"))
     private Entity overrideCameraEntityForRayTrace(MinecraftClient mc) {
-        // Return the real player for the hit target ray tracing if the
-        // player inputs option is enabled in Free Camera mode.
-        // Normally in Free Camera mode the Tweakeroo CameraEntity is set as the
-        // render view/camera entity, which would then also ray trace from the camera point of view.
         if (FreecamModule.INSTANCE.isEnabled() && true && mc.player != null) {
             return mc.player;
         }

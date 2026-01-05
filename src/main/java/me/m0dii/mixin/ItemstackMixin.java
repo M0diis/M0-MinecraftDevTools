@@ -19,7 +19,10 @@ import java.util.ArrayList;
 public abstract class ItemstackMixin {
 
     @Inject(method = "getTooltip", at = @At("RETURN"), cancellable = true)
-    protected void injectEditTooltipmethod(Item.TooltipContext context, @Nullable PlayerEntity player, TooltipType type, CallbackInfoReturnable<ArrayList<Text>> info) {
+    protected void injectEditTooltipMethod(Item.TooltipContext context,
+                                           @Nullable PlayerEntity player,
+                                           TooltipType type,
+                                           CallbackInfoReturnable<ArrayList<Text>> info) {
 
         if (type.isAdvanced() && NBTTooltipModule.INSTANCE.isEnabled()) {
             ItemStack itemStack = (ItemStack) (Object) this;

@@ -45,7 +45,7 @@ public class MacroKeybindOverlayModule extends Module {
         if (Float.isNaN(scale) || scale <= 0f) {
             scale = 0.85f;
         }
-        scale = Math.max(0.5f, Math.min(3.0f, scale));
+        scale = Math.clamp(scale, 0.5f, 3.0f);
 
         final int lineH = Math.max(1, ModConfig.macroOverlayLineHeight);
         final int pad = Math.max(0, ModConfig.macroOverlayPadding);

@@ -25,7 +25,7 @@ public class ModConfig extends MidnightConfig {
     public static final String CATEGORY_GENERAL = "General";
 
     @MidnightConfig.Entry(name = "Fullbright Gamma", category = CATEGORY_GENERAL, isSlider = true, min = 1, max = 100)
-    public static int fullbrightGamma = 100;
+    public static double fullbrightGamma = 100;
 
     @MidnightConfig.Entry(name = "Command History Limit", category = CATEGORY_GENERAL, isSlider = true, min = 10, max = 500)
     public static int commandHistoryLimit = 500;
@@ -104,7 +104,11 @@ public class ModConfig extends MidnightConfig {
     @MidnightConfig.Entry(name = "Pending Macros Anchor", category = CATEGORY_HUD_OVERLAY)
     public static OverlayAnchor pendingMacrosAnchor = OverlayAnchor.TOP_LEFT;
 
-    // --- Secondary chat box ---
+    // --- ClickGUI specific settings ---
+    @MidnightConfig.Entry(name = "ClickGUI Text Scale", category = CATEGORY_HUD_OVERLAY)
+    public static double clickGuiTextScale = 0.85;
+
+    // --- Secondary Chat specific settings ---
     public static final String CATEGORY_SECONDARY_CHAT = "Secondary Chat";
 
     public enum ChatInterceptMode {
