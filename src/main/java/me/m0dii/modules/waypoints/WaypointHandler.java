@@ -132,7 +132,7 @@ public class WaypointHandler {
                     .setStyle(Style.EMPTY
                             .withColor(Formatting.GREEN)
                             .withBold(true)
-                            .withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/waypoint_teleport " + wp.id))
+                            .withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/waypoint tp " + wp.id))
                             .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT,
                                     Text.literal("Click to teleport to ").formatted(Formatting.GREEN)
                                             .append(Text.literal(wp.name).formatted(Formatting.AQUA)))));
@@ -141,7 +141,7 @@ public class WaypointHandler {
                     .setStyle(Style.EMPTY
                             .withColor(Formatting.RED)
                             .withBold(true)
-                            .withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/waypoint_delete " + wp.id))
+                            .withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/waypoint delete " + wp.id))
                             .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT,
                                     Text.literal("Click to delete ").formatted(Formatting.RED)
                                             .append(Text.literal(wp.name).formatted(Formatting.AQUA))
@@ -151,7 +151,7 @@ public class WaypointHandler {
                     .setStyle(Style.EMPTY
                             .withColor(Formatting.YELLOW)
                             .withBold(true)
-                            .withClickEvent(new ClickEvent(ClickEvent.Action.SUGGEST_COMMAND, "/waypoint_rename " + wp.id + " "))
+                            .withClickEvent(new ClickEvent(ClickEvent.Action.SUGGEST_COMMAND, "/waypoint rename " + wp.id + " "))
                             .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT,
                                     Text.literal("Click to rename ").formatted(Formatting.YELLOW)
                                             .append(Text.literal(wp.name).formatted(Formatting.AQUA)))));

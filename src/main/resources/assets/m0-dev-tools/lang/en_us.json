@@ -13,6 +13,8 @@
 
   "key.m0-dev-tools.add_waypoint": "Add Waypoint",
   "key.m0-dev-tools.list_waypoints": "List Waypoints",
+  "key.m0-dev-tools.open_waypoint_gui": "Open Waypoint GUI",
+  "key.m0-dev-tools.toggle_waypoint_render": "Toggle Waypoint Rendering",
   "key.m0-dev-tools.cycle_block_state": "Cycle Block State",
   "key.m0-dev-tools.teleport_up": "Teleport Up",
   "key.m0-dev-tools.teleport_down": "Teleport Down",
