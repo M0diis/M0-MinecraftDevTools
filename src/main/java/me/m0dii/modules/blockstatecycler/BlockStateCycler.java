@@ -37,7 +37,7 @@ public class BlockStateCycler extends Module {
 
     @Override
     public void register() {
-        registerPressedKeybind("key.m0-dev-tools.cycle_block_state", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_KP_DECIMAL, client -> {
+        registerPressedKeybind("key.m0-dev-tools.cycle_block_state", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_LEFT_ALT, client -> {
             cycleBlockState();
         });
     }

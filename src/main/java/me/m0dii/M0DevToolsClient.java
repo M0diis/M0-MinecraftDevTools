@@ -5,6 +5,7 @@ import lombok.Getter;
 import me.m0dii.modules.blockstatecycler.BlockStateCycler;
 import me.m0dii.modules.chat.SecondaryChatModule;
 import me.m0dii.modules.clickgui.ClickGuiModule;
+import me.m0dii.modules.clickgui.ModuleRegistry;
 import me.m0dii.modules.commandhistory.CommandHistoryModule;
 import me.m0dii.modules.entityradar.EntityRadarModule;
 import me.m0dii.modules.freecam.FreecamModule;
@@ -88,6 +89,9 @@ public class M0DevToolsClient implements ClientModInitializer {
         FullbrightModule.INSTANCE.register();
         InventoryMoveModule.INSTANCE.register();
         ClickGuiModule.INSTANCE.register();
+
+        // Populate ModuleRegistry categories after modules have had a chance to create their singletons
+        ModuleRegistry.initializeCategories();
 
         KeybindManager.registerPressedKeybind("key.m0-dev-tools.open_modules_screen",
                 InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_O,

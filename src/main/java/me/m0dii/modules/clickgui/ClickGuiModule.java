@@ -15,7 +15,7 @@ public class ClickGuiModule extends Module {
     public static final ClickGuiModule INSTANCE = new ClickGuiModule();
 
     @Getter
-    private final ClickGuiRenderer renderer = new ClickGuiRenderer();
+    private ClickGuiRenderer renderer;
 
     private ClickGuiModule() {
         super("clickgui", "ClickGUI", true);
@@ -23,12 +23,14 @@ public class ClickGuiModule extends Module {
 
     @Override
     public void register() {
+        this.renderer = new ClickGuiRenderer();
+
         HudRenderCallback.EVENT.register(renderer::onHudRender);
 
         registerPressedKeybind(
                 "key.m0-dev-tools.clickgui",
                 InputUtil.Type.KEYSYM,
-                GLFW.GLFW_KEY_RIGHT_ALT,
+                GLFW.GLFW_KEY_GRAVE_ACCENT,
                 client -> renderer.toggle()
         );
     }
@@ -42,6 +44,7 @@ public class ClickGuiModule extends Module {
         settings.add("Decrease GUI Scale (-0.1)");
         settings.add("Decrease GUI Scale (-1.0)");
         settings.add("Reset GUI Scale");
+        settings.add("WASD navigation: " + (renderer != null && renderer.isWasdNavigation()));
         return settings;
     }
 
@@ -55,10 +58,15 @@ public class ClickGuiModule extends Module {
             case 3 -> newScale = Math.max(ModConfig.clickGuiTextScale - 0.1f, 0.5f);
             case 4 -> newScale = Math.max(ModConfig.clickGuiTextScale - 1.0f, 0.5f);
             case 5 -> newScale = 1.0f;
+            case 6 -> {
+                if (renderer != null) {
+                    renderer.setWasdNavigation(!renderer.isWasdNavigation());
+                }
+                return;
+            }
             default -> newScale = ModConfig.clickGuiTextScale;
         }
 
         ModConfig.updateAndSave(() -> ModConfig.clickGuiTextScale = newScale);
     }
 }
-

@@ -1,7 +1,9 @@
 package me.m0dii.modules.clickgui;
 
 import lombok.Getter;
+import lombok.Setter;
 import me.m0dii.modules.Module;
+import me.m0dii.modules.Toggleable;
 import me.m0dii.utils.ModConfig;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.client.MinecraftClient;
@@ -14,16 +16,9 @@ import org.lwjgl.glfw.GLFW;
 import java.util.List;
 import java.util.Objects;
 
-public class ClickGuiRenderer {
-    @Getter
-    private boolean visible = false;
-    private final ModuleCategory[] categories;
-    private int selectedCategoryIndex = 0;
-    private int selectedModuleIndex = 0;
-    private boolean inModuleList = false;
-    private boolean inSettingsView = false;
-    private int selectedSettingIndex = 0;
-    private Module currentSettingsModule = null;
+public class ClickGuiRenderer implements Toggleable {
+
+    private static final ModuleCategory[] categories = ModuleRegistry.getCategories();
 
     private static final int CATEGORY_WIDTH = 120;
     private static final int MODULE_WIDTH = 140;
@@ -40,24 +35,32 @@ public class ClickGuiRenderer {
     private static final int COLOR_BORDER = 0xFF404040;
     private static final int COLOR_TEXT = 0xFFFFFFFF;
 
+    @Getter
+    @Setter
+    private boolean enabled = false;
+    private int selectedCategoryIndex = 0;
+    private int selectedModuleIndex = 0;
+    private boolean inModuleList = false;
+    private boolean inSettingsView = false;
+    private int selectedSettingIndex = 0;
+    private Module currentSettingsModule = null;
+
     private boolean upPressed = false;
     private boolean downPressed = false;
     private boolean leftPressed = false;
     private boolean rightPressed = false;
     private boolean enterPressed = false;
 
-    public ClickGuiRenderer() {
-        this.categories = ModuleRegistry.getCategories();
+    @Getter
+    @Setter
+    private boolean wasdNavigation = false;
 
+    public ClickGuiRenderer() {
         ClientTickEvents.END_CLIENT_TICK.register(this::onClientTick);
     }
 
-    public void toggle() {
-        visible = !visible;
-    }
-
     private void onClientTick(MinecraftClient client) {
-        if (!visible || client.player == null) {
+        if (!enabled || client.player == null) {
             return;
         }
 
@@ -68,6 +71,13 @@ public class ClickGuiRenderer {
         boolean leftNow = InputUtil.isKeyPressed(window, GLFW.GLFW_KEY_LEFT);
         boolean rightNow = InputUtil.isKeyPressed(window, GLFW.GLFW_KEY_RIGHT);
         boolean enterNow = InputUtil.isKeyPressed(window, GLFW.GLFW_KEY_ENTER);
+
+        if(wasdNavigation) {
+            upNow = upNow || InputUtil.isKeyPressed(window, GLFW.GLFW_KEY_W);
+            downNow = downNow || InputUtil.isKeyPressed(window, GLFW.GLFW_KEY_S);
+            leftNow = leftNow || InputUtil.isKeyPressed(window, GLFW.GLFW_KEY_A);
+            rightNow = rightNow || InputUtil.isKeyPressed(window, GLFW.GLFW_KEY_D);
+        }
 
         if (categories.length == 0) {
             return;
@@ -179,7 +189,7 @@ public class ClickGuiRenderer {
     }
 
     public void onHudRender(DrawContext context, RenderTickCounter tickCounter) {
-        if (!visible) {
+        if (!enabled) {
             return;
         }
 

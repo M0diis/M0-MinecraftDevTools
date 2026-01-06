@@ -1,10 +1,8 @@
 package me.m0dii.mixin;
 
-import me.m0dii.modules.inventorymove.InventoryMoveModule;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.screen.ingame.HandledScreen;
-import net.minecraft.client.util.InputUtil;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -21,10 +19,9 @@ public class MinecraftClientInvMoveMixin {
         if (client.player == null) {
             return;
         }
-
         Screen screen = client.currentScreen;
 
-        if (screen instanceof HandledScreen && InventoryMoveModule.INSTANCE.isEnabled()) {
+        if (screen instanceof HandledScreen) {
             client.options.forwardKey.setPressed(isKeyPressed(client.getWindow().getHandle(), GLFW_KEY_W));
             client.options.leftKey.setPressed(isKeyPressed(client.getWindow().getHandle(), GLFW_KEY_A));
             client.options.backKey.setPressed(isKeyPressed(client.getWindow().getHandle(), GLFW_KEY_S));
