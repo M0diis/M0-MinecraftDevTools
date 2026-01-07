@@ -27,8 +27,14 @@ public class ModConfig extends MidnightConfig {
     @MidnightConfig.Entry(name = "Fullbright Gamma", category = CATEGORY_GENERAL, isSlider = true, min = 1, max = 100)
     public static double fullbrightGamma = 100;
 
-    @MidnightConfig.Entry(name = "Command History Limit", category = CATEGORY_GENERAL, isSlider = true, min = 10, max = 500)
+    @MidnightConfig.Entry(name = "Command History Limit", category = CATEGORY_GENERAL, isSlider = true, min = 10, max = 100)
     public static int commandHistoryLimit = 500;
+
+    @MidnightConfig.Entry(name = "Message Box History Limit", category = CATEGORY_GENERAL, min = 10, max = 50000)
+    public static int messageBoxHistoryLimit = 500;
+
+    @MidnightConfig.Entry(name = "Message History Limit", category = CATEGORY_GENERAL, min = 10, max = 1000)
+    public static int messageHistoryLimit = 500;
 
     public static final String CATEGORY_OVERLAY = "Overlay";
 

@@ -120,12 +120,12 @@ public final class SecondaryChatInteraction {
         }
     }
 
-    private static boolean handleMouseRelease(Screen screen, double mouseX, double mouseY, int button) {
+    private static void handleMouseRelease(Screen screen, double mouseX, double mouseY, int button) {
         if (button != 0) {
-            return false;
+            return;
         }
         if (!dragging && !resizing) {
-            return false;
+            return;
         }
 
         dragging = false;
@@ -136,13 +136,11 @@ public final class SecondaryChatInteraction {
             ModConfig.save();
             configDirty = false;
         }
-
-        return true;
     }
 
-    private static boolean handleMouseScroll(Screen screen, double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
+    private static void handleMouseScroll(Screen screen, double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
         if (!ModConfig.secondaryChatEnabled || !ModConfig.secondaryChatShowOverlay) {
-            return false;
+            return;
         }
 
         int x = ModConfig.secondaryChatX;
@@ -151,13 +149,12 @@ public final class SecondaryChatInteraction {
         int h = Math.max(30, ModConfig.secondaryChatHeight);
 
         if (!isInside(mouseX, mouseY, x, y, w, h)) {
-            return false;
+            return;
         }
 
         int scrollAmount = (int) Math.signum(verticalAmount);
         SecondaryChatOverlay.scroll(scrollAmount);
 
-        return true;
     }
 
     public static boolean isDraggingOrResizing() {

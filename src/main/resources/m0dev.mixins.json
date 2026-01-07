@@ -8,6 +8,7 @@
   "client": [
     "AbstractClientPlayerMixin",
     "BlockPlacementMixin",
+    "ChatHudMixin",
     "ClientPlayerEntityMixin",
     "ClientPlayerInteractionManagerMixin",
     "CommandHistoryMixin",
@@ -20,7 +21,6 @@
     "MouseMixin",
     "MouseSecondaryChatMixin",
     "MultiplayerServerListWidgetMixin",
-    "SecondaryChatCaptureMixin",
     "SimpleOptionMixin",
     "WorldRendererMixin",
     "uiutilities.BookEditScreenMixin",

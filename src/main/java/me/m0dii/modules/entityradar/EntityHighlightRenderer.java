@@ -50,6 +50,11 @@ public class EntityHighlightRenderer implements Toggleable {
             List<Entity> entities = EntityRadarModule.INSTANCE.getEntities();
 
             MatrixStack matrices = context.matrixStack();
+
+            if (matrices == null) {
+                return;
+            }
+
             VertexConsumerProvider vertexConsumers = context.consumers();
             if (vertexConsumers == null) {
                 return;

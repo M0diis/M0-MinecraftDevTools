@@ -20,7 +20,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public abstract class GameRendererMixin {
     @Shadow
     @Final
-    MinecraftClient client;
+    private MinecraftClient client;
 
     @Inject(method = "getFov", at = @At("HEAD"), cancellable = true)
     private void applyZoom(Camera camera, float tickDelta, boolean changingFov, CallbackInfoReturnable<Float> cir) {

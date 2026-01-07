@@ -18,7 +18,9 @@ A powerful client-side mod for Minecraft that enhances your gameplay experience 
 - Secondary Chat Box
 - Waila-like NBT/Block State Viewer
 - Macros
-- Command History
+- Command History Menu
+- Message History Menu
+- Longer Chat Box History
 - In-Game Groovy/Kotlin Scripting
 - Instant block break
 - Fullbright

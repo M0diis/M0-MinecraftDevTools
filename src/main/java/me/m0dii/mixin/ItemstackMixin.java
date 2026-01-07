@@ -15,7 +15,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import java.util.ArrayList;
 
 @Mixin(ItemStack.class)
-
 public abstract class ItemstackMixin {
 
     @Inject(method = "getTooltip", at = @At("RETURN"), cancellable = true)
@@ -23,7 +22,6 @@ public abstract class ItemstackMixin {
                                            @Nullable PlayerEntity player,
                                            TooltipType type,
                                            CallbackInfoReturnable<ArrayList<Text>> info) {
-
         if (type.isAdvanced() && NBTTooltipModule.INSTANCE.isEnabled()) {
             ItemStack itemStack = (ItemStack) (Object) this;
             ArrayList<Text> list = info.getReturnValue();

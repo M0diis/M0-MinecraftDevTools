@@ -14,8 +14,9 @@ public class CommandHistoryModule extends Module {
 
     @Override
     public void register() {
-        registerPressedKeybind("key.m0-dev-tools.command_history", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_H, client -> {
-            client.setScreen(CommandHistoryScreen.create(client.currentScreen));
-        });
+        registerPressedKeybind("key.m0-dev-tools.command_history",
+                InputUtil.Type.KEYSYM,
+                GLFW.GLFW_KEY_H,
+                client -> client.setScreen(CommandHistoryScreen.create(client.currentScreen)));
     }
 }

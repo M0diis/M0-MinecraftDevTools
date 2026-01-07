@@ -18,7 +18,6 @@ public final class SecondaryChatManager {
 
     private static final Deque<Text> buffer = new ArrayDeque<>();
 
-    // Cached compiled regex
     private static String lastRegex = null;
     private static Pattern lastPattern = null;
 

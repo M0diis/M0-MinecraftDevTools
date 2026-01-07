@@ -3,7 +3,6 @@ package me.m0dii.modules.clickgui;
 import me.m0dii.M0DevTools;
 import me.m0dii.modules.Module;
 import me.m0dii.modules.chat.SecondaryChatModule;
-import me.m0dii.modules.overlays.CommandBlockOverlayModule;
 import me.m0dii.modules.commandhistory.CommandHistoryModule;
 import me.m0dii.modules.entityradar.EntityRadarModule;
 import me.m0dii.modules.freecam.FreecamModule;
@@ -12,10 +11,10 @@ import me.m0dii.modules.instantbreak.InstantBreakModule;
 import me.m0dii.modules.inventorymove.InventoryMoveModule;
 import me.m0dii.modules.macros.gui.MacroKeybindOverlayModule;
 import me.m0dii.modules.macros.gui.PendingMacrosOverlayModule;
+import me.m0dii.modules.messagehistory.MessageHistoryModule;
 import me.m0dii.modules.nbthud.NBTInfoHudOverlayModule;
 import me.m0dii.modules.nbttooltip.NBTTooltipModule;
 import me.m0dii.modules.overlays.*;
-import me.m0dii.modules.overlays.RedstoneBlockUpdateViewModule;
 import me.m0dii.modules.uiutilities.UiUtilitiesModule;
 import me.m0dii.modules.waypoints.WaypointModule;
 import me.m0dii.modules.xray.XrayModule;
@@ -73,7 +72,6 @@ public class ModuleRegistry {
 
         ModuleCategory utilities = new ModuleCategory("Utilities");
         safeAdd(utilities, XrayModule.INSTANCE);
-        safeAdd(utilities, CommandHistoryModule.INSTANCE);
         safeAdd(utilities, InstantBreakModule.INSTANCE);
         safeAdd(utilities, NBTTooltipModule.INSTANCE);
         safeAdd(utilities, FullbrightModule.INSTANCE);
@@ -88,6 +86,8 @@ public class ModuleRegistry {
         categories.add(movement);
 
         ModuleCategory chat = new ModuleCategory("Chat");
+        safeAdd(chat, CommandHistoryModule.INSTANCE);
+        safeAdd(chat, MessageHistoryModule.INSTANCE);
         safeAdd(chat, SecondaryChatModule.INSTANCE);
         categories.add(chat);
     }

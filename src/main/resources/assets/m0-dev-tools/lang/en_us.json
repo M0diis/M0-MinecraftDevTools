@@ -26,6 +26,7 @@
   "key.m0-dev-tools.toggle_creative": "Toggle Creative Mode",
   "key.m0-dev-tools.toggle_spectator": "Toggle Spectator Mode",
   "key.m0-dev-tools.command_history": "Open Command History",
+  "key.m0-dev-tools.message_history": "Open Message History",
   "key.m0-dev-tools.toggle_entity_radar": "Toggle Entity Radar",
   "key.m0-dev-tools.open_entity_radar_screen": "Open Entity Radar Screen",
   "key.m0-dev-tools.open_modules_screen": "Open Modules Screen",

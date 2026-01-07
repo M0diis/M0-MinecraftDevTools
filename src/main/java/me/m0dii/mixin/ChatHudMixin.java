@@ -1,6 +1,8 @@
 package me.m0dii.mixin;
 
+import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import me.m0dii.modules.chat.SecondaryChatManager;
+import me.m0dii.modules.messagehistory.MessageHistoryManager;
 import me.m0dii.utils.ModConfig;
 import net.minecraft.client.gui.hud.ChatHud;
 import net.minecraft.client.gui.hud.MessageIndicator;
@@ -13,11 +15,11 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(ChatHud.class)
-public class SecondaryChatCaptureMixin {
+public class ChatHudMixin {
 
     // Hook the simple addMessage(Text) - catches command feedback
     @Inject(method = "addMessage(Lnet/minecraft/text/Text;)V", at = @At("HEAD"), cancellable = true)
-    private void m0devtools$onAddMessage(Text message, CallbackInfo ci) {
+    private void onAddMessageSecondaryChat(Text message, CallbackInfo ci) {
         handleMessage(message, ci);
     }
 
@@ -27,7 +29,7 @@ public class SecondaryChatCaptureMixin {
             at = @At("HEAD"),
             cancellable = true
     )
-    private void m0devtools$onAddMessageFull(Text message, MessageSignatureData signature, MessageIndicator indicator, CallbackInfo ci) {
+    private void onAddMessageFullSecondaryChat(Text message, MessageSignatureData signature, MessageIndicator indicator, CallbackInfo ci) {
         handleMessage(message, ci);
     }
 
@@ -50,5 +52,19 @@ public class SecondaryChatCaptureMixin {
         } catch (Exception e) {
             // Silently catch errors to avoid breaking chat
         }
+    }
+
+    // Modify the chat history size constant
+    @ModifyExpressionValue(
+            method = {"addMessage(Lnet/minecraft/client/gui/hud/ChatHudLine;)V", "addVisibleMessage", "addToMessageHistory"},
+            at = {@At(value = "CONSTANT", args = {"intValue=100"})})
+    public int modifyChatHistorySize(int original) {
+        return ModConfig.messageBoxHistoryLimit;
+    }
+
+    // Hook to store messages in history
+    @Inject(method = "addMessage(Lnet/minecraft/text/Text;)V", at = @At("HEAD"))
+    private void onAddMessage(Text message, CallbackInfo ci) {
+        MessageHistoryManager.addMessage(message);
     }
 }

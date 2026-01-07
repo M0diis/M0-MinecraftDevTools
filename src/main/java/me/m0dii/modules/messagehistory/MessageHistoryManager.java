@@ -1,4 +1,4 @@
-package me.m0dii.modules.commandhistory;
+package me.m0dii.modules.messagehistory;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -6,6 +6,7 @@ import com.google.gson.reflect.TypeToken;
 import me.m0dii.M0DevTools;
 import me.m0dii.utils.ModConfig;
 import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.text.Text;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -14,25 +15,27 @@ import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 
-public class CommandHistoryManager {
+public class MessageHistoryManager {
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
-    private static final Path HISTORY_FILE = FabricLoader.getInstance().getConfigDir().resolve("m0-dev-tools-command-history.json");
-    private static final int MAX_HISTORY_SIZE = ModConfig.commandHistoryLimit;
+    private static final Path HISTORY_FILE = FabricLoader.getInstance().getConfigDir().resolve("m0-dev-tools-message-history.json");
+    private static final int MAX_HISTORY_SIZE = ModConfig.messageHistoryLimit;
 
-    private static final LinkedList<String> commandHistory = new LinkedList<>();
+    private static final LinkedList<String> messageHistory = new LinkedList<>();
     private static boolean loaded = false;
 
-    public static void addCommand(String command) {
-        if (command == null || command.trim().isEmpty() && CommandHistoryModule.INSTANCE.isEnabled()) {
+    public static void addMessage(Text message) {
+        String messageStr = message.getString();
+
+        if (messageStr == null || messageStr.trim().isEmpty() && MessageHistoryModule.INSTANCE.isEnabled()) {
             return;
         }
 
-        commandHistory.remove(command);
-        commandHistory.addFirst(command);
+        messageHistory.remove(messageStr);
+        messageHistory.addFirst(messageStr);
 
-        while (commandHistory.size() > MAX_HISTORY_SIZE) {
-            commandHistory.removeLast();
+        while (messageHistory.size() > MAX_HISTORY_SIZE) {
+            messageHistory.removeLast();
         }
 
         save();
@@ -42,11 +45,11 @@ public class CommandHistoryManager {
         if (!loaded) {
             load();
         }
-        return new ArrayList<>(commandHistory);
+        return new ArrayList<>(messageHistory);
     }
 
     public static void clearHistory() {
-        commandHistory.clear();
+        messageHistory.clear();
         save();
     }
 
@@ -62,20 +65,20 @@ public class CommandHistoryManager {
             List<String> loaded = GSON.fromJson(json, new TypeToken<List<String>>() {
             }.getType());
             if (loaded != null) {
-                commandHistory.clear();
-                commandHistory.addAll(loaded);
+                messageHistory.clear();
+                messageHistory.addAll(loaded);
             }
         } catch (IOException e) {
-            M0DevTools.LOGGER.error("Failed to load command history", e);
+            M0DevTools.LOGGER.error("Failed to load message history", e);
         }
     }
 
     private static void save() {
         try {
-            String json = GSON.toJson(commandHistory);
+            String json = GSON.toJson(messageHistory);
             Files.writeString(HISTORY_FILE, json);
         } catch (IOException e) {
-            M0DevTools.LOGGER.error("Failed to save command history", e);
+            M0DevTools.LOGGER.error("Failed to save message history", e);
         }
     }
 }
