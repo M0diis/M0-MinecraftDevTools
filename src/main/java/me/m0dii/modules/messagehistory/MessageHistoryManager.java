@@ -25,13 +25,16 @@ public class MessageHistoryManager {
     private static boolean loaded = false;
 
     public static void addMessage(Text message) {
+        if (message == null) {
+            return;
+        }
+
         String messageStr = message.getString();
 
         if (messageStr == null || messageStr.trim().isEmpty() && MessageHistoryModule.INSTANCE.isEnabled()) {
             return;
         }
 
-        messageHistory.remove(messageStr);
         messageHistory.addFirst(messageStr);
 
         while (messageHistory.size() > MAX_HISTORY_SIZE) {

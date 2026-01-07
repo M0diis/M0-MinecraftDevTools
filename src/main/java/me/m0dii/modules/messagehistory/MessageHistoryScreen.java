@@ -11,15 +11,15 @@ import java.util.List;
 
 public class MessageHistoryScreen extends Screen {
     private final Screen parent;
-    private final List<String> commands;
+    private final List<String> messages;
     private int scrollOffset = 0;
     private static final int LINE_HEIGHT = 20;
     private static final int VISIBLE_LINES = 15;
 
     public MessageHistoryScreen(Screen parent) {
-        super(Text.literal("Command History"));
+        super(Text.literal("Message History"));
         this.parent = parent;
-        this.commands = new ArrayList<>(MessageHistoryManager.getHistory());
+        this.messages = new ArrayList<>(MessageHistoryManager.getHistory());
     }
 
     public static Screen create(Screen parent) {
@@ -36,7 +36,7 @@ public class MessageHistoryScreen extends Screen {
                 .dimensions(width / 2 - 100, height - 30, 100, 20)
                 .build());
 
-        if (!commands.isEmpty()) {
+        if (!messages.isEmpty()) {
             addDrawableChild(ButtonWidget.builder(
                             Text.literal("Clear History").formatted(Formatting.RED),
                             button -> {
@@ -65,25 +65,25 @@ public class MessageHistoryScreen extends Screen {
     private void drawContents(DrawContext context, int mouseX, int mouseY) {
         context.drawCenteredTextWithShadow(textRenderer, title, width / 2, 15, 0xFFFFFF);
 
-        String info = commands.isEmpty()
-                ? "No message in history yet."
+        String info = messages.isEmpty()
+                ? "No messages in history yet."
                 : "Click any message to copy it to clipboard";
         context.drawCenteredTextWithShadow(textRenderer,
                 Text.literal(info).formatted(Formatting.GRAY),
                 width / 2, 30, 0xAAAAAA);
 
-        if (!commands.isEmpty()) {
+        if (!messages.isEmpty()) {
             // Draw commands
             int yStart = 50;
-            int maxVisible = Math.min(VISIBLE_LINES, commands.size() - scrollOffset);
+            int maxVisible = Math.min(VISIBLE_LINES, messages.size() - scrollOffset);
 
             for (int i = 0; i < maxVisible; i++) {
                 int index = i + scrollOffset;
-                if (index >= commands.size()) {
+                if (index >= messages.size()) {
                     break;
                 }
 
-                String command = commands.get(index);
+                String command = messages.get(index);
                 int y = yStart + (i * LINE_HEIGHT);
                 int boxX1 = 20;
                 int boxX2 = width - 20;
@@ -123,8 +123,8 @@ public class MessageHistoryScreen extends Screen {
                 }
             }
 
-            if (commands.size() > VISIBLE_LINES) {
-                int totalPages = (commands.size() + VISIBLE_LINES - 1) / VISIBLE_LINES;
+            if (messages.size() > VISIBLE_LINES) {
+                int totalPages = (messages.size() + VISIBLE_LINES - 1) / VISIBLE_LINES;
                 int currentPage = (scrollOffset / VISIBLE_LINES) + 1;
                 String pageText = "Page " + currentPage + "/" + totalPages + " (Scroll to navigate)";
                 context.drawCenteredTextWithShadow(textRenderer,
@@ -136,17 +136,17 @@ public class MessageHistoryScreen extends Screen {
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (button == 0 && !commands.isEmpty()) { // Left click
+        if (button == 0 && !messages.isEmpty()) { // Left click
             int yStart = 50;
-            int maxVisible = Math.min(VISIBLE_LINES, commands.size() - scrollOffset);
+            int maxVisible = Math.min(VISIBLE_LINES, messages.size() - scrollOffset);
 
             for (int i = 0; i < maxVisible; i++) {
                 int index = i + scrollOffset;
-                if (index >= commands.size()) {
+                if (index >= messages.size()) {
                     break;
                 }
 
-                String command = commands.get(index);
+                String command = messages.get(index);
                 int y = yStart + (i * LINE_HEIGHT);
                 int boxX1 = 20;
                 int boxX2 = width - 20;
@@ -175,11 +175,11 @@ public class MessageHistoryScreen extends Screen {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
-        if (commands.size() > VISIBLE_LINES) {
+        if (messages.size() > VISIBLE_LINES) {
             if (verticalAmount > 0) {
                 scrollOffset = Math.max(0, scrollOffset - 1);
             } else if (verticalAmount < 0) {
-                scrollOffset = Math.min(commands.size() - VISIBLE_LINES, scrollOffset + 1);
+                scrollOffset = Math.min(messages.size() - VISIBLE_LINES, scrollOffset + 1);
             }
             return true;
         }

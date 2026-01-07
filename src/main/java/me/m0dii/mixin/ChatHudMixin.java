@@ -31,23 +31,21 @@ public class ChatHudMixin {
     )
     private void onAddMessageFullSecondaryChat(Text message, MessageSignatureData signature, MessageIndicator indicator, CallbackInfo ci) {
         handleMessage(message, ci);
+
+        MessageHistoryManager.addMessage(message);
     }
 
     @Unique
     private void handleMessage(Text message, CallbackInfo ci) {
         try {
-            if (!ModConfig.secondaryChatEnabled || message == null) {
-                return;
-            }
+            if (ModConfig.secondaryChatEnabled && message != null) {
+                if (SecondaryChatManager.matchesFilter(message)) {
+                    SecondaryChatManager.push(message);
 
-            if (!SecondaryChatManager.matchesFilter(message)) {
-                return;
-            }
-
-            SecondaryChatManager.push(message);
-
-            if (ModConfig.secondaryChatInterceptMode == ModConfig.ChatInterceptMode.MOVE) {
-                ci.cancel();
+                    if (ModConfig.secondaryChatInterceptMode == ModConfig.ChatInterceptMode.MOVE) {
+                        ci.cancel();
+                    }
+                }
             }
         } catch (Exception e) {
             // Silently catch errors to avoid breaking chat
@@ -60,11 +58,5 @@ public class ChatHudMixin {
             at = {@At(value = "CONSTANT", args = {"intValue=100"})})
     public int modifyChatHistorySize(int original) {
         return ModConfig.messageBoxHistoryLimit;
-    }
-
-    // Hook to store messages in history
-    @Inject(method = "addMessage(Lnet/minecraft/text/Text;)V", at = @At("HEAD"))
-    private void onAddMessage(Text message, CallbackInfo ci) {
-        MessageHistoryManager.addMessage(message);
     }
 }
