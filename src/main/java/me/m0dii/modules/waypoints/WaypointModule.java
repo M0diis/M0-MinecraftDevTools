@@ -8,7 +8,7 @@ public class WaypointModule extends Module {
     public static final WaypointModule INSTANCE = new WaypointModule();
 
     protected WaypointModule() {
-        super("waypoint_module", "Waypoint Module", false);
+        super("waypoints", "Waypoints", false);
     }
 
     @Override

@@ -2,7 +2,6 @@ package me.m0dii.modules.overlays;
 
 import me.m0dii.modules.Module;
 import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
-import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.RenderLayer;
 import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.client.render.VertexConsumerProvider;
@@ -20,18 +19,14 @@ public class ChunkBorderOverlayModule extends Module {
         super("chunk_border_overlay", "Chunk Border Overlay", false);
     }
 
+    @Override
     public void register() {
         WorldRenderEvents.AFTER_ENTITIES.register(getAfterEntities());
     }
 
     private WorldRenderEvents.@NotNull AfterEntities getAfterEntities() {
         return context -> {
-            if (!isEnabled()) {
-                return;
-            }
-
-            MinecraftClient client = MinecraftClient.getInstance();
-            if (client.player == null || client.world == null) {
+            if (!isEnabled() || isClientNull()) {
                 return;
             }
 
@@ -39,12 +34,11 @@ public class ChunkBorderOverlayModule extends Module {
             VertexConsumerProvider vertexConsumers = context.consumers();
             Vec3d cameraPos = context.camera().getPos();
 
-            BlockPos playerPos = client.player.getBlockPos();
+            BlockPos playerPos = getClient().player.getBlockPos();
             int chunkX = playerPos.getX() >> 4;
             int chunkZ = playerPos.getZ() >> 4;
 
-            // Render chunk borders in a radius around player
-            int radius = 3; // Show 3x3 chunks around player
+            int radius = 3;
             for (int dx = -radius; dx <= radius; dx++) {
                 for (int dz = -radius; dz <= radius; dz++) {
                     int targetChunkX = chunkX + dx;
@@ -69,7 +63,6 @@ public class ChunkBorderOverlayModule extends Module {
         double maxX = ((chunkX << 4) + 16) - cameraPos.x;
         double maxZ = ((chunkZ << 4) + 16) - cameraPos.z;
 
-        // Height range for lines
         double minY = -64 - cameraPos.y;
         double maxY = 320 - cameraPos.y;
 

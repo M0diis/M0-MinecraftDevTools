@@ -4,6 +4,7 @@ import me.m0dii.modules.Module;
 import me.m0dii.utils.ModConfig;
 import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.render.Camera;
 import net.minecraft.client.render.RenderLayer;
 import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.client.render.VertexConsumerProvider;
@@ -30,29 +31,20 @@ public class SlimeChunkOverlayModule extends Module {
     public void register() {
         WorldRenderEvents.AFTER_ENTITIES.register(getAfterEntities());
 
-        registerPressedKeybind("key.m0-dev-tools.toggle_slime_overlay", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_F9, client -> {
-            toggleEnabled();
-            if (client.player != null) {
-                client.player.sendMessage(net.minecraft.text.Text.literal("Slime chunk overlay: " + (isEnabled() ? "ON" : "OFF")), true);
-            }
-            setEnabled(isEnabled());
-        });
+        registerPressedKeybind("key.m0-dev-tools.toggle_slime_overlay",
+                InputUtil.Type.KEYSYM,
+                GLFW.GLFW_KEY_F9,
+                client -> toggleEnabled());
     }
 
     private WorldRenderEvents.@NotNull AfterEntities getAfterEntities() {
         return context -> {
-            if (!isEnabled()) {
-                return;
-            }
-
-            MinecraftClient client = MinecraftClient.getInstance();
-
-            if (client.player == null || client.world == null) {
+            if (!isEnabled() || isClientNull()) {
                 return;
             }
 
             long seed;
-            MinecraftServer server = client.getServer();
+            MinecraftServer server = getClient().getServer();
             if (server != null) {
                 seed = server.getSaveProperties().getGeneratorOptions().getSeed();
             } else {
@@ -60,15 +52,17 @@ public class SlimeChunkOverlayModule extends Module {
             }
 
             MatrixStack matrices = context.matrixStack();
-            if (matrices == null) {
+            Camera camera = context.camera();
+            if (matrices == null || camera == null) {
                 return;
             }
-            Vec3d cameraPos = context.camera().getPos();
-            ChunkPos playerChunk = new ChunkPos(client.player.getBlockPos());
+
+            Vec3d cameraPos = camera.getPos();
+            ChunkPos playerChunk = new ChunkPos(getClient().player.getBlockPos());
 
             VertexConsumerProvider vcp = context.consumers();
             if (vcp == null) {
-                vcp = client.getBufferBuilders().getEntityVertexConsumers();
+                vcp = getClient().getBufferBuilders().getEntityVertexConsumers();
             }
 
             int chunkRadius = Math.max(1, ModConfig.overlayXZradius / 16);
@@ -110,7 +104,6 @@ public class SlimeChunkOverlayModule extends Module {
         VertexConsumer vertexConsumer = vcp.getBuffer(RenderLayer.getLines());
         Matrix4f matrix = matrices.peek().getPositionMatrix();
 
-        // Draw vertical lines at corners using Vec3d endpoints
         drawLine(vertexConsumer, matrix, new Vec3d(minX, minY, minZ), new Vec3d(minX, maxY, minZ));
         drawLine(vertexConsumer, matrix, new Vec3d(maxX, minY, minZ), new Vec3d(maxX, maxY, minZ));
         drawLine(vertexConsumer, matrix, new Vec3d(minX, minY, maxZ), new Vec3d(minX, maxY, maxZ));

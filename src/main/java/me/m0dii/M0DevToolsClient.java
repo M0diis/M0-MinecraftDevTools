@@ -6,16 +6,18 @@ import me.m0dii.modules.blockstatecycler.BlockStateCycler;
 import me.m0dii.modules.chat.SecondaryChatModule;
 import me.m0dii.modules.clickgui.ClickGuiModule;
 import me.m0dii.modules.clickgui.ModuleRegistry;
+import me.m0dii.modules.overlays.CommandBlockOverlayModule;
 import me.m0dii.modules.commandhistory.CommandHistoryModule;
 import me.m0dii.modules.entityradar.EntityRadarModule;
 import me.m0dii.modules.freecam.FreecamModule;
 import me.m0dii.modules.fullbright.FullbrightModule;
-import me.m0dii.modules.instabreak.InstaBreakModule;
+import me.m0dii.modules.instantbreak.InstantBreakModule;
 import me.m0dii.modules.inventorymove.InventoryMoveModule;
 import me.m0dii.modules.macros.MacrosModule;
 import me.m0dii.modules.nbtget.NBTGetCommand;
 import me.m0dii.modules.nbttooltip.NBTTooltipModule;
 import me.m0dii.modules.overlays.*;
+import me.m0dii.modules.overlays.RedstoneBlockUpdateViewModule;
 import me.m0dii.modules.quicktp.QuickTeleportModule;
 import me.m0dii.modules.scripting.ClientCommandRunScript;
 import me.m0dii.modules.scripting.InGameScriptingKeybinds;
@@ -70,6 +72,7 @@ public class M0DevToolsClient implements ClientModInitializer {
         // XrayModule.INSTANCE.register(); // Not ready yet
         LightLevelOverlayModule.INSTANCE.register();
         RedstonePowerOverlayModule.INSTANCE.register();
+        RedstoneBlockUpdateViewModule.INSTANCE.register();
         SlimeChunkOverlayModule.INSTANCE.register();
         EntityRadarModule.INSTANCE.register();
         CommandHistoryModule.INSTANCE.register();
@@ -84,11 +87,12 @@ public class M0DevToolsClient implements ClientModInitializer {
         FreecamModule.INSTANCE.register();
         ZoomModule.INSTANCE.register();
         SpectatorToggleModule.INSTANCE.register();
-        InstaBreakModule.INSTANCE.register();
+        InstantBreakModule.INSTANCE.register();
         NBTTooltipModule.INSTANCE.register();
         FullbrightModule.INSTANCE.register();
         InventoryMoveModule.INSTANCE.register();
         ClickGuiModule.INSTANCE.register();
+        CommandBlockOverlayModule.INSTANCE.register();
 
         // Populate ModuleRegistry categories after modules have had a chance to create their singletons
         ModuleRegistry.initializeCategories();

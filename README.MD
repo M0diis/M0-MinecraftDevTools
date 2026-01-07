@@ -25,6 +25,8 @@ A powerful client-side mod for Minecraft that enhances your gameplay experience 
 - Freecam
 - Waypoints
 - Zoom
+- Redstone Dust Update Order display
+- Faster Server Pinger
 
 ---
 

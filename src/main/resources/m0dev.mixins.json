@@ -19,16 +19,17 @@
     "MinecraftClientInvMoveMixin",
     "MouseMixin",
     "MouseSecondaryChatMixin",
+    "MultiplayerServerListWidgetMixin",
     "SecondaryChatCaptureMixin",
     "SimpleOptionMixin",
     "WorldRendererMixin",
     "uiutilities.BookEditScreenMixin",
     "uiutilities.BookScreenMixin",
     "uiutilities.ClientCommonNetworkHandlerMixin",
+    "uiutilities.ClientConnectionMixin",
     "uiutilities.HandledScreenMixin",
     "uiutilities.MultiplayerScreenMixin",
     "uiutilities.SignEditScreenMixin",
-    "uiutilities.SleepingChatScreenMixin",
-    "uiutilities.ClientConnectionMixin"
+    "uiutilities.SleepingChatScreenMixin"
   ]
 }

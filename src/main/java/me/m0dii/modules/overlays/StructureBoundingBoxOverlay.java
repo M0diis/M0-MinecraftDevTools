@@ -2,7 +2,7 @@ package me.m0dii.modules.overlays;
 
 import me.m0dii.modules.Module;
 import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
-import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.render.Camera;
 import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.client.render.VertexConsumerProvider;
 import net.minecraft.client.util.math.MatrixStack;
@@ -24,27 +24,28 @@ public class StructureBoundingBoxOverlay extends Module {
         super("structure_bounding_box_overlay", "Structure Bounding Box Overlay", false);
     }
 
+    @Override
     public void register() {
         WorldRenderEvents.AFTER_ENTITIES.register(getAfterEntities());
     }
 
     private WorldRenderEvents.@NotNull AfterEntities getAfterEntities() {
         return context -> {
-            if (!isEnabled()) {
-                return;
-            }
-
-            MinecraftClient client = MinecraftClient.getInstance();
-
-            if (client.player == null || client.world == null) {
+            if (!isEnabled() || isClientNull()) {
                 return;
             }
 
             MatrixStack matrices = context.matrixStack();
-            VertexConsumerProvider vertexConsumers = context.consumers();
-            Vec3d cameraPos = context.camera().getPos();
+            Camera camera = context.camera();
 
-            BlockPos playerPos = client.player.getBlockPos();
+            if (matrices == null || camera == null) {
+                return;
+            }
+
+            VertexConsumerProvider vertexConsumers = context.consumers();
+            Vec3d cameraPos = camera.getPos();
+
+            BlockPos playerPos = getClient().player.getBlockPos();
             int chunkX = playerPos.getX() >> 4;
             int chunkZ = playerPos.getZ() >> 4;
             int radius = 16;
@@ -52,7 +53,7 @@ public class StructureBoundingBoxOverlay extends Module {
             List<BlockBox> boxes = new ArrayList<>();
             for (int dx = -radius; dx <= radius; dx++) {
                 for (int dz = -radius; dz <= radius; dz++) {
-                    WorldChunk chunk = client.world.getChunk(chunkX + dx, chunkZ + dz);
+                    WorldChunk chunk = getClient().world.getChunk(chunkX + dx, chunkZ + dz);
                     if (chunk == null) {
                         continue;
                     }

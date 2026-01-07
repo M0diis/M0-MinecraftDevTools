@@ -1,37 +1,30 @@
 package me.m0dii.modules.overlays;
 
-import me.m0dii.modules.Module;
-import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
 import net.minecraft.block.Block;
+import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.font.TextRenderer;
-import net.minecraft.client.render.VertexConsumerProvider;
 import net.minecraft.client.util.InputUtil;
-import net.minecraft.client.util.math.MatrixStack;
-import net.minecraft.text.Text;
 import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.RotationAxis;
 import net.minecraft.util.math.Vec3d;
-import org.jetbrains.annotations.NotNull;
-import org.joml.Matrix4f;
+import org.jetbrains.annotations.Nullable;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.List;
 
-public class LightLevelOverlayModule extends Module {
+public class LightLevelOverlayModule extends BlockTextOverlayModule {
+
     private static final int XZ_RADIUS = 16;
     private static final int Y_RADIUS = 4;
 
     private static final List<Block> excludedBlocks = List.of(
-        Blocks.SHORT_GRASS,
-        Blocks.TALL_GRASS,
-        Blocks.FERN,
-        Blocks.LARGE_FERN,
-        Blocks.DEAD_BUSH,
-        Blocks.SEAGRASS,
-        Blocks.KELP,
-        Blocks.SUGAR_CANE
+            Blocks.SHORT_GRASS,
+            Blocks.TALL_GRASS,
+            Blocks.FERN,
+            Blocks.LARGE_FERN,
+            Blocks.DEAD_BUSH,
+            Blocks.SEAGRASS,
+            Blocks.KELP,
+            Blocks.SUGAR_CANE
     );
 
     public static final LightLevelOverlayModule INSTANCE = new LightLevelOverlayModule();
@@ -42,91 +35,44 @@ public class LightLevelOverlayModule extends Module {
 
     @Override
     public void register() {
-        WorldRenderEvents.AFTER_ENTITIES.register(getAfterEntities());
+        super.register();
 
-        registerPressedKeybind("key.m0-dev-tools.toggle_light_overlay", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_F9, client -> {
-            toggleEnabled();
-            if (client.player != null) {
-                client.player.sendMessage(Text.literal("Light overlay: " + (isEnabled() ? "ON" : "OFF")), true);
-            }
-            setEnabled(isEnabled());
-        });
+        registerPressedKeybind("key.m0-dev-tools.toggle_light_overlay",
+                InputUtil.Type.KEYSYM,
+                GLFW.GLFW_KEY_F9,
+                client -> toggleEnabled());
     }
 
-    private WorldRenderEvents.@NotNull AfterEntities getAfterEntities() {
-        return context -> {
-            if (!isEnabled()) {
-                return;
-            }
+    @Nullable
+    @Override
+    protected TextRenderInfo shouldRender(BlockPos pos, Vec3d cameraPos) {
+        BlockState state = getClient().world.getBlockState(pos);
+        if (state.isAir() || state.getLuminance() > 0 || excludedBlocks.contains(state.getBlock())) {
+            return null;
+        }
 
-            MinecraftClient client = MinecraftClient.getInstance();
-            if (client.player == null || client.world == null) {
-                return;
-            }
+        BlockState above = getClient().world.getBlockState(pos.up());
+        boolean topExposed = above.isAir() || above.getCollisionShape(getClient().world, pos.up()).isEmpty();
+        if (!topExposed) {
+            return null;
+        }
 
-            MatrixStack matrices = context.matrixStack();
-            if (matrices == null) {
-                return;
-            }
+        int light = getClient().world.getLightLevel(pos.up());
+        if (light <= 0) {
+            return null;
+        }
 
-            TextRenderer textRenderer = client.textRenderer;
-            Vec3d cameraPos = context.camera().getPos();
-            BlockPos playerPos = client.player.getBlockPos();
+        int color = (light < 8) ? 0xFF0000 : 0x00FF00;
+        return new TextRenderInfo(Integer.toString(light), color);
+    }
 
-            VertexConsumerProvider vcp = context.consumers();
-            if (vcp == null) {
-                vcp = client.getBufferBuilders().getEntityVertexConsumers();
-            }
+    @Override
+    protected int getXZRadius() {
+        return XZ_RADIUS;
+    }
 
-            for (int x = -XZ_RADIUS; x <= XZ_RADIUS; x++) {
-                for (int y = -Y_RADIUS; y <= Y_RADIUS; y++) {
-                    for (int z = -XZ_RADIUS; z <= XZ_RADIUS; z++) {
-                        BlockPos pos = playerPos.add(x, y, z);
-                        var state = client.world.getBlockState(pos);
-                        if (state.isAir()) {
-                            continue;
-                        }
-                        if (state.getLuminance() > 0) {
-                            continue;
-                        }
-                        if (excludedBlocks.contains(state.getBlock())) {
-                            continue;
-                        }
-                        var above = client.world.getBlockState(pos.up());
-                        boolean topExposed = above.isAir() || above.getCollisionShape(client.world, pos.up()).isEmpty();
-                        if (!topExposed) {
-                            continue;
-                        }
-                        int light = client.world.getLightLevel(pos.up());
-                        if (light <= 0) {
-                            continue;
-                        }
-
-                        Vec3d blockTop = new Vec3d(pos.getX() + 0.5, pos.getY() + 1.005, pos.getZ() + 0.5);
-                        double distSq = cameraPos.squaredDistanceTo(blockTop);
-                        if (distSq > XZ_RADIUS * XZ_RADIUS) {
-                            continue;
-                        }
-
-                        int color = (light < 8) ? 0xFF0000 : 0x00FF00;
-
-                        matrices.push();
-                        matrices.translate(blockTop.x - cameraPos.x, blockTop.y - cameraPos.y, blockTop.z - cameraPos.z);
-                        matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(90f));
-                        float scale = 0.04F;
-                        matrices.scale(scale, scale, scale);
-
-                        String s = Integer.toString(light);
-                        int w = textRenderer.getWidth(s);
-                        Matrix4f model = matrices.peek().getPositionMatrix();
-                        int fullBright = 0x00F000F0;
-
-                        textRenderer.draw(s, -w / 2f, 0, color, true, model, vcp, TextRenderer.TextLayerType.POLYGON_OFFSET, 0, fullBright);
-
-                        matrices.pop();
-                    }
-                }
-            }
-        };
+    @Override
+    protected int getYRadius() {
+        return Y_RADIUS;
     }
 }

@@ -1,6 +1,7 @@
 package me.m0dii.modules.freecam;
 
 
+import lombok.Setter;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.WorldRenderer;
 import net.minecraft.client.world.ClientWorld;
@@ -14,11 +15,8 @@ public class CameraUtils {
     private CameraUtils() {
     }
 
+    @Setter
     private static boolean freeCameraSpectator;
-
-    public static void setFreeCameraSpectator(boolean isSpectator) {
-        freeCameraSpectator = isSpectator;
-    }
 
     public static boolean getFreeCameraSpectator() {
         return freeCameraSpectator;

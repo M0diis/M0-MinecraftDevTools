@@ -6,6 +6,8 @@
 
   "key.m0-dev-tools.toggle_light_overlay": "Toggle Light Overlay",
   "key.m0-dev-tools.toggle_redstone_overlay": "Toggle Redstone Overlay",
+  "key.m0-dev-tools.toggle_redstone_bud": "Toggle Redstone BUD Order Display",
+  "key.m0-dev-tools.clear_redstone_bud": "Clear Redstone BUD Order",
   "key.m0-dev-tools.toggle_slime_overlay": "Toggle Slime Chunk Overlay",
   "key.m0-dev-tools.open_nbt_editor": "Open NBT Editor",
   "key.m0-dev-tools.toggle_block_inspector": "Toggle Block Inspector",

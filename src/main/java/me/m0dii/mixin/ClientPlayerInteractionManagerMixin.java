@@ -1,7 +1,7 @@
 package me.m0dii.mixin;
 
 import me.m0dii.modules.freecam.CameraUtils;
-import me.m0dii.modules.instabreak.InstaBreakModule;
+import me.m0dii.modules.instantbreak.InstantBreakModule;
 import net.minecraft.client.network.ClientPlayerInteractionManager;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
@@ -19,7 +19,7 @@ public class ClientPlayerInteractionManagerMixin {
 
     @Inject(method = "updateBlockBreakingProgress", at = @At("HEAD"), cancellable = true)
     private void handleInstantBreak(BlockPos pos, Direction side, CallbackInfoReturnable<Boolean> cir) {
-        if (InstaBreakModule.INSTANCE.isEnabled()) {
+        if (InstantBreakModule.INSTANCE.isEnabled()) {
             this.blockBreakingCooldown = 0;
         }
 

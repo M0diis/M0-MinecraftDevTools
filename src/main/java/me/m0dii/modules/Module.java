@@ -6,6 +6,7 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
+import net.minecraft.client.world.ClientWorld;
 import net.minecraft.text.Text;
 import org.jetbrains.annotations.NotNull;
 
@@ -19,7 +20,11 @@ import java.util.function.Consumer;
  */
 public abstract class Module {
     @Getter
-    protected final MinecraftClient client = MinecraftClient.getInstance();
+    private final MinecraftClient client = MinecraftClient.getInstance();
+
+    public ClientWorld getWorld() {
+        return client.world;
+    }
 
     @Getter
     protected final ClientPlayerEntity player = client.player;
@@ -40,6 +45,10 @@ public abstract class Module {
         this.enabled = defaultEnabled;
     }
 
+    protected boolean isClientNull() {
+        return getClient() == null || getClient().player == null || getClient().world == null;
+    }
+
     public void setEnabled(boolean enabled) {
         if (this.enabled == enabled) {
             return;
@@ -57,9 +66,8 @@ public abstract class Module {
     public void toggleEnabled() {
         setEnabled(!isEnabled());
 
-        MinecraftClient mc = MinecraftClient.getInstance();
-        if (mc.player != null) {
-            mc.player.sendMessage(Text.literal(displayName + " " + (isEnabled() ? "enabled" : "disabled")), true);
+        if (getClient().player != null) {
+            getClient().player.sendMessage(Text.literal(displayName + " " + (isEnabled() ? "enabled" : "disabled")), true);
         }
     }
 
