@@ -9,6 +9,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class KotlinScriptManager implements ScriptManager {
+    
     private final ScriptEngine engine;
 
     public KotlinScriptManager() {

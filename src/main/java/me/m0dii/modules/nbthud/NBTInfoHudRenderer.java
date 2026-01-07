@@ -65,7 +65,7 @@ public class NBTInfoHudRenderer implements Toggleable {
         int y = startY;
         ctx.getMatrices().push();
         ctx.getMatrices().scale(scale, scale, 1.0F);
-        // draw title
+
         ctx.drawText(tr, "Inspector", (int) (startX / scale), (int) (y / scale), 0xFFFFFF, true);
         y += (int) Math.ceil(lineH * scale);
 

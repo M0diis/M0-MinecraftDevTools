@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
 import lombok.Builder;
+import me.m0dii.M0DevTools;
 import net.fabricmc.loader.api.FabricLoader;
 
 import java.io.IOException;
@@ -46,7 +47,7 @@ public class MacroDataHandler {
                 macros = loadedMacros;
             }
         } catch (IOException e) {
-            System.err.println("Failed to load macros: " + e.getMessage());
+            M0DevTools.LOGGER.error("Failed to load macros: {}", e.getMessage());
         }
     }
 
@@ -55,7 +56,7 @@ public class MacroDataHandler {
             String json = GSON.toJson(macros);
             Files.writeString(CONFIG_FILE, json);
         } catch (IOException e) {
-            System.err.println("Failed to save macros: " + e.getMessage());
+            M0DevTools.LOGGER.error("Failed to save macros: {}", e.getMessage());
         }
     }
 

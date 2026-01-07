@@ -27,7 +27,7 @@ public class PendingMacrosOverlayModule extends Module {
 
     private void onHudRender(DrawContext ctx, RenderTickCounter tickCounter) {
         MinecraftClient client = MinecraftClient.getInstance();
-        if (client == null || client.player == null) {
+        if (!isEnabled() || isClientNull()) {
             return;
         }
 
@@ -38,7 +38,7 @@ public class PendingMacrosOverlayModule extends Module {
 
         TextRenderer tr = client.textRenderer;
 
-        final float scale = Math.max(0.5f, Math.min(3.0f, (float) ModConfig.macroOverlayTextScale));
+        final float scale = Math.clamp((float) ModConfig.macroOverlayTextScale, 0.5f, 3.0f);
         final int lineH = Math.max(1, ModConfig.macroOverlayLineHeight);
         final int pad = Math.max(0, ModConfig.macroOverlayPadding);
         final int marginX = Math.max(0, ModConfig.macroOverlayMarginX);

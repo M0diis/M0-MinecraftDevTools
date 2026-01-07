@@ -21,7 +21,7 @@ public class NBTTooltipModule extends Module {
 
     @Override
     public void register() {
-        // Opened via ModulesScreen
+        // Enabled via ClickGUI
     }
 
     public static List<Text> getNbtTooltipText(ItemStack itemStack, List<Text> list) {

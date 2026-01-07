@@ -24,10 +24,7 @@ public class NBTInfoHudOverlayModule extends Module {
         registerPressedKeybind("key.m0-dev-tools.toggle_block_inspector",
                 InputUtil.Type.KEYSYM,
                 GLFW.GLFW_KEY_F10,
-                client -> {
-                    toggleEnabled();
-                    renderer.setEnabled(isEnabled());
-                });
+                client -> toggleEnabled());
     }
 
     @Override

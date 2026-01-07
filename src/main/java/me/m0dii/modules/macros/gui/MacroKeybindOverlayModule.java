@@ -30,7 +30,7 @@ public class MacroKeybindOverlayModule extends Module {
 
     private void onHudRender(DrawContext ctx, RenderTickCounter tickCounter) {
         MinecraftClient client = MinecraftClient.getInstance();
-        if (client == null || client.player == null || !isEnabled()) {
+        if (!isEnabled() || isClientNull()) {
             return;
         }
 

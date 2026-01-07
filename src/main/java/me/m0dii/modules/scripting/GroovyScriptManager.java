@@ -2,16 +2,13 @@ package me.m0dii.modules.scripting;
 
 import groovy.lang.Binding;
 import groovy.lang.GroovyShell;
+import me.m0dii.M0DevTools;
 import net.minecraft.client.MinecraftClient;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 
-import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
 public class GroovyScriptManager implements ScriptManager {
-    private static final Logger LOGGER = LogManager.getLogger(GroovyScriptManager.class);
 
     private final GroovyShell shell;
     private final Binding binding;
@@ -19,25 +16,6 @@ public class GroovyScriptManager implements ScriptManager {
     public GroovyScriptManager() {
         this.binding = new Binding();
         this.shell = new GroovyShell(binding);
-    }
-
-    /**
-     * Execute a saved script by name (reads from storage and runs it).
-     */
-    public static void executeScript(String scriptName) {
-        try {
-            String script = ScriptStorage.readScript(scriptName);
-            if (script == null) {
-                LOGGER.warn("Script '{}' returned null content", scriptName);
-                return;
-            }
-            GroovyScriptManager manager = new GroovyScriptManager();
-            manager.runScript(script);
-        } catch (IOException e) {
-            LOGGER.warn("Failed to read script '{}' from storage: {}", scriptName, e.getMessage());
-        } catch (Exception e) {
-            LOGGER.error("Unhandled exception while executing script '{}':", scriptName, e);
-        }
     }
 
     @Override
@@ -50,7 +28,7 @@ public class GroovyScriptManager implements ScriptManager {
         try {
             return shell.evaluate(script);
         } catch (Exception e) {
-            LOGGER.error("Error executing Groovy script:", e);
+            M0DevTools.LOGGER.error("Error executing Groovy script:", e);
             return null;
         }
     }

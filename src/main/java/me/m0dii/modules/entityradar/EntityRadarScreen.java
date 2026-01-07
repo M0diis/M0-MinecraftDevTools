@@ -156,8 +156,7 @@ public class EntityRadarScreen extends Screen {
                 return;
             }
 
-            String command = String.format("tp @s %.2f %.2f %.2f",
-                    entity.getX(), entity.getY(), entity.getZ());
+            String command = String.format("tp @s %.2f %.2f %.2f", entity.getX(), entity.getY(), entity.getZ());
             client.player.networkHandler.sendChatCommand(command);
             client.setScreen(null);
         }

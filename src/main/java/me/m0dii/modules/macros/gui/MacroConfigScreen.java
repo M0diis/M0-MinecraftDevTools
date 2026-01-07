@@ -8,11 +8,9 @@ import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.util.InputUtil;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
+import org.jetbrains.annotations.Nullable;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -253,20 +251,10 @@ public final class MacroConfigScreen {
         return builder.build();
     }
 
-    private static List<String> sanitize(List<String> src) {
-        List<String> out = new ArrayList<>();
+    private static List<String> sanitize(@Nullable List<String> src) {
         if (src == null) {
-            return out;
+            return new ArrayList<>();
         }
-        for (String s : src) {
-            if (s == null) {
-                continue;
-            }
-            String t = s.trim();
-            if (!t.isEmpty()) {
-                out.add(t);
-            }
-        }
-        return out;
+        return src.stream().filter(Objects::nonNull).map(String::trim).filter(t -> !t.isEmpty()).toList();
     }
 }

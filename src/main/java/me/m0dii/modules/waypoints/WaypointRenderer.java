@@ -26,7 +26,6 @@ public class WaypointRenderer {
         WaypointRenderer.enabled = enabled;
     }
 
-
     public static void register() {
         WorldRenderEvents.AFTER_ENTITIES.register(context -> {
             if (!enabled) {

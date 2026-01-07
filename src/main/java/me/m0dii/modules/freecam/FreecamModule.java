@@ -14,9 +14,10 @@ public class FreecamModule extends Module {
 
     @Override
     public void register() {
-        registerPressedKeybind("key.m0-dev-tools.freecam", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_U, client -> {
-            toggleEnabled();
-        });
+        registerPressedKeybind("key.m0-dev-tools.freecam",
+                InputUtil.Type.KEYSYM,
+                GLFW.GLFW_KEY_U,
+                client -> toggleEnabled());
     }
 
     @Override

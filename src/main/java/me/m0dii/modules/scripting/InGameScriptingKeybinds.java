@@ -2,13 +2,12 @@ package me.m0dii.modules.scripting;
 
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
+import me.m0dii.M0DevTools;
 import me.m0dii.modules.scripting.gui.ScriptEditorScreen;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.option.KeyBinding;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 import org.lwjgl.glfw.GLFW;
 
 import java.io.IOException;
@@ -28,9 +27,7 @@ public class InGameScriptingKeybinds {
     private static final Gson GSON = new Gson();
     private static final Map<String, Integer> scriptKeybinds = new HashMap<>();
     private static final Map<Integer, Boolean> keyPressedLastTick = new HashMap<>();
-    private static final Logger LOGGER = LogManager.getLogger(InGameScriptingKeybinds.class);
 
-    // Added a private constructor to hide the implicit public one
     private InGameScriptingKeybinds() {
         // Prevent instantiation
     }
@@ -63,7 +60,7 @@ public class InGameScriptingKeybinds {
         try {
             String script = ScriptStorage.readScript(scriptName);
             if (script == null) {
-                LOGGER.warn("Script '{}' returned null content", scriptName);
+                M0DevTools.LOGGER.warn("Script '{}' returned null content", scriptName);
                 return;
             }
             if (scriptName.endsWith(".groovy")) {
@@ -73,10 +70,10 @@ public class InGameScriptingKeybinds {
                 KotlinScriptManager manager = new KotlinScriptManager();
                 manager.runScript(script);
             } else {
-                LOGGER.warn("Unknown script extension for '{}'. Supported: .groovy, .kts", scriptName);
+                M0DevTools.LOGGER.warn("Unknown script extension for '{}'. Supported: .groovy, .kts", scriptName);
             }
         } catch (Exception e) {
-            LOGGER.error("Error executing script '{}':", scriptName, e);
+            M0DevTools.LOGGER.error("Error executing script '{}':", scriptName, e);
         }
     }
 

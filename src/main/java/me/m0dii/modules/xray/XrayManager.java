@@ -3,6 +3,7 @@ package me.m0dii.modules.xray;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import lombok.Getter;
+import me.m0dii.M0DevTools;
 import net.fabricmc.loader.api.FabricLoader;
 
 import java.io.IOException;
@@ -15,13 +16,6 @@ public class XrayManager {
 
     private static final Path CONFIG_FILE = FabricLoader.getInstance().getConfigDir().resolve("m0-dev-tools-xray.json");
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
-
-    @Getter
-    private static boolean xrayEnabled = false;
-
-    public static void toggleXray() {
-        xrayEnabled = !xrayEnabled;
-    }
 
     @Getter
     private static Set<String> xrayBlocks = new HashSet<>();
@@ -53,7 +47,7 @@ public class XrayManager {
                 xrayBlocks = new HashSet<>(loaded);
             }
         } catch (IOException e) {
-            System.err.println("Failed to load xray blocks: " + e.getMessage());
+            M0DevTools.LOGGER.error("Failed to load xray blocks: {}", e.getMessage());
         }
     }
 
@@ -62,7 +56,7 @@ public class XrayManager {
             String json = GSON.toJson(xrayBlocks);
             Files.writeString(CONFIG_FILE, json);
         } catch (IOException e) {
-            System.err.println("Failed to save xray blocks: " + e.getMessage());
+            M0DevTools.LOGGER.error("Failed to save xray blocks: {}", e.getMessage());
         }
     }
 }

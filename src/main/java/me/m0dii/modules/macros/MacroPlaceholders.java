@@ -14,6 +14,7 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.biome.Biome;
 
+import java.util.Locale;
 import java.util.Random;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -314,7 +315,7 @@ public final class MacroPlaceholders {
     }
 
     private static String formatDouble(double d) {
-        return String.format(java.util.Locale.ROOT, "%.3f", d);
+        return String.format(Locale.ROOT, "%.3f", d);
     }
 }
 
