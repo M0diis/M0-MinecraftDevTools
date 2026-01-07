@@ -34,7 +34,7 @@ A powerful client-side mod for Minecraft that enhances your gameplay experience 
 
 ## Installation
 
-1. Download the latest release from the [GitHub Releases](https://github.com/mod-nerds-inc/middle-click-fix/releases) page or build from source (see below).
+1. Download the latest release from the [GitHub Releases](https://github.com/M0diis/M0-MinecraftDevTools) page or build from source (see below).
 2. Place the mod JAR into your Minecraft `mods` folder.
 3. Launch Minecraft with Fabric Loader (see Requirements).
 
