@@ -17,7 +17,7 @@ import org.joml.Matrix4f;
  */
 public abstract class BlockTextOverlayModule extends Module {
 
-    protected BlockTextOverlayModule(String id, String displayName, boolean defaultEnabled) {
+    protected BlockTextOverlayModule(@NotNull String id, @NotNull String displayName, boolean defaultEnabled) {
         super(id, displayName, defaultEnabled);
     }
 

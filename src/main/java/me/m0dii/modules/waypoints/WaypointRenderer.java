@@ -1,6 +1,7 @@
 package me.m0dii.modules.waypoints;
 
 import lombok.Getter;
+import lombok.Setter;
 import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.font.TextRenderer;
@@ -14,16 +15,15 @@ import org.joml.Matrix4f;
 import java.util.List;
 
 public class WaypointRenderer {
+
     @Getter
+    @Setter
     private static boolean enabled = true;
+
     private static final int MAX_RENDER_DISTANCE = 1000;
 
     private WaypointRenderer() {
         // Utility class
-    }
-
-    public static void setEnabled(boolean enabled) {
-        WaypointRenderer.enabled = enabled;
     }
 
     public static void register() {

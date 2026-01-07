@@ -20,9 +20,12 @@ public class SecondaryChatModule extends Module {
         SecondaryChatCommands.register();
         SecondaryChatInteraction.register();
 
-        registerPressedKeybind("key.m0-dev-tools.toggle_secondary_chat", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_P, client -> {
-            ModConfig.updateAndSave(() -> ModConfig.secondaryChatEnabled = !ModConfig.secondaryChatEnabled);
-            setEnabled(ModConfig.secondaryChatEnabled);
-        });
+        registerPressedKeybind("key.m0-dev-tools.toggle_secondary_chat",
+                InputUtil.Type.KEYSYM,
+                GLFW.GLFW_KEY_P,
+                client -> {
+                    ModConfig.updateAndSave(() -> ModConfig.secondaryChatEnabled = !ModConfig.secondaryChatEnabled);
+                    setEnabled(ModConfig.secondaryChatEnabled);
+                });
     }
 }

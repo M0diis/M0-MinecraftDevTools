@@ -2,6 +2,7 @@ package me.m0dii.modules.chat;
 
 import me.m0dii.utils.ModConfig;
 import net.fabricmc.fabric.api.client.message.v1.ClientSendMessageEvents;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
@@ -40,7 +41,7 @@ public final class SecondaryChatInputRouter {
         });
     }
 
-    private static Pattern compile(String regex) {
+    private static Pattern compile(@NotNull String regex) {
         if (regex.equals(lastRegex)) {
             return lastPattern;
         }

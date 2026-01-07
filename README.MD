@@ -1,4 +1,4 @@
-# M0-Dev Tools Fabric Modd
+# M0-Dev Tools Fabric Mod
 
 A powerful client-side mod for Minecraft that enhances your gameplay experience with advanced tools, overlays, scripting, and automation. Designed for modders, power users, and anyone who wants more control and information in-game.
 
@@ -11,10 +11,12 @@ A powerful client-side mod for Minecraft that enhances your gameplay experience 
 - Inventory Move
 - Block State Cycler
 - Entity Radar / List
-- Redstone Level Overlay
-- Chunk Border Overlay
-- Light Level Overlay
-- Slime Chunk Overlay
+- Redstone Level overlay
+- Chunk Border overlay
+- Light Level overlay
+- Slime Chunk overlay
+- Redstone Dust Update Order overlay
+- Command Block command overlay
 - Secondary Chat Box
 - Waila-like NBT/Block State Viewer
 - Macros
@@ -27,7 +29,6 @@ A powerful client-side mod for Minecraft that enhances your gameplay experience 
 - Freecam
 - Waypoints
 - Zoom
-- Redstone Dust Update Order display
 - Faster Server Pinger
 
 ---

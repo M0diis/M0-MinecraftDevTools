@@ -19,9 +19,7 @@ public final class SecondaryChatCommands {
     }
 
     public static void register() {
-        ClientCommandRegistrationCallback.EVENT.register(
-                (dispatcher, registryAccess) ->
-                        registerCommands(dispatcher));
+        ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> registerCommands(dispatcher));
     }
 
     private static void registerCommands(CommandDispatcher<FabricClientCommandSource> dispatcher) {

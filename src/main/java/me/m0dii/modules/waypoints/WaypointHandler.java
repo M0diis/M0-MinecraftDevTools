@@ -21,7 +21,6 @@ import java.util.List;
 import java.util.UUID;
 
 public class WaypointHandler {
-    private static final String CATEGORY = "category.m0-dev-tools";
     private static final Path CONFIG_FILE = FabricLoader.getInstance().getConfigDir().resolve("m0-dev-tools-waypoints.json");
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
@@ -56,7 +55,7 @@ public class WaypointHandler {
 
         try {
             String json = Files.readString(CONFIG_FILE);
-            TypeToken<List<Waypoint>> typeToken = new TypeToken<List<Waypoint>>() {
+            TypeToken<List<Waypoint>> typeToken = new TypeToken<>() {
             };
             List<Waypoint> loadedWaypoints = GSON.fromJson(json, typeToken.getType());
             if (loadedWaypoints != null) {
@@ -113,7 +112,6 @@ public class WaypointHandler {
             return;
         }
 
-        // Header with styling
         Text header = Text.literal("")
                 .append(Text.literal("════════════").formatted(Formatting.GOLD))
                 .append(Text.literal("\n"))

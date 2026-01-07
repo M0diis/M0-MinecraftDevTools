@@ -8,6 +8,7 @@ import net.minecraft.client.world.ClientWorld;
 import net.minecraft.entity.Entity;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.world.chunk.ChunkStatus;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 public class CameraUtils {
@@ -101,7 +102,7 @@ public class CameraUtils {
         }
     }
 
-    public static void markChunkForReRender(WorldRenderer renderer, int chunkX, int chunkZ) {
+    public static void markChunkForReRender(@NotNull WorldRenderer renderer, int chunkX, int chunkZ) {
         for (int cy = 0; cy < 16; ++cy) {
             int minX = chunkX << 4;
             int minY = cy << 4;

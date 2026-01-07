@@ -39,7 +39,7 @@ public abstract class Module {
     @Getter
     protected KeyBinding keyBinding;
 
-    protected Module(String id, String displayName, boolean defaultEnabled) {
+    protected Module(@NotNull String id, @NotNull String displayName, boolean defaultEnabled) {
         this.id = Objects.requireNonNull(id);
         this.displayName = Objects.requireNonNull(displayName);
         this.enabled = defaultEnabled;

@@ -13,6 +13,7 @@ import net.minecraft.entity.MovementType;
 import net.minecraft.stat.StatHandler;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
+import org.jetbrains.annotations.NotNull;
 
 public class CameraEntity extends ClientPlayerEntity {
 
@@ -27,9 +28,11 @@ public class CameraEntity extends ClientPlayerEntity {
     private static boolean sprinting;
     private static boolean originalCameraWasPlayer;
 
-    private CameraEntity(MinecraftClient mc, ClientWorld world,
-                         ClientPlayNetworkHandler netHandler, StatHandler stats,
-                         ClientRecipeBook recipeBook) {
+    private CameraEntity(@NotNull MinecraftClient mc,
+                         @NotNull ClientWorld world,
+                         @NotNull ClientPlayNetworkHandler netHandler,
+                         @NotNull StatHandler stats,
+                         @NotNull ClientRecipeBook recipeBook) {
         super(mc, world, netHandler, stats, recipeBook, false, false);
     }
 
@@ -59,7 +62,7 @@ public class CameraEntity extends ClientPlayerEntity {
         }
     }
 
-    public static Vec3d calculatePlayerMotionWithDeceleration(Vec3d lastMotion,
+    public static Vec3d calculatePlayerMotionWithDeceleration(@NotNull Vec3d lastMotion,
                                                               double rampAmount,
                                                               double decelerationFactor) {
         GameOptions options = MinecraftClient.getInstance().options;
@@ -164,7 +167,7 @@ public class CameraEntity extends ClientPlayerEntity {
         this.setCameraRotations(yaw, pitch);
     }
 
-    private static CameraEntity create(MinecraftClient mc) {
+    private static CameraEntity create(@NotNull MinecraftClient mc) {
         ClientPlayerEntity player = mc.player;
         CameraEntity camera = new CameraEntity(mc, mc.world, player.networkHandler, player.getStatHandler(), player.getRecipeBook());
         camera.noClip = true;

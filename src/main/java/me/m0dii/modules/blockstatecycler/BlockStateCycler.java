@@ -20,6 +20,7 @@ import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
+import org.jetbrains.annotations.NotNull;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.Collection;
@@ -37,9 +38,10 @@ public class BlockStateCycler extends Module {
 
     @Override
     public void register() {
-        registerPressedKeybind("key.m0-dev-tools.cycle_block_state", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_LEFT_ALT, client -> {
-            cycleBlockState();
-        });
+        registerPressedKeybind("key.m0-dev-tools.cycle_block_state",
+                InputUtil.Type.KEYSYM,
+                GLFW.GLFW_KEY_LEFT_ALT,
+                client -> cycleBlockState());
     }
 
     private static void cycleBlockState() {
@@ -118,7 +120,7 @@ public class BlockStateCycler extends Module {
         }
     }
 
-    private static void setBlockStateWithPackets(BlockPos pos, BlockState state) {
+    private static void setBlockStateWithPackets(@NotNull BlockPos pos, @NotNull BlockState state) {
         MinecraftClient client = MinecraftClient.getInstance();
         if (client.player == null || client.player.networkHandler == null || client.world == null) {
             return;
@@ -159,7 +161,7 @@ public class BlockStateCycler extends Module {
         return state.with(property, nextValue);
     }
 
-    private static <T extends Comparable<T>> String getPropertyValue(BlockState state, Property<T> property) {
+    private static <T extends Comparable<T>> String getPropertyValue(@NotNull BlockState state, @NotNull Property<T> property) {
         T value = state.get(property);
         return property.name(value);
     }

@@ -5,6 +5,7 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.text.MutableText;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -24,7 +25,7 @@ public class NBTTooltipModule extends Module {
         // Enabled via ClickGUI
     }
 
-    public static List<Text> getNbtTooltipText(ItemStack itemStack, List<Text> list) {
+    public static List<Text> getNbtTooltipText(@NotNull ItemStack itemStack, @NotNull List<Text> list) {
         List<Text> temp = new ArrayList<>();
         temp.add(Text.translatable("item.nbt_tags", itemStack.manager$getNbt().getKeys().size()).formatted(Formatting.DARK_GRAY));
         int index = list.indexOf(temp.getFirst());
@@ -54,7 +55,7 @@ public class NBTTooltipModule extends Module {
         Formatting lstringColor = Formatting.YELLOW;
 
         int lastIndex = 0;
-        Boolean singleQuotationMark = Boolean.FALSE;
+        boolean singleQuotationMark = false;
         String lastString = "";
 
         while (m.find()) {
@@ -70,16 +71,16 @@ public class NBTTooltipModule extends Module {
                 currentLineLength = 0;
             }
             if (nbtList.charAt(m.start()) == '\'') {
-                if (singleQuotationMark.equals(Boolean.FALSE)) {
+                if (!singleQuotationMark) {
                     mutableText.append(Text.literal(String.valueOf(nbtList.charAt(m.start()))).formatted(quotationColor));
                     currentLineLength += 1;
-                    singleQuotationMark = Boolean.TRUE;
+                    singleQuotationMark = true;
                 } else {
                     mutableText.append(Text.literal(nbtList.substring(lastIndex + 1, m.start())).formatted(stringColor));
                     currentLineLength += segmentLength;
                     mutableText.append(Text.literal(String.valueOf(nbtList.charAt(m.start()))).formatted(quotationColor));
                     currentLineLength += 1;
-                    singleQuotationMark = Boolean.FALSE;
+                    singleQuotationMark = false;
                 }
                 lastString = String.valueOf(nbtList.charAt(m.start()));
                 lastIndex = m.start();

@@ -6,14 +6,13 @@ import com.google.gson.reflect.TypeToken;
 import lombok.Builder;
 import me.m0dii.M0DevTools;
 import net.fabricmc.loader.api.FabricLoader;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class MacroDataHandler {
 
@@ -60,16 +59,17 @@ public class MacroDataHandler {
         }
     }
 
-    public static void addMacro(String id,
-                                String name,
-                                List<String> commands,
+    public static void addMacro(@NotNull String id,
+                                @NotNull String name,
+                                @Nullable List<String> commands,
                                 int keyCode,
-                                String modifierKey,
+                                @Nullable String modifierKey,
                                 int delayTicks,
                                 boolean showInOverlay) {
         macros.put(id, MacroEntry.builder()
                 .name(name)
-                .commands(commands != null ? commands : new ArrayList<>())
+                .commands(Optional.ofNullable(commands)
+                        .orElse(new ArrayList<>()))
                 .keyCode(keyCode)
                 .modifierKey(modifierKey)
                 .delayTicks(delayTicks)
@@ -84,7 +84,7 @@ public class MacroDataHandler {
         saveMacros();
     }
 
-    public static MacroEntry getMacro(String id) {
+    public static MacroEntry getMacro(@NotNull String id) {
         return macros.get(id);
     }
 
@@ -92,15 +92,15 @@ public class MacroDataHandler {
         return new HashMap<>(macros);
     }
 
-    public static boolean hasMacro(String id) {
+    public static boolean hasMacro(@NotNull String id) {
         return macros.containsKey(id);
     }
 
-    public static void updateMacro(String id,
-                                   String name,
-                                   List<String> commands,
+    public static void updateMacro(@NotNull String id,
+                                   @NotNull String name,
+                                   @Nullable List<String> commands,
                                    int keyCode,
-                                   String modifierKey,
+                                   @Nullable String modifierKey,
                                    int delayTicks,
                                    boolean showInOverlay) {
         if (macros.containsKey(id)) {

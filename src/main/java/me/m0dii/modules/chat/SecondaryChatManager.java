@@ -4,6 +4,8 @@ import lombok.Getter;
 import lombok.Setter;
 import me.m0dii.utils.ModConfig;
 import net.minecraft.text.Text;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -33,7 +35,7 @@ public final class SecondaryChatManager {
         return new ArrayList<>(buffer);
     }
 
-    public static void push(Text text) {
+    public static void push(@Nullable Text text) {
         if (text == null) {
             return;
         }
@@ -50,7 +52,7 @@ public final class SecondaryChatManager {
         lastAlphaReset = System.currentTimeMillis();
     }
 
-    public static boolean matchesFilter(Text text) {
+    public static boolean matchesFilter(@Nullable Text text) {
         if (!ModConfig.secondaryChatEnabled || text == null) {
             return false;
         }
@@ -72,7 +74,7 @@ public final class SecondaryChatManager {
         return false;
     }
 
-    private static Pattern getCompiled(String regex) {
+    private static Pattern getCompiled(@NotNull String regex) {
         if (regex.equals(lastRegex)) {
             return lastPattern;
         }

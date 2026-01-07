@@ -5,6 +5,7 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.util.InputUtil;
 import net.minecraft.text.Text;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
 
@@ -18,7 +19,7 @@ public class CommandMacros {
     private static final Map<Integer, Boolean> keyPrevPressed = new HashMap<>();
     private static final List<PendingRun> pendingRuns = new ArrayList<>();
 
-    private record PendingRun(String name, List<String> commands, int ticksRemaining) {
+    private record PendingRun(@NotNull String name, @NotNull List<String> commands, int ticksRemaining) {
         PendingRun tick() {
             return new PendingRun(name, commands, Math.max(0, ticksRemaining - 1));
         }
@@ -118,11 +119,11 @@ public class CommandMacros {
         return key != null ? key.getCode() : -1;
     }
 
-    public static boolean addMacro(String id,
-                                   String name,
-                                   List<String> commands,
+    public static boolean addMacro(@NotNull String id,
+                                   @NotNull String name,
+                                   @NotNull List<String> commands,
                                    int keyCode,
-                                   String modifierKey,
+                                   @Nullable String modifierKey,
                                    int delayTicks,
                                    boolean showInOverlay) {
         if (MacroDataHandler.hasMacro(id)) {
@@ -165,7 +166,7 @@ public class CommandMacros {
         return lines;
     }
 
-    private static void executeMacro(String macroName, List<String> commands) {
+    private static void executeMacro(@NotNull String macroName, @Nullable List<String> commands) {
         MinecraftClient client = MinecraftClient.getInstance();
         if (client.player == null) {
             return;

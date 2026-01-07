@@ -9,6 +9,7 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.render.RenderTickCounter;
+import net.minecraft.state.property.Property;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.EntityHitResult;
 import net.minecraft.util.hit.HitResult;
@@ -162,8 +163,8 @@ public class NBTInfoHudRenderer implements Toggleable {
     }
 
     @SuppressWarnings("unchecked")
-    private static <T extends Comparable<T>> String getPropertyValueAsString(BlockState state, net.minecraft.state.property.Property<?> property) {
-        net.minecraft.state.property.Property<T> typedProperty = (net.minecraft.state.property.Property<T>) property;
+    private static <T extends Comparable<T>> String getPropertyValueAsString(BlockState state, Property<?> property) {
+        Property<T> typedProperty = (Property<T>) property;
         T value = state.get(typedProperty);
         return typedProperty.name(value);
     }

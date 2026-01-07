@@ -24,7 +24,6 @@ public class StructureBoundingBoxOverlay extends Module {
         super("structure_bounding_box_overlay", "Structure Bounding Box Overlay", false);
     }
 
-    @Override
     public void register() {
         WorldRenderEvents.AFTER_ENTITIES.register(getAfterEntities());
     }
@@ -43,9 +42,13 @@ public class StructureBoundingBoxOverlay extends Module {
             }
 
             VertexConsumerProvider vertexConsumers = context.consumers();
-            Vec3d cameraPos = camera.getPos();
+            if (vertexConsumers == null) {
+                return;
+            }
 
+            Vec3d cameraPos = camera.getPos();
             BlockPos playerPos = getClient().player.getBlockPos();
+
             int chunkX = playerPos.getX() >> 4;
             int chunkZ = playerPos.getZ() >> 4;
             int radius = 16;

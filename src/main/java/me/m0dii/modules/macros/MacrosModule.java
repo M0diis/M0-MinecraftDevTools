@@ -29,9 +29,9 @@ public class MacrosModule extends Module {
 
     @Override
     public void register() {
-        ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) ->
-                registerMacroCommands(dispatcher)
-        );
+        ClientCommandRegistrationCallback.EVENT.register(
+                (dispatcher, registryAccess)
+                        -> registerMacroCommands(dispatcher));
 
         CommandMacros.register();
 

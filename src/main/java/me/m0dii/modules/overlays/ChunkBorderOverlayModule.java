@@ -31,10 +31,18 @@ public class ChunkBorderOverlayModule extends Module {
             }
 
             MatrixStack matrices = context.matrixStack();
-            VertexConsumerProvider vertexConsumers = context.consumers();
-            Vec3d cameraPos = context.camera().getPos();
+            if (matrices == null) {
+                return;
+            }
 
+            VertexConsumerProvider vertexConsumers = context.consumers();
+            if (vertexConsumers == null) {
+                return;
+            }
+
+            Vec3d cameraPos = context.camera().getPos();
             BlockPos playerPos = getClient().player.getBlockPos();
+
             int chunkX = playerPos.getX() >> 4;
             int chunkZ = playerPos.getZ() >> 4;
 
@@ -50,9 +58,9 @@ public class ChunkBorderOverlayModule extends Module {
         };
     }
 
-    private static void renderChunkBorder(MatrixStack matrices,
-                                          VertexConsumerProvider vertexConsumers,
-                                          Vec3d cameraPos,
+    private static void renderChunkBorder(@NotNull MatrixStack matrices,
+                                          @NotNull VertexConsumerProvider vertexConsumers,
+                                          @NotNull Vec3d cameraPos,
                                           int chunkX,
                                           int chunkZ) {
         matrices.push();

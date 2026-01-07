@@ -52,6 +52,7 @@ public class FullbrightModule extends Module {
             case 4 -> updateGamma(gammaValue - 5);
             case 5 -> updateGamma(100);
             default -> {
+                return;
             }
         }
 
