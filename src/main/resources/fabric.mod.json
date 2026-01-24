@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "m0-dev-tools",
   "version": "${version}",
-  "name": "m0-dev-tools",
+  "name": "M0-Dev-Tools",
   "description": "M0-Dev-Tools is a collection of useful development tools for Minecraft modders using Fabric.",
   "authors": [
     "M0dii"

@@ -91,6 +91,8 @@ public class M0DevToolsClient implements ClientModInitializer {
         InventoryMoveModule.INSTANCE.register();
         ClickGuiModule.INSTANCE.register();
         CommandBlockOverlayModule.INSTANCE.register();
+        me.m0dii.modules.actionrunner.ActionRunnerClientInit.register();
+        me.m0dii.modules.actionrunner.ActionRunnerClientTick.register();
 
         // Populate ModuleRegistry categories after modules have had a chance to create their singletons
         ModuleRegistry.initializeCategories();
