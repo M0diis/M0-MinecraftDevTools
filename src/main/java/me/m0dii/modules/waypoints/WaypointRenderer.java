@@ -2,7 +2,7 @@ package me.m0dii.modules.waypoints;
 
 import lombok.Getter;
 import lombok.Setter;
-import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
+import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.render.Camera;
@@ -37,7 +37,7 @@ public class WaypointRenderer {
                 return;
             }
 
-            MatrixStack matrices = context.matrixStack();
+            MatrixStack matrices = context.matrices();
             if (matrices == null) {
                 return;
             }
@@ -47,8 +47,8 @@ public class WaypointRenderer {
                 vertexConsumers = client.getBufferBuilders().getEntityVertexConsumers();
             }
 
-            Camera camera = context.camera();
-            Vec3d cameraPos = camera.getPos();
+            Camera camera = context.gameRenderer().getCamera();
+            Vec3d cameraPos = camera.getCameraPos();
             String currentDimension = client.world.getRegistryKey().getValue().toString();
 
             List<WaypointHandler.Waypoint> waypoints = WaypointHandler.getWaypoints();

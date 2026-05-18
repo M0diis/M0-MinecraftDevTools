@@ -8,7 +8,6 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.render.RenderTickCounter;
-import org.joml.Matrix4f;
 
 import java.util.List;
 
@@ -90,20 +89,19 @@ public class PendingMacrosOverlayModule extends Module {
 
         ctx.fill(panelX, panelY, panelX + panelWScaled, panelY + panelHScaled, 0x88000000);
 
-        ctx.getMatrices().push();
-        Matrix4f m = new Matrix4f(ctx.getMatrices().peek().getPositionMatrix());
-        ctx.getMatrices().peek().getPositionMatrix().set(m.scale(scale, scale, 1.0f));
+        ctx.getMatrices().pushMatrix();
+        ctx.getMatrices().scale(scale, scale);
 
         final int baseX = Math.round(panelX / scale) + pad;
         int y = Math.round(panelY / scale) + pad;
 
-        ctx.drawText(tr, "Macros pending:", baseX, y, 0xFFFFFF, false);
+        ctx.drawText(tr, "Macros pending:", baseX, y, 0xFFFFFFFF, false);
         y += lineH;
         for (String s : lines) {
-            ctx.drawText(tr, s, baseX, y, 0xC0C0C0, false);
+            ctx.drawText(tr, s, baseX, y, 0xFFC0C0C0, false);
             y += lineH;
         }
 
-        ctx.getMatrices().pop();
+        ctx.getMatrices().popMatrix();
     }
 }

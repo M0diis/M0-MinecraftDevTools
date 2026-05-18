@@ -10,7 +10,6 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.render.RenderTickCounter;
 import net.minecraft.client.util.InputUtil;
-import org.joml.Matrix4f;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.List;
@@ -64,7 +63,7 @@ public class ClickGuiRenderer implements Toggleable {
             return;
         }
 
-        long window = client.getWindow().getHandle();
+        var window = client.getWindow();
 
         boolean upNow = InputUtil.isKeyPressed(window, GLFW.GLFW_KEY_UP);
         boolean downNow = InputUtil.isKeyPressed(window, GLFW.GLFW_KEY_DOWN);
@@ -207,9 +206,8 @@ public class ClickGuiRenderer implements Toggleable {
         }
         scale = Math.clamp(scale, 0.5f, 3.0f);
 
-        context.getMatrices().push();
-        Matrix4f m = new Matrix4f(context.getMatrices().peek().getPositionMatrix());
-        context.getMatrices().peek().getPositionMatrix().set(m.scale(scale, scale, 1.0f));
+        context.getMatrices().pushMatrix();
+        context.getMatrices().scale(scale, scale);
 
         // Convert screen coordinates to scaled coordinates
         int scaledStartX = Math.round(START_X / scale);
@@ -233,7 +231,7 @@ public class ClickGuiRenderer implements Toggleable {
         int scaledScreenHeight = Math.round(screenHeight / scale);
         renderInstructions(context, scaledScreenHeight);
 
-        context.getMatrices().pop();
+        context.getMatrices().popMatrix();
     }
 
     private void renderCategories(DrawContext context, int x, int y) {

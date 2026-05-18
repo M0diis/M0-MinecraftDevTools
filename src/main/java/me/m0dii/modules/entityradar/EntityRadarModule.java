@@ -74,7 +74,8 @@ public class EntityRadarModule extends Module {
             return List.of();
         }
 
-        Box box = new Box(getClient().player.getPos(), getClient().player.getPos()).expand(ModConfig.entityRadarRadius);
+        var playerPos = new net.minecraft.util.math.Vec3d(getClient().player.getX(), getClient().player.getY(), getClient().player.getZ());
+        Box box = new Box(playerPos, playerPos).expand(ModConfig.entityRadarRadius);
         return getClient().world.getOtherEntities(getClient().player, box).stream()
                 .sorted((a, b) -> Double.compare(a.distanceTo(getClient().player), b.distanceTo(getClient().player)))
                 .toList();

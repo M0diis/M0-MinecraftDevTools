@@ -1,8 +1,9 @@
 package me.m0dii.modules.overlays;
 
 import me.m0dii.modules.Module;
-import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
+import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
 import net.minecraft.client.render.Camera;
+import net.minecraft.client.render.RenderLayers;
 import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.client.render.VertexConsumerProvider;
 import net.minecraft.client.util.math.MatrixStack;
@@ -34,8 +35,8 @@ public class StructureBoundingBoxOverlay extends Module {
                 return;
             }
 
-            MatrixStack matrices = context.matrixStack();
-            Camera camera = context.camera();
+            MatrixStack matrices = context.matrices();
+            Camera camera = context.gameRenderer().getCamera();
 
             if (matrices == null || camera == null) {
                 return;
@@ -46,7 +47,7 @@ public class StructureBoundingBoxOverlay extends Module {
                 return;
             }
 
-            Vec3d cameraPos = camera.getPos();
+            Vec3d cameraPos = camera.getCameraPos();
             BlockPos playerPos = getClient().player.getBlockPos();
 
             int chunkX = playerPos.getX() >> 4;
@@ -83,7 +84,7 @@ public class StructureBoundingBoxOverlay extends Module {
         float b = 1.0f;
         float a = 0.8f;
         matrices.push();
-        var vertexConsumer = vertexConsumers.getBuffer(net.minecraft.client.render.RenderLayer.getLines());
+        var vertexConsumer = vertexConsumers.getBuffer(RenderLayers.LINES);
         double minX = box.getMinX() - cameraPos.x;
         double minY = box.getMinY() - cameraPos.y;
         double minZ = box.getMinZ() - cameraPos.z;
@@ -118,7 +119,7 @@ public class StructureBoundingBoxOverlay extends Module {
                                  float g,
                                  float b,
                                  float a) {
-        vertexConsumer.vertex((float) x1, (float) y1, (float) z1).color(r, g, b, a).normal(0.0f, 1.0f, 0.0f);
-        vertexConsumer.vertex((float) x2, (float) y2, (float) z2).color(r, g, b, a).normal(0.0f, 1.0f, 0.0f);
+        vertexConsumer.vertex((float) x1, (float) y1, (float) z1).color(r, g, b, a).normal(0.0f, 1.0f, 0.0f).lineWidth(1.0f);
+        vertexConsumer.vertex((float) x2, (float) y2, (float) z2).color(r, g, b, a).normal(0.0f, 1.0f, 0.0f).lineWidth(1.0f);
     }
 }

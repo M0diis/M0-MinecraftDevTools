@@ -1,11 +1,11 @@
 package me.m0dii.modules.scripting.gui;
 
 import io.wispforest.owo.ui.base.BaseOwoScreen;
-import io.wispforest.owo.ui.component.Components;
 import io.wispforest.owo.ui.component.TextAreaComponent;
 import io.wispforest.owo.ui.component.TextBoxComponent;
-import io.wispforest.owo.ui.container.Containers;
+import io.wispforest.owo.ui.component.UIComponents;
 import io.wispforest.owo.ui.container.GridLayout;
+import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.Insets;
 import io.wispforest.owo.ui.core.OwoUIAdapter;
 import io.wispforest.owo.ui.core.Sizing;
@@ -33,7 +33,7 @@ public class ScriptEditorScreen extends BaseOwoScreen<GridLayout> {
     @Override
     protected @NotNull OwoUIAdapter<GridLayout> createAdapter() {
         // 3 columns, 6 rows for all components
-        return OwoUIAdapter.create(this, (sizing, sizing1) -> Containers.grid(sizing, sizing, 5, 5));
+        return OwoUIAdapter.create(this, (sizing, sizing1) -> UIContainers.grid(sizing, sizing, 5, 5));
     }
 
     @Override
@@ -45,24 +45,24 @@ public class ScriptEditorScreen extends BaseOwoScreen<GridLayout> {
     protected void build(GridLayout rootComponent) {
         rootComponent.padding(Insets.of(10)).surface(Surface.VANILLA_TRANSLUCENT);
 
-        fileNameBox = Components.textBox(Sizing.fixed(200));
+        fileNameBox = UIComponents.textBox(Sizing.fixed(200));
         rootComponent.child(fileNameBox, 0, 0);
 
-        scriptBox = Components.textArea(Sizing.fill(100), Sizing.fill(30));
+        scriptBox = UIComponents.textArea(Sizing.fill(100), Sizing.fill(30));
         rootComponent.child(scriptBox, 1, 0);
 
-        outputBox = Components.textArea(Sizing.fill(100), Sizing.fixed(60));
+        outputBox = UIComponents.textArea(Sizing.fill(100), Sizing.fixed(60));
         rootComponent.child(outputBox, 3, 0);
 
-        rootComponent.child(Components.button(Text.literal("Run"), button -> runScript())
+        rootComponent.child(UIComponents.button(Text.literal("Run"), button -> runScript())
                 .horizontalSizing(Sizing.fixed(60)), 4, 0);
-        rootComponent.child(Components.button(Text.literal("Save"), button -> saveScript())
+        rootComponent.child(UIComponents.button(Text.literal("Save"), button -> saveScript())
                 .horizontalSizing(Sizing.fixed(60)), 4, 1);
-        rootComponent.child(Components.button(Text.literal("Load"), button -> loadScript())
+        rootComponent.child(UIComponents.button(Text.literal("Load"), button -> loadScript())
                 .horizontalSizing(Sizing.fixed(60)), 4, 2);
-        rootComponent.child(Components.button(Text.literal("Docs"), button -> showDocs())
+        rootComponent.child(UIComponents.button(Text.literal("Docs"), button -> showDocs())
                 .horizontalSizing(Sizing.fixed(60)), 4, 3);
-        rootComponent.child(Components.button(Text.literal("Scripts"), button -> showScripts())
+        rootComponent.child(UIComponents.button(Text.literal("Scripts"), button -> showScripts())
                 .horizontalSizing(Sizing.fixed(60)), 4, 4);
 
     }

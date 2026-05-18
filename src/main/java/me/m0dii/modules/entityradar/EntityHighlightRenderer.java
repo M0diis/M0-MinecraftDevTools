@@ -3,17 +3,18 @@ package me.m0dii.modules.entityradar;
 import lombok.Getter;
 import lombok.Setter;
 import me.m0dii.modules.Toggleable;
-import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
+import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.render.*;
-import net.minecraft.client.util.math.MatrixStack;
+import net.minecraft.client.render.RenderLayers;
+import net.minecraft.client.render.VertexConsumer;
+import net.minecraft.client.render.VertexConsumerProvider;
 import net.minecraft.entity.Entity;
+import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
 import net.minecraft.world.chunk.Chunk;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.OptionalDouble;
 
 public class EntityHighlightRenderer implements Toggleable {
 
@@ -21,23 +22,8 @@ public class EntityHighlightRenderer implements Toggleable {
     @Setter
     private boolean enabled = false;
 
-    private static final RenderLayer LINES_NO_DEPTH = RenderLayer.of(
-            "lines_no_depth",
-            VertexFormats.LINES,
-            VertexFormat.DrawMode.LINES,
-            1536,
-            RenderLayer.MultiPhaseParameters.builder()
-                    .program(RenderPhase.LINES_PROGRAM)
-                    .lineWidth(new RenderPhase.LineWidth(OptionalDouble.empty()))
-                    .layering(RenderPhase.VIEW_OFFSET_Z_LAYERING)
-                    .transparency(RenderPhase.TRANSLUCENT_TRANSPARENCY)
-                    .depthTest(RenderPhase.ALWAYS_DEPTH_TEST)
-                    .writeMaskState(RenderPhase.ALL_MASK)
-                    .build(false)
-    );
-
     public void register() {
-        WorldRenderEvents.BEFORE_DEBUG_RENDER.register(context -> {
+        WorldRenderEvents.AFTER_ENTITIES.register(context -> {
             if (!enabled) {
                 return;
             }
@@ -49,32 +35,44 @@ public class EntityHighlightRenderer implements Toggleable {
 
             List<Entity> entities = EntityRadarModule.INSTANCE.getEntities();
 
-            MatrixStack matrices = context.matrixStack();
-
-            if (matrices == null) {
-                return;
-            }
-
             VertexConsumerProvider vertexConsumers = context.consumers();
             if (vertexConsumers == null) {
-                return;
+                vertexConsumers = client.getBufferBuilders().getEntityVertexConsumers();
             }
 
-            double cameraX = context.camera().getPos().x;
-            double cameraY = context.camera().getPos().y;
-            double cameraZ = context.camera().getPos().z;
+            VertexConsumer lineBuffer = vertexConsumers.getBuffer(RenderLayers.LINES);
+            VertexConsumer occludedLineBuffer = vertexConsumers.getBuffer(RenderLayers.LINES_TRANSLUCENT);
 
-            VertexConsumer vertexConsumer = vertexConsumers.getBuffer(LINES_NO_DEPTH);
+            double cameraX = context.gameRenderer().getCamera().getCameraPos().x;
+            double cameraY = context.gameRenderer().getCamera().getCameraPos().y;
+            double cameraZ = context.gameRenderer().getCamera().getCameraPos().z;
 
             for (Entity entity : entities) {
                 if (entity == client.player) {
                     continue;
                 }
-                matrices.push();
-                matrices.translate(entity.getX() - cameraX, entity.getY() - cameraY, entity.getZ() - cameraZ);
-                Box box = entity.getBoundingBox().offset(-entity.getX(), -entity.getY(), -entity.getZ());
-                VertexRendering.drawBox(matrices, vertexConsumer, box, 1.0f, 1.0f, 0.0f, 1.0f);
-                matrices.pop();
+
+                Box box = entity.getBoundingBox().expand(0.03);
+                drawOutlinedBoxSafe(
+                        lineBuffer,
+                        box.minX - cameraX,
+                        box.minY - cameraY,
+                        box.minZ - cameraZ,
+                        box.maxX - cameraX,
+                        box.maxY - cameraY,
+                        box.maxZ - cameraZ,
+                        1.0f, 0.25f, 0.25f, 0.9f
+                );
+                drawOutlinedBoxSafe(
+                        occludedLineBuffer,
+                        box.minX - cameraX,
+                        box.minY - cameraY,
+                        box.minZ - cameraZ,
+                        box.maxX - cameraX,
+                        box.maxY - cameraY,
+                        box.maxZ - cameraZ,
+                        1.0f, 0.25f, 0.25f, 0.55f
+                );
             }
 
             List<Chunk> nearbyChunks = new ArrayList<>();
@@ -89,14 +87,93 @@ public class EntityHighlightRenderer implements Toggleable {
 
             nearbyChunks.forEach(chunk ->
                     chunk.getBlockEntityPositions().forEach(pos -> {
-                        matrices.push();
-                        matrices.translate(pos.getX() - cameraX, pos.getY() - cameraY, pos.getZ() - cameraZ);
-                        Box localBox = new Box(0, 0, 0, 1, 1, 1);
-                        VertexRendering.drawBox(matrices, vertexConsumer, localBox, 0.0f, 1.0f, 1.0f, 1.0f);
-                        matrices.pop();
+                        drawBlockEntityBoxSafe(lineBuffer, pos, cameraX, cameraY, cameraZ);
+                        drawBlockEntityBoxSafe(occludedLineBuffer, pos, cameraX, cameraY, cameraZ);
                     }));
 
         });
+    }
+
+    private static void drawBlockEntityBox(VertexConsumer lineBuffer, BlockPos pos, double cameraX, double cameraY, double cameraZ) {
+        double minX = pos.getX() - cameraX;
+        double minY = pos.getY() - cameraY;
+        double minZ = pos.getZ() - cameraZ;
+        double maxX = minX + 1.0;
+        double maxY = minY + 1.0;
+        double maxZ = minZ + 1.0;
+
+        drawOutlinedBox(lineBuffer, minX, minY, minZ, maxX, maxY, maxZ, 0.25f, 0.8f, 1.0f, 0.9f);
+    }
+
+    private static void drawBlockEntityBoxSafe(VertexConsumer lineBuffer, BlockPos pos, double cameraX, double cameraY, double cameraZ) {
+        try {
+            drawBlockEntityBox(lineBuffer, pos, cameraX, cameraY, cameraZ);
+        } catch (IllegalStateException ignored) {
+            // Optional pass: skip if this buffer is not building in the current phase.
+        }
+    }
+
+    private static void drawOutlinedBox(VertexConsumer lineBuffer,
+                                        double minX,
+                                        double minY,
+                                        double minZ,
+                                        double maxX,
+                                        double maxY,
+                                        double maxZ,
+                                        float r,
+                                        float g,
+                                        float b,
+                                        float a) {
+        // Bottom ring
+        drawLine(lineBuffer, minX, minY, minZ, maxX, minY, minZ, r, g, b, a);
+        drawLine(lineBuffer, maxX, minY, minZ, maxX, minY, maxZ, r, g, b, a);
+        drawLine(lineBuffer, maxX, minY, maxZ, minX, minY, maxZ, r, g, b, a);
+        drawLine(lineBuffer, minX, minY, maxZ, minX, minY, minZ, r, g, b, a);
+
+        // Top ring
+        drawLine(lineBuffer, minX, maxY, minZ, maxX, maxY, minZ, r, g, b, a);
+        drawLine(lineBuffer, maxX, maxY, minZ, maxX, maxY, maxZ, r, g, b, a);
+        drawLine(lineBuffer, maxX, maxY, maxZ, minX, maxY, maxZ, r, g, b, a);
+        drawLine(lineBuffer, minX, maxY, maxZ, minX, maxY, minZ, r, g, b, a);
+
+        // Vertical edges
+        drawLine(lineBuffer, minX, minY, minZ, minX, maxY, minZ, r, g, b, a);
+        drawLine(lineBuffer, maxX, minY, minZ, maxX, maxY, minZ, r, g, b, a);
+        drawLine(lineBuffer, maxX, minY, maxZ, maxX, maxY, maxZ, r, g, b, a);
+        drawLine(lineBuffer, minX, minY, maxZ, minX, maxY, maxZ, r, g, b, a);
+    }
+
+    private static void drawOutlinedBoxSafe(VertexConsumer lineBuffer,
+                                            double minX,
+                                            double minY,
+                                            double minZ,
+                                            double maxX,
+                                            double maxY,
+                                            double maxZ,
+                                            float r,
+                                            float g,
+                                            float b,
+                                            float a) {
+        try {
+            drawOutlinedBox(lineBuffer, minX, minY, minZ, maxX, maxY, maxZ, r, g, b, a);
+        } catch (IllegalStateException ignored) {
+            // Optional pass: skip if this buffer is not building in the current phase.
+        }
+    }
+
+    private static void drawLine(VertexConsumer lineBuffer,
+                                 double x1,
+                                 double y1,
+                                 double z1,
+                                 double x2,
+                                 double y2,
+                                 double z2,
+                                 float r,
+                                 float g,
+                                 float b,
+                                 float a) {
+        lineBuffer.vertex((float) x1, (float) y1, (float) z1).color(r, g, b, a).normal(0.0f, 1.0f, 0.0f).lineWidth(1.0f);
+        lineBuffer.vertex((float) x2, (float) y2, (float) z2).color(r, g, b, a).normal(0.0f, 1.0f, 0.0f).lineWidth(1.0f);
     }
 }
 

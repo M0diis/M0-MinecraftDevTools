@@ -21,7 +21,7 @@ public class BlockPlacementMixin {
         }
 
         ItemStack itemStack = new ItemStack(state.getBlock().asItem());
-        int selectedSlot = client.player.getInventory().selectedSlot;
+        int selectedSlot = client.player.getInventory().getSelectedSlot();
         client.player.networkHandler.sendPacket(new CreativeInventoryActionC2SPacket(36 + selectedSlot, itemStack));
 
         BlockHitResult newHit = new BlockHitResult(

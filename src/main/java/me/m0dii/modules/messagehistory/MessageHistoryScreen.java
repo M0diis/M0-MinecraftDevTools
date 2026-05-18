@@ -1,5 +1,6 @@
 package me.m0dii.modules.messagehistory;
 
+import net.minecraft.client.gui.Click;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
@@ -135,7 +136,11 @@ public class MessageHistoryScreen extends Screen {
     }
 
     @Override
-    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+    public boolean mouseClicked(Click click, boolean doubled) {
+        int button = click.button();
+        double mouseY = click.y();
+        double mouseX = click.x();
+
         if (button == 0 && !messages.isEmpty()) { // Left click
             int yStart = 50;
             int maxVisible = Math.min(VISIBLE_LINES, messages.size() - scrollOffset);
@@ -170,10 +175,9 @@ public class MessageHistoryScreen extends Screen {
             }
         }
 
-        return super.mouseClicked(mouseX, mouseY, button);
+        return super.mouseClicked(click, doubled);
     }
 
-    @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
         if (messages.size() > VISIBLE_LINES) {
             if (verticalAmount > 0) {

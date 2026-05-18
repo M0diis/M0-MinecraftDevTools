@@ -4,8 +4,10 @@ import lombok.Getter;
 import me.m0dii.modules.scripting.InGameScriptingKeybinds;
 import me.m0dii.modules.scripting.ScriptStorage;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.gui.Click;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
+import net.minecraft.client.input.KeyInput;
 import net.minecraft.client.util.InputUtil;
 import net.minecraft.text.Text;
 import net.minecraft.util.math.MathHelper;
@@ -88,7 +90,7 @@ public class SavedScriptsScreen extends Screen {
         if (key == null) {
             return "Set Keybind";
         }
-        return "Key: " + InputUtil.fromKeyCode(key, 0).getTranslationKey();
+        return "Key: " + InputUtil.Type.KEYSYM.createFromCode(key).getTranslationKey();
     }
 
     private void loadSavedScripts() {
@@ -174,7 +176,10 @@ public class SavedScriptsScreen extends Screen {
     }
 
     @Override
-    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+    public boolean mouseClicked(Click click, boolean doubled) {
+        double mouseY = click.y();
+        double mouseX = click.x();
+
         int listX = 40;
         int listY = 40;
         int listW = this.width - 80;
@@ -200,7 +205,7 @@ public class SavedScriptsScreen extends Screen {
                 return true;
             }
         }
-        return super.mouseClicked(mouseX, mouseY, button);
+        return super.mouseClicked(click, doubled);
     }
 
     @Override
@@ -221,11 +226,13 @@ public class SavedScriptsScreen extends Screen {
             return true;
         }
 
-        return super.mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount);
+        return false;
     }
 
     @Override
-    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+    public boolean keyPressed(KeyInput input) {
+        int keyCode = input.getKeycode();
+
         if (renaming) {
             if (keyCode == 257 || keyCode == 335) { // Enter
                 finishRename();
@@ -250,17 +257,17 @@ public class SavedScriptsScreen extends Screen {
             }
             return true;
         }
-        return super.keyPressed(keyCode, scanCode, modifiers);
+        return super.keyPressed(input);
     }
 
-    @Override
-    public boolean charTyped(char chr, int modifiers) {
-        if (renaming && (Character.isLetterOrDigit(chr) || chr == '_' || chr == '-' || chr == '.')) {
-            renameInput += chr;
-            return true;
-        }
-        return super.charTyped(chr, modifiers);
-    }
+//    @Override
+//    public boolean charTyped(char chr) {
+//        if (renaming && (Character.isLetterOrDigit(chr) || chr == '_' || chr == '-' || chr == '.')) {
+//            renameInput += chr;
+//            return true;
+//        }
+//        return false;
+//    }
 
     @Override
     public void render(net.minecraft.client.gui.DrawContext context, int mouseX, int mouseY, float delta) {
@@ -277,11 +284,11 @@ public class SavedScriptsScreen extends Screen {
 
         // List background with border
         context.fill(listX - 2, listY - 2, listX + listW + 2, listY + listH + 2, 0xFF222222);
-        try {
-            // drawBorder may not exist on all DrawContext versions — surround with try in case
-            context.drawBorder(listX - 2, listY - 2, listW + 4, listH + 4, 0xFF888888);
-        } catch (NoSuchMethodError ignored) {
-        }
+        int borderColor = 0xFF888888;
+        context.fill(listX - 2, listY - 2, listX + listW + 2, listY - 1, borderColor);
+        context.fill(listX - 2, listY + listH + 1, listX + listW + 2, listY + listH + 2, borderColor);
+        context.fill(listX - 2, listY - 2, listX - 1, listY + listH + 2, borderColor);
+        context.fill(listX + listW + 1, listY - 2, listX + listW + 2, listY + listH + 2, borderColor);
 
         int selectedIndex = savedScripts.indexOf(selectedScript);
 

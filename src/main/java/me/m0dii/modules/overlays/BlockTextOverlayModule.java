@@ -1,7 +1,7 @@
 package me.m0dii.modules.overlays;
 
 import me.m0dii.modules.Module;
-import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
+import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.render.VertexConsumerProvider;
 import net.minecraft.client.util.math.MatrixStack;
@@ -35,13 +35,13 @@ public abstract class BlockTextOverlayModule extends Module {
                 return;
             }
 
-            MatrixStack matrices = context.matrixStack();
+            MatrixStack matrices = context.matrices();
             if (matrices == null) {
                 return;
             }
 
             TextRenderer textRenderer = getClient().textRenderer;
-            Vec3d cameraPos = context.camera().getPos();
+            Vec3d cameraPos = context.gameRenderer().getCamera().getCameraPos();
             BlockPos playerPos = getClient().player.getBlockPos();
 
             VertexConsumerProvider vcp = context.consumers();

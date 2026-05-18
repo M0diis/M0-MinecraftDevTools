@@ -2,10 +2,10 @@ package me.m0dii.modules.overlays;
 
 import me.m0dii.modules.Module;
 import me.m0dii.utils.ModConfig;
-import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
+import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.Camera;
-import net.minecraft.client.render.RenderLayer;
+import net.minecraft.client.render.RenderLayers;
 import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.client.render.VertexConsumerProvider;
 import net.minecraft.client.util.InputUtil;
@@ -51,13 +51,13 @@ public class SlimeChunkOverlayModule extends Module {
                 return; // Seed not available
             }
 
-            MatrixStack matrices = context.matrixStack();
-            Camera camera = context.camera();
+            MatrixStack matrices = context.matrices();
+            Camera camera = context.gameRenderer().getCamera();
             if (matrices == null || camera == null) {
                 return;
             }
 
-            Vec3d cameraPos = camera.getPos();
+            Vec3d cameraPos = camera.getCameraPos();
             ChunkPos playerChunk = new ChunkPos(getClient().player.getBlockPos());
 
             VertexConsumerProvider vcp = context.consumers();
@@ -101,7 +101,7 @@ public class SlimeChunkOverlayModule extends Module {
         float minY = (float) (playerY - 5f - cameraPos.y);
         float maxY = (float) (playerY + 5f - cameraPos.y);
 
-        VertexConsumer vertexConsumer = vcp.getBuffer(RenderLayer.getLines());
+        VertexConsumer vertexConsumer = vcp.getBuffer(RenderLayers.LINES);
         Matrix4f matrix = matrices.peek().getPositionMatrix();
 
         drawLine(vertexConsumer, matrix, new Vec3d(minX, minY, minZ), new Vec3d(minX, maxY, minZ));
@@ -117,7 +117,7 @@ public class SlimeChunkOverlayModule extends Module {
                                  Vec3d a,
                                  Vec3d b) {
         // Green color for slime chunks (0.0f red, 1.0f green, 0.0f blue, 1.0f alpha)
-        vertexConsumer.vertex(matrix, (float) a.x, (float) a.y, (float) a.z).color(0.0f, 1.0f, 0.0f, 1.0f).normal(0.0f, 0.0f, 0.0f);
-        vertexConsumer.vertex(matrix, (float) b.x, (float) b.y, (float) b.z).color(0.0f, 1.0f, 0.0f, 1.0f).normal(0.0f, 0.0f, 0.0f);
+        vertexConsumer.vertex(matrix, (float) a.x, (float) a.y, (float) a.z).color(0.0f, 1.0f, 0.0f, 1.0f).normal(0.0f, 0.0f, 0.0f).lineWidth(1.0f);
+        vertexConsumer.vertex(matrix, (float) b.x, (float) b.y, (float) b.z).color(0.0f, 1.0f, 0.0f, 1.0f).normal(0.0f, 0.0f, 0.0f).lineWidth(1.0f);
     }
 }

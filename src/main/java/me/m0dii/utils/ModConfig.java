@@ -88,6 +88,9 @@ public class ModConfig extends MidnightConfig {
     @MidnightConfig.Entry(name = "Macro Overlay Margin Y", category = CATEGORY_HUD_OVERLAY)
     public static int macroOverlayMarginY = 6;
 
+    @MidnightConfig.Entry(name = "Show Macro Keybind Overlay", category = CATEGORY_HUD_OVERLAY)
+    public static boolean showMacroKeybindOverlay = true;
+
     // --- Macro GUI specific settings ---
     @MidnightConfig.Entry(name = "Macro GUI Width", category = CATEGORY_HUD_OVERLAY)
     public static int macroGuiWidth = 220;

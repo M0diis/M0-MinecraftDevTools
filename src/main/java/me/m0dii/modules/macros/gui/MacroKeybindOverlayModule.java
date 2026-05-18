@@ -9,7 +9,6 @@ import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.render.RenderTickCounter;
 import net.minecraft.client.util.InputUtil;
-import org.joml.Matrix4f;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -30,7 +29,7 @@ public class MacroKeybindOverlayModule extends Module {
 
     private void onHudRender(DrawContext ctx, RenderTickCounter tickCounter) {
         MinecraftClient client = MinecraftClient.getInstance();
-        if (!isEnabled() || isClientNull()) {
+        if (!isEnabled() || !ModConfig.showMacroKeybindOverlay || isClientNull()) {
             return;
         }
 
@@ -104,22 +103,21 @@ public class MacroKeybindOverlayModule extends Module {
         ctx.fill(panelX, panelY, panelX + panelWScaled, panelY + panelHScaled, 0x88000000);
 
         // Draw text in scaled coordinates.
-        ctx.getMatrices().push();
-        Matrix4f m = new Matrix4f(ctx.getMatrices().peek().getPositionMatrix());
-        ctx.getMatrices().peek().getPositionMatrix().set(m.scale(scale, scale, 1.0f));
+        ctx.getMatrices().pushMatrix();
+        ctx.getMatrices().scale(scale, scale);
 
         // Convert screen-space to unscaled-space for text rendering.
         final int baseX = Math.round(panelX / scale) + pad;
         int y = Math.round(panelY / scale) + pad;
 
-        ctx.drawText(tr, "Macro Keybinds", baseX, y, 0xFFFFFF, false);
+        ctx.drawText(tr, "Macro Keybinds", baseX, y, 0xFFFFFFFF, false);
         y += lineH;
         for (String s : lines) {
-            ctx.drawText(tr, s, baseX, y, 0xC0C0C0, false);
+            ctx.drawText(tr, s, baseX, y, 0xFFC0C0C0, false);
             y += lineH;
         }
 
-        ctx.getMatrices().pop();
+        ctx.getMatrices().popMatrix();
     }
 
     private static List<String> getInfoLines() {
@@ -131,16 +129,23 @@ public class MacroKeybindOverlayModule extends Module {
         }
 
         Map<String, MacroDataHandler.MacroEntry> allMacros = MacroDataHandler.getAllMacros();
+        boolean hasExplicitOverlayEntries = allMacros.values().stream().anyMatch(m -> m != null && m.showInOverlay);
 
         for (MacroDataHandler.MacroEntry me : allMacros.values()) {
-            if (!me.showInOverlay) {
+            if (me == null) {
+                continue;
+            }
+
+            // Backward-compat behavior: if no macro is explicitly opted in, show all configured macros.
+            if (hasExplicitOverlayEntries && !me.showInOverlay) {
                 continue;
             }
 
             int keyName = me.keyCode;
             String modifierKey = me.modifierKey;
-            String displayKey = (modifierKey != null && !modifierKey.isEmpty() ? modifierKey + "+" : "") + (keyName > 0 ? getKeyName(keyName) : "None");
-            lines.add(me.name + " - [" + displayKey + "]");
+            String displayName = (me.name == null || me.name.isBlank()) ? "Unnamed macro" : me.name;
+            String displayKey = (modifierKey != null && !modifierKey.isEmpty() ? modifierKey + "+" : "") + (keyName >= 0 ? getKeyName(keyName) : "None");
+            lines.add(displayName + " - [" + displayKey + "]");
         }
 
         return lines;
@@ -148,9 +153,27 @@ public class MacroKeybindOverlayModule extends Module {
 
     private static String getKeyName(int keyCode) {
         try {
-            return InputUtil.fromKeyCode(keyCode, 0).getLocalizedText().getString();
+            return InputUtil.Type.KEYSYM.createFromCode(keyCode).getLocalizedText().getString();
         } catch (Exception e) {
             return "Unknown";
         }
+    }
+
+    @Override
+    public List<String> getSettingsDisplay() {
+        List<String> settings = new ArrayList<>();
+        settings.add("Visible: " + (ModConfig.showMacroKeybindOverlay ? "ON" : "OFF"));
+        settings.add("Toggle: " + (isEnabled() ? "ON" : "OFF"));
+        return settings;
+    }
+
+    @Override
+    public void onSettingSelected(int settingIndex) {
+        if (settingIndex == 0) {
+            ModConfig.updateAndSave(() -> ModConfig.showMacroKeybindOverlay = !ModConfig.showMacroKeybindOverlay);
+            return;
+        }
+
+        super.onSettingSelected(settingIndex);
     }
 }

@@ -7,6 +7,7 @@ import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
+import net.minecraft.util.Identifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -20,7 +21,7 @@ public final class KeybindManager {
 
     private static final Logger LOGGER = LoggerFactory.getLogger("m0-dev-tools");
 
-    private static final String CATEGORY = "category.m0-dev-tools";
+    public static final KeyBinding.Category KEY_CATEGORY = KeyBinding.Category.create(Identifier.of("m0-dev-tools", "keybinds"));
 
     @Getter
     @RequiredArgsConstructor
@@ -50,7 +51,7 @@ public final class KeybindManager {
                 translationKey,
                 type,
                 defaultKey,
-                CATEGORY
+                KEY_CATEGORY
         ));
         synchronized (PRESSED_KEYBINDS) {
             PRESSED_KEYBINDS.put(kb, action);
@@ -68,7 +69,7 @@ public final class KeybindManager {
                 translationKey,
                 type,
                 defaultKey,
-                CATEGORY
+                KEY_CATEGORY
         ));
         synchronized (PRESSED_KEYBINDS) {
             HELD_KEYBINDS.put(kb, new HeldKeybind(heldAction, releasedAction));
@@ -97,7 +98,7 @@ public final class KeybindManager {
                         try {
                             action.accept(client);
                         } catch (Exception e) {
-                            LOGGER.error("Error executing keybind action for {}", kb.getTranslationKey(), e);
+                            LOGGER.error("Error executing keybind action for {}", kb, e);
                         }
                     }
                 }
@@ -110,7 +111,7 @@ public final class KeybindManager {
                     try {
                         heldKeybind.tick(client, kb);
                     } catch (Exception e) {
-                        LOGGER.error("Error executing held keybind action for {}", kb.getTranslationKey(), e);
+                        LOGGER.error("Error executing held keybind action for {}", kb, e);
                     }
                 }
             }

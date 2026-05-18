@@ -1,5 +1,6 @@
 package me.m0dii.modules.waypoints;
 
+import net.minecraft.client.gui.Click;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
@@ -100,7 +101,7 @@ public class WaypointScreen extends Screen {
             this.addDrawableChild(ButtonWidget.builder(Text.literal("Cancel"), button -> {
                 editingWaypoint = null;
                 clearEditFields();
-                init(client, width, height);
+                init();
             }).dimensions(editPanelX + 110, editPanelY + 140, 90, 20).build());
         }
     }
@@ -151,7 +152,7 @@ public class WaypointScreen extends Screen {
             editingWaypoint = null;
             clearEditFields();
             refreshWaypoints();
-            init(client, width, height);
+            init();
         } catch (NumberFormatException e) {
             if (client != null && client.player != null) {
                 client.player.sendMessage(
@@ -239,7 +240,10 @@ public class WaypointScreen extends Screen {
         context.fill(x, y, x + contentWidth, y + ENTRY_HEIGHT, bgColor);
 
         int borderColor = isEditing ? 0xFFFFAA00 : 0x80808080;
-        context.drawBorder(x, y, contentWidth, ENTRY_HEIGHT, borderColor);
+        context.fill(x, y, x + contentWidth, y + 1, borderColor);
+        context.fill(x, y + ENTRY_HEIGHT - 1, x + contentWidth, y + ENTRY_HEIGHT, borderColor);
+        context.fill(x, y, x + 1, y + ENTRY_HEIGHT, borderColor);
+        context.fill(x + contentWidth - 1, y, x + contentWidth, y + ENTRY_HEIGHT, borderColor);
 
         String displayName = wp.name;
         int maxNameWidth = contentWidth - 120;
@@ -265,7 +269,7 @@ public class WaypointScreen extends Screen {
                 x + 5, y + 20, 0xFFFFFF);
 
         if (client != null && client.player != null) {
-            double distance = client.player.getPos().distanceTo(wp.position);
+            double distance = client.player.getEntityPos().distanceTo(wp.position);
             String distText = String.format("Distance: %.0fm", distance);
             int distColor = distance < 100 ? 0x55FF55 : (distance < 1000 ? 0xFFFF55 : 0xFF5555);
             context.drawTextWithShadow(this.textRenderer,
@@ -304,7 +308,10 @@ public class WaypointScreen extends Screen {
         int panelHeight = 180;
 
         context.fill(panelX, panelY, panelX + panelWidth, panelY + panelHeight, 0xE0202020);
-        context.drawBorder(panelX, panelY, panelWidth, panelHeight, 0xFFFFAA00);
+        context.fill(panelX, panelY, panelX + panelWidth, panelY + 1, 0xFFFFAA00);
+        context.fill(panelX, panelY + panelHeight - 1, panelX + panelWidth, panelY + panelHeight, 0xFFFFAA00);
+        context.fill(panelX, panelY, panelX + 1, panelY + panelHeight, 0xFFFFAA00);
+        context.fill(panelX + panelWidth - 1, panelY, panelX + panelWidth, panelY + panelHeight, 0xFFFFAA00);
 
         context.drawCenteredTextWithShadow(this.textRenderer,
                 Text.literal("Edit Waypoint").formatted(Formatting.GOLD, Formatting.BOLD),
@@ -317,7 +324,11 @@ public class WaypointScreen extends Screen {
     }
 
     @Override
-    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+    public boolean mouseClicked(Click click, boolean doubled) {
+        int button = click.getKeycode();
+        double mouseX = click.x();
+        double mouseY = click.y();
+
         if (button == 0) { // Left click
             int listWidth = editingWaypoint != null ? this.width - 240 : this.width - 40;
             int startX = 20;
@@ -341,7 +352,7 @@ public class WaypointScreen extends Screen {
                         && mouseY >= buttonY && mouseY <= buttonY + BUTTON_HEIGHT) {
                     editingWaypoint = wp;
                     clearEditFields();
-                    init(client, width, height);
+                    init();
                     return true;
                 }
 
@@ -353,7 +364,7 @@ public class WaypointScreen extends Screen {
                     if (editingWaypoint != null && editingWaypoint.id.equals(wp.id)) {
                         editingWaypoint = null;
                         clearEditFields();
-                        init(client, width, height);
+                        init();
                     }
                     return true;
                 }
@@ -366,7 +377,7 @@ public class WaypointScreen extends Screen {
             }
         }
 
-        return super.mouseClicked(mouseX, mouseY, button);
+        return super.mouseClicked(click, doubled);
     }
 
     @Override

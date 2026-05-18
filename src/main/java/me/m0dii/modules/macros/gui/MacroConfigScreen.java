@@ -2,6 +2,7 @@ package me.m0dii.modules.macros.gui;
 
 import me.m0dii.modules.macros.CommandMacros;
 import me.m0dii.modules.macros.MacroDataHandler;
+import me.m0dii.utils.ModConfig;
 import me.shedaniel.clothconfig2.api.*;
 import me.shedaniel.clothconfig2.impl.builders.SubCategoryBuilder;
 import net.minecraft.client.gui.screen.Screen;
@@ -40,6 +41,15 @@ public final class MacroConfigScreen {
 
         ConfigEntryBuilder eb = builder.entryBuilder();
         ConfigCategory category = builder.getOrCreateCategory(Text.literal("Macros"));
+        boolean[] overlayVisible = new boolean[]{ModConfig.showMacroKeybindOverlay};
+
+        SubCategoryBuilder overlaySettings = eb.startSubCategory(Text.literal("Overlay Settings"))
+                .setExpanded(false);
+        overlaySettings.add(eb.startBooleanToggle(Text.literal("Show macro keybind overlay"), overlayVisible[0])
+                .setTooltip(Text.literal("Shows or hides the macro keybind list on the HUD"))
+                .setSaveConsumer(val -> overlayVisible[0] = val)
+                .build());
+        category.addEntry(overlaySettings.build());
 
         SubCategoryBuilder subInstructors = eb.startSubCategory(Text.literal("Instructions"))
                 .setExpanded(false);
@@ -56,6 +66,13 @@ public final class MacroConfigScreen {
                          • {player.___} (name, uuid, hp, max_hp, food, saturation, xp, level, yaw, pitch, facing, gamemode)
                          • {pos.___} (x, y, z, biome, dim, light, block, facing)
                          • {sel.self/@s}, {sel.nearest/@p}, {sel.random/@r}, {sel.all/@a}, {sel.entities/@e}
+                         • {players.count}, {players.count.other}
+                         • {players.list}, {players.list.other}, {players.list.nl}, {players.list.other.nl}
+                         • {players.nearby.3}, {players.nearby.3.nl}, {players.nearby.3.r128}, {players.nearby.3.r128.nl}
+                         • {players.nearby.3.with_distance}, {players.nearby.3.with_distance.nl}, {players.nearby.3.unique}
+                         • sort suffixes: .sort=name or .sort=distance (default distance)
+                         • {entities.nearby.3}, {entities.nearby.3.nl}, {entities.nearby.3.r64}, {entities.nearby.3.r64.nl}
+                         • {entities.nearby.3.with_distance}, {entities.nearby.3.with_distance.nl}, {entities.nearby.3.unique}
                          • {look.block.xyz}, {look.entity.name}, {dim}, rand.int(a,b)
                          • {hand.___} (item, id, count, damage, max_damage, durability)
                         
@@ -87,7 +104,7 @@ public final class MacroConfigScreen {
             // Build title with key and optional modifier
             String baseKey = (macroEntry.keyCode == -1)
                     ? "None"
-                    : InputUtil.fromKeyCode(macroEntry.keyCode, 0).getTranslationKey().toUpperCase();
+                    : InputUtil.Type.KEYSYM.createFromCode(macroEntry.keyCode).getTranslationKey().toUpperCase();
             String modPart = null;
             if (macroEntry.modifierKey != null && !macroEntry.modifierKey.isEmpty() && macroEntry.keyCode != -1) {
                 var modKey = InputUtil.fromTranslationKey(macroEntry.modifierKey.toLowerCase());
@@ -109,7 +126,7 @@ public final class MacroConfigScreen {
                     .setSaveConsumer(nameRef::set)
                     .build());
 
-            sub.add(eb.startKeyCodeField(Text.literal("Key"), InputUtil.fromKeyCode(Math.max(-1, keyRef.get()), 0))
+            sub.add(eb.startKeyCodeField(Text.literal("Key"), InputUtil.Type.KEYSYM.createFromCode(Math.max(-1, keyRef.get())))
                     .setTooltip(Text.literal("Keyboard key to trigger this macro"))
                     .setDefaultValue(InputUtil.UNKNOWN_KEY)
                     .setKeySaveConsumer(k -> keyRef.set(k.getCode()))
@@ -219,6 +236,8 @@ public final class MacroConfigScreen {
         category.addEntry(addSub.build());
 
         builder.setSavingRunnable(() -> {
+            ModConfig.updateAndSave(() -> ModConfig.showMacroKeybindOverlay = overlayVisible[0]);
+
             // Apply deletions and updates
             for (MacroState state : states) {
                 if (state.deleteFlag()[0]) {

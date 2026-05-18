@@ -2,6 +2,7 @@ package me.m0dii.modules.entityradar;
 
 import me.m0dii.modules.freecam.CameraEntity;
 import me.m0dii.modules.freecam.FreecamModule;
+import net.minecraft.client.gui.Click;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
@@ -115,7 +116,11 @@ public class EntityRadarScreen extends Screen {
     }
 
     @Override
-    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+    public boolean mouseClicked(Click click, boolean doubled) {
+        int button = click.button();
+        double mouseY = click.y();
+        double mouseX = click.x();
+
         if (button == 0) { // Left click
             int startIndex = scrollOffset / ENTRY_HEIGHT;
             int visibleEntries = (this.height - HEADER_HEIGHT - 40) / ENTRY_HEIGHT;
@@ -136,7 +141,7 @@ public class EntityRadarScreen extends Screen {
             }
         }
 
-        return super.mouseClicked(mouseX, mouseY, button);
+        return super.mouseClicked(click, doubled);
     }
 
     @Override

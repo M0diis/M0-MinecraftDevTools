@@ -22,12 +22,12 @@ public class MinecraftClientInvMoveMixin {
         Screen screen = client.currentScreen;
 
         if (screen instanceof HandledScreen) {
-            client.options.forwardKey.setPressed(isKeyPressed(client.getWindow().getHandle(), GLFW_KEY_W));
-            client.options.leftKey.setPressed(isKeyPressed(client.getWindow().getHandle(), GLFW_KEY_A));
-            client.options.backKey.setPressed(isKeyPressed(client.getWindow().getHandle(), GLFW_KEY_S));
-            client.options.rightKey.setPressed(isKeyPressed(client.getWindow().getHandle(), GLFW_KEY_D));
-            client.options.jumpKey.setPressed(isKeyPressed(client.getWindow().getHandle(), GLFW_KEY_SPACE));
-            client.options.sprintKey.setPressed(isKeyPressed(client.getWindow().getHandle(), GLFW_KEY_LEFT_CONTROL));
+            client.options.forwardKey.setPressed(isKeyPressed(client.getWindow(), GLFW_KEY_W));
+            client.options.leftKey.setPressed(isKeyPressed(client.getWindow(), GLFW_KEY_A));
+            client.options.backKey.setPressed(isKeyPressed(client.getWindow(), GLFW_KEY_S));
+            client.options.rightKey.setPressed(isKeyPressed(client.getWindow(), GLFW_KEY_D));
+            client.options.jumpKey.setPressed(isKeyPressed(client.getWindow(), GLFW_KEY_SPACE));
+            client.options.sprintKey.setPressed(isKeyPressed(client.getWindow(), GLFW_KEY_LEFT_CONTROL));
         }
     }
 

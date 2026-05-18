@@ -58,8 +58,8 @@ public class QuickTeleportModule extends Module {
             return;
         }
 
-        var pos = client.player.getPos();
-        client.player.setPosition(pos.x + x, pos.y + y, pos.z + z);
+        var pos = client.player.getEntityPos();
+        client.player.setPosition(pos.getX() + x, pos.getY() + y, pos.getZ() + z);
 
         client.player.sendMessage(
                 Text.literal("§aTeleported §f" + String.format("%.1f, %.1f, %.1f", x, y, z)),
@@ -77,8 +77,8 @@ public class QuickTeleportModule extends Module {
         double x = -Math.sin(yaw) * distance;
         double z = Math.cos(yaw) * distance;
 
-        var pos = client.player.getPos();
-        client.player.setPosition(pos.x + x, pos.y, pos.z + z);
+        var pos = client.player.getEntityPos();
+        client.player.setPosition(pos.getX() + x, pos.getY(), pos.getZ() + z);
 
         client.player.sendMessage(
                 Text.literal("§aTeleported forward §f" + distance + " blocks"),

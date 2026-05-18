@@ -17,11 +17,6 @@ public class EntityMixin {
     @Shadow
     private float pitch;
 
-    @Shadow
-    public float prevYaw;
-    @Shadow
-    public float prevPitch;
-
     private double forcedPitch;
     private double forcedYaw;
 

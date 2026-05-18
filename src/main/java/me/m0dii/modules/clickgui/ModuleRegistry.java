@@ -11,6 +11,7 @@ import me.m0dii.modules.instantbreak.InstantBreakModule;
 import me.m0dii.modules.inventorymove.InventoryMoveModule;
 import me.m0dii.modules.macros.gui.MacroKeybindOverlayModule;
 import me.m0dii.modules.macros.gui.PendingMacrosOverlayModule;
+import me.m0dii.modules.macros.hud.MacroHudOverlayModule;
 import me.m0dii.modules.messagehistory.MessageHistoryModule;
 import me.m0dii.modules.nbthud.NBTInfoHudOverlayModule;
 import me.m0dii.modules.nbttooltip.NBTTooltipModule;
@@ -61,6 +62,7 @@ public class ModuleRegistry {
         ModuleCategory hud = new ModuleCategory("HUD");
         safeAdd(hud, MacroKeybindOverlayModule.INSTANCE);
         safeAdd(hud, PendingMacrosOverlayModule.INSTANCE);
+        safeAdd(hud, MacroHudOverlayModule.INSTANCE);
         safeAdd(hud, NBTInfoHudOverlayModule.INSTANCE);
         safeAdd(hud, EntityRadarModule.INSTANCE);
         safeAdd(hud, ClickGuiModule.INSTANCE);

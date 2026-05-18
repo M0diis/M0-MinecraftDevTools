@@ -1,8 +1,8 @@
 package me.m0dii.modules.overlays;
 
 import me.m0dii.modules.Module;
-import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
-import net.minecraft.client.render.RenderLayer;
+import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
+import net.minecraft.client.render.RenderLayers;
 import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.client.render.VertexConsumerProvider;
 import net.minecraft.client.util.math.MatrixStack;
@@ -30,7 +30,7 @@ public class ChunkBorderOverlayModule extends Module {
                 return;
             }
 
-            MatrixStack matrices = context.matrixStack();
+            MatrixStack matrices = context.matrices();
             if (matrices == null) {
                 return;
             }
@@ -40,7 +40,7 @@ public class ChunkBorderOverlayModule extends Module {
                 return;
             }
 
-            Vec3d cameraPos = context.camera().getPos();
+            Vec3d cameraPos = context.gameRenderer().getCamera().getCameraPos();
             BlockPos playerPos = getClient().player.getBlockPos();
 
             int chunkX = playerPos.getX() >> 4;
@@ -74,7 +74,7 @@ public class ChunkBorderOverlayModule extends Module {
         double minY = -64 - cameraPos.y;
         double maxY = 320 - cameraPos.y;
 
-        VertexConsumer vertexConsumer = vertexConsumers.getBuffer(RenderLayer.getLines());
+        VertexConsumer vertexConsumer = vertexConsumers.getBuffer(RenderLayers.LINES);
         Matrix4f matrix = matrices.peek().getPositionMatrix();
 
         // Draw vertical lines at chunk corners
@@ -89,7 +89,7 @@ public class ChunkBorderOverlayModule extends Module {
     private static void drawLine(VertexConsumer vertexConsumer, Matrix4f matrix,
                                  float x1, float y1, float z1, float x2, float y2, float z2) {
         // Blue color for chunk borders
-        vertexConsumer.vertex(matrix, x1, y1, z1).color(0.0f, 0.5f, 1.0f, 0.8f).normal(0.0f, 1.0f, 0.0f);
-        vertexConsumer.vertex(matrix, x2, y2, z2).color(0.0f, 0.5f, 1.0f, 0.8f).normal(0.0f, 1.0f, 0.0f);
+        vertexConsumer.vertex(matrix, x1, y1, z1).color(0.0f, 0.5f, 1.0f, 0.8f).normal(0.0f, 1.0f, 0.0f).lineWidth(1.0f);
+        vertexConsumer.vertex(matrix, x2, y2, z2).color(0.0f, 0.5f, 1.0f, 0.8f).normal(0.0f, 1.0f, 0.0f).lineWidth(1.0f);
     }
 }

@@ -1,7 +1,7 @@
 package me.m0dii.modules;
 
-import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderContext;
-import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
+import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext;
+import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
 import net.minecraft.block.BlockState;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.render.Camera;
@@ -35,8 +35,8 @@ public abstract class BlockTargetTextModule extends Module {
             return;
         }
 
-        MatrixStack matrices = context.matrixStack();
-        Camera camera = context.camera();
+        MatrixStack matrices = context.matrices();
+        Camera camera = context.gameRenderer().getCamera();
 
         if (matrices == null || camera == null) {
             return;

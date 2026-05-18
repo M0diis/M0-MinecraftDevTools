@@ -7,7 +7,10 @@ import com.mojang.brigadier.context.CommandContext;
 import me.m0dii.modules.Module;
 import me.m0dii.modules.macros.gui.MacroConfigScreen;
 import me.m0dii.modules.macros.gui.MacroKeybindOverlayModule;
+import me.m0dii.modules.macros.gui.MacroWorkbenchV2Screen;
 import me.m0dii.modules.macros.gui.PendingMacrosOverlayModule;
+import me.m0dii.modules.macros.hud.MacroHudDataHandler;
+import me.m0dii.modules.macros.hud.MacroHudOverlayModule;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
@@ -34,6 +37,7 @@ public class MacrosModule extends Module {
                         -> registerMacroCommands(dispatcher));
 
         CommandMacros.register();
+        MacroHudDataHandler.load();
 
         registerPressedKeybind(
                 "key.m0-dev-tools.open_macro_gui",
@@ -42,8 +46,30 @@ public class MacrosModule extends Module {
                 client -> client.setScreen(MacroConfigScreen.create(client.currentScreen))
         );
 
+        registerPressedKeybind(
+                "key.m0-dev-tools.open_macro_panel_editor",
+                InputUtil.Type.KEYSYM,
+                GLFW.GLFW_KEY_J,
+                client -> client.setScreen(MacroWorkbenchV2Screen.create(client.currentScreen, MacroWorkbenchV2Screen.Tab.CANVAS))
+        );
+
+        registerPressedKeybind(
+                "key.m0-dev-tools.open_macro_hud_editor",
+                InputUtil.Type.KEYSYM,
+                GLFW.GLFW_KEY_K,
+                client -> client.setScreen(MacroWorkbenchV2Screen.create(client.currentScreen, MacroWorkbenchV2Screen.Tab.CANVAS))
+        );
+
+        registerPressedKeybind(
+                "key.m0-dev-tools.open_macro_keyboard_layout",
+                InputUtil.Type.KEYSYM,
+                GLFW.GLFW_KEY_U,
+                client -> client.setScreen(MacroWorkbenchV2Screen.create(client.currentScreen, MacroWorkbenchV2Screen.Tab.KEYBOARD))
+        );
+
         MacroKeybindOverlayModule.INSTANCE.register();
         PendingMacrosOverlayModule.INSTANCE.register();
+        MacroHudOverlayModule.INSTANCE.register();
     }
 
     private static void registerMacroCommands(CommandDispatcher<FabricClientCommandSource> dispatcher) {
@@ -75,7 +101,7 @@ public class MacrosModule extends Module {
         String name = StringArgumentType.getString(context, "name");
         int keyCode = IntegerArgumentType.getInteger(context, "keycode");
         String modifierKey = ""; // Future use for modifier keys like Shift, Ctrl, etc.
-        List<String> commands = List.of(StringArgumentType.getString(context, "commands").split(";"));
+        List<String> commands = List.of(StringArgumentType.getString(context, "command").split(";"));
 
         if (CommandMacros.addMacro(id, name, commands, keyCode, modifierKey, 0, false)) {
             context.getSource().sendFeedback(Text.literal("§aAdded macro '" + name + "' with ID '" + id + "' (Key: " + getKeyName(keyCode) + ")"));
@@ -109,7 +135,7 @@ public class MacrosModule extends Module {
         String name = StringArgumentType.getString(context, "name");
         int keyCode = IntegerArgumentType.getInteger(context, "keycode");
         String modifierKey = "";
-        List<String> commands = StringArgumentType.getString(context, "command").isEmpty() ? new ArrayList<>() : List.of(StringArgumentType.getString(context, "command").split(";"));
+        List<String> commands = StringArgumentType.getString(context, "commands").isEmpty() ? new ArrayList<>() : List.of(StringArgumentType.getString(context, "commands").split(";"));
 
         if (CommandMacros.updateMacro(id, name, commands, keyCode, modifierKey)) {
             context.getSource().sendFeedback(Text.literal("§aUpdated macro '" + name + "' (ID: " + id + ")"));
@@ -128,7 +154,7 @@ public class MacrosModule extends Module {
             return 1;
         }
 
-        context.getSource().sendFeedback(Text.literal("§aCconfigured Macros:"));
+        context.getSource().sendFeedback(Text.literal("§aConfigured Macros:"));
         for (Map.Entry<String, MacroDataHandler.MacroEntry> entry : macros.entrySet()) {
             String id = entry.getKey();
             MacroDataHandler.MacroEntry macro = entry.getValue();

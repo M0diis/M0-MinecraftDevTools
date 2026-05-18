@@ -6,8 +6,6 @@ import com.google.gson.reflect.TypeToken;
 import lombok.Getter;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.text.ClickEvent;
-import net.minecraft.text.HoverEvent;
 import net.minecraft.text.Style;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
@@ -81,7 +79,7 @@ public class WaypointHandler {
             return;
         }
 
-        Vec3d pos = client.player.getPos();
+        Vec3d pos = new Vec3d(client.player.getX(), client.player.getY(), client.player.getZ());
         String dimension = client.world.getRegistryKey().getValue().toString();
         String id = UUID.randomUUID().toString().substring(0, 8);
         String name = "Waypoint " + (waypoints.size() + 1);
@@ -124,35 +122,22 @@ public class WaypointHandler {
         for (int i = 0; i < waypoints.size(); i++) {
             Waypoint wp = waypoints.get(i);
             String dimName = wp.dimension.substring(wp.dimension.lastIndexOf(":") + 1);
-            double distance = client.player.getPos().distanceTo(wp.position);
+            double distance = new Vec3d(client.player.getX(), client.player.getY(), client.player.getZ()).distanceTo(wp.position);
 
             Text teleportButton = Text.literal("TP")
                     .setStyle(Style.EMPTY
                             .withColor(Formatting.GREEN)
-                            .withBold(true)
-                            .withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/waypoint tp " + wp.id))
-                            .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT,
-                                    Text.literal("Click to teleport to ").formatted(Formatting.GREEN)
-                                            .append(Text.literal(wp.name).formatted(Formatting.AQUA)))));
+                            .withBold(true));
 
             Text deleteButton = Text.literal("DEL")
                     .setStyle(Style.EMPTY
                             .withColor(Formatting.RED)
-                            .withBold(true)
-                            .withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/waypoint delete " + wp.id))
-                            .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT,
-                                    Text.literal("Click to delete ").formatted(Formatting.RED)
-                                            .append(Text.literal(wp.name).formatted(Formatting.AQUA))
-                                            .append(Text.literal("\nThis cannot be undone!").formatted(Formatting.YELLOW)))));
+                            .withBold(true));
 
             Text renameButton = Text.literal("RENAME")
                     .setStyle(Style.EMPTY
                             .withColor(Formatting.YELLOW)
-                            .withBold(true)
-                            .withClickEvent(new ClickEvent(ClickEvent.Action.SUGGEST_COMMAND, "/waypoint rename " + wp.id + " "))
-                            .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT,
-                                    Text.literal("Click to rename ").formatted(Formatting.YELLOW)
-                                            .append(Text.literal(wp.name).formatted(Formatting.AQUA)))));
+                            .withBold(true));
 
             Text waypointInfo = Text.literal("")
                     .append(Text.literal((i + 1) + ". ").formatted(Formatting.GRAY))

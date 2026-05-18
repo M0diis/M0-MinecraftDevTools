@@ -1,5 +1,6 @@
 package me.m0dii.modules.commandhistory;
 
+import net.minecraft.client.gui.Click;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
@@ -131,7 +132,11 @@ public class CommandHistoryScreen extends Screen {
     }
 
     @Override
-    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+    public boolean mouseClicked(Click click, boolean doubled) {
+        int button = click.button();
+        double mouseY = click.y();
+        double mouseX = click.x();
+
         if (button == 0 && !commands.isEmpty()) { // Left click
             int yStart = 50;
             int maxVisible = Math.min(VISIBLE_LINES, commands.size() - scrollOffset);
@@ -166,7 +171,7 @@ public class CommandHistoryScreen extends Screen {
             }
         }
 
-        return super.mouseClicked(mouseX, mouseY, button);
+        return super.mouseClicked(click, doubled);
     }
 
     @Override
@@ -179,7 +184,7 @@ public class CommandHistoryScreen extends Screen {
             }
             return true;
         }
-        return super.mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount);
+        return false;
     }
 
     @Override

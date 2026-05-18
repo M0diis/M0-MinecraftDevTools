@@ -12,6 +12,10 @@
   "key.m0-dev-tools.open_nbt_editor": "Open NBT Editor",
   "key.m0-dev-tools.toggle_block_inspector": "Toggle Block Inspector",
   "key.m0-dev-tools.open_macro_gui": "Open Macro Manager",
+  "key.m0-dev-tools.open_macro_panel": "Open Macro Workbench (Canvas)",
+  "key.m0-dev-tools.open_macro_panel_editor": "Open Macro Workbench (Canvas)",
+  "key.m0-dev-tools.open_macro_hud_editor": "Open Macro Workbench (Canvas)",
+  "key.m0-dev-tools.open_macro_keyboard_layout": "Open Macro Workbench (Keyboard)",
 
   "key.m0-dev-tools.add_waypoint": "Add Waypoint",
   "key.m0-dev-tools.list_waypoints": "List Waypoints",

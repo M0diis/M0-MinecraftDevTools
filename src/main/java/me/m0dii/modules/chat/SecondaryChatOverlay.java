@@ -1,5 +1,7 @@
 package me.m0dii.modules.chat;
 
+import me.m0dii.gui.GuiSystem;
+import me.m0dii.modules.hudcanvas.HudCanvasDataHandler;
 import me.m0dii.utils.ModConfig;
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 import net.minecraft.client.MinecraftClient;
@@ -9,7 +11,6 @@ import net.minecraft.client.gui.screen.ChatScreen;
 import net.minecraft.client.render.RenderTickCounter;
 import net.minecraft.text.OrderedText;
 import net.minecraft.text.Text;
-import org.joml.Matrix4f;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -50,24 +51,30 @@ public final class SecondaryChatOverlay {
                 && ModConfig.noTransparencyWhenChatOpen;
 
         TextRenderer tr = client.textRenderer;
+        HudCanvasDataHandler.HudCanvasElement canvas = HudCanvasDataHandler.getMutableElement(
+                HudCanvasDataHandler.ELEMENT_SECONDARY_CHAT,
+                SecondaryChatOverlay::defaultCanvasElement
+        );
+        if (!canvas.visible) {
+            return;
+        }
 
-        final float scale = (float) Math.max(0.1, ModConfig.secondaryChatScale);
-        final int lineH = Math.max(1, ModConfig.secondaryChatLineHeight);
-        final int pad = Math.max(0, ModConfig.secondaryChatPadding);
+        final float scale = Math.max(0.1f, canvas.fontScale);
+        final int lineH = Math.max(1, canvas.lineHeight);
+        final int pad = Math.max(0, canvas.padding);
 
-        int panelX = ModConfig.secondaryChatX;
-        int panelY = ModConfig.secondaryChatY;
-        int panelW = Math.max(50, ModConfig.secondaryChatWidth);
-        int panelH = Math.max(30, ModConfig.secondaryChatHeight);
+        int panelX = canvas.x;
+        int panelY = canvas.y;
+        int panelW = Math.max(50, canvas.width);
+        int panelH = Math.max(30, canvas.height);
 
         int screenW = client.getWindow().getScaledWidth();
         int screenH = client.getWindow().getScaledHeight();
         panelX = Math.clamp(panelX, 0, Math.max(0, screenW - 5));
         panelY = Math.clamp(panelY, 0, Math.max(0, screenH - 5));
 
-        // Fade alpha
-        int alpha = (ModConfig.secondaryChatBackgroundColor >> 24) & 0xFF;
-        int textAlpha = (ModConfig.secondaryChatTextColor >> 24) & 0xFF;
+        int alpha = (canvas.backgroundColor >> 24) & 0xFF;
+        int textAlpha = (canvas.textColor >> 24) & 0xFF;
         if (ModConfig.secondaryChatFadeEnabled && !noTransparency) {
             long now = System.currentTimeMillis();
             long lastMsg = SecondaryChatManager.getLastAlphaReset();
@@ -80,9 +87,14 @@ public final class SecondaryChatOverlay {
                 textAlpha = Math.round(minAlpha + (textAlpha - minAlpha) * fade);
             }
         }
-        int bg = (ModConfig.secondaryChatBackgroundColor & 0x00FFFFFF) | (alpha << 24);
-        int textColor = (ModConfig.secondaryChatTextColor & 0x00FFFFFF) | (textAlpha << 24);
-        ctx.fill(panelX, panelY, panelX + panelW, panelY + panelH, bg);
+        int bg = (canvas.backgroundColor & 0x00FFFFFF) | (alpha << 24);
+        int textColor = (canvas.textColor & 0x00FFFFFF) | (textAlpha << 24);
+        if (canvas.drawBackground) {
+            ctx.fill(panelX, panelY, panelX + panelW, panelY + panelH, bg);
+        }
+        if (canvas.drawBorder) {
+            GuiSystem.drawOutline(ctx, panelX, panelY, panelX + panelW, panelY + panelH, canvas.borderColor);
+        }
 
         // Resize handle
         int handleAlpha = alpha; // Use fade alpha
@@ -90,7 +102,7 @@ public final class SecondaryChatOverlay {
         if (SecondaryChatInteraction.isDraggingOrResizing()) {
             // Highlight border
             int borderColor = (0x00FF00) | (handleAlpha << 24);
-            ctx.drawBorder(panelX, panelY, panelW, panelH, borderColor);
+            GuiSystem.drawOutline(ctx, panelX, panelY, panelX + panelW, panelY + panelH, borderColor);
         }
 
         int resizeX = panelX + panelW - 6;
@@ -100,9 +112,8 @@ public final class SecondaryChatOverlay {
         List<Text> lines = SecondaryChatManager.snapshot();
 
         // Scaled text draw (convert to unscaled coords)
-        ctx.getMatrices().push();
-        Matrix4f m = new Matrix4f(ctx.getMatrices().peek().getPositionMatrix());
-        ctx.getMatrices().peek().getPositionMatrix().set(m.scale(scale, scale, 1.0f));
+        ctx.getMatrices().pushMatrix();
+        ctx.getMatrices().scale(scale, scale);
 
         final int baseX = Math.round(panelX / scale) + pad;
         final int baseY = Math.round(panelY / scale) + pad;
@@ -180,7 +191,25 @@ public final class SecondaryChatOverlay {
             }
         }
 
-        ctx.getMatrices().pop();
+        ctx.getMatrices().popMatrix();
+    }
+
+    static HudCanvasDataHandler.HudCanvasElement defaultCanvasElement() {
+        HudCanvasDataHandler.HudCanvasElement e = new HudCanvasDataHandler.HudCanvasElement();
+        e.x = ModConfig.secondaryChatX;
+        e.y = ModConfig.secondaryChatY;
+        e.width = Math.max(50, ModConfig.secondaryChatWidth);
+        e.height = Math.max(30, ModConfig.secondaryChatHeight);
+        e.fontScale = (float) Math.max(0.1, ModConfig.secondaryChatScale);
+        e.lineHeight = Math.max(1, ModConfig.secondaryChatLineHeight);
+        e.padding = Math.max(0, ModConfig.secondaryChatPadding);
+        e.backgroundColor = ModConfig.secondaryChatBackgroundColor;
+        e.textColor = ModConfig.secondaryChatTextColor;
+        e.borderColor = 0xFFFFFFFF;
+        e.drawBackground = true;
+        e.drawBorder = false;
+        e.visible = true;
+        return e;
     }
 
 }

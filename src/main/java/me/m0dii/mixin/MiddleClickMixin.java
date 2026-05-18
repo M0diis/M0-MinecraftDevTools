@@ -38,7 +38,7 @@ public class MiddleClickMixin {
             if (!stack.isEmpty()) {
                 // Calculate the correct slot index for creative inventory
                 // Hotbar slots are 36-44 in creative inventory packet (0-8 + 36)
-                int selectedSlot = client.player.getInventory().selectedSlot;
+                int selectedSlot = client.player.getInventory().getSelectedSlot();
                 int creativeSlot = selectedSlot + 36; // Convert to creative inventory slot index
 
                 // Send packet to server first

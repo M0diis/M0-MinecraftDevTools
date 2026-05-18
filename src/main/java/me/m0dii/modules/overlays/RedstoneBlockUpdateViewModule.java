@@ -48,7 +48,7 @@ public class RedstoneBlockUpdateViewModule extends BlockTargetTextModule {
 
         for (int i = 0; i < order.size(); i++) {
             Vec3d renderPos = getBlockCenterWithVerticalOffset(order.get(i), 0);
-            renderFloatingText(matrices, renderPos, camera.getPos(), String.valueOf(i + 1), camera);
+            renderFloatingText(matrices, renderPos, camera.getCameraPos(), String.valueOf(i + 1), camera);
         }
     }
 

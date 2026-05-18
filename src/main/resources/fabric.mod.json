@@ -25,49 +25,13 @@
   "accessWidener": "m0dev.accesswidener",
 
   "mixins": [
-    "m0dev.mixins.json",
-    "nbt.mixins.json",
-    "nbt-multiversion.mixins.json",
-    "nbt-multiversion-networkingapi.mixins.json"
+    "m0dev.mixins.json"
   ],
 
   "depends": {
-    "fabricloader": "0.16.10",
-    "minecraft": "1.21.4",
+    "fabricloader": ">=0.18.6",
+    "minecraft": "1.21.11",
     "java": ">=21",
     "fabric-api": "*"
-  },
-
-  "suggests": {
-    "nbt_ac": ">=1.1"
-  },
-  "custom": {
-    "loom:injected_interfaces": {
-      "net/minecraft/class_4068": [
-        "me/m0dii/nbteditor/multiversion/MVDrawableParent"
-      ],
-      "net/minecraft/class_437": [
-        "me/m0dii/nbteditor/multiversion/MVScreenParent"
-      ],
-      "net/minecraft/class_342": [
-        "me/m0dii/nbteditor/screens/InjectableTickable"
-      ],
-      "net/minecraft/class_364": [
-        "me/m0dii/nbteditor/multiversion/MVElementParent"
-      ],
-      "net/minecraft/class_2945": [
-        "me/m0dii/nbteditor/misc/ResetableDataTracker"
-      ],
-      "net/minecraft/class_2540": [
-        "me/m0dii/nbteditor/multiversion/MVPacketByteBufParent"
-      ],
-      "net/minecraft/class_1799": [
-        "me/m0dii/nbteditor/multiversion/nbt/IntegratedNBTManager",
-        "me/m0dii/nbteditor/multiversion/nbt/MVItemStackParent"
-      ],
-      "net/minecraft/class_2813": [
-        "me/m0dii/nbteditor/packets/ClickSlotC2SPacketParent"
-      ]
-    }
   }
 }

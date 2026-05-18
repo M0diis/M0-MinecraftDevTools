@@ -128,7 +128,7 @@ public class ActionRunnerModule {
                 player.sendMessage(Text.literal("[ActionRunner] Executed COMMAND: /" + action.command + " at tick " + tick), false);
             }
             case SWAP_OFFHAND -> {
-                int mainSlot = player.getInventory().selectedSlot;
+                int mainSlot = player.getInventory().getSelectedSlot();
                 int offhandSlot = 40;
 
                 ItemStack main = player.getInventory().getStack(mainSlot);
@@ -149,7 +149,7 @@ public class ActionRunnerModule {
                 try {
                     int slot = Integer.parseInt(action.command);
                     if (slot >= 0 && slot <= 8) {
-                        mc.player.getInventory().selectedSlot = slot;
+                        mc.player.getInventory().setSelectedSlot(slot);
                         player.sendMessage(Text.literal("[ActionRunner] Selected hotbar slot " + slot + " at tick " + tick), false);
                     } else {
                         player.sendMessage(Text.literal("[ActionRunner] Invalid hotbar slot: " + slot + " at tick " + tick), false);

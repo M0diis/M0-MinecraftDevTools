@@ -7,7 +7,6 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.render.RenderTickCounter;
 import net.minecraft.entity.Entity;
-import org.joml.Matrix4f;
 
 import java.util.List;
 
@@ -37,9 +36,8 @@ public class EntityRadarHudOverlay implements Toggleable {
         float scale = 0.75f;
         scale = Math.clamp(scale, 0.5f, 3.0f);
 
-        context.getMatrices().push();
-        Matrix4f m = new Matrix4f(context.getMatrices().peek().getPositionMatrix());
-        context.getMatrices().peek().getPositionMatrix().set(m.scale(scale, scale, 1.0f));
+        context.getMatrices().pushMatrix();
+        context.getMatrices().scale(scale, scale);
 
         int x = Math.round(10 / scale);
         int y = Math.round(10 / scale);
@@ -59,7 +57,7 @@ public class EntityRadarHudOverlay implements Toggleable {
             y += lineHeight;
         }
 
-        context.getMatrices().pop();
+        context.getMatrices().popMatrix();
     }
 }
 

@@ -53,6 +53,6 @@ public class CommandBlockOverlayModule extends BlockTargetTextModule {
         }
 
         Vec3d renderPos = getBlockCenterWithVerticalOffset(pos, 0.75);
-        renderFloatingText(matrices, renderPos, camera.getPos(), command, camera);
+        renderFloatingText(matrices, renderPos, camera.getCameraPos(), command, camera);
     }
 }

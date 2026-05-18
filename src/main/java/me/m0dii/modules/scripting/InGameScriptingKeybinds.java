@@ -8,6 +8,7 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.option.KeyBinding;
+import net.minecraft.util.Identifier;
 import org.lwjgl.glfw.GLFW;
 
 import java.io.IOException;
@@ -21,7 +22,7 @@ public class InGameScriptingKeybinds {
     private static final KeyBinding OPEN_SCRIPT_EDITOR = KeyBindingHelper.registerKeyBinding(new KeyBinding(
             "key.m0-dev-tools.openscripteditor",
             GLFW.GLFW_KEY_COMMA,
-            "category.m0-dev-tools.scripting"
+            KeyBinding.Category.create(Identifier.of("m0-dev-tools", "scripting"))
     ));
     private static final Path KEYBINDS_FILE = Paths.get("config/m0-dev-tools/script_keybinds.json");
     private static final Gson GSON = new Gson();

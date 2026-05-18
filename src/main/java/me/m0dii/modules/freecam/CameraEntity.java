@@ -33,7 +33,9 @@ public class CameraEntity extends ClientPlayerEntity {
                          @NotNull ClientPlayNetworkHandler netHandler,
                          @NotNull StatHandler stats,
                          @NotNull ClientRecipeBook recipeBook) {
-        super(mc, world, netHandler, stats, recipeBook, false, false);
+        // MinecraftClient client, ClientWorld world, ClientPlayNetworkHandler networkHandler,
+        // StatHandler stats, ClientRecipeBook recipeBook, PlayerInput lastPlayerInput, boolean lastSprinting
+        super(mc, world, netHandler, stats, recipeBook, null, false);
     }
 
     @Override
@@ -135,6 +137,14 @@ public class CameraEntity extends ClientPlayerEntity {
         this.move(MovementType.SELF, this.getVelocity());
     }
 
+    private double prevX;
+    private double prevY;
+    private double prevZ;
+
+    private float prevYaw;
+    private float prevPitch;
+    private float prevHeadYaw;
+
     private void updateLastTickPosition() {
         this.lastRenderX = this.getX();
         this.lastRenderY = this.getY();
@@ -195,7 +205,7 @@ public class CameraEntity extends ClientPlayerEntity {
                 removeCamera(mc);
             }
 
-            mc.gameRenderer.setRenderHand(!enabled);
+//            mc.gameRenderer.setRenderHand(!enabled);
         }
     }
 

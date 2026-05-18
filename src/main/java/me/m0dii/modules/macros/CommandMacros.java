@@ -60,7 +60,7 @@ public class CommandMacros {
                 return;
             }
 
-            final long handle = client.getWindow().getHandle();
+            final var window = client.getWindow();
 
             Map<Integer, Boolean> currentStates = new HashMap<>();
 
@@ -71,11 +71,11 @@ public class CommandMacros {
                     continue;
                 }
 
-                boolean isPressed = InputUtil.isKeyPressed(handle, keyCode);
+                boolean isPressed = InputUtil.isKeyPressed(window, keyCode);
                 boolean modifierPressed = true;
                 int modCode = macroModifierKeycodes.getOrDefault(macroId, -1);
                 if (modCode >= 0) {
-                    modifierPressed = InputUtil.isKeyPressed(handle, modCode);
+                    modifierPressed = InputUtil.isKeyPressed(window, modCode);
                 }
 
                 boolean wasPressed = keyPrevPressed.getOrDefault(keyCode, false);
@@ -150,7 +150,11 @@ public class CommandMacros {
             return false;
         }
 
-        MacroDataHandler.updateMacro(id, name, commands, keyCode, modifierKey, 0, false);
+        MacroDataHandler.MacroEntry existing = MacroDataHandler.getMacro(id);
+        int delayTicks = existing != null ? existing.delayTicks : 0;
+        boolean showInOverlay = existing != null && existing.showInOverlay;
+
+        MacroDataHandler.updateMacro(id, name, commands, keyCode, modifierKey, delayTicks, showInOverlay);
         refreshKeybindings();
         return true;
     }
@@ -164,6 +168,32 @@ public class CommandMacros {
             lines.add(pr.name + " (" + pr.ticksRemaining + "t)");
         }
         return lines;
+    }
+
+    public static boolean runMacroById(@NotNull String macroId) {
+        MacroDataHandler.MacroEntry macro = MacroDataHandler.getMacro(macroId);
+        if (macro == null) {
+            return false;
+        }
+
+        int delay = Math.max(0, macro.delayTicks);
+        List<String> commands = macro.commands == null ? List.of() : new ArrayList<>(macro.commands);
+        if (delay > 0) {
+            pendingRuns.add(new PendingRun(macro.name, commands, delay));
+            return true;
+        }
+
+        executeMacro(macro.name, commands);
+        return true;
+    }
+
+    public static boolean runInlineAction(@NotNull String actionName, @Nullable String action) {
+        String raw = action == null ? "" : action.trim();
+        if (raw.isEmpty()) {
+            return false;
+        }
+        executeMacro(actionName, List.of(raw));
+        return true;
     }
 
     private static void executeMacro(@NotNull String macroName, @Nullable List<String> commands) {

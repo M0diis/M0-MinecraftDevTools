@@ -9,6 +9,7 @@ import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.client.gui.widget.TextFieldWidget;
+import net.minecraft.client.input.KeyInput;
 import net.minecraft.network.packet.Packet;
 import net.minecraft.network.packet.c2s.play.CloseHandledScreenC2SPacket;
 import net.minecraft.screen.ScreenHandler;
@@ -17,7 +18,6 @@ import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 import java.util.regex.Pattern;
 
 public class UiUtilitiesModule extends Module {
@@ -149,8 +149,7 @@ public class UiUtilitiesModule extends Module {
             screen.addDrawableChild(ButtonWidget.builder(Text.of("Copy GUI Title JSON"), button -> {
                 try {
                     if (mc.currentScreen != null) {
-                        mc.keyboard.setClipboard(Text.Serialization.toJsonString(mc.currentScreen.getTitle(),
-                                Objects.requireNonNull(MinecraftClient.getInstance().getServer()).getRegistryManager()));
+                        mc.keyboard.setClipboard(mc.currentScreen.getTitle().getString());
                     } else {
                         M0DevTools.LOGGER.warn("Current screen was null while copying title JSON to clipboard.");
                     }
@@ -166,7 +165,8 @@ public class UiUtilitiesModule extends Module {
     public static TextFieldWidget createInputField(TextRenderer textRenderer, MinecraftClient mc) {
         TextFieldWidget inputField = new TextFieldWidget(textRenderer, 5, yPosition, 115, 20, Text.of("")) {
             @Override
-            public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+            public boolean keyPressed(KeyInput input) {
+                int keyCode = input.getKeycode();
                 if (keyCode == GLFW.GLFW_KEY_ENTER) {
                     if (mc.getNetworkHandler() != null) {
                         if (this.getText().startsWith("/")) {
@@ -180,7 +180,7 @@ public class UiUtilitiesModule extends Module {
 
                     this.setText("");
                 }
-                return super.keyPressed(keyCode, scanCode, modifiers);
+                return super.keyPressed(input);
             }
         };
 

@@ -26,9 +26,9 @@ public abstract class ItemstackMixin {
             ItemStack itemStack = (ItemStack) (Object) this;
             ArrayList<Text> list = info.getReturnValue();
 
-            if (itemStack.manager$hasNbt()) {
-                info.setReturnValue(new ArrayList<>(NBTTooltipModule.getNbtTooltipText(itemStack, list)));
-            }
+//            if (itemStack.hasNbt()) {
+//                info.setReturnValue(new ArrayList<>(NBTTooltipModule.getNbtTooltipText(itemStack, list)));
+//            }
         }
     }
 }
