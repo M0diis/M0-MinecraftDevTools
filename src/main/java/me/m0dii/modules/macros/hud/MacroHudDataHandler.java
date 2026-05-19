@@ -9,9 +9,7 @@ import org.jetbrains.annotations.NotNull;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
 
 public final class MacroHudDataHandler {
 
@@ -26,7 +24,13 @@ public final class MacroHudDataHandler {
     public enum ElementType {
         BUTTON,
         TEXT,
-        MACRO_KEYBINDS
+        MACRO_KEYBINDS,
+        ICON,
+        BAR,
+        VALUE,
+        LIST,
+        SHAPE,
+        STATE_BADGE
     }
 
     public enum VisibilityMode {
@@ -48,9 +52,13 @@ public final class MacroHudDataHandler {
 
     public enum Anchor {
         TOP_LEFT,
+        TOP_CENTER,
         TOP_RIGHT,
         BOTTOM_LEFT,
+        BOTTOM_CENTER,
         BOTTOM_RIGHT,
+        MIDDLE_CENTER,
+        // Legacy center anchor kept for old saved configs.
         CENTER
     }
 
@@ -79,10 +87,52 @@ public final class MacroHudDataHandler {
         public VerticalAlign verticalAlign = VerticalAlign.CENTER;
         public VisibilityMode visibilityMode = VisibilityMode.ALWAYS;
         public boolean visible = true;
+
+        // Shared data source/config for advanced widget types.
+        public String sourceToken = "";
+        public String sourceTokenMax = "";
+        public String prefix = "";
+        public String suffix = "";
+        public double minValue = 0.0;
+        public double maxValue = 100.0;
+
+        // BAR / VALUE coloring and thresholds.
+        public int colorStart = 0xFF44FF44;
+        public int colorEnd = 0xFFFF4444;
+        public int colorWarn = 0xFFFFFF44;
+        public int colorCrit = 0xFFFF4444;
+        public double warnThreshold = 50.0;
+        public double critThreshold = 20.0;
+        public boolean segmented = false;
+        public int segments = 10;
+
+        // LIST behavior.
+        public int maxLines = 6;
+        public int listScroll = 0;
+
+        // ICON behavior.
+        public String iconKind = "item"; // item|block|entity
+        public String iconId = "minecraft:stone";
+        public boolean iconShowCount = true;
+        public boolean iconShowDurability = true;
+        public boolean iconShowCooldown = true;
+
+        // SHAPE behavior.
+        public String shapeType = "rounded_rect"; // rect|rounded_rect|circle|line
+        public boolean shapeFilled = true;
+        public int shapeRadius = 6;
+        public int shapeThickness = 2;
+
+        // STATE badge behavior.
+        public String stateOnText = "ON";
+        public String stateOffText = "OFF";
+        public boolean stateShowValue = true;
     }
 
     public static final class HudConfig {
         public boolean enabled = true;
+        public String activePresetId = "default";
+        public Map<String, List<HudElement>> presetElements = new LinkedHashMap<>();
         public List<HudElement> elements = new ArrayList<>();
     }
 
@@ -112,6 +162,88 @@ public final class MacroHudDataHandler {
 
     public static @NotNull HudConfig getConfigCopy() {
         return deepCopy(sanitize(config));
+    }
+
+    public static String getActivePresetId() {
+        return sanitize(config).activePresetId;
+    }
+
+    public static List<String> listPresetIds() {
+        HudConfig cleaned = sanitize(config);
+        return new ArrayList<>(cleaned.presetElements.keySet());
+    }
+
+    public static void setActivePresetId(String presetId) {
+        HudConfig cleaned = sanitize(config);
+        String id = sanitizePresetId(presetId, cleaned.activePresetId);
+        if (!cleaned.presetElements.containsKey(id)) {
+            return;
+        }
+        cleaned.activePresetId = id;
+        cleaned.elements = deepCopyElements(cleaned.presetElements.get(id));
+        config = cleaned;
+        save();
+    }
+
+    public static void createPreset(String presetId, boolean copyActive) {
+        HudConfig cleaned = sanitize(config);
+        String id = sanitizePresetId(presetId, "preset_" + (cleaned.presetElements.size() + 1));
+        if (cleaned.presetElements.containsKey(id)) {
+            return;
+        }
+        List<HudElement> seed = copyActive
+                ? deepCopyElements(cleaned.presetElements.getOrDefault(cleaned.activePresetId, List.of()))
+                : new ArrayList<>();
+        cleaned.presetElements.put(id, seed);
+        cleaned.activePresetId = id;
+        cleaned.elements = deepCopyElements(seed);
+        config = cleaned;
+        save();
+    }
+
+    public static void renamePreset(String fromId, String toId) {
+        HudConfig cleaned = sanitize(config);
+        if (cleaned.presetElements.size() <= 0) {
+            return;
+        }
+        String from = sanitizePresetId(fromId, cleaned.activePresetId);
+        if (!cleaned.presetElements.containsKey(from)) {
+            return;
+        }
+        String target = sanitizePresetId(toId, from);
+        if (from.equals(target) || cleaned.presetElements.containsKey(target)) {
+            return;
+        }
+        Map<String, List<HudElement>> renamed = new LinkedHashMap<>();
+        for (Map.Entry<String, List<HudElement>> e : cleaned.presetElements.entrySet()) {
+            if (e.getKey().equals(from)) {
+                renamed.put(target, deepCopyElements(e.getValue()));
+            } else {
+                renamed.put(e.getKey(), deepCopyElements(e.getValue()));
+            }
+        }
+        cleaned.presetElements = renamed;
+        if (cleaned.activePresetId.equals(from)) {
+            cleaned.activePresetId = target;
+        }
+        cleaned.elements = deepCopyElements(cleaned.presetElements.get(cleaned.activePresetId));
+        config = cleaned;
+        save();
+    }
+
+    public static void deletePreset(String presetId) {
+        HudConfig cleaned = sanitize(config);
+        if (cleaned.presetElements.size() <= 1) {
+            return;
+        }
+        String id = sanitizePresetId(presetId, cleaned.activePresetId);
+        cleaned.presetElements.remove(id);
+        if (!cleaned.presetElements.containsKey(cleaned.activePresetId)) {
+            cleaned.activePresetId = cleaned.presetElements.keySet().stream().findFirst().orElse("default");
+        }
+        cleaned.elements = deepCopyElements(cleaned.presetElements.getOrDefault(cleaned.activePresetId, List.of()));
+        config = cleaned;
+        save();
     }
 
     public static void setConfig(@NotNull HudConfig next) {
@@ -147,6 +279,82 @@ public final class MacroHudDataHandler {
             element.horizontalAlign = HorizontalAlign.LEFT;
             element.verticalAlign = VerticalAlign.TOP;
         }
+        if (type == ElementType.ICON) {
+            element.label = "Icon";
+            element.width = 22;
+            element.height = 22;
+            element.drawBackground = true;
+            element.drawBorder = true;
+            element.backgroundColor = 0xAA101010;
+            element.borderColor = 0xFFFFFFFF;
+            element.iconKind = "item";
+            element.iconId = "minecraft:stone";
+        }
+        if (type == ElementType.BAR) {
+            element.label = "Bar";
+            element.width = 150;
+            element.height = 18;
+            element.sourceToken = "hp";
+            element.sourceTokenMax = "max_hp";
+            element.minValue = 0.0;
+            element.maxValue = 20.0;
+            element.colorStart = 0xFF44FF44;
+            element.colorEnd = 0xFFFF4444;
+            element.segmented = false;
+            element.segments = 10;
+        }
+        if (type == ElementType.VALUE) {
+            element.label = "Value";
+            element.width = 140;
+            element.height = 24;
+            element.sourceToken = "hp";
+            element.prefix = "HP: ";
+            element.warnThreshold = 10.0;
+            element.critThreshold = 5.0;
+            element.colorWarn = 0xFFFFFF55;
+            element.colorCrit = 0xFFFF5555;
+            element.textColor = 0xFF55FF55;
+            element.fontScale = 1.5f;
+        }
+        if (type == ElementType.LIST) {
+            element.label = "List";
+            element.width = 220;
+            element.height = 96;
+            element.sourceToken = "players.nearby.5.with_distance";
+            element.maxLines = 6;
+            element.drawBackground = true;
+            element.drawBorder = true;
+            element.horizontalAlign = HorizontalAlign.LEFT;
+            element.verticalAlign = VerticalAlign.TOP;
+        }
+        if (type == ElementType.SHAPE) {
+            element.label = "Shape";
+            element.width = 120;
+            element.height = 40;
+            element.shapeType = "rounded_rect";
+            element.shapeFilled = true;
+            element.shapeRadius = 8;
+            element.shapeThickness = 2;
+            element.drawBackground = true;
+            element.drawBorder = true;
+            element.backgroundColor = 0x88202020;
+            element.borderColor = 0xFFFFFFFF;
+            element.text = "";
+        }
+        if (type == ElementType.STATE_BADGE) {
+            element.label = "State";
+            element.width = 90;
+            element.height = 18;
+            element.sourceToken = "player.sprinting";
+            element.stateOnText = "ON";
+            element.stateOffText = "OFF";
+            element.stateShowValue = true;
+            element.colorStart = 0xFF3FBF3F;
+            element.colorEnd = 0xFFBF3F3F;
+            element.textColor = 0xFFFFFFFF;
+            element.drawBackground = true;
+            element.drawBorder = true;
+        }
         return element;
     }
 
@@ -154,84 +362,197 @@ public final class MacroHudDataHandler {
         HudConfig cleaned = new HudConfig();
         cleaned.enabled = source.enabled;
 
-        if (source.elements != null) {
-            for (HudElement raw : source.elements) {
-                if (raw == null) {
-                    continue;
+        cleaned.presetElements = new LinkedHashMap<>();
+        if (source.presetElements != null) {
+            for (Map.Entry<String, List<HudElement>> entry : source.presetElements.entrySet()) {
+                String id = sanitizePresetId(entry.getKey(), "preset_" + (cleaned.presetElements.size() + 1));
+                if (!cleaned.presetElements.containsKey(id)) {
+                    cleaned.presetElements.put(id, sanitizeElements(entry.getValue()));
                 }
-                HudElement e = new HudElement();
-                e.id = (raw.id == null || raw.id.isBlank()) ? shortId() : raw.id.trim();
-                e.type = raw.type == null ? ElementType.BUTTON : raw.type;
-                e.label = safe(raw.label, "Button");
-                e.text = safe(raw.text, "Text");
-                e.macroId = raw.macroId == null ? "" : raw.macroId.trim();
-                e.buttonAction = raw.buttonAction == null ? "" : raw.buttonAction.trim();
-                e.x = Math.clamp(raw.x, -10000, 10000);
-                e.y = Math.clamp(raw.y, -10000, 10000);
-                e.anchor = raw.anchor == null ? Anchor.TOP_LEFT : raw.anchor;
-                // Keep sizes stable across saves; editor can intentionally use large panels.
-                e.width = Math.clamp(raw.width, 40, 2000);
-                e.height = Math.clamp(raw.height, 12, 1200);
-                e.lineHeight = Math.clamp(raw.lineHeight, 6, 24);
-                e.fontScale = Math.clamp(raw.fontScale, 0.5f, 4.0f);
-                e.backgroundColor = raw.backgroundColor;
-                e.borderColor = (raw.borderColor >>> 24) == 0 ? 0xFFFFFFFF : raw.borderColor;
-                e.textColor = raw.textColor;
-                e.drawBackground = raw.drawBackground;
-                e.drawBorder = raw.drawBorder;
-                e.horizontalAlign = raw.horizontalAlign == null ? HorizontalAlign.CENTER : raw.horizontalAlign;
-                e.verticalAlign = raw.verticalAlign == null ? VerticalAlign.CENTER : raw.verticalAlign;
-                e.visibilityMode = raw.visibilityMode == null ? VisibilityMode.ALWAYS : raw.visibilityMode;
-                e.visible = raw.visible;
-
-                // Legacy migration: remove the temporary helper text introduced in early builds.
-                if (e.type == ElementType.TEXT && "Open chat to click HUD buttons".equalsIgnoreCase(e.text)) {
-                    continue;
-                }
-
-                cleaned.elements.add(e);
             }
         }
 
+        List<HudElement> legacyElements = sanitizeElements(source.elements);
+        if (cleaned.presetElements.isEmpty()) {
+            cleaned.presetElements.put("default", legacyElements);
+        }
+
+        cleaned.activePresetId = sanitizePresetId(source.activePresetId, "default");
+        if (!cleaned.presetElements.containsKey(cleaned.activePresetId)) {
+            cleaned.activePresetId = cleaned.presetElements.keySet().stream().findFirst().orElse("default");
+        }
+        cleaned.elements = deepCopyElements(cleaned.presetElements.getOrDefault(cleaned.activePresetId, List.of()));
+
         return cleaned;
+    }
+
+    private static List<HudElement> sanitizeElements(List<HudElement> rawElements) {
+        List<HudElement> cleaned = new ArrayList<>();
+        if (rawElements == null) {
+            return cleaned;
+        }
+        for (HudElement raw : rawElements) {
+            if (raw == null) {
+                continue;
+            }
+            HudElement e = new HudElement();
+            e.id = (raw.id == null || raw.id.isBlank()) ? shortId() : raw.id.trim();
+            e.type = raw.type == null ? ElementType.BUTTON : raw.type;
+            e.label = safe(raw.label, "Button");
+            e.text = safe(raw.text, "Text");
+            e.macroId = raw.macroId == null ? "" : raw.macroId.trim();
+            e.buttonAction = raw.buttonAction == null ? "" : raw.buttonAction.trim();
+            e.x = Math.clamp(raw.x, -10000, 10000);
+            e.y = Math.clamp(raw.y, -10000, 10000);
+            e.anchor = raw.anchor == null ? Anchor.TOP_LEFT : raw.anchor;
+            e.width = Math.clamp(raw.width, 1, 2000);
+            e.height = Math.clamp(raw.height, 1, 1200);
+            e.lineHeight = Math.clamp(raw.lineHeight, 6, 24);
+            e.fontScale = Math.clamp(raw.fontScale, 0.5f, 4.0f);
+            e.backgroundColor = raw.backgroundColor;
+            e.borderColor = (raw.borderColor >>> 24) == 0 ? 0xFFFFFFFF : raw.borderColor;
+            e.textColor = raw.textColor;
+            e.drawBackground = raw.drawBackground;
+            e.drawBorder = raw.drawBorder;
+            e.horizontalAlign = raw.horizontalAlign == null ? HorizontalAlign.CENTER : raw.horizontalAlign;
+            e.verticalAlign = raw.verticalAlign == null ? VerticalAlign.CENTER : raw.verticalAlign;
+            e.visibilityMode = raw.visibilityMode == null ? VisibilityMode.ALWAYS : raw.visibilityMode;
+            e.visible = raw.visible;
+            e.sourceToken = raw.sourceToken == null ? "" : raw.sourceToken.trim();
+            e.sourceTokenMax = raw.sourceTokenMax == null ? "" : raw.sourceTokenMax.trim();
+            e.prefix = raw.prefix == null ? "" : raw.prefix;
+            e.suffix = raw.suffix == null ? "" : raw.suffix;
+            e.minValue = Double.isFinite(raw.minValue) ? raw.minValue : 0.0;
+            e.maxValue = Double.isFinite(raw.maxValue) ? raw.maxValue : 100.0;
+            e.colorStart = raw.colorStart;
+            e.colorEnd = raw.colorEnd;
+            e.colorWarn = raw.colorWarn;
+            e.colorCrit = raw.colorCrit;
+            e.warnThreshold = Double.isFinite(raw.warnThreshold) ? raw.warnThreshold : 50.0;
+            e.critThreshold = Double.isFinite(raw.critThreshold) ? raw.critThreshold : 20.0;
+            e.segmented = raw.segmented;
+            e.segments = Math.clamp(raw.segments, 1, 120);
+            e.maxLines = Math.clamp(raw.maxLines, 1, 200);
+            e.listScroll = Math.max(0, raw.listScroll);
+            e.iconKind = safe(raw.iconKind, "item").toLowerCase();
+            e.iconId = safe(raw.iconId, "minecraft:stone");
+            e.iconShowCount = raw.iconShowCount;
+            e.iconShowDurability = raw.iconShowDurability;
+            e.iconShowCooldown = raw.iconShowCooldown;
+            e.shapeType = safe(raw.shapeType, "rounded_rect").toLowerCase();
+            e.shapeFilled = raw.shapeFilled;
+            e.shapeRadius = Math.clamp(raw.shapeRadius, 0, 64);
+            e.shapeThickness = Math.clamp(raw.shapeThickness, 1, 24);
+            e.stateOnText = safe(raw.stateOnText, "ON");
+            e.stateOffText = safe(raw.stateOffText, "OFF");
+            e.stateShowValue = raw.stateShowValue;
+            if (e.type == ElementType.TEXT && "Open chat to click HUD buttons".equalsIgnoreCase(e.text)) {
+                continue;
+            }
+            cleaned.add(e);
+        }
+        return cleaned;
+    }
+
+    private static String sanitizePresetId(String raw, String fallback) {
+        String base = raw == null ? "" : raw.trim();
+        if (base.isBlank()) {
+            base = fallback == null || fallback.isBlank() ? "preset" : fallback.trim();
+        }
+        base = base.replaceAll("[^a-zA-Z0-9 _.-]", "_").trim();
+        if (base.isBlank()) {
+            base = "preset";
+        }
+        return base;
     }
 
     private static HudConfig deepCopy(HudConfig source) {
         HudConfig copy = new HudConfig();
         copy.enabled = source.enabled;
+        copy.activePresetId = source.activePresetId;
+        copy.presetElements = new LinkedHashMap<>();
+        for (Map.Entry<String, List<HudElement>> entry : source.presetElements.entrySet()) {
+            copy.presetElements.put(entry.getKey(), deepCopyElements(entry.getValue()));
+        }
         copy.elements = new ArrayList<>();
         for (HudElement e : source.elements) {
-            HudElement cloned = new HudElement();
-            cloned.id = e.id;
-            cloned.type = e.type;
-            cloned.label = e.label;
-            cloned.text = e.text;
-            cloned.macroId = e.macroId;
-            cloned.buttonAction = e.buttonAction;
-            cloned.x = e.x;
-            cloned.y = e.y;
-            cloned.anchor = e.anchor;
-            cloned.width = e.width;
-            cloned.height = e.height;
-            cloned.lineHeight = e.lineHeight;
-            cloned.fontScale = e.fontScale;
-            cloned.backgroundColor = e.backgroundColor;
-            cloned.borderColor = e.borderColor;
-            cloned.textColor = e.textColor;
-            cloned.drawBackground = e.drawBackground;
-            cloned.drawBorder = e.drawBorder;
-            cloned.horizontalAlign = e.horizontalAlign;
-            cloned.verticalAlign = e.verticalAlign;
-            cloned.visibilityMode = e.visibilityMode;
-            cloned.visible = e.visible;
+            HudElement cloned = cloneElement(e);
             copy.elements.add(cloned);
         }
         return copy;
     }
 
+    private static List<HudElement> deepCopyElements(List<HudElement> elements) {
+        List<HudElement> out = new ArrayList<>();
+        if (elements == null) {
+            return out;
+        }
+        for (HudElement e : elements) {
+            out.add(cloneElement(e));
+        }
+        return out;
+    }
+
+    private static HudElement cloneElement(HudElement e) {
+        HudElement cloned = new HudElement();
+        cloned.id = e.id;
+        cloned.type = e.type;
+        cloned.label = e.label;
+        cloned.text = e.text;
+        cloned.macroId = e.macroId;
+        cloned.buttonAction = e.buttonAction;
+        cloned.x = e.x;
+        cloned.y = e.y;
+        cloned.anchor = e.anchor;
+        cloned.width = e.width;
+        cloned.height = e.height;
+        cloned.lineHeight = e.lineHeight;
+        cloned.fontScale = e.fontScale;
+        cloned.backgroundColor = e.backgroundColor;
+        cloned.borderColor = e.borderColor;
+        cloned.textColor = e.textColor;
+        cloned.drawBackground = e.drawBackground;
+        cloned.drawBorder = e.drawBorder;
+        cloned.horizontalAlign = e.horizontalAlign;
+        cloned.verticalAlign = e.verticalAlign;
+        cloned.visibilityMode = e.visibilityMode;
+        cloned.visible = e.visible;
+        cloned.sourceToken = e.sourceToken;
+        cloned.sourceTokenMax = e.sourceTokenMax;
+        cloned.prefix = e.prefix;
+        cloned.suffix = e.suffix;
+        cloned.minValue = e.minValue;
+        cloned.maxValue = e.maxValue;
+        cloned.colorStart = e.colorStart;
+        cloned.colorEnd = e.colorEnd;
+        cloned.colorWarn = e.colorWarn;
+        cloned.colorCrit = e.colorCrit;
+        cloned.warnThreshold = e.warnThreshold;
+        cloned.critThreshold = e.critThreshold;
+        cloned.segmented = e.segmented;
+        cloned.segments = e.segments;
+        cloned.maxLines = e.maxLines;
+        cloned.listScroll = e.listScroll;
+        cloned.iconKind = e.iconKind;
+        cloned.iconId = e.iconId;
+        cloned.iconShowCount = e.iconShowCount;
+        cloned.iconShowDurability = e.iconShowDurability;
+        cloned.iconShowCooldown = e.iconShowCooldown;
+        cloned.shapeType = e.shapeType;
+        cloned.shapeFilled = e.shapeFilled;
+        cloned.shapeRadius = e.shapeRadius;
+        cloned.shapeThickness = e.shapeThickness;
+        cloned.stateOnText = e.stateOnText;
+        cloned.stateOffText = e.stateOffText;
+        cloned.stateShowValue = e.stateShowValue;
+        return cloned;
+    }
+
     private static HudConfig defaults() {
         HudConfig cfg = new HudConfig();
         cfg.enabled = true;
+        cfg.activePresetId = "default";
+        cfg.presetElements = new LinkedHashMap<>();
         cfg.elements = new ArrayList<>();
 
 
@@ -241,6 +562,7 @@ public final class MacroHudDataHandler {
         button.x = 10;
         button.y = 26;
         cfg.elements.add(button);
+        cfg.presetElements.put("default", deepCopyElements(cfg.elements));
 
         return cfg;
     }

@@ -6,6 +6,7 @@ import me.m0dii.modules.macros.CommandMacros;
 import me.m0dii.modules.macros.MacroDataHandler;
 import me.m0dii.modules.macros.MacroPlaceholders;
 import me.m0dii.modules.macros.hud.MacroHudDataHandler;
+import me.m0dii.modules.nbthud.NBTInfoHudOverlayModule;
 import me.m0dii.utils.ModConfig;
 import net.minecraft.client.gui.Click;
 import net.minecraft.client.gui.DrawContext;
@@ -17,7 +18,11 @@ import net.minecraft.client.input.CharInput;
 import net.minecraft.client.input.KeyInput;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
+import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
+import net.minecraft.registry.Registries;
 import net.minecraft.text.Text;
+import net.minecraft.util.Identifier;
 import org.lwjgl.glfw.GLFW;
 
 import java.lang.reflect.Field;
@@ -44,10 +49,38 @@ public class MacroWorkbenchV2Screen extends Screen {
     private static boolean GRID_ENABLED_PREF = false;
     private static int GRID_ROWS_PREF = 12;
     private static int GRID_COLS_PREF = 16;
+    private static boolean CENTER_LINES_ENABLED_PREF = false;
     private static final int[] STYLE_COLOR_PALETTE = {
             0xAA101010, 0xAA1F1F1F, 0xAA2D1F0E, 0xAA0E2D1F, 0xAA1F0E2D,
             0xCC2A2A2A, 0xCC4A2A2A, 0xCC2A4A2A, 0xCC2A2A4A, 0xCC808080,
             0xFFFFFFFF, 0xFFFFAA00, 0xFFFF5555, 0xFF55FF55, 0xFF55FFFF, 0xFF5555FF
+    };
+    private static final String[] BAR_VALUE_SOURCE_PRESETS = {
+            "hp", "max_hp", "food", "saturation", "xp", "level", "client.fps", "players.count", "players.nearby.count"
+    };
+    private static final String[] LIST_SOURCE_PRESETS = {
+            "players.nearby.5.with_distance", "players.list.other", "entities.nearby.6.with_distance", "players.nearby.10.nl"
+    };
+    private static final String[] STATE_SOURCE_PRESETS = {
+            "player.sprinting", "player.sneaking", "player.swimming", "player.on_ground", "world.is_day", "client.server.singleplayer"
+    };
+    private static final String[] ICON_KIND_PRESETS = {"item", "block", "entity"};
+    private static final String[] ICON_ITEM_ID_PRESETS = {
+            "minecraft:stone", "minecraft:diamond_sword", "minecraft:ender_pearl", "minecraft:totem_of_undying"
+    };
+    private static final String[] ICON_BLOCK_ID_PRESETS = {
+            "minecraft:stone", "minecraft:chest", "minecraft:crafting_table", "minecraft:redstone_block"
+    };
+    private static final String[] ICON_ENTITY_ID_PRESETS = {
+            "minecraft:zombie", "minecraft:skeleton", "minecraft:creeper", "minecraft:enderman"
+    };
+    private static final String[] SHAPE_TYPE_PRESETS = {"rounded_rect", "rect", "circle", "line"};
+    private static final String[] SOURCE_TOKEN_SUGGESTIONS = {
+            "hp", "max_hp", "food", "saturation", "xp", "level", "client.fps", "player.speed",
+            "players.count", "players.nearby.count", "players.nearby.5.with_distance",
+            "entities.nearby.6.with_distance", "world.time.clock", "world.is_day", "world.is_night",
+            "player.sprinting", "player.sneaking", "player.swimming", "player.on_ground",
+            "key.pressed.w", "key.held.w", "key.pressed.space", "key.held.space"
     };
 
     private final Screen parent;
@@ -56,8 +89,21 @@ public class MacroWorkbenchV2Screen extends Screen {
     private MacroHudDataHandler.HudConfig working;
     private MacroHudDataHandler.HudElement selected;
     private boolean dragging = false;
+    private boolean resizing = false;
     private int dragOffsetX = 0;
     private int dragOffsetY = 0;
+    private int resizeStartMouseX = 0;
+    private int resizeStartMouseY = 0;
+    private int resizeStartWidth = 0;
+    private int resizeStartHeight = 0;
+    private String dragPrimaryElementId;
+    private final Map<String, int[]> dragStartScreenPositions = new LinkedHashMap<>();
+    private List<ElementSnapshot> activeMoveSnapshot;
+    private final Deque<List<ElementSnapshot>> moveUndoStack = new ArrayDeque<>();
+    private final LinkedHashSet<String> selectedElementIds = new LinkedHashSet<>();
+    private final List<MacroHudDataHandler.HudElement> elementClipboard = new ArrayList<>();
+    private int clipboardWidth = -1;
+    private int clipboardHeight = -1;
 
     private TextFieldWidget quickField;
     private TextFieldWidget macroField;
@@ -65,12 +111,21 @@ public class MacroWorkbenchV2Screen extends Screen {
     private ButtonWidget backgroundToggle;
     private ButtonWidget borderToggle;
     private ButtonWidget editButton;
+    private ButtonWidget deleteButton;
     private ButtonWidget gridToggleButton;
     private ButtonWidget gridRowsMinusButton;
     private ButtonWidget gridRowsPlusButton;
     private ButtonWidget gridColsMinusButton;
     private ButtonWidget gridColsPlusButton;
+    private ButtonWidget centerLinesToggleButton;
+    private ButtonWidget presetPrevButton;
+    private ButtonWidget presetNextButton;
+    private ButtonWidget presetNewButton;
+    private ButtonWidget presetRenameButton;
+    private ButtonWidget presetDeleteButton;
+    private TextFieldWidget presetNameField;
 
+    private final List<ClickableWidget> topBarWidgets = new ArrayList<>();
     private final List<ClickableWidget> canvasWidgets = new ArrayList<>();
     private final List<ClickableWidget> keyboardWidgets = new ArrayList<>();
 
@@ -97,13 +152,19 @@ public class MacroWorkbenchV2Screen extends Screen {
     private String advancedBorderColor = "";
     private int advancedCursor = 0;
     private int advancedActionCursor = 0;
+    private int advancedActionSuggestionIndex = -1;
+    private int advancedSelectionAnchor = -1;
+    private int advancedActionSelectionAnchor = -1;
     private int advancedBgCursor = 0;
     private int advancedBorderCursor = 0;
+    private int advancedBgSelectionAnchor = -1;
+    private int advancedBorderSelectionAnchor = -1;
 
     private int placeholderScroll = 0;
     private boolean gridEnabled = GRID_ENABLED_PREF;
     private int gridRows = GRID_ROWS_PREF;
     private int gridCols = GRID_COLS_PREF;
+    private boolean centerLinesEnabled = CENTER_LINES_ENABLED_PREF;
     private int gridOverlayTicks = 0;
     private boolean canvasChromeVisible = true;
 
@@ -111,6 +172,7 @@ public class MacroWorkbenchV2Screen extends Screen {
     private boolean kbCommandsFocused = false;
     private String kbCommandsText = "";
     private int kbCommandsCursor = 0;
+    private int kbCommandsSelectionAnchor = -1;
 
     private boolean advancedSecondaryShowWhileGuiOpen;
     private boolean advancedSecondaryFadeEnabled;
@@ -123,7 +185,22 @@ public class MacroWorkbenchV2Screen extends Screen {
     private int advancedSecondaryLineHeight;
     private ModConfig.ChatInterceptMode advancedSecondaryInterceptMode;
 
+    private boolean addElementModalOpen = false;
+    private boolean advancedModalDragging = false;
+    private int advancedModalDragOffsetX = 0;
+    private int advancedModalDragOffsetY = 0;
+    private Integer advancedModalPosX = null;
+    private Integer advancedModalPosY = null;
+
     private record KeyCell(int keyCode, String label, int x, int y, int w, int h) {
+    }
+
+    private record ElementSnapshot(String id, int x, int y, int width, int height) {
+    }
+
+    private enum ExternalProxyRenderState {
+        ACTIVE,
+        MODULE_DISABLED
     }
 
     public MacroWorkbenchV2Screen(Screen parent, Tab initialTab) {
@@ -148,83 +225,94 @@ public class MacroWorkbenchV2Screen extends Screen {
         rebuildBindingMaps();
         rebuildKeyboardGrid();
 
-        addDrawableChild(ButtonWidget.builder(Text.literal("Canvas"), b -> setTab(Tab.CANVAS)).dimensions(8, 8, 70, 20).build());
-        addDrawableChild(ButtonWidget.builder(Text.literal("Keyboard"), b -> setTab(Tab.KEYBOARD)).dimensions(82, 8, 80, 20).build());
-        addDrawableChild(ButtonWidget.builder(Text.literal("Placeholders"), b -> setTab(Tab.PLACEHOLDERS)).dimensions(166, 8, 102, 20).build());
-        addDrawableChild(ButtonWidget.builder(Text.literal("Save"), b -> saveAll()).dimensions(this.width - 152, 8, 66, 20).build());
-        addDrawableChild(ButtonWidget.builder(Text.literal("Done"), b -> {
+        ButtonWidget tabCanvas = ButtonWidget.builder(Text.literal("Canvas"), b -> setTab(Tab.CANVAS)).dimensions(8, 8, 70, 20).build();
+        ButtonWidget tabKeyboard = ButtonWidget.builder(Text.literal("Keyboard"), b -> setTab(Tab.KEYBOARD)).dimensions(82, 8, 80, 20).build();
+        ButtonWidget tabPlaceholders = ButtonWidget.builder(Text.literal("Placeholders"), b -> setTab(Tab.PLACEHOLDERS)).dimensions(166, 8, 102, 20).build();
+        ButtonWidget saveButton = ButtonWidget.builder(Text.literal("Save"), b -> saveAll()).dimensions(this.width - 152, 8, 66, 20).build();
+        ButtonWidget doneButton = ButtonWidget.builder(Text.literal("Done"), b -> {
             saveAll();
             close();
-        }).dimensions(this.width - 82, 8, 66, 20).build());
+        }).dimensions(this.width - 82, 8, 66, 20).build();
+        this.topBarWidgets.add(tabCanvas);
+        this.topBarWidgets.add(tabKeyboard);
+        this.topBarWidgets.add(tabPlaceholders);
+        this.topBarWidgets.add(saveButton);
+        this.topBarWidgets.add(doneButton);
+        addDrawableChild(tabCanvas);
+        addDrawableChild(tabKeyboard);
+        addDrawableChild(tabPlaceholders);
+        addDrawableChild(saveButton);
+        addDrawableChild(doneButton);
 
-        ButtonWidget addButton = ButtonWidget.builder(Text.literal("Add Button"), b -> {
-            MacroHudDataHandler.HudElement e = MacroHudDataHandler.createElement(MacroHudDataHandler.ElementType.BUTTON);
-            e.x = 20;
-            e.y = 20;
-            e.label = "Macro";
-            this.working.elements.add(e);
-            this.selected = e;
-            syncCanvasFields();
-        }).dimensions(8, 32, 82, 18).build();
+        ButtonWidget addElement = ButtonWidget.builder(Text.literal("Add Element"), b -> addElementModalOpen = true)
+                .dimensions(8, 32, 92, 18).build();
 
-        ButtonWidget addText = ButtonWidget.builder(Text.literal("Add Text"), b -> {
-            MacroHudDataHandler.HudElement e = MacroHudDataHandler.createElement(MacroHudDataHandler.ElementType.TEXT);
-            e.x = 20;
-            e.y = 50;
-            e.text = "Text";
-            this.working.elements.add(e);
-            this.selected = e;
-            syncCanvasFields();
-        }).dimensions(94, 32, 72, 18).build();
-
-        ButtonWidget addMacroList = ButtonWidget.builder(Text.literal("Add Macro List"), b -> {
-            MacroHudDataHandler.HudElement e = MacroHudDataHandler.createElement(MacroHudDataHandler.ElementType.MACRO_KEYBINDS);
-            e.x = 20;
-            e.y = 80;
-            this.working.elements.add(e);
-            this.selected = e;
-            syncCanvasFields();
-        }).dimensions(170, 32, 92, 18).build();
-
-        ButtonWidget delete = ButtonWidget.builder(Text.literal("Delete"), b -> {
+        this.deleteButton = ButtonWidget.builder(Text.literal("Delete"), b -> {
             if (selected != null) {
-                this.working.elements.removeIf(e -> e.id.equals(selected.id));
+                Set<String> ids = selectedElementIds.isEmpty() ? Set.of(selected.id) : new HashSet<>(selectedElementIds);
+                this.working.elements.removeIf(e -> ids.contains(e.id));
+                selectedElementIds.clear();
                 this.selected = null;
                 syncCanvasFields();
             }
-        }).dimensions(266, 32, 58, 18).build();
+        }).dimensions(this.width - 160, this.height - 38, 76, 18).build();
 
         this.gridToggleButton = ButtonWidget.builder(Text.literal("Grid: OFF"), b -> {
             gridEnabled = !gridEnabled;
             gridOverlayTicks = 120;
             persistGridPrefs();
             syncGridButtons();
-        }).dimensions(328, 32, 74, 18).build();
+        }).dimensions(104, 32, 74, 18).build();
 
         this.gridRowsMinusButton = ButtonWidget.builder(Text.literal("R-"), b -> {
-            gridRows = Math.max(2, gridRows - 1);
+            int step = isShiftDown() ? 5 : 1;
+            gridRows = Math.max(2, gridRows - step);
             gridOverlayTicks = 120;
             persistGridPrefs();
             syncGridButtons();
-        }).dimensions(406, 32, 24, 18).build();
+        }).dimensions(182, 32, 24, 18).build();
         this.gridRowsPlusButton = ButtonWidget.builder(Text.literal("R+"), b -> {
-            gridRows = Math.min(80, gridRows + 1);
+            int step = isShiftDown() ? 5 : 1;
+            gridRows = Math.min(80, gridRows + step);
             gridOverlayTicks = 120;
             persistGridPrefs();
             syncGridButtons();
-        }).dimensions(434, 32, 24, 18).build();
+        }).dimensions(210, 32, 24, 18).build();
         this.gridColsMinusButton = ButtonWidget.builder(Text.literal("C-"), b -> {
-            gridCols = Math.max(2, gridCols - 1);
+            int step = isShiftDown() ? 5 : 1;
+            gridCols = Math.max(2, gridCols - step);
             gridOverlayTicks = 120;
             persistGridPrefs();
             syncGridButtons();
-        }).dimensions(462, 32, 24, 18).build();
+        }).dimensions(238, 32, 24, 18).build();
         this.gridColsPlusButton = ButtonWidget.builder(Text.literal("C+"), b -> {
-            gridCols = Math.min(80, gridCols + 1);
+            int step = isShiftDown() ? 5 : 1;
+            gridCols = Math.min(80, gridCols + step);
             gridOverlayTicks = 120;
             persistGridPrefs();
             syncGridButtons();
-        }).dimensions(490, 32, 24, 18).build();
+        }).dimensions(266, 32, 24, 18).build();
+
+        this.centerLinesToggleButton = ButtonWidget.builder(Text.literal("Center: OFF"), b -> {
+            centerLinesEnabled = !centerLinesEnabled;
+            persistGridPrefs();
+            syncGridButtons();
+        }).dimensions(294, 32, 86, 18).build();
+
+        this.presetPrevButton = ButtonWidget.builder(Text.literal("<"), b -> cyclePreset(false)).dimensions(384, 32, 20, 18).build();
+        this.presetNextButton = ButtonWidget.builder(Text.literal(">"), b -> cyclePreset(true)).dimensions(408, 32, 20, 18).build();
+        this.presetNameField = new TextFieldWidget(this.textRenderer, 432, 32, 130, 18, Text.literal("Preset"));
+        this.presetNameField.setMaxLength(40);
+        this.presetNewButton = ButtonWidget.builder(Text.literal("New"), b -> createPresetFromField()).dimensions(566, 32, 38, 18).build();
+        this.presetRenameButton = ButtonWidget.builder(Text.literal("Rename"), b -> renamePresetFromField()).dimensions(608, 32, 54, 18).build();
+        this.presetDeleteButton = ButtonWidget.builder(Text.literal("Delete"), b -> {
+            MacroHudDataHandler.deletePreset(MacroHudDataHandler.getActivePresetId());
+            this.working = MacroHudDataHandler.getConfigCopy();
+            syncExternalCanvasElementsFromSources();
+            syncCanvasFields();
+            syncGridButtons();
+            syncPresetControls();
+        }).dimensions(666, 32, 50, 18).build();
 
         this.quickField = new TextFieldWidget(this.textRenderer, 8, this.height - 38, 280, 18, Text.literal("Quick Edit"));
         this.quickField.setMaxLength(300);
@@ -239,43 +327,52 @@ public class MacroWorkbenchV2Screen extends Screen {
                 ensureVisibleBackground(selected);
                 syncStyleButtons();
             }
-        }).dimensions(this.width - 238, this.height - 38, 74, 18).build();
+        }).dimensions(this.width - 316, this.height - 38, 74, 18).build();
 
         this.borderToggle = ButtonWidget.builder(Text.literal("Border: OFF"), b -> {
             if (selected != null) {
                 selected.drawBorder = !selected.drawBorder;
                 syncStyleButtons();
             }
-        }).dimensions(this.width - 160, this.height - 38, 78, 18).build();
+        }).dimensions(this.width - 238, this.height - 38, 78, 18).build();
 
         this.editButton = ButtonWidget.builder(Text.literal("Edit"), b -> openAdvancedModal())
                 .dimensions(this.width - 80, this.height - 38, 72, 18).build();
 
-        this.canvasWidgets.add(addButton);
-        this.canvasWidgets.add(addText);
-        this.canvasWidgets.add(addMacroList);
-        this.canvasWidgets.add(delete);
+        this.canvasWidgets.add(addElement);
+        this.canvasWidgets.add(deleteButton);
         this.canvasWidgets.add(gridToggleButton);
         this.canvasWidgets.add(gridRowsMinusButton);
         this.canvasWidgets.add(gridRowsPlusButton);
         this.canvasWidgets.add(gridColsMinusButton);
         this.canvasWidgets.add(gridColsPlusButton);
+        this.canvasWidgets.add(centerLinesToggleButton);
+        this.canvasWidgets.add(presetPrevButton);
+        this.canvasWidgets.add(presetNextButton);
+        this.canvasWidgets.add(presetNameField);
+        this.canvasWidgets.add(presetNewButton);
+        this.canvasWidgets.add(presetRenameButton);
+        this.canvasWidgets.add(presetDeleteButton);
         this.canvasWidgets.add(quickField);
         this.canvasWidgets.add(macroField);
         this.canvasWidgets.add(actionField);
         this.canvasWidgets.add(backgroundToggle);
         this.canvasWidgets.add(borderToggle);
         this.canvasWidgets.add(editButton);
-
-        addDrawableChild(addButton);
-        addDrawableChild(addText);
-        addDrawableChild(addMacroList);
-        addDrawableChild(delete);
+        addDrawableChild(addElement);
+        addDrawableChild(deleteButton);
         addDrawableChild(gridToggleButton);
         addDrawableChild(gridRowsMinusButton);
         addDrawableChild(gridRowsPlusButton);
         addDrawableChild(gridColsMinusButton);
         addDrawableChild(gridColsPlusButton);
+        addDrawableChild(centerLinesToggleButton);
+        addDrawableChild(presetPrevButton);
+        addDrawableChild(presetNextButton);
+        addDrawableChild(presetNameField);
+        addDrawableChild(presetNewButton);
+        addDrawableChild(presetRenameButton);
+        addDrawableChild(presetDeleteButton);
         addDrawableChild(quickField);
         addDrawableChild(macroField);
         addDrawableChild(actionField);
@@ -313,7 +410,6 @@ public class MacroWorkbenchV2Screen extends Screen {
         this.keyboardWidgets.add(kbEditCommands);
         this.keyboardWidgets.add(kbNew);
         this.keyboardWidgets.add(kbOpenManager);
-
         addDrawableChild(gameToggle);
         addDrawableChild(kbNameField);
         addDrawableChild(kbCommandsField);
@@ -326,6 +422,7 @@ public class MacroWorkbenchV2Screen extends Screen {
 
         syncCanvasFields();
         syncGridButtons();
+        syncPresetControls();
         syncKeyboardFields();
         setTab(this.tab);
     }
@@ -336,14 +433,7 @@ public class MacroWorkbenchV2Screen extends Screen {
         boolean keyboard = next == Tab.KEYBOARD;
         boolean placeholders = next == Tab.PLACEHOLDERS;
 
-        for (ClickableWidget w : canvasWidgets) {
-            w.visible = canvas;
-            w.active = canvas;
-        }
-        for (ClickableWidget w : keyboardWidgets) {
-            w.visible = keyboard;
-            w.active = keyboard;
-        }
+        refreshTabWidgetVisibility();
 
         if (canvas) {
             refreshCanvasChromeVisibility();
@@ -364,6 +454,24 @@ public class MacroWorkbenchV2Screen extends Screen {
         }
     }
 
+    private void refreshTabWidgetVisibility() {
+        boolean canvasTab = this.tab == Tab.CANVAS;
+        boolean keyboardTab = this.tab == Tab.KEYBOARD;
+        // In canvas, F1 controls visibility; in other tabs controls are always visible.
+        boolean showChrome = !canvasTab || canvasChromeVisible;
+
+        setWidgetState(topBarWidgets, showChrome);
+        setWidgetState(canvasWidgets, canvasTab && showChrome);
+        setWidgetState(keyboardWidgets, keyboardTab && showChrome);
+    }
+
+    private static void setWidgetState(List<ClickableWidget> widgets, boolean visible) {
+        for (ClickableWidget widget : widgets) {
+            widget.visible = visible;
+            widget.active = visible;
+        }
+    }
+
     @Override
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
         context.fill(0, 0, this.width, this.height, 0xD0101010);
@@ -380,11 +488,24 @@ public class MacroWorkbenchV2Screen extends Screen {
         // Draw normal widgets first.
         super.render(context, mouseX, mouseY, delta);
 
+        if (advancedOpen && advancedModalDragging && this.client != null) {
+            long window = this.client.getWindow().getHandle();
+            if (GLFW.glfwGetMouseButton(window, GLFW.GLFW_MOUSE_BUTTON_LEFT) == GLFW.GLFW_PRESS) {
+                this.advancedModalPosX = mouseX - advancedModalDragOffsetX;
+                this.advancedModalPosY = mouseY - advancedModalDragOffsetY;
+            } else {
+                this.advancedModalDragging = false;
+            }
+        }
+
         if (advancedOpen) {
             renderAdvancedModal(context, mouseX, mouseY);
         }
         if (kbCommandsModalOpen) {
             renderKeyboardCommandsModal(context, mouseX, mouseY);
+        }
+        if (this.tab == Tab.CANVAS && addElementModalOpen && !advancedOpen && !kbCommandsModalOpen) {
+            renderAddElementModal(context, mouseX, mouseY);
         }
     }
 
@@ -392,22 +513,27 @@ public class MacroWorkbenchV2Screen extends Screen {
         applyQuickEdit();
         updateDragging(mouseX, mouseY);
 
-        context.drawTextWithShadow(this.textRenderer, "Mouse wheel = width, Shift + wheel = height", 8, TOP_BAR_H + 4, 0xFFE0E0E0);
         context.drawTextWithShadow(this.textRenderer,
-                "F1 toggles editor chrome: " + (canvasChromeVisible ? "ON" : "OFF"),
-                8, TOP_BAR_H + 16, 0xFF9FCFCF);
+                "Press F1 to turn on/off placement mode: " + (canvasChromeVisible ? "OFF" : "ON"),
+                8, TOP_BAR_H + 4, 0xFF9FCFCF);
+        context.drawTextWithShadow(this.textRenderer,
+                "Ctrl+Click multi-select, Ctrl+C/V copy/paste element, Ctrl+Shift+C/V dimensions, Ctrl+Z undo move",
+                8, TOP_BAR_H + 16, 0xFF9FBFBF);
         int canvasHeight = Math.max(1, this.height - BOTTOM_BAR_H - CANVAS_CONTENT_TOP);
         int cellW = Math.max(1, Math.round(this.width / (float) Math.max(1, gridCols)));
         int cellH = Math.max(1, Math.round(canvasHeight / (float) Math.max(1, gridRows)));
         context.drawTextWithShadow(this.textRenderer,
                 "Grid " + (gridEnabled ? "ON" : "OFF") + "  " + gridCols + "x" + gridRows + "  Cell: " + cellW + "x" + cellH,
-                520, 36, 0xFFBFCFCF);
+                8, TOP_BAR_H + 28, 0xFFBFCFCF);
 
         if (gridEnabled || gridOverlayTicks > 0) {
             drawGridOverlay(context);
             if (gridOverlayTicks > 0) {
                 gridOverlayTicks--;
             }
+        }
+        if (centerLinesEnabled) {
+            drawCenterLinesOverlay(context);
         }
 
         for (MacroHudDataHandler.HudElement element : this.working.elements) {
@@ -436,7 +562,7 @@ public class MacroWorkbenchV2Screen extends Screen {
         int bottom = this.height - 14;
         int lineHeight = 11;
         int maxLines = Math.max(1, (bottom - top) / lineHeight);
-        List<String> docs = placeholderDocs();
+        List<String> docs = MacroPlaceholders.PLACEHOLDER_DOCS;
         int maxScroll = Math.max(0, docs.size() - maxLines);
         placeholderScroll = Math.clamp(placeholderScroll, 0, maxScroll);
 
@@ -527,6 +653,9 @@ public class MacroWorkbenchV2Screen extends Screen {
         if (advancedOpen) {
             return onAdvancedMouseClick(click);
         }
+        if (this.tab == Tab.CANVAS && addElementModalOpen) {
+            return onAddElementModalClick(click);
+        }
 
         if (super.mouseClicked(click, doubled)) {
             return true;
@@ -537,7 +666,12 @@ public class MacroWorkbenchV2Screen extends Screen {
         }
 
         if (this.tab == Tab.CANVAS) {
-            return onCanvasClick(click.x(), click.y());
+            boolean hit = onCanvasClick(click.x(), click.y());
+            if (hit && doubled && selected != null) {
+                openAdvancedModal();
+                return true;
+            }
+            return hit;
         }
         if (this.tab == Tab.KEYBOARD) {
             return onKeyboardClick(click.x(), click.y());
@@ -557,14 +691,7 @@ public class MacroWorkbenchV2Screen extends Screen {
         }
 
         if (this.tab == Tab.CANVAS && selected != null) {
-            int delta = verticalAmount > 0 ? 4 : -4;
-            boolean shiftDown = isShiftDown();
-            if (shiftDown) {
-                selected.height = Math.clamp(selected.height + delta, 12, 128);
-            } else {
-                selected.width = Math.clamp(selected.width + delta, 40, 380);
-            }
-            return true;
+            return false;
         }
 
         return super.mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount);
@@ -605,6 +732,38 @@ public class MacroWorkbenchV2Screen extends Screen {
             return true;
         }
 
+        if (this.tab == Tab.CANVAS && !advancedOpen && !kbCommandsModalOpen && keyCode == GLFW.GLFW_KEY_DELETE && selected != null) {
+            Set<String> ids = selectedElementIds.isEmpty() ? Set.of(selected.id) : new HashSet<>(selectedElementIds);
+            this.working.elements.removeIf(e -> ids.contains(e.id));
+            selectedElementIds.clear();
+            this.selected = null;
+            syncCanvasFields();
+            return true;
+        }
+
+        if (this.tab == Tab.CANVAS && !advancedOpen && !kbCommandsModalOpen && !isAnyCanvasTextFieldFocused() && isCtrlDown()) {
+            if (keyCode == GLFW.GLFW_KEY_Z) {
+                undoLastMove();
+                return true;
+            }
+            if (keyCode == GLFW.GLFW_KEY_C) {
+                if (isShiftDown()) {
+                    copySelectedDimensions();
+                } else {
+                    copySelectedElements();
+                }
+                return true;
+            }
+            if (keyCode == GLFW.GLFW_KEY_V) {
+                if (isShiftDown()) {
+                    pasteDimensionsToSelection();
+                } else {
+                    pasteElementsFromClipboard();
+                }
+                return true;
+            }
+        }
+
         if (kbCommandsModalOpen) {
             if (kbCommandsFocused) {
                 handleKeyboardCommandsKey(keyCode);
@@ -633,25 +792,65 @@ public class MacroWorkbenchV2Screen extends Screen {
     private boolean onCanvasClick(double mouseX, double mouseY) {
         if (mouseY > this.height - BOTTOM_BAR_H || mouseY < CANVAS_CONTENT_TOP) {
             dragging = false;
+            resizing = false;
             return false;
         }
+
+        boolean ctrl = isCtrlDown();
 
         for (int i = this.working.elements.size() - 1; i >= 0; i--) {
             MacroHudDataHandler.HudElement e = this.working.elements.get(i);
             int ex = resolveElementX(e);
             int ey = resolveElementY(e);
             if (contains(ex, ey, e, mouseX, mouseY)) {
+                if (ctrl) {
+                    this.selected = e;
+                    if (!selectedElementIds.add(e.id)) {
+                        selectedElementIds.remove(e.id);
+                    }
+                    if (selectedElementIds.isEmpty()) {
+                        selectedElementIds.add(e.id);
+                    }
+                    dragging = false;
+                    resizing = false;
+                    syncCanvasFields();
+                    return true;
+                }
+
                 this.selected = e;
-                this.dragOffsetX = (int) mouseX - ex;
-                this.dragOffsetY = (int) mouseY - ey;
-                this.dragging = true;
+                if (!selectedElementIds.contains(e.id)) {
+                    selectedElementIds.clear();
+                    selectedElementIds.add(e.id);
+                }
+                if (isResizeHandleHit(ex, ey, e, mouseX, mouseY)) {
+                    this.resizing = true;
+                    this.dragging = false;
+                    this.resizeStartMouseX = (int) mouseX;
+                    this.resizeStartMouseY = (int) mouseY;
+                    this.resizeStartWidth = e.width;
+                    this.resizeStartHeight = e.height;
+                    this.activeMoveSnapshot = captureSnapshots(List.of(e));
+                } else {
+                    this.activeMoveSnapshot = captureSnapshots(getSelectedElements());
+                    this.dragStartScreenPositions.clear();
+                    for (MacroHudDataHandler.HudElement selectedElement : getSelectedElements()) {
+                        this.dragStartScreenPositions.put(selectedElement.id, new int[]{resolveElementX(selectedElement), resolveElementY(selectedElement)});
+                    }
+                    this.dragPrimaryElementId = e.id;
+                    this.dragOffsetX = (int) mouseX - ex;
+                    this.dragOffsetY = (int) mouseY - ey;
+                    this.dragging = true;
+                    this.resizing = false;
+                }
                 syncCanvasFields();
                 return true;
             }
         }
 
         this.selected = null;
+        selectedElementIds.clear();
         this.dragging = false;
+        this.resizing = false;
         syncCanvasFields();
         return false;
     }
@@ -684,9 +883,11 @@ public class MacroWorkbenchV2Screen extends Screen {
     }
 
     private boolean onAdvancedMouseClick(Click click) {
-        if (click.button() != 0) {
+        if (click.button() != 0 && click.button() != 1) {
             return true;
         }
+
+        boolean forward = click.button() != 1;
 
         int boxX = modalX();
         int boxY = modalY();
@@ -707,11 +908,18 @@ public class MacroWorkbenchV2Screen extends Screen {
         int borderFieldW = 88;
         int borderFieldH = 18;
 
+        if (containsBox(click.x(), click.y(), boxX, boxY, MODAL_W, 20)) {
+            advancedModalDragging = true;
+            advancedModalDragOffsetX = (int) click.x() - boxX;
+            advancedModalDragOffsetY = (int) click.y() - boxY;
+            return true;
+        }
+
         if (isSecondaryChatProxy(selected)) {
             int regexX = boxX + 12;
-            int regexY = boxY + 92;
+            int regexY = boxY + 100;
             int regexW = MODAL_W - 24;
-            int regexH = 86;
+            int regexH = 74;
             int outgoingX = boxX + 12;
             int outgoingY = boxY + 182;
             int outgoingW = 244;
@@ -739,64 +947,64 @@ public class MacroWorkbenchV2Screen extends Screen {
                 return true;
             }
             if (containsBox(click.x(), click.y(), boxX + 304, boxY + 68, 48, 18)) {
-                advancedSecondaryScale = Math.max(0.1, advancedSecondaryScale - 0.05);
+                advancedSecondaryScale = Math.max(0.1, advancedSecondaryScale - stepDouble(0.05));
                 return true;
             }
             if (containsBox(click.x(), click.y(), boxX + 356, boxY + 68, 48, 18)) {
-                advancedSecondaryScale = Math.min(3.0, advancedSecondaryScale + 0.05);
+                advancedSecondaryScale = Math.min(3.0, advancedSecondaryScale + stepDouble(0.05));
                 return true;
             }
             if (containsBox(click.x(), click.y(), boxX + 408, boxY + 68, 48, 18)) {
-                advancedSecondaryLineHeight = Math.max(1, advancedSecondaryLineHeight - 1);
+                advancedSecondaryLineHeight = Math.max(1, advancedSecondaryLineHeight - stepInt(1));
                 return true;
             }
             if (containsBox(click.x(), click.y(), boxX + 408, boxY + 92, 48, 18)) {
-                advancedSecondaryLineHeight = Math.min(30, advancedSecondaryLineHeight + 1);
+                advancedSecondaryLineHeight = Math.min(30, advancedSecondaryLineHeight + stepInt(1));
                 return true;
             }
-            if (containsBox(click.x(), click.y(), boxX + 12, boxY + 206, 48, 18)) {
-                advancedSecondaryFadeDurationMs = Math.max(1000, advancedSecondaryFadeDurationMs - 1000);
+            if (containsBox(click.x(), click.y(), boxX + 12, boxY + 222, 48, 18)) {
+                advancedSecondaryFadeDurationMs = Math.max(1000, advancedSecondaryFadeDurationMs - stepInt(1000));
                 return true;
             }
-            if (containsBox(click.x(), click.y(), boxX + 64, boxY + 206, 48, 18)) {
-                advancedSecondaryFadeDurationMs = Math.min(120000, advancedSecondaryFadeDurationMs + 1000);
+            if (containsBox(click.x(), click.y(), boxX + 64, boxY + 222, 48, 18)) {
+                advancedSecondaryFadeDurationMs = Math.min(120000, advancedSecondaryFadeDurationMs + stepInt(1000));
                 return true;
             }
-            if (containsBox(click.x(), click.y(), boxX + 116, boxY + 206, 48, 18)) {
-                advancedSecondaryMinAlpha = Math.max(0, advancedSecondaryMinAlpha - 5);
+            if (containsBox(click.x(), click.y(), boxX + 116, boxY + 222, 48, 18)) {
+                advancedSecondaryMinAlpha = Math.max(0, advancedSecondaryMinAlpha - stepInt(5));
                 return true;
             }
-            if (containsBox(click.x(), click.y(), boxX + 168, boxY + 206, 48, 18)) {
-                advancedSecondaryMinAlpha = Math.min(255, advancedSecondaryMinAlpha + 5);
+            if (containsBox(click.x(), click.y(), boxX + 168, boxY + 222, 48, 18)) {
+                advancedSecondaryMinAlpha = Math.min(255, advancedSecondaryMinAlpha + stepInt(5));
                 return true;
             }
-            if (containsBox(click.x(), click.y(), boxX + 220, boxY + 206, 48, 18)) {
-                advancedSecondaryMaxLines = Math.max(10, advancedSecondaryMaxLines - 10);
+            if (containsBox(click.x(), click.y(), boxX + 220, boxY + 222, 48, 18)) {
+                advancedSecondaryMaxLines = Math.max(10, advancedSecondaryMaxLines - stepInt(10));
                 return true;
             }
-            if (containsBox(click.x(), click.y(), boxX + 272, boxY + 206, 48, 18)) {
-                advancedSecondaryMaxLines = Math.min(500, advancedSecondaryMaxLines + 10);
+            if (containsBox(click.x(), click.y(), boxX + 272, boxY + 222, 48, 18)) {
+                advancedSecondaryMaxLines = Math.min(500, advancedSecondaryMaxLines + stepInt(10));
                 return true;
             }
-            if (containsBox(click.x(), click.y(), boxX + 324, boxY + 206, 64, 18)) {
+            if (containsBox(click.x(), click.y(), boxX + 324, boxY + 222, 64, 18)) {
                 selected.backgroundColor = cycleStyleColor(selected.backgroundColor, false);
                 advancedBgColor = formatColor(selected.backgroundColor);
                 advancedBgCursor = advancedBgColor.length();
                 return true;
             }
-            if (containsBox(click.x(), click.y(), boxX + 392, boxY + 206, 64, 18)) {
+            if (containsBox(click.x(), click.y(), boxX + 392, boxY + 222, 64, 18)) {
                 selected.backgroundColor = cycleStyleColor(selected.backgroundColor, true);
                 advancedBgColor = formatColor(selected.backgroundColor);
                 advancedBgCursor = advancedBgColor.length();
                 return true;
             }
-            if (containsBox(click.x(), click.y(), boxX + 324, boxY + 230, 64, 18)) {
+            if (containsBox(click.x(), click.y(), boxX + 324, boxY + 246, 64, 18)) {
                 selected.textColor = cycleStyleColor(selected.textColor, false);
                 advancedBorderColor = formatColor(selected.textColor);
                 advancedBorderCursor = advancedBorderColor.length();
                 return true;
             }
-            if (containsBox(click.x(), click.y(), boxX + 392, boxY + 230, 64, 18)) {
+            if (containsBox(click.x(), click.y(), boxX + 392, boxY + 246, 64, 18)) {
                 selected.textColor = cycleStyleColor(selected.textColor, true);
                 advancedBorderColor = formatColor(selected.textColor);
                 advancedBorderCursor = advancedBorderColor.length();
@@ -811,21 +1019,23 @@ public class MacroWorkbenchV2Screen extends Screen {
                 return true;
             }
 
-            advancedBgColorFocused = containsBox(click.x(), click.y(), boxX + 324, boxY + 230, 64, 18);
+            advancedBgColorFocused = containsBox(click.x(), click.y(), boxX + 324, boxY + 246, 64, 18);
             if (advancedBgColorFocused) {
-                advancedBorderColorFocused = false;
                 advancedTextFocused = false;
                 advancedActionFocused = false;
+                advancedBorderColorFocused = false;
+                advancedBgSelectionAnchor = -1;
                 int localX = (int) (click.x() - (boxX + 328));
                 advancedBgCursor = cursorIndexFromPoint(advancedBgColor, localX, 0, 9);
                 return true;
             }
 
-            advancedBorderColorFocused = containsBox(click.x(), click.y(), boxX + 392, boxY + 230, 64, 18);
+            advancedBorderColorFocused = containsBox(click.x(), click.y(), boxX + 392, boxY + 246, 64, 18);
             if (advancedBorderColorFocused) {
-                advancedBgColorFocused = false;
                 advancedTextFocused = false;
                 advancedActionFocused = false;
+                advancedBgColorFocused = false;
+                advancedBorderSelectionAnchor = -1;
                 int localX = (int) (click.x() - (boxX + 396));
                 advancedBorderCursor = cursorIndexFromPoint(advancedBorderColor, localX, 0, 9);
                 return true;
@@ -836,6 +1046,7 @@ public class MacroWorkbenchV2Screen extends Screen {
                 advancedTextFocused = false;
                 advancedBgColorFocused = false;
                 advancedBorderColorFocused = false;
+                advancedActionSelectionAnchor = -1;
                 int localX = (int) (click.x() - (outgoingX + 4));
                 advancedActionCursor = cursorIndexFromPoint(advancedAction, localX, 0, 9);
                 return true;
@@ -846,6 +1057,7 @@ public class MacroWorkbenchV2Screen extends Screen {
                 advancedActionFocused = false;
                 advancedBgColorFocused = false;
                 advancedBorderColorFocused = false;
+                advancedSelectionAnchor = -1;
                 advancedCursor = cursorIndexFromPoint(advancedText, (int) (click.x() - (regexX + 4)), (int) (click.y() - (regexY + 4)), 9);
             }
             return true;
@@ -853,19 +1065,19 @@ public class MacroWorkbenchV2Screen extends Screen {
 
         if (isNbtInspectorProxy(selected)) {
             if (containsBox(click.x(), click.y(), boxX + 12, boxY + 52, 64, 18)) {
-                selected.fontScale = Math.clamp(selected.fontScale - 0.1f, 0.5f, 4.0f);
+                selected.fontScale = Math.clamp((float) (selected.fontScale - stepDouble(0.1)), 0.5f, 4.0f);
                 return true;
             }
             if (containsBox(click.x(), click.y(), boxX + 80, boxY + 52, 64, 18)) {
-                selected.fontScale = Math.clamp(selected.fontScale + 0.1f, 0.5f, 4.0f);
+                selected.fontScale = Math.clamp((float) (selected.fontScale + stepDouble(0.1)), 0.5f, 4.0f);
                 return true;
             }
             if (containsBox(click.x(), click.y(), boxX + 12, boxY + 76, 64, 18)) {
-                selected.lineHeight = Math.clamp(selected.lineHeight - 1, 6, 24);
+                selected.lineHeight = Math.clamp(selected.lineHeight - stepInt(1), 6, 24);
                 return true;
             }
             if (containsBox(click.x(), click.y(), boxX + 80, boxY + 76, 64, 18)) {
-                selected.lineHeight = Math.clamp(selected.lineHeight + 1, 6, 24);
+                selected.lineHeight = Math.clamp(selected.lineHeight + stepInt(1), 6, 24);
                 return true;
             }
             if (containsBox(click.x(), click.y(), boxX + 12, boxY + 100, 120, 18)) {
@@ -915,6 +1127,10 @@ public class MacroWorkbenchV2Screen extends Screen {
             return true;
         }
 
+        if (isCustomWidgetType(selected)) {
+            return onCustomWidgetAdvancedClick(click, boxX, boxY);
+        }
+
         if (containsBox(click.x(), click.y(), boxX + 12, boxY + 172, 56, 18)) {
             if (selected != null) {
                 selected.drawBackground = !selected.drawBackground;
@@ -932,34 +1148,23 @@ public class MacroWorkbenchV2Screen extends Screen {
         }
         if (containsBox(click.x(), click.y(), boxX + 142, boxY + 172, 92, 18)) {
             if (selected != null) {
-                selected.horizontalAlign = switch (selected.horizontalAlign) {
-                    case LEFT -> MacroHudDataHandler.HorizontalAlign.CENTER;
-                    case CENTER -> MacroHudDataHandler.HorizontalAlign.RIGHT;
-                    case RIGHT -> MacroHudDataHandler.HorizontalAlign.LEFT;
-                };
+                selected.horizontalAlign = cycleHorizontalAlign(selected.horizontalAlign, forward);
             }
             return true;
         }
         if (containsBox(click.x(), click.y(), boxX + 238, boxY + 172, 92, 18)) {
             if (selected != null) {
-                selected.verticalAlign = switch (selected.verticalAlign) {
-                    case TOP -> MacroHudDataHandler.VerticalAlign.CENTER;
-                    case CENTER -> MacroHudDataHandler.VerticalAlign.BOTTOM;
-                    case BOTTOM -> MacroHudDataHandler.VerticalAlign.TOP;
-                };
+                selected.verticalAlign = cycleVerticalAlign(selected.verticalAlign, forward);
             }
             return true;
         }
         if (containsBox(click.x(), click.y(), boxX + 334, boxY + 172, 122, 18)) {
             if (selected != null) {
-                selected.anchor = switch (selected.anchor) {
-                    case TOP_LEFT -> MacroHudDataHandler.Anchor.TOP_RIGHT;
-                    case TOP_RIGHT -> MacroHudDataHandler.Anchor.BOTTOM_RIGHT;
-                    case BOTTOM_RIGHT -> MacroHudDataHandler.Anchor.BOTTOM_LEFT;
-                    case BOTTOM_LEFT -> MacroHudDataHandler.Anchor.CENTER;
-                    case CENTER -> MacroHudDataHandler.Anchor.TOP_LEFT;
-                };
-                setElementScreenPosition(selected, resolveElementX(selected), resolveElementY(selected));
+                int oldScreenX = resolveElementX(selected);
+                int oldScreenY = resolveElementY(selected);
+                selected.anchor = cycleAnchor(selected.anchor, forward);
+                setElementScreenPosition(selected, oldScreenX, oldScreenY);
+                clampElementToCanvas(selected);
             }
             return true;
         }
@@ -973,25 +1178,25 @@ public class MacroWorkbenchV2Screen extends Screen {
         }
         if (containsBox(click.x(), click.y(), boxX + 12, boxY + 196, 40, 18)) {
             if (selected != null) {
-                selected.lineHeight = Math.clamp(selected.lineHeight - 1, 6, 24);
+                selected.lineHeight = Math.clamp(selected.lineHeight - stepInt(1), 6, 24);
             }
             return true;
         }
         if (containsBox(click.x(), click.y(), boxX + 56, boxY + 196, 40, 18)) {
             if (selected != null) {
-                selected.lineHeight = Math.clamp(selected.lineHeight + 1, 6, 24);
+                selected.lineHeight = Math.clamp(selected.lineHeight + stepInt(1), 6, 24);
             }
             return true;
         }
         if (containsBox(click.x(), click.y(), boxX + 104, boxY + 196, 40, 18)) {
             if (selected != null) {
-                selected.fontScale = Math.clamp(selected.fontScale - 0.1f, 0.5f, 4.0f);
+                selected.fontScale = Math.clamp((float) (selected.fontScale - stepDouble(0.1)), 0.5f, 4.0f);
             }
             return true;
         }
         if (containsBox(click.x(), click.y(), boxX + 148, boxY + 196, 40, 18)) {
             if (selected != null) {
-                selected.fontScale = Math.clamp(selected.fontScale + 0.1f, 0.5f, 4.0f);
+                selected.fontScale = Math.clamp((float) (selected.fontScale + stepDouble(0.1)), 0.5f, 4.0f);
             }
             return true;
         }
@@ -1043,6 +1248,7 @@ public class MacroWorkbenchV2Screen extends Screen {
             advancedTextFocused = false;
             advancedActionFocused = false;
             advancedBorderColorFocused = false;
+            advancedBgSelectionAnchor = -1;
             int localX = (int) (click.x() - (bgFieldX + 4));
             advancedBgCursor = cursorIndexFromPoint(advancedBgColor, localX, 0, 9);
             return true;
@@ -1053,6 +1259,7 @@ public class MacroWorkbenchV2Screen extends Screen {
             advancedTextFocused = false;
             advancedActionFocused = false;
             advancedBgColorFocused = false;
+            advancedBorderSelectionAnchor = -1;
             int localX = (int) (click.x() - (borderFieldX + 4));
             advancedBorderCursor = cursorIndexFromPoint(advancedBorderColor, localX, 0, 9);
             return true;
@@ -1063,6 +1270,7 @@ public class MacroWorkbenchV2Screen extends Screen {
             advancedTextFocused = false;
             advancedBgColorFocused = false;
             advancedBorderColorFocused = false;
+            advancedActionSelectionAnchor = -1;
             int localX = (int) (click.x() - (actionX + 4));
             advancedActionCursor = cursorIndexFromPoint(advancedAction, localX, 0, 9);
             return true;
@@ -1073,19 +1281,41 @@ public class MacroWorkbenchV2Screen extends Screen {
             advancedActionFocused = false;
             advancedBgColorFocused = false;
             advancedBorderColorFocused = false;
+            advancedSelectionAnchor = -1;
             advancedCursor = cursorIndexFromPoint(advancedText, (int) (click.x() - (textX + 4)), (int) (click.y() - (textY + 4)), 9);
         }
         return true;
     }
 
     private void updateDragging(int mouseX, int mouseY) {
-        if (!dragging || selected == null || this.client == null) {
+        if ((!dragging && !resizing) || selected == null || this.client == null) {
             return;
         }
 
         long window = this.client.getWindow().getHandle();
         if (GLFW.glfwGetMouseButton(window, GLFW.GLFW_MOUSE_BUTTON_LEFT) != GLFW.GLFW_PRESS) {
+            if (activeMoveSnapshot != null && hasSnapshotChanges(activeMoveSnapshot)) {
+                moveUndoStack.push(activeMoveSnapshot);
+                while (moveUndoStack.size() > 25) {
+                    moveUndoStack.removeLast();
+                }
+            }
+            activeMoveSnapshot = null;
+            dragStartScreenPositions.clear();
+            dragPrimaryElementId = null;
             dragging = false;
+            resizing = false;
+            return;
+        }
+
+        if (resizing) {
+            selected.width = Math.clamp(resizeStartWidth + (mouseX - resizeStartMouseX), 1, 2000);
+            selected.height = Math.clamp(resizeStartHeight + (mouseY - resizeStartMouseY), 1, 1200);
+
+            int clampedX = Math.clamp(resolveElementX(selected), 0, Math.max(0, this.width - selected.width));
+            int clampedY = Math.clamp(resolveElementY(selected), CANVAS_CONTENT_TOP,
+                    Math.max(CANVAS_CONTENT_TOP, this.height - BOTTOM_BAR_H - selected.height));
+            setElementScreenPosition(selected, clampedX, clampedY);
             return;
         }
 
@@ -1098,11 +1328,34 @@ public class MacroWorkbenchV2Screen extends Screen {
             int[] snapped = snapToGrid(screenX, screenY);
             screenX = snapped[0];
             screenY = snapped[1];
-            selected.width = snapped[2];
-            selected.height = snapped[3];
+            if (selectedElementIds.size() <= 1) {
+                selected.width = snapped[2];
+                selected.height = snapped[3];
+            }
         }
 
-        setElementScreenPosition(selected, screenX, screenY);
+        if (isShiftDown()) {
+            int[] snappedToElements = snapElementToNeighbors(selected, screenX, screenY);
+            screenX = snappedToElements[0];
+            screenY = snappedToElements[1];
+        }
+
+        if (selectedElementIds.size() <= 1 || dragPrimaryElementId == null || !dragStartScreenPositions.containsKey(dragPrimaryElementId)) {
+            setElementScreenPosition(selected, screenX, screenY);
+            return;
+        }
+
+        int[] primaryStart = dragStartScreenPositions.get(dragPrimaryElementId);
+        int dx = screenX - primaryStart[0];
+        int dy = screenY - primaryStart[1];
+        for (MacroHudDataHandler.HudElement e : getSelectedElements()) {
+            int[] start = dragStartScreenPositions.get(e.id);
+            if (start == null) {
+                continue;
+            }
+            setElementScreenPosition(e, start[0] + dx, start[1] + dy);
+            clampElementToCanvas(e);
+        }
     }
 
     private int[] snapToGrid(int x, int y) {
@@ -1118,12 +1371,101 @@ public class MacroWorkbenchV2Screen extends Screen {
 
         int snappedX = Math.clamp((int) Math.round(col * cellW), 0, Math.max(0, canvasW - 1));
         int snappedY = Math.clamp((int) Math.round(row * cellH), 0, Math.max(0, canvasH - 1));
-        int snappedW = Math.clamp((int) Math.round(cellW), 40, 2000);
-        int snappedH = Math.clamp((int) Math.round(cellH), 12, 1200);
+        int snappedW = Math.clamp((int) Math.round(cellW), 1, 2000);
+        int snappedH = Math.clamp((int) Math.round(cellH), 1, 1200);
 
         snappedX = Math.clamp(snappedX, 0, Math.max(0, canvasW - snappedW));
         snappedY = Math.clamp(snappedY, 0, Math.max(0, canvasH - snappedH));
         return new int[]{snappedX, snappedY + CANVAS_CONTENT_TOP, snappedW, snappedH};
+    }
+
+    private int[] snapElementToNeighbors(MacroHudDataHandler.HudElement moving, int screenX, int screenY) {
+        if (moving == null) {
+            return new int[]{screenX, screenY};
+        }
+        final int threshold = 8;
+        int bestDx = threshold + 1;
+        int bestDy = threshold + 1;
+        int snappedX = screenX;
+        int snappedY = screenY;
+
+        int movingLeft = screenX;
+        int movingRight = screenX + moving.width;
+        int movingCenterX = screenX + moving.width / 2;
+        int movingTop = screenY;
+        int movingBottom = screenY + moving.height;
+        int movingCenterY = screenY + moving.height / 2;
+
+        for (MacroHudDataHandler.HudElement other : this.working.elements) {
+            if (other == null || other.id.equals(moving.id)) {
+                continue;
+            }
+            int ox = resolveElementX(other);
+            int oy = resolveElementY(other);
+            int otherLeft = ox;
+            int otherRight = ox + other.width;
+            int otherCenterX = ox + other.width / 2;
+            int otherTop = oy;
+            int otherBottom = oy + other.height;
+            int otherCenterY = oy + other.height / 2;
+
+            int[] xCandidates = {
+                    otherLeft,
+                    otherRight,
+                    otherCenterX,
+                    otherLeft - moving.width,
+                    otherRight - moving.width,
+                    otherCenterX - moving.width / 2
+            };
+            int[] yCandidates = {
+                    otherTop,
+                    otherBottom,
+                    otherCenterY,
+                    otherTop - moving.height,
+                    otherBottom - moving.height,
+                    otherCenterY - moving.height / 2
+            };
+
+            for (int candidate : xCandidates) {
+                int dx = Math.abs(candidate - movingLeft);
+                if (dx < bestDx && dx <= threshold) {
+                    bestDx = dx;
+                    snappedX = candidate;
+                }
+                int dxRight = Math.abs(candidate - movingRight);
+                if (dxRight < bestDx && dxRight <= threshold) {
+                    bestDx = dxRight;
+                    snappedX = candidate - moving.width;
+                }
+                int dxCenter = Math.abs(candidate - movingCenterX);
+                if (dxCenter < bestDx && dxCenter <= threshold) {
+                    bestDx = dxCenter;
+                    snappedX = candidate - moving.width / 2;
+                }
+            }
+
+            for (int candidate : yCandidates) {
+                int dy = Math.abs(candidate - movingTop);
+                if (dy < bestDy && dy <= threshold) {
+                    bestDy = dy;
+                    snappedY = candidate;
+                }
+                int dyBottom = Math.abs(candidate - movingBottom);
+                if (dyBottom < bestDy && dyBottom <= threshold) {
+                    bestDy = dyBottom;
+                    snappedY = candidate - moving.height;
+                }
+                int dyCenter = Math.abs(candidate - movingCenterY);
+                if (dyCenter < bestDy && dyCenter <= threshold) {
+                    bestDy = dyCenter;
+                    snappedY = candidate - moving.height / 2;
+                }
+            }
+        }
+
+        snappedX = Math.clamp(snappedX, 0, Math.max(0, this.width - moving.width));
+        snappedY = Math.clamp(snappedY, CANVAS_CONTENT_TOP, Math.max(CANVAS_CONTENT_TOP, this.height - BOTTOM_BAR_H - moving.height));
+        return new int[]{snappedX, snappedY};
     }
 
     private void drawGridOverlay(DrawContext context) {
@@ -1141,28 +1483,50 @@ public class MacroWorkbenchV2Screen extends Screen {
         }
     }
 
-    private void drawCanvasElement(DrawContext context, MacroHudDataHandler.HudElement element) {
-        List<String> lines;
-        if (isSecondaryChatProxy(element)) {
-            lines = List.of("Secondary Chat", "Unified HUD element");
-        } else if (isNbtInspectorProxy(element)) {
-            lines = List.of("NBT Inspector", "Unified HUD element");
-        } else if (element.type == MacroHudDataHandler.ElementType.MACRO_KEYBINDS) {
-            lines = buildMacroKeybindPreviewLines(element);
-        } else {
-            lines = splitLines(expandForCanvas(element.type == MacroHudDataHandler.ElementType.BUTTON ? element.label : element.text));
-        }
+    private void drawCenterLinesOverlay(DrawContext context) {
+        int canvasTop = CANVAS_CONTENT_TOP;
+        int canvasBottom = Math.max(canvasTop + 1, this.height - BOTTOM_BAR_H);
+        int centerX = this.width / 2;
+        int centerY = canvasTop + (canvasBottom - canvasTop) / 2;
+        context.fill(centerX, canvasTop, centerX + 1, canvasBottom, 0x80FFCC66);
+        context.fill(0, centerY, this.width, centerY + 1, 0x80FFCC66);
+    }
 
+    private void drawCanvasElement(DrawContext context, MacroHudDataHandler.HudElement element) {
         int x1 = resolveElementX(element);
         int y1 = resolveElementY(element);
         int x2 = x1 + element.width;
         int y2 = y1 + element.height;
 
+        boolean customWidget = element.type == MacroHudDataHandler.ElementType.ICON
+                || element.type == MacroHudDataHandler.ElementType.BAR
+                || element.type == MacroHudDataHandler.ElementType.VALUE
+                || element.type == MacroHudDataHandler.ElementType.LIST
+                || element.type == MacroHudDataHandler.ElementType.SHAPE
+                || element.type == MacroHudDataHandler.ElementType.STATE_BADGE;
+
+        if (customWidget) {
+            drawCanvasSpecialWidget(context, element, x1, y1, x2, y2);
+            drawSelectedOutline(context, x1, y1, x2, y2, selectedElementIds.contains(element.id));
+            return;
+        }
+
+        List<String> lines;
+        if (isSecondaryChatProxy(element)) {
+            lines = buildExternalProxyPreviewLines(element, "Secondary Chat");
+        } else if (isNbtInspectorProxy(element)) {
+            lines = buildExternalProxyPreviewLines(element, "NBT Inspector");
+        } else if (element.type == MacroHudDataHandler.ElementType.MACRO_KEYBINDS) {
+            lines = buildMacroKeybindPreviewLines(element);
+        } else {
+            lines = splitLines(expandForCanvas(element.type == MacroHudDataHandler.ElementType.TEXT ? element.text : element.label));
+        }
+
         if (element.drawBackground) {
             context.fill(x1, y1, x2, y2, element.backgroundColor);
         }
         if (element.drawBorder) {
-            drawBorder(context, x1, y1, x2, y2, element.borderColor);
+            GuiSystem.drawOutline(context, x1, y1, x2, y2, element.borderColor);
         }
 
         float scale = Math.clamp(element.fontScale, 0.5f, 4.0f);
@@ -1178,20 +1542,155 @@ public class MacroWorkbenchV2Screen extends Screen {
             drawStyledTextLine(context, line, x, y, element.textColor, scale);
         }
 
-        if (selected != null && selected.id.equals(element.id)) {
-            context.fill(x1, y1, x2, y1 + 1, 0xFFFFFF00);
-            context.fill(x1, y2 - 1, x2, y2, 0xFFFFFF00);
-            context.fill(x1, y1, x1 + 1, y2, 0xFFFFFF00);
-            context.fill(x2 - 1, y1, x2, y2, 0xFFFFFF00);
+        drawSelectedOutline(context, x1, y1, x2, y2, selectedElementIds.contains(element.id));
+    }
+
+    private void drawCanvasSpecialWidget(DrawContext context, MacroHudDataHandler.HudElement e, int x1, int y1, int x2, int y2) {
+        switch (e.type) {
+            case ICON -> drawCanvasIconPreview(context, e, x1, y1, x2, y2);
+            case BAR -> drawCanvasBarPreview(context, e, x1, y1, x2, y2);
+            case VALUE -> drawCanvasValuePreview(context, e, x1, y1, x2, y2);
+            case LIST -> drawCanvasListPreview(context, e, x1, y1, x2, y2);
+            case SHAPE -> drawCanvasShapePreview(context, e, x1, y1, x2, y2);
+            case STATE_BADGE -> drawCanvasStateBadgePreview(context, e, x1, y1, x2, y2);
+            default -> {
+                // no-op
+            }
         }
+    }
+
+    private void drawCanvasIconPreview(DrawContext context, MacroHudDataHandler.HudElement e, int x1, int y1, int x2, int y2) {
+        if (e.drawBackground) {
+            context.fill(x1, y1, x2, y2, e.backgroundColor);
+        }
+        if (e.drawBorder) {
+            GuiSystem.drawOutline(context, x1, y1, x2, y2, e.borderColor);
+        }
+        ItemStack stack = resolvePreviewIconStack(e.iconKind, e.iconId);
+        int ix = x1 + Math.max(0, (e.width - 16) / 2);
+        int iy = y1 + Math.max(0, (e.height - 16) / 2);
+        context.drawItem(stack, ix, iy);
+        String label = safe(e.label);
+        if (!label.isBlank()) {
+            int ty = Math.min(y2 - 9, y1 + Math.max(0, e.height - 9));
+            drawStyledTextLine(context, label, x1 + 2, ty, e.textColor, Math.max(0.5f, e.fontScale));
+        }
+    }
+
+    private void drawCanvasBarPreview(DrawContext context, MacroHudDataHandler.HudElement e, int x1, int y1, int x2, int y2) {
+        if (e.drawBackground) {
+            context.fill(x1, y1, x2, y2, e.backgroundColor);
+        }
+        if (e.drawBorder) {
+            GuiSystem.drawOutline(context, x1, y1, x2, y2, e.borderColor);
+        }
+        float progress = 0.66f;
+        int innerX = x1 + 1;
+        int innerY = y1 + 1;
+        int innerW = Math.max(1, e.width - 2);
+        int innerH = Math.max(1, e.height - 2);
+        int fillW = Math.round(innerW * progress);
+        for (int px = 0; px < fillW; px++) {
+            float t = innerW <= 1 ? progress : (px / (float) (innerW - 1));
+            int c = blendColor(e.colorStart, e.colorEnd, t);
+            context.fill(innerX + px, innerY, innerX + px + 1, innerY + innerH, c);
+        }
+    }
+
+    private void drawCanvasValuePreview(DrawContext context, MacroHudDataHandler.HudElement e, int x1, int y1, int x2, int y2) {
+        if (e.drawBackground) {
+            context.fill(x1, y1, x2, y2, e.backgroundColor);
+        }
+        if (e.drawBorder) {
+            GuiSystem.drawOutline(context, x1, y1, x2, y2, e.borderColor);
+        }
+        String text = (safe(e.prefix).isBlank() ? "" : e.prefix) + "42" + safe(e.suffix);
+        float scale = Math.max(0.5f, e.fontScale);
+        int tw = Math.max(1, Math.round(styledLineWidth(text) * scale));
+        int tx = alignedStartX(x1, e, tw, true);
+        int ty = alignedStartY(e, Math.max(9, Math.round(9 * scale)), true);
+        drawStyledTextLine(context, text, tx, ty, e.textColor, scale);
+    }
+
+    private void drawCanvasListPreview(DrawContext context, MacroHudDataHandler.HudElement e, int x1, int y1, int x2, int y2) {
+        if (e.drawBackground) {
+            context.fill(x1, y1, x2, y2, e.backgroundColor);
+        }
+        if (e.drawBorder) {
+            GuiSystem.drawOutline(context, x1, y1, x2, y2, e.borderColor);
+        }
+        List<String> lines = List.of("List", safe(e.sourceToken), "Line A", "Line B");
+        int startY = y1 + 3;
+        for (int i = 0; i < Math.min(lines.size(), Math.max(1, e.maxLines)); i++) {
+            int yy = startY + i * Math.max(8, e.lineHeight);
+            if (yy > y2 - 10) {
+                break;
+            }
+            context.drawTextWithShadow(this.textRenderer, lines.get(i), x1 + 4, yy, e.textColor);
+        }
+    }
+
+    private void drawCanvasShapePreview(DrawContext context, MacroHudDataHandler.HudElement e, int x1, int y1, int x2, int y2) {
+        String type = safe(e.shapeType).toLowerCase(Locale.ROOT);
+        if ("line".equals(type)) {
+            int w = Math.max(1, x2 - x1);
+            int h = Math.max(1, y2 - y1);
+            for (int i = 0; i < Math.max(1, e.shapeThickness); i++) {
+                int yy = y2 - 1 - i;
+                int xx = x1 + i;
+                context.fill(xx, yy, xx + w - i * 2, yy + 1, e.borderColor);
+            }
+            return;
+        }
+        if (e.drawBackground || e.shapeFilled) {
+            context.fill(x1, y1, x2, y2, e.backgroundColor);
+        }
+        if (e.drawBorder || !e.shapeFilled) {
+            GuiSystem.drawOutline(context, x1, y1, x2, y2, e.borderColor);
+        }
+    }
+
+    private void drawCanvasStateBadgePreview(DrawContext context, MacroHudDataHandler.HudElement e, int x1, int y1, int x2, int y2) {
+        boolean on = true;
+        int bg = on ? e.colorStart : e.colorEnd;
+        context.fill(x1, y1, x2, y2, bg);
+        if (e.drawBorder) {
+            GuiSystem.drawOutline(context, x1, y1, x2, y2, e.borderColor);
+        }
+        String baseLabel = safe(e.label).isBlank() ? "State" : e.label;
+        String label = e.stateShowValue ? (baseLabel + ": " + (on ? safe(e.stateOnText) : safe(e.stateOffText))) : baseLabel;
+        float scale = Math.clamp(e.fontScale, 0.5f, 4.0f);
+        int textWidth = Math.max(1, Math.round(styledLineWidth(label) * scale));
+        int tx = alignedStartX(x1, e, textWidth, true);
+        int ty = alignedStartY(e, Math.max(9, Math.round(Math.max(6, e.lineHeight) * scale)), true);
+        drawStyledTextLine(context, label, tx, ty, e.textColor, scale);
+    }
+
+    private void drawSelectedOutline(DrawContext context, int x1, int y1, int x2, int y2, boolean isSelected) {
+        if (!isSelected) {
+            return;
+        }
+        context.fill(x1, y1, x2, y1 + 1, 0xFFFFFF00);
+        context.fill(x1, y2 - 1, x2, y2, 0xFFFFFF00);
+        context.fill(x1, y1, x1 + 1, y2, 0xFFFFFF00);
+        context.fill(x2 - 1, y1, x2, y2, 0xFFFFFF00);
+        int handleSize = 6;
+        int hx = x2 - handleSize;
+        int hy = y2 - handleSize;
+        int handleColor = resizing ? 0xFFFFC36B : 0xFFC0C0C0;
+        context.fill(hx, hy, x2, y2, handleColor);
     }
 
     private void syncCanvasFields() {
         if (quickField == null || macroField == null || actionField == null) {
             return;
         }
+        if (deleteButton != null) {
+            deleteButton.active = selected != null;
+        }
 
         if (selected == null) {
+            selectedElementIds.clear();
             quickField.setEditable(false);
             quickField.setText("");
             macroField.setEditable(false);
@@ -1207,10 +1706,11 @@ public class MacroWorkbenchV2Screen extends Screen {
         }
 
         if (isExternalCanvasProxy(selected)) {
+            ExternalProxyRenderState externalState = getExternalProxyRenderState(selected);
             quickField.setEditable(false);
             quickField.setText(isSecondaryChatProxy(selected)
-                    ? "Secondary Chat (edit style/pos/size)"
-                    : "NBT Inspector (edit style/pos/size)");
+                    ? "Secondary Chat (edit style/pos/size)" + (externalState == ExternalProxyRenderState.MODULE_DISABLED ? " [DISABLED]" : "")
+                    : "NBT Inspector (edit style/pos/size)" + (externalState == ExternalProxyRenderState.MODULE_DISABLED ? " [DISABLED]" : ""));
             macroField.setEditable(false);
             macroField.setText("");
             macroField.visible = false;
@@ -1224,7 +1724,7 @@ public class MacroWorkbenchV2Screen extends Screen {
         }
 
         quickField.setEditable(true);
-        String raw = selected.type == MacroHudDataHandler.ElementType.BUTTON ? selected.label : selected.text;
+        String raw = selected.type == MacroHudDataHandler.ElementType.TEXT ? selected.text : selected.label;
         quickField.setText(firstLine(raw));
 
         boolean button = selected.type == MacroHudDataHandler.ElementType.BUTTON;
@@ -1248,8 +1748,8 @@ public class MacroWorkbenchV2Screen extends Screen {
             return;
         }
 
-        String raw = selected.type == MacroHudDataHandler.ElementType.BUTTON ? selected.label : selected.text;
-        List<String> lines = splitLinesRaw(raw);
+        String raw = selected.type == MacroHudDataHandler.ElementType.TEXT ? selected.text : selected.label;
+        List<String> lines = new ArrayList<>(splitLinesRaw(raw));
         if (lines.isEmpty()) {
             lines = new ArrayList<>(List.of(""));
         }
@@ -1260,8 +1760,10 @@ public class MacroWorkbenchV2Screen extends Screen {
             selected.label = merged;
             selected.macroId = macroField.getText() == null ? "" : macroField.getText().trim();
             selected.buttonAction = actionField.getText() == null ? "" : actionField.getText().trim();
-        } else {
+        } else if (selected.type == MacroHudDataHandler.ElementType.TEXT) {
             selected.text = merged;
+        } else {
+            selected.label = merged;
         }
     }
 
@@ -1286,7 +1788,7 @@ public class MacroWorkbenchV2Screen extends Screen {
 
     private void syncGridButtons() {
         if (gridToggleButton == null || gridRowsMinusButton == null || gridRowsPlusButton == null
-                || gridColsMinusButton == null || gridColsPlusButton == null) {
+                || gridColsMinusButton == null || gridColsPlusButton == null || centerLinesToggleButton == null) {
             return;
         }
         gridToggleButton.setMessage(Text.literal(gridEnabled ? "Grid: ON" : "Grid: OFF"));
@@ -1294,20 +1796,88 @@ public class MacroWorkbenchV2Screen extends Screen {
         gridRowsPlusButton.setMessage(Text.literal("R+"));
         gridColsMinusButton.setMessage(Text.literal("C-"));
         gridColsPlusButton.setMessage(Text.literal("C+"));
+        centerLinesToggleButton.setMessage(Text.literal(centerLinesEnabled ? "Center: ON" : "Center: OFF"));
+    }
+
+    private void syncPresetControls() {
+        if (presetNameField == null || presetDeleteButton == null || presetPrevButton == null || presetNextButton == null) {
+            return;
+        }
+        String active = this.working == null ? "default" : safe(this.working.activePresetId);
+        presetNameField.setText(active);
+        List<String> ids = MacroHudDataHandler.listPresetIds();
+        int idx = ids.indexOf(active);
+        if (idx < 0) {
+            idx = 0;
+        }
+        presetDeleteButton.active = ids.size() > 1;
+        presetPrevButton.active = idx > 0;
+        presetNextButton.active = idx >= 0 && idx < ids.size() - 1;
+    }
+
+    private void cyclePreset(boolean forward) {
+        if (this.working == null) {
+            return;
+        }
+        saveAll();
+        List<String> ids = MacroHudDataHandler.listPresetIds();
+        if (ids.isEmpty()) {
+            return;
+        }
+        String active = MacroHudDataHandler.getActivePresetId();
+        int idx = ids.indexOf(active);
+        if (idx < 0) {
+            idx = 0;
+        }
+        int next = forward ? idx + 1 : idx - 1;
+        if (next < 0 || next >= ids.size()) {
+            return;
+        }
+        MacroHudDataHandler.setActivePresetId(ids.get(next));
+        this.working = MacroHudDataHandler.getConfigCopy();
+        syncExternalCanvasElementsFromSources();
+        this.selected = null;
+        syncCanvasFields();
+        syncPresetControls();
+    }
+
+    private void createPresetFromField() {
+        String name = safe(presetNameField == null ? null : presetNameField.getText());
+        if (name.isBlank()) {
+            name = "preset_" + (MacroHudDataHandler.listPresetIds().size() + 1);
+        }
+        saveAll();
+        MacroHudDataHandler.createPreset(name, true);
+        this.working = MacroHudDataHandler.getConfigCopy();
+        syncExternalCanvasElementsFromSources();
+        this.selected = null;
+        syncCanvasFields();
+        syncPresetControls();
+    }
+
+    private void renamePresetFromField() {
+        String target = safe(presetNameField == null ? null : presetNameField.getText());
+        if (target.isBlank()) {
+            return;
+        }
+        String current = MacroHudDataHandler.getActivePresetId();
+        MacroHudDataHandler.renamePreset(current, target);
+        this.working = MacroHudDataHandler.getConfigCopy();
+        syncExternalCanvasElementsFromSources();
+        this.selected = null;
+        syncCanvasFields();
+        syncPresetControls();
     }
 
     private void refreshCanvasChromeVisibility() {
-        boolean visible = this.tab == Tab.CANVAS && canvasChromeVisible;
-        for (ClickableWidget w : canvasWidgets) {
-            w.visible = visible;
-            w.active = visible;
-        }
+        refreshTabWidgetVisibility();
     }
 
     private void persistGridPrefs() {
         GRID_ENABLED_PREF = gridEnabled;
         GRID_ROWS_PREF = Math.max(2, gridRows);
         GRID_COLS_PREF = Math.max(2, gridCols);
+        CENTER_LINES_ENABLED_PREF = centerLinesEnabled;
     }
 
     private void openAdvancedModal() {
@@ -1321,14 +1891,20 @@ public class MacroWorkbenchV2Screen extends Screen {
         this.advancedActionFocused = false;
         this.advancedBgColorFocused = false;
         this.advancedBorderColorFocused = false;
-        this.advancedText = selected.type == MacroHudDataHandler.ElementType.BUTTON ? safe(selected.label) : safe(selected.text);
-        this.advancedAction = selected.type == MacroHudDataHandler.ElementType.BUTTON ? safe(selected.buttonAction) : "";
+        this.advancedText = selected.type == MacroHudDataHandler.ElementType.TEXT ? safe(selected.text) : safe(selected.label);
+        this.advancedAction = selected.type == MacroHudDataHandler.ElementType.BUTTON ? safe(selected.buttonAction) : safe(selected.sourceToken);
         this.advancedBgColor = formatColor(selected.backgroundColor);
         this.advancedBorderColor = formatColor(selected.borderColor);
         this.advancedCursor = this.advancedText.length();
         this.advancedActionCursor = this.advancedAction.length();
+        this.advancedActionSuggestionIndex = -1;
+        this.advancedSelectionAnchor = -1;
+        this.advancedActionSelectionAnchor = -1;
+        this.advancedBgSelectionAnchor = -1;
+        this.advancedBorderSelectionAnchor = -1;
         this.advancedBgCursor = this.advancedBgColor.length();
         this.advancedBorderCursor = this.advancedBorderColor.length();
+        this.advancedActionSuggestionIndex = -1;
         if (isSecondaryChatProxy(selected)) {
             this.advancedText = String.join("\n", ModConfig.secondaryChatRegexList == null ? List.of() : ModConfig.secondaryChatRegexList);
             this.advancedAction = ModConfig.secondaryChatOutgoingRegex == null ? "" : ModConfig.secondaryChatOutgoingRegex;
@@ -1353,6 +1929,24 @@ public class MacroWorkbenchV2Screen extends Screen {
             this.advancedBorderColor = formatColor(selected.textColor);
             this.advancedBgCursor = this.advancedBgColor.length();
             this.advancedBorderCursor = this.advancedBorderColor.length();
+        } else if (isCustomWidgetType(selected)) {
+            this.advancedText = safe(selected.label);
+            this.advancedAction = selected.type == MacroHudDataHandler.ElementType.ICON
+                    ? safe(selected.iconId)
+                    : safe(selected.sourceToken);
+            this.advancedCursor = this.advancedText.length();
+            this.advancedActionCursor = this.advancedAction.length();
+            if (selected.type == MacroHudDataHandler.ElementType.BAR) {
+                this.advancedBgColor = String.format(Locale.ROOT, "%.2f,%.2f", selected.minValue, selected.maxValue);
+                this.advancedBorderColor = Integer.toString(selected.segments);
+                this.advancedBgCursor = this.advancedBgColor.length();
+                this.advancedBorderCursor = this.advancedBorderColor.length();
+            } else if (selected.type == MacroHudDataHandler.ElementType.VALUE) {
+                this.advancedBgColor = selected.prefix == null ? "" : selected.prefix;
+                this.advancedBorderColor = selected.suffix == null ? "" : selected.suffix;
+                this.advancedBgCursor = this.advancedBgColor.length();
+                this.advancedBorderCursor = this.advancedBorderColor.length();
+            }
         }
         ensureVisibleBackground(selected);
     }
@@ -1378,8 +1972,7 @@ public class MacroWorkbenchV2Screen extends Screen {
         int borderFieldH = 18;
 
         context.fill(0, 0, this.width, this.height, 0x88000000);
-        context.fill(boxX, boxY, boxX + MODAL_W, boxY + MODAL_H, 0xEE1A1A1A);
-        context.fill(boxX, boxY, boxX + MODAL_W, boxY + 1, 0x80FFFFFF);
+        GuiSystem.drawPanel(context, boxX, boxY, MODAL_W, MODAL_H);
 
         if (isSecondaryChatProxy(selected)) {
             renderSecondaryChatAdvancedModal(context, mouseX, mouseY, boxX, boxY);
@@ -1389,12 +1982,17 @@ public class MacroWorkbenchV2Screen extends Screen {
             renderNbtInspectorAdvancedModal(context, mouseX, mouseY, boxX, boxY);
             return;
         }
+        if (isCustomWidgetType(selected)) {
+            renderCustomWidgetAdvancedModal(context, mouseX, mouseY, boxX, boxY);
+            return;
+        }
 
         context.drawTextWithShadow(this.textRenderer, "Edit", boxX + 12, boxY + 12, 0xFFFFFFFF);
         context.drawTextWithShadow(this.textRenderer, "Multi-line editor (Enter for new line)", boxX + 12, boxY + 22, 0xFFB0B0B0);
 
         context.fill(textX, textY, textX + textW, textY + textH, advancedTextFocused ? 0xFF0F0F0F : 0xFF141414);
         context.fill(textX, textY, textX + textW, textY + 1, 0x60FFFFFF);
+        drawMultilineSelection(context, textX + 4, textY + 4, textY + textH - 12, advancedText, advancedSelectionAnchor, advancedCursor, 9);
 
         List<String> lines = splitLinesRaw(advancedText);
         int y = textY + 4;
@@ -1415,6 +2013,7 @@ public class MacroWorkbenchV2Screen extends Screen {
         int actionBg = advancedActionFocused ? 0xFF0F0F0F : 0xFF161616;
         context.fill(actionX, actionY, actionX + actionW, actionY + actionH, actionBg);
         context.fill(actionX, actionY, actionX + actionW, actionY + 1, 0x60FFFFFF);
+        drawSingleLineSelection(context, actionX + 4, actionY + 5, advancedAction, advancedActionSelectionAnchor, advancedActionCursor);
         context.drawTextWithShadow(this.textRenderer, advancedAction, actionX + 4, actionY + 5, 0xFFEAEAEA);
         if (advancedActionFocused && (System.currentTimeMillis() / 500L) % 2L == 0L) {
             int ax = actionX + 4 + this.textRenderer.getWidth(advancedAction.substring(0, Math.clamp(advancedActionCursor, 0, advancedAction.length())));
@@ -1444,11 +2043,13 @@ public class MacroWorkbenchV2Screen extends Screen {
         int bgInputBg = advancedBgColorFocused ? 0xFF0F0F0F : 0xFF161616;
         context.fill(bgFieldX, bgFieldY, bgFieldX + bgFieldW, bgFieldY + bgFieldH, bgInputBg);
         context.fill(bgFieldX, bgFieldY, bgFieldX + bgFieldW, bgFieldY + 1, 0x60FFFFFF);
+        drawSingleLineSelection(context, bgFieldX + 4, bgFieldY + 5, advancedBgColor, advancedBgSelectionAnchor, advancedBgCursor);
         context.drawTextWithShadow(this.textRenderer, advancedBgColor, bgFieldX + 4, bgFieldY + 5, 0xFFEAEAEA);
 
         int borderInputBg = advancedBorderColorFocused ? 0xFF0F0F0F : 0xFF161616;
         context.fill(borderFieldX, borderFieldY, borderFieldX + borderFieldW, borderFieldY + borderFieldH, borderInputBg);
         context.fill(borderFieldX, borderFieldY, borderFieldX + borderFieldW, borderFieldY + 1, 0x60FFFFFF);
+        drawSingleLineSelection(context, borderFieldX + 4, borderFieldY + 5, advancedBorderColor, advancedBorderSelectionAnchor, advancedBorderCursor);
         context.drawTextWithShadow(this.textRenderer, advancedBorderColor, borderFieldX + 4, borderFieldY + 5, 0xFFEAEAEA);
 
         if (advancedBgColorFocused && (System.currentTimeMillis() / 500L) % 2L == 0L) {
@@ -1492,12 +2093,13 @@ public class MacroWorkbenchV2Screen extends Screen {
                 boxX + 304, boxY + 96, 0xFFEAEAEA);
 
         int regexX = boxX + 12;
-        int regexY = boxY + 92;
+        int regexY = boxY + 100;
         int regexW = MODAL_W - 24;
-        int regexH = 86;
+        int regexH = 74;
         context.drawTextWithShadow(this.textRenderer, "Regex List (one pattern per line)", regexX, regexY - 10, 0xFFB8B8B8);
         context.fill(regexX, regexY, regexX + regexW, regexY + regexH, advancedTextFocused ? 0xFF0F0F0F : 0xFF161616);
         context.fill(regexX, regexY, regexX + regexW, regexY + 1, 0x60FFFFFF);
+        drawMultilineSelection(context, regexX + 4, regexY + 4, regexY + regexH - 12, advancedText, advancedSelectionAnchor, advancedCursor, 9);
         List<String> regexLines = splitLinesRaw(advancedText);
         int ry = regexY + 4;
         for (String line : regexLines) {
@@ -1519,34 +2121,35 @@ public class MacroWorkbenchV2Screen extends Screen {
         context.drawTextWithShadow(this.textRenderer, "Outgoing Regex", outgoingX, outgoingY - 10, 0xFFB8B8B8);
         context.fill(outgoingX, outgoingY, outgoingX + outgoingW, outgoingY + outgoingH, advancedActionFocused ? 0xFF0F0F0F : 0xFF161616);
         context.fill(outgoingX, outgoingY, outgoingX + outgoingW, outgoingY + 1, 0x60FFFFFF);
+        drawSingleLineSelection(context, outgoingX + 4, outgoingY + 5, advancedAction, advancedActionSelectionAnchor, advancedActionCursor);
         context.drawTextWithShadow(this.textRenderer, advancedAction, outgoingX + 4, outgoingY + 5, 0xFFEAEAEA);
         if (advancedActionFocused && (System.currentTimeMillis() / 500L) % 2L == 0L) {
             int ax = outgoingX + 4 + this.textRenderer.getWidth(advancedAction.substring(0, Math.clamp(advancedActionCursor, 0, advancedAction.length())));
             context.fill(ax, outgoingY + 4, ax + 1, outgoingY + 13, 0xFFFFFFFF);
         }
 
-        drawModalButton(context, boxX + 12, boxY + 206, 48, 18, "FD-", containsBox(mouseX, mouseY, boxX + 12, boxY + 206, 48, 18));
-        drawModalButton(context, boxX + 64, boxY + 206, 48, 18, "FD+", containsBox(mouseX, mouseY, boxX + 64, boxY + 206, 48, 18));
-        drawModalButton(context, boxX + 116, boxY + 206, 48, 18, "A-", containsBox(mouseX, mouseY, boxX + 116, boxY + 206, 48, 18));
-        drawModalButton(context, boxX + 168, boxY + 206, 48, 18, "A+", containsBox(mouseX, mouseY, boxX + 168, boxY + 206, 48, 18));
-        drawModalButton(context, boxX + 220, boxY + 206, 48, 18, "L-", containsBox(mouseX, mouseY, boxX + 220, boxY + 206, 48, 18));
-        drawModalButton(context, boxX + 272, boxY + 206, 48, 18, "L+", containsBox(mouseX, mouseY, boxX + 272, boxY + 206, 48, 18));
+        drawModalButton(context, boxX + 12, boxY + 222, 48, 18, "FD-", containsBox(mouseX, mouseY, boxX + 12, boxY + 222, 48, 18));
+        drawModalButton(context, boxX + 64, boxY + 222, 48, 18, "FD+", containsBox(mouseX, mouseY, boxX + 64, boxY + 222, 48, 18));
+        drawModalButton(context, boxX + 116, boxY + 222, 48, 18, "A-", containsBox(mouseX, mouseY, boxX + 116, boxY + 222, 48, 18));
+        drawModalButton(context, boxX + 168, boxY + 222, 48, 18, "A+", containsBox(mouseX, mouseY, boxX + 168, boxY + 222, 48, 18));
+        drawModalButton(context, boxX + 220, boxY + 222, 48, 18, "L-", containsBox(mouseX, mouseY, boxX + 220, boxY + 222, 48, 18));
+        drawModalButton(context, boxX + 272, boxY + 222, 48, 18, "L+", containsBox(mouseX, mouseY, boxX + 272, boxY + 222, 48, 18));
         context.drawTextWithShadow(this.textRenderer,
                 "Fade: " + advancedSecondaryFadeDurationMs + "ms  Alpha: " + advancedSecondaryMinAlpha + "  Max: " + advancedSecondaryMaxLines,
-                boxX + 12, boxY + 230, 0xFFEAEAEA);
+                boxX + 12, boxY + 246, 0xFFEAEAEA);
 
-        drawModalButton(context, boxX + 324, boxY + 206, 64, 18, "BG-", containsBox(mouseX, mouseY, boxX + 324, boxY + 206, 64, 18));
-        drawModalButton(context, boxX + 392, boxY + 206, 64, 18, "BG+", containsBox(mouseX, mouseY, boxX + 392, boxY + 206, 64, 18));
-        context.drawTextWithShadow(this.textRenderer, "BG", boxX + 324, boxY + 224, 0xFFEAEAEA);
-        context.drawTextWithShadow(this.textRenderer, "TX", boxX + 392, boxY + 224, 0xFFEAEAEA);
+        drawModalButton(context, boxX + 324, boxY + 222, 64, 18, "BG-", containsBox(mouseX, mouseY, boxX + 324, boxY + 222, 64, 18));
+        drawModalButton(context, boxX + 392, boxY + 222, 64, 18, "BG+", containsBox(mouseX, mouseY, boxX + 392, boxY + 222, 64, 18));
+        context.drawTextWithShadow(this.textRenderer, "BG", boxX + 324, boxY + 240, 0xFFEAEAEA);
+        context.drawTextWithShadow(this.textRenderer, "TX", boxX + 392, boxY + 240, 0xFFEAEAEA);
         int bgInputBg = advancedBgColorFocused ? 0xFF0F0F0F : 0xFF161616;
-        context.fill(boxX + 324, boxY + 230, boxX + 388, boxY + 248, bgInputBg);
-        context.fill(boxX + 324, boxY + 230, boxX + 388, boxY + 231, 0x60FFFFFF);
-        context.drawTextWithShadow(this.textRenderer, advancedBgColor, boxX + 328, boxY + 235, 0xFFEAEAEA);
+        context.fill(boxX + 324, boxY + 246, boxX + 388, boxY + 264, bgInputBg);
+        context.fill(boxX + 324, boxY + 246, boxX + 388, boxY + 247, 0x60FFFFFF);
+        context.drawTextWithShadow(this.textRenderer, advancedBgColor, boxX + 328, boxY + 251, 0xFFEAEAEA);
         int txInputBg = advancedBorderColorFocused ? 0xFF0F0F0F : 0xFF161616;
-        context.fill(boxX + 392, boxY + 230, boxX + 456, boxY + 248, txInputBg);
-        context.fill(boxX + 392, boxY + 230, boxX + 456, boxY + 231, 0x60FFFFFF);
-        context.drawTextWithShadow(this.textRenderer, advancedBorderColor, boxX + 396, boxY + 235, 0xFFEAEAEA);
+        context.fill(boxX + 392, boxY + 246, boxX + 456, boxY + 264, txInputBg);
+        context.fill(boxX + 392, boxY + 246, boxX + 456, boxY + 247, 0x60FFFFFF);
+        context.drawTextWithShadow(this.textRenderer, advancedBorderColor, boxX + 396, boxY + 251, 0xFFEAEAEA);
 
         drawModalButton(context, boxX + MODAL_W - 134, boxY + MODAL_H - 24, 60, 18, "Apply",
                 containsBox(mouseX, mouseY, boxX + MODAL_W - 134, boxY + MODAL_H - 24, 60, 18));
@@ -1555,11 +2158,11 @@ public class MacroWorkbenchV2Screen extends Screen {
 
         if (advancedBgColorFocused && (System.currentTimeMillis() / 500L) % 2L == 0L) {
             int cx = boxX + 328 + this.textRenderer.getWidth(advancedBgColor.substring(0, Math.clamp(advancedBgCursor, 0, advancedBgColor.length())));
-            context.fill(cx, boxY + 234, cx + 1, boxY + 243, 0xFFFFFFFF);
+            context.fill(cx, boxY + 250, cx + 1, boxY + 259, 0xFFFFFFFF);
         }
         if (advancedBorderColorFocused && (System.currentTimeMillis() / 500L) % 2L == 0L) {
             int cx = boxX + 396 + this.textRenderer.getWidth(advancedBorderColor.substring(0, Math.clamp(advancedBorderCursor, 0, advancedBorderColor.length())));
-            context.fill(cx, boxY + 234, cx + 1, boxY + 243, 0xFFFFFFFF);
+            context.fill(cx, boxY + 250, cx + 1, boxY + 259, 0xFFFFFFFF);
         }
     }
 
@@ -1600,9 +2203,675 @@ public class MacroWorkbenchV2Screen extends Screen {
                 containsBox(mouseX, mouseY, boxX + MODAL_W - 70, boxY + MODAL_H - 24, 58, 18));
     }
 
+    private void renderCustomWidgetAdvancedModal(DrawContext context, int mouseX, int mouseY, int boxX, int boxY) {
+        if (selected == null) {
+            return;
+        }
+        int labelX = boxX + 12;
+        int labelY = boxY + 44;
+        int labelW = 214;
+        int labelH = 18;
+        int sourceX = boxX + 12;
+        int sourceY = boxY + 72;
+        int sourceW = 214;
+        int sourceH = 18;
+
+        context.drawTextWithShadow(this.textRenderer, selected.type + " Widget", boxX + 12, boxY + 12, 0xFFFFFFFF);
+        context.drawTextWithShadow(this.textRenderer,
+                selected.type == MacroHudDataHandler.ElementType.ICON
+                        ? "Label + icon id + type-specific controls"
+                        : "Label + source token + type-specific controls",
+                boxX + 12, boxY + 24, 0xFFB0B0B0);
+
+        context.drawTextWithShadow(this.textRenderer, "Label", labelX, labelY - 10, 0xFFB8B8B8);
+        context.fill(labelX, labelY, labelX + labelW, labelY + labelH, advancedTextFocused ? 0xFF0F0F0F : 0xFF161616);
+        context.fill(labelX, labelY, labelX + labelW, labelY + 1, 0x60FFFFFF);
+        drawSingleLineSelection(context, labelX + 4, labelY + 5, advancedText, advancedSelectionAnchor, advancedCursor);
+        context.drawTextWithShadow(this.textRenderer, advancedText, labelX + 4, labelY + 5, 0xFFEAEAEA);
+
+        context.drawTextWithShadow(this.textRenderer,
+                selected.type == MacroHudDataHandler.ElementType.ICON ? "Icon id" : "Source token",
+                sourceX, sourceY - 10, 0xFFB8B8B8);
+        context.fill(sourceX, sourceY, sourceX + sourceW, sourceY + sourceH, advancedActionFocused ? 0xFF0F0F0F : 0xFF161616);
+        context.fill(sourceX, sourceY, sourceX + sourceW, sourceY + 1, 0x60FFFFFF);
+        drawSingleLineSelection(context, sourceX + 4, sourceY + 5, advancedAction, advancedActionSelectionAnchor, advancedActionCursor);
+        context.drawTextWithShadow(this.textRenderer, advancedAction, sourceX + 4, sourceY + 5, 0xFFEAEAEA);
+        List<String> suggestions = advancedActionSuggestions();
+        if (!suggestions.isEmpty()) {
+            int dropX = sourceX;
+            int dropY = sourceY + 22;
+            int dropW = sourceW;
+            int rowH = 10;
+            int maxVisible = Math.max(1, Math.min(suggestions.size(), ((boxY + MODAL_H - 28) - dropY) / rowH));
+            context.fill(dropX, dropY, dropX + dropW, dropY + maxVisible * rowH, 0xC0101010);
+            for (int i = 0; i < maxVisible; i++) {
+                String token = suggestions.get(i);
+                int yy = dropY + i * rowH;
+                boolean selectedSuggestion = (advancedActionSuggestionIndex == i);
+                if (selectedSuggestion) {
+                    context.fill(dropX, yy, dropX + dropW, yy + rowH, 0x503777AA);
+                }
+                context.drawTextWithShadow(this.textRenderer, token, dropX + 3, yy + 1, 0xFF8FC8FF);
+            }
+            if (suggestions.size() > maxVisible) {
+                context.drawTextWithShadow(this.textRenderer, "+" + (suggestions.size() - maxVisible) + " more...", dropX + 3, dropY + maxVisible * rowH + 1, 0xFF909090);
+            }
+        }
+
+        if (advancedTextFocused && (System.currentTimeMillis() / 500L) % 2L == 0L) {
+            int cx = labelX + 4 + this.textRenderer.getWidth(advancedText.substring(0, Math.clamp(advancedCursor, 0, advancedText.length())));
+            context.fill(cx, labelY + 4, cx + 1, labelY + 13, 0xFFFFFFFF);
+        }
+        if (advancedActionFocused && (System.currentTimeMillis() / 500L) % 2L == 0L) {
+            int cx = sourceX + 4 + this.textRenderer.getWidth(advancedAction.substring(0, Math.clamp(advancedActionCursor, 0, advancedAction.length())));
+            context.fill(cx, sourceY + 4, cx + 1, sourceY + 13, 0xFFFFFFFF);
+        }
+
+        drawModalButton(context, boxX + 232, boxY + 38, 54, 18, "BG-", containsBox(mouseX, mouseY, boxX + 232, boxY + 38, 54, 18));
+        drawModalButton(context, boxX + 290, boxY + 38, 54, 18, "BG+", containsBox(mouseX, mouseY, boxX + 290, boxY + 38, 54, 18));
+        drawModalButton(context, boxX + 348, boxY + 38, 54, 18, "BR-", containsBox(mouseX, mouseY, boxX + 348, boxY + 38, 54, 18));
+        drawModalButton(context, boxX + 406, boxY + 38, 50, 18, "BR+", containsBox(mouseX, mouseY, boxX + 406, boxY + 38, 50, 18));
+        drawModalButton(context, boxX + 232, boxY + 64, 224, 18, "Pick Src", containsBox(mouseX, mouseY, boxX + 232, boxY + 64, 224, 18));
+
+        if (selected.type == MacroHudDataHandler.ElementType.ICON) {
+            drawModalButton(context, boxX + 232, boxY + 90, 124, 18, "Kind: " + selected.iconKind, containsBox(mouseX, mouseY, boxX + 232, boxY + 90, 124, 18));
+            drawModalButton(context, boxX + 360, boxY + 90, 96, 18, "Pick Id", containsBox(mouseX, mouseY, boxX + 360, boxY + 90, 96, 18));
+            drawModalButton(context, boxX + 232, boxY + 114, 72, 18, "Count: " + (selected.iconShowCount ? "ON" : "OFF"), containsBox(mouseX, mouseY, boxX + 232, boxY + 114, 72, 18));
+            drawModalButton(context, boxX + 308, boxY + 114, 72, 18, "Dur: " + (selected.iconShowDurability ? "ON" : "OFF"), containsBox(mouseX, mouseY, boxX + 308, boxY + 114, 72, 18));
+            drawModalButton(context, boxX + 384, boxY + 114, 72, 18, "CD: " + (selected.iconShowCooldown ? "ON" : "OFF"), containsBox(mouseX, mouseY, boxX + 384, boxY + 114, 72, 18));
+            context.drawTextWithShadow(this.textRenderer, "Id: " + selected.iconId, boxX + 232, boxY + 136, 0xFFEAEAEA);
+        } else if (selected.type == MacroHudDataHandler.ElementType.BAR) {
+            drawModalButton(context, boxX + 232, boxY + 90, 224, 18, "Max Src: " + (safe(selected.sourceTokenMax).isBlank() ? "(none)" : selected.sourceTokenMax), containsBox(mouseX, mouseY, boxX + 232, boxY + 90, 224, 18));
+            drawModalButton(context, boxX + 232, boxY + 114, 90, 18, "Segmented: " + (selected.segmented ? "ON" : "OFF"), containsBox(mouseX, mouseY, boxX + 232, boxY + 114, 90, 18));
+            drawModalButton(context, boxX + 326, boxY + 114, 62, 18, "R-", containsBox(mouseX, mouseY, boxX + 326, boxY + 114, 62, 18));
+            drawModalButton(context, boxX + 392, boxY + 114, 64, 18, "R+", containsBox(mouseX, mouseY, boxX + 392, boxY + 114, 64, 18));
+            drawModalButton(context, boxX + 232, boxY + 138, 54, 18, "MIN-", containsBox(mouseX, mouseY, boxX + 232, boxY + 138, 54, 18));
+            drawModalButton(context, boxX + 290, boxY + 138, 54, 18, "MIN+", containsBox(mouseX, mouseY, boxX + 290, boxY + 138, 54, 18));
+            drawModalButton(context, boxX + 348, boxY + 138, 54, 18, "MAX-", containsBox(mouseX, mouseY, boxX + 348, boxY + 138, 54, 18));
+            drawModalButton(context, boxX + 406, boxY + 138, 50, 18, "MAX+", containsBox(mouseX, mouseY, boxX + 406, boxY + 138, 50, 18));
+            drawModalButton(context, boxX + 232, boxY + 162, 54, 18, "C1-", containsBox(mouseX, mouseY, boxX + 232, boxY + 162, 54, 18));
+            drawModalButton(context, boxX + 290, boxY + 162, 54, 18, "C1+", containsBox(mouseX, mouseY, boxX + 290, boxY + 162, 54, 18));
+            drawModalButton(context, boxX + 348, boxY + 162, 54, 18, "C2-", containsBox(mouseX, mouseY, boxX + 348, boxY + 162, 54, 18));
+            drawModalButton(context, boxX + 406, boxY + 162, 50, 18, "C2+", containsBox(mouseX, mouseY, boxX + 406, boxY + 162, 50, 18));
+            context.drawTextWithShadow(this.textRenderer, "Range: " + String.format(Locale.ROOT, "%.1f..%.1f", selected.minValue, selected.maxValue) + "  Segments: " + selected.segments, boxX + 232, boxY + 184, 0xFFEAEAEA);
+
+            int rangeX = boxX + 232;
+            int rangeY = boxY + 198;
+            int rangeW = 124;
+            int segX = boxX + 360;
+            int segY = boxY + 198;
+            int segW = 96;
+            context.drawTextWithShadow(this.textRenderer, "Range min,max", rangeX, rangeY - 10, 0xFFB8B8B8);
+            context.fill(rangeX, rangeY, rangeX + rangeW, rangeY + 18, advancedBgColorFocused ? 0xFF0F0F0F : 0xFF161616);
+            context.fill(rangeX, rangeY, rangeX + rangeW, rangeY + 1, 0x60FFFFFF);
+            context.drawTextWithShadow(this.textRenderer, advancedBgColor, rangeX + 4, rangeY + 5, 0xFFEAEAEA);
+
+            context.drawTextWithShadow(this.textRenderer, "Segments", segX, segY - 10, 0xFFB8B8B8);
+            context.fill(segX, segY, segX + segW, segY + 18, advancedBorderColorFocused ? 0xFF0F0F0F : 0xFF161616);
+            context.fill(segX, segY, segX + segW, segY + 1, 0x60FFFFFF);
+            context.drawTextWithShadow(this.textRenderer, advancedBorderColor, segX + 4, segY + 5, 0xFFEAEAEA);
+
+            if (advancedBgColorFocused && (System.currentTimeMillis() / 500L) % 2L == 0L) {
+                int cx = rangeX + 4 + this.textRenderer.getWidth(advancedBgColor.substring(0, Math.clamp(advancedBgCursor, 0, advancedBgColor.length())));
+                context.fill(cx, rangeY + 4, cx + 1, rangeY + 13, 0xFFFFFFFF);
+            }
+            if (advancedBorderColorFocused && (System.currentTimeMillis() / 500L) % 2L == 0L) {
+                int cx = segX + 4 + this.textRenderer.getWidth(advancedBorderColor.substring(0, Math.clamp(advancedBorderCursor, 0, advancedBorderColor.length())));
+                context.fill(cx, segY + 4, cx + 1, segY + 13, 0xFFFFFFFF);
+            }
+        } else if (selected.type == MacroHudDataHandler.ElementType.VALUE) {
+            drawModalButton(context, boxX + 232, boxY + 90, 54, 18, "WRN-", containsBox(mouseX, mouseY, boxX + 232, boxY + 90, 54, 18));
+            drawModalButton(context, boxX + 290, boxY + 90, 54, 18, "WRN+", containsBox(mouseX, mouseY, boxX + 290, boxY + 90, 54, 18));
+            drawModalButton(context, boxX + 348, boxY + 90, 54, 18, "CRT-", containsBox(mouseX, mouseY, boxX + 348, boxY + 90, 54, 18));
+            drawModalButton(context, boxX + 406, boxY + 90, 50, 18, "CRT+", containsBox(mouseX, mouseY, boxX + 406, boxY + 90, 50, 18));
+            drawModalButton(context, boxX + 232, boxY + 114, 54, 18, "W-", containsBox(mouseX, mouseY, boxX + 232, boxY + 114, 54, 18));
+            drawModalButton(context, boxX + 290, boxY + 114, 54, 18, "W+", containsBox(mouseX, mouseY, boxX + 290, boxY + 114, 54, 18));
+            drawModalButton(context, boxX + 348, boxY + 114, 54, 18, "C-", containsBox(mouseX, mouseY, boxX + 348, boxY + 114, 54, 18));
+            drawModalButton(context, boxX + 406, boxY + 114, 50, 18, "C+", containsBox(mouseX, mouseY, boxX + 406, boxY + 114, 50, 18));
+            drawModalButton(context, boxX + 232, boxY + 138, 108, 18, "Prefix preset", containsBox(mouseX, mouseY, boxX + 232, boxY + 138, 108, 18));
+            drawModalButton(context, boxX + 344, boxY + 138, 112, 18, "Suffix preset", containsBox(mouseX, mouseY, boxX + 344, boxY + 138, 112, 18));
+            context.drawTextWithShadow(this.textRenderer, "Warn/Crit: " + String.format(Locale.ROOT, "%.1f / %.1f", selected.warnThreshold, selected.critThreshold), boxX + 232, boxY + 162, 0xFFEAEAEA);
+            context.drawTextWithShadow(this.textRenderer, "Prefix", boxX + 232, boxY + 186, 0xFFB8B8B8);
+            context.drawTextWithShadow(this.textRenderer, "Suffix", boxX + 344, boxY + 186, 0xFFB8B8B8);
+            context.fill(boxX + 232, boxY + 196, boxX + 340, boxY + 214, advancedBgColorFocused ? 0xFF0F0F0F : 0xFF161616);
+            context.fill(boxX + 232, boxY + 196, boxX + 340, boxY + 197, 0x60FFFFFF);
+            context.fill(boxX + 344, boxY + 196, boxX + 456, boxY + 214, advancedBorderColorFocused ? 0xFF0F0F0F : 0xFF161616);
+            context.fill(boxX + 344, boxY + 196, boxX + 456, boxY + 197, 0x60FFFFFF);
+            drawSingleLineSelection(context, boxX + 236, boxY + 201, advancedBgColor, advancedBgSelectionAnchor, advancedBgCursor);
+            drawSingleLineSelection(context, boxX + 348, boxY + 201, advancedBorderColor, advancedBorderSelectionAnchor, advancedBorderCursor);
+            context.drawTextWithShadow(this.textRenderer, advancedBgColor, boxX + 236, boxY + 201, 0xFFEAEAEA);
+            context.drawTextWithShadow(this.textRenderer, advancedBorderColor, boxX + 348, boxY + 201, 0xFFEAEAEA);
+            if (advancedBgColorFocused && (System.currentTimeMillis() / 500L) % 2L == 0L) {
+                int cx = boxX + 236 + this.textRenderer.getWidth(advancedBgColor.substring(0, Math.clamp(advancedBgCursor, 0, advancedBgColor.length())));
+                context.fill(cx, boxY + 200, cx + 1, boxY + 209, 0xFFFFFFFF);
+            }
+            if (advancedBorderColorFocused && (System.currentTimeMillis() / 500L) % 2L == 0L) {
+                int cx = boxX + 348 + this.textRenderer.getWidth(advancedBorderColor.substring(0, Math.clamp(advancedBorderCursor, 0, advancedBorderColor.length())));
+                context.fill(cx, boxY + 200, cx + 1, boxY + 209, 0xFFFFFFFF);
+            }
+        } else if (selected.type == MacroHudDataHandler.ElementType.LIST) {
+            drawModalButton(context, boxX + 232, boxY + 90, 224, 18, "List source preset", containsBox(mouseX, mouseY, boxX + 232, boxY + 90, 224, 18));
+            drawModalButton(context, boxX + 232, boxY + 114, 54, 18, "L-", containsBox(mouseX, mouseY, boxX + 232, boxY + 114, 54, 18));
+            drawModalButton(context, boxX + 290, boxY + 114, 54, 18, "L+", containsBox(mouseX, mouseY, boxX + 290, boxY + 114, 54, 18));
+            drawModalButton(context, boxX + 348, boxY + 114, 54, 18, "S-", containsBox(mouseX, mouseY, boxX + 348, boxY + 114, 54, 18));
+            drawModalButton(context, boxX + 406, boxY + 114, 50, 18, "S+", containsBox(mouseX, mouseY, boxX + 406, boxY + 114, 50, 18));
+            context.drawTextWithShadow(this.textRenderer, "Max lines: " + selected.maxLines + "  Scroll: " + selected.listScroll, boxX + 232, boxY + 138, 0xFFEAEAEA);
+        } else if (selected.type == MacroHudDataHandler.ElementType.SHAPE) {
+            drawModalButton(context, boxX + 232, boxY + 90, 224, 18, "Type: " + selected.shapeType, containsBox(mouseX, mouseY, boxX + 232, boxY + 90, 224, 18));
+            drawModalButton(context, boxX + 232, boxY + 114, 90, 18, "Filled: " + (selected.shapeFilled ? "ON" : "OFF"), containsBox(mouseX, mouseY, boxX + 232, boxY + 114, 90, 18));
+            drawModalButton(context, boxX + 326, boxY + 114, 62, 18, "R-", containsBox(mouseX, mouseY, boxX + 326, boxY + 114, 62, 18));
+            drawModalButton(context, boxX + 392, boxY + 114, 64, 18, "R+", containsBox(mouseX, mouseY, boxX + 392, boxY + 114, 64, 18));
+            drawModalButton(context, boxX + 326, boxY + 138, 62, 18, "T-", containsBox(mouseX, mouseY, boxX + 326, boxY + 138, 62, 18));
+            drawModalButton(context, boxX + 392, boxY + 138, 64, 18, "T+", containsBox(mouseX, mouseY, boxX + 392, boxY + 138, 64, 18));
+            context.drawTextWithShadow(this.textRenderer, "Radius: " + selected.shapeRadius + "  Thickness: " + selected.shapeThickness, boxX + 232, boxY + 162, 0xFFEAEAEA);
+        } else if (selected.type == MacroHudDataHandler.ElementType.STATE_BADGE) {
+            context.drawTextWithShadow(this.textRenderer, "Use Pick Src above for state source", boxX + 232, boxY + 96, 0xFFB8B8B8);
+            drawModalButton(context, boxX + 232, boxY + 114, 108, 18, "ON text", containsBox(mouseX, mouseY, boxX + 232, boxY + 114, 108, 18));
+            drawModalButton(context, boxX + 344, boxY + 114, 112, 18, "OFF text", containsBox(mouseX, mouseY, boxX + 344, boxY + 114, 112, 18));
+            drawModalButton(context, boxX + 232, boxY + 138, 54, 18, "ON-", containsBox(mouseX, mouseY, boxX + 232, boxY + 138, 54, 18));
+            drawModalButton(context, boxX + 290, boxY + 138, 54, 18, "ON+", containsBox(mouseX, mouseY, boxX + 290, boxY + 138, 54, 18));
+            drawModalButton(context, boxX + 348, boxY + 138, 54, 18, "OFF-", containsBox(mouseX, mouseY, boxX + 348, boxY + 138, 54, 18));
+            drawModalButton(context, boxX + 406, boxY + 138, 50, 18, "OFF+", containsBox(mouseX, mouseY, boxX + 406, boxY + 138, 50, 18));
+            drawModalButton(context, boxX + 232, boxY + 162, 224, 18, "Show Value: " + (selected.stateShowValue ? "ON" : "OFF"), containsBox(mouseX, mouseY, boxX + 232, boxY + 162, 224, 18));
+            context.drawTextWithShadow(this.textRenderer, "ON: " + selected.stateOnText + "  OFF: " + selected.stateOffText, boxX + 232, boxY + 184, 0xFFEAEAEA);
+        }
+
+        drawModalButton(context, boxX + 12, boxY + 218, 82, 18, "H: " + selected.horizontalAlign.name(), containsBox(mouseX, mouseY, boxX + 12, boxY + 218, 82, 18));
+        drawModalButton(context, boxX + 98, boxY + 218, 82, 18, "V: " + selected.verticalAlign.name(), containsBox(mouseX, mouseY, boxX + 98, boxY + 218, 82, 18));
+        drawModalButton(context, boxX + 184, boxY + 218, 110, 18, "Anchor: " + shortAnchor(selected.anchor), containsBox(mouseX, mouseY, boxX + 184, boxY + 218, 110, 18));
+
+        drawModalButton(context, boxX + MODAL_W - 134, boxY + MODAL_H - 24, 60, 18, "Apply",
+                containsBox(mouseX, mouseY, boxX + MODAL_W - 134, boxY + MODAL_H - 24, 60, 18));
+        drawModalButton(context, boxX + MODAL_W - 70, boxY + MODAL_H - 24, 58, 18, "Cancel",
+                containsBox(mouseX, mouseY, boxX + MODAL_W - 70, boxY + MODAL_H - 24, 58, 18));
+    }
+
+    private boolean onCustomWidgetAdvancedClick(Click click, int boxX, int boxY) {
+        if (click.button() != 0 && click.button() != 1) {
+            return true;
+        }
+        boolean forward = click.button() != 1;
+        if (selected == null) {
+            return true;
+        }
+        int labelX = boxX + 12;
+        int labelY = boxY + 44;
+        int labelW = 214;
+        int labelH = 18;
+        int sourceX = boxX + 12;
+        int sourceY = boxY + 72;
+        int sourceW = 214;
+        int sourceH = 18;
+
+        List<String> suggestions = advancedActionSuggestions();
+        if (!suggestions.isEmpty()) {
+            int dropX = sourceX;
+            int dropY = sourceY + 22;
+            int dropW = sourceW;
+            int rowH = 10;
+            int maxVisible = Math.max(1, Math.min(suggestions.size(), ((boxY + MODAL_H - 28) - dropY) / rowH));
+            for (int i = 0; i < maxVisible; i++) {
+                int yy = dropY + i * rowH;
+                if (containsBox(click.x(), click.y(), dropX, yy, dropW, rowH)) {
+                    advancedAction = suggestions.get(i);
+                    advancedActionCursor = advancedAction.length();
+                    advancedActionSuggestionIndex = i;
+                    return true;
+                }
+            }
+        }
+
+        if (containsBox(click.x(), click.y(), boxX + MODAL_W - 134, boxY + MODAL_H - 24, 60, 18)) {
+            applyAdvancedAndClose();
+            return true;
+        }
+        if (containsBox(click.x(), click.y(), boxX + MODAL_W - 70, boxY + MODAL_H - 24, 58, 18)) {
+            closeAdvancedModal();
+            return true;
+        }
+
+        if (containsBox(click.x(), click.y(), boxX + 232, boxY + 38, 54, 18)) {
+            selected.backgroundColor = cycleStyleColor(selected.backgroundColor, false);
+            return true;
+        }
+        if (containsBox(click.x(), click.y(), boxX + 290, boxY + 38, 54, 18)) {
+            selected.backgroundColor = cycleStyleColor(selected.backgroundColor, true);
+            return true;
+        }
+        if (containsBox(click.x(), click.y(), boxX + 348, boxY + 38, 54, 18)) {
+            selected.borderColor = cycleStyleColor(selected.borderColor, false);
+            return true;
+        }
+        if (containsBox(click.x(), click.y(), boxX + 406, boxY + 38, 50, 18)) {
+            selected.borderColor = cycleStyleColor(selected.borderColor, true);
+            return true;
+        }
+        if (containsBox(click.x(), click.y(), boxX + 232, boxY + 64, 224, 18)) {
+            String[] presets = switch (selected.type) {
+                case LIST -> LIST_SOURCE_PRESETS;
+                case STATE_BADGE -> STATE_SOURCE_PRESETS;
+                case ICON -> iconIdSuggestionsForKind(selected.iconKind);
+                default -> BAR_VALUE_SOURCE_PRESETS;
+            };
+            advancedAction = cyclePreset(advancedAction, presets, forward);
+            advancedActionCursor = advancedAction.length();
+            return true;
+        }
+
+        if (containsBox(click.x(), click.y(), boxX + 12, boxY + 218, 82, 18)) {
+            selected.horizontalAlign = cycleHorizontalAlign(selected.horizontalAlign, forward);
+            return true;
+        }
+        if (containsBox(click.x(), click.y(), boxX + 98, boxY + 218, 82, 18)) {
+            selected.verticalAlign = cycleVerticalAlign(selected.verticalAlign, forward);
+            return true;
+        }
+        if (containsBox(click.x(), click.y(), boxX + 184, boxY + 218, 110, 18)) {
+            int oldScreenX = resolveElementX(selected);
+            int oldScreenY = resolveElementY(selected);
+            selected.anchor = cycleAnchor(selected.anchor, forward);
+            setElementScreenPosition(selected, oldScreenX, oldScreenY);
+            clampElementToCanvas(selected);
+            return true;
+        }
+
+        if (selected.type == MacroHudDataHandler.ElementType.ICON) {
+            if (containsBox(click.x(), click.y(), boxX + 232, boxY + 90, 124, 18)) {
+                selected.iconKind = cyclePreset(selected.iconKind, ICON_KIND_PRESETS, forward);
+                return true;
+            }
+            if (containsBox(click.x(), click.y(), boxX + 360, boxY + 90, 96, 18)) {
+                String[] ids = "block".equalsIgnoreCase(selected.iconKind) ? ICON_BLOCK_ID_PRESETS
+                        : "entity".equalsIgnoreCase(selected.iconKind) ? ICON_ENTITY_ID_PRESETS : ICON_ITEM_ID_PRESETS;
+                selected.iconId = cyclePreset(selected.iconId, ids, forward);
+                return true;
+            }
+            if (containsBox(click.x(), click.y(), boxX + 232, boxY + 114, 72, 18)) {
+                selected.iconShowCount = !selected.iconShowCount;
+                return true;
+            }
+            if (containsBox(click.x(), click.y(), boxX + 308, boxY + 114, 72, 18)) {
+                selected.iconShowDurability = !selected.iconShowDurability;
+                return true;
+            }
+            if (containsBox(click.x(), click.y(), boxX + 384, boxY + 114, 72, 18)) {
+                selected.iconShowCooldown = !selected.iconShowCooldown;
+                return true;
+            }
+        } else if (selected.type == MacroHudDataHandler.ElementType.BAR) {
+            if (containsBox(click.x(), click.y(), boxX + 232, boxY + 90, 224, 18)) {
+                selected.sourceTokenMax = cyclePreset(selected.sourceTokenMax, new String[]{"", "max_hp", "food", "players.count"}, forward);
+                return true;
+            }
+            if (containsBox(click.x(), click.y(), boxX + 232, boxY + 114, 90, 18)) {
+                selected.segmented = !selected.segmented;
+                return true;
+            }
+            if (containsBox(click.x(), click.y(), boxX + 326, boxY + 114, 62, 18)) {
+                selected.segments = Math.max(1, selected.segments - stepInt(1));
+                return true;
+            }
+            if (containsBox(click.x(), click.y(), boxX + 392, boxY + 114, 64, 18)) {
+                selected.segments = Math.min(120, selected.segments + stepInt(1));
+                return true;
+            }
+            if (containsBox(click.x(), click.y(), boxX + 232, boxY + 138, 54, 18)) {
+                selected.minValue -= stepDouble(1.0);
+                return true;
+            }
+            if (containsBox(click.x(), click.y(), boxX + 290, boxY + 138, 54, 18)) {
+                selected.minValue += stepDouble(1.0);
+                return true;
+            }
+            if (containsBox(click.x(), click.y(), boxX + 348, boxY + 138, 54, 18)) {
+                selected.maxValue = Math.max(selected.minValue + 1.0, selected.maxValue - stepDouble(1.0));
+                return true;
+            }
+            if (containsBox(click.x(), click.y(), boxX + 406, boxY + 138, 50, 18)) {
+                selected.maxValue = selected.maxValue + stepDouble(1.0);
+                return true;
+            }
+            if (containsBox(click.x(), click.y(), boxX + 232, boxY + 162, 54, 18)) {
+                selected.colorStart = cycleStyleColor(selected.colorStart, false);
+                return true;
+            }
+            if (containsBox(click.x(), click.y(), boxX + 290, boxY + 162, 54, 18)) {
+                selected.colorStart = cycleStyleColor(selected.colorStart, true);
+                return true;
+            }
+            if (containsBox(click.x(), click.y(), boxX + 348, boxY + 162, 54, 18)) {
+                selected.colorEnd = cycleStyleColor(selected.colorEnd, false);
+                return true;
+            }
+            if (containsBox(click.x(), click.y(), boxX + 406, boxY + 162, 50, 18)) {
+                selected.colorEnd = cycleStyleColor(selected.colorEnd, true);
+                return true;
+            }
+        } else if (selected.type == MacroHudDataHandler.ElementType.VALUE) {
+            if (containsBox(click.x(), click.y(), boxX + 232, boxY + 90, 54, 18)) {
+                selected.warnThreshold -= stepDouble(1.0);
+                return true;
+            }
+            if (containsBox(click.x(), click.y(), boxX + 290, boxY + 90, 54, 18)) {
+                selected.warnThreshold += stepDouble(1.0);
+                return true;
+            }
+            if (containsBox(click.x(), click.y(), boxX + 348, boxY + 90, 54, 18)) {
+                selected.critThreshold -= stepDouble(1.0);
+                return true;
+            }
+            if (containsBox(click.x(), click.y(), boxX + 406, boxY + 90, 50, 18)) {
+                selected.critThreshold += stepDouble(1.0);
+                return true;
+            }
+            if (containsBox(click.x(), click.y(), boxX + 232, boxY + 114, 54, 18)) {
+                selected.colorWarn = cycleStyleColor(selected.colorWarn, false);
+                return true;
+            }
+            if (containsBox(click.x(), click.y(), boxX + 290, boxY + 114, 54, 18)) {
+                selected.colorWarn = cycleStyleColor(selected.colorWarn, true);
+                return true;
+            }
+            if (containsBox(click.x(), click.y(), boxX + 348, boxY + 114, 54, 18)) {
+                selected.colorCrit = cycleStyleColor(selected.colorCrit, false);
+                return true;
+            }
+            if (containsBox(click.x(), click.y(), boxX + 406, boxY + 114, 50, 18)) {
+                selected.colorCrit = cycleStyleColor(selected.colorCrit, true);
+                return true;
+            }
+            if (containsBox(click.x(), click.y(), boxX + 232, boxY + 138, 108, 18)) {
+                selected.prefix = cyclePreset(selected.prefix, new String[]{"", "HP: ", "Food: ", "FPS: "}, forward);
+                return true;
+            }
+            if (containsBox(click.x(), click.y(), boxX + 344, boxY + 138, 112, 18)) {
+                selected.suffix = cyclePreset(selected.suffix, new String[]{"", "%", " hp", " ms"}, forward);
+                return true;
+            }
+        } else if (selected.type == MacroHudDataHandler.ElementType.LIST) {
+            if (containsBox(click.x(), click.y(), boxX + 232, boxY + 90, 224, 18)) {
+                advancedAction = cyclePreset(advancedAction, LIST_SOURCE_PRESETS, forward);
+                advancedActionCursor = advancedAction.length();
+                return true;
+            }
+            if (containsBox(click.x(), click.y(), boxX + 232, boxY + 114, 54, 18)) {
+                selected.maxLines = Math.max(1, selected.maxLines - stepInt(1));
+                return true;
+            }
+            if (containsBox(click.x(), click.y(), boxX + 290, boxY + 114, 54, 18)) {
+                selected.maxLines = Math.min(200, selected.maxLines + stepInt(1));
+                return true;
+            }
+            if (containsBox(click.x(), click.y(), boxX + 348, boxY + 114, 54, 18)) {
+                selected.listScroll = Math.max(0, selected.listScroll - stepInt(1));
+                return true;
+            }
+            if (containsBox(click.x(), click.y(), boxX + 406, boxY + 114, 50, 18)) {
+                selected.listScroll = Math.min(500, selected.listScroll + stepInt(1));
+                return true;
+            }
+        } else if (selected.type == MacroHudDataHandler.ElementType.SHAPE) {
+            if (containsBox(click.x(), click.y(), boxX + 232, boxY + 90, 224, 18)) {
+                selected.shapeType = cyclePreset(selected.shapeType, SHAPE_TYPE_PRESETS, forward);
+                return true;
+            }
+            if (containsBox(click.x(), click.y(), boxX + 232, boxY + 114, 90, 18)) {
+                selected.shapeFilled = !selected.shapeFilled;
+                return true;
+            }
+            if (containsBox(click.x(), click.y(), boxX + 326, boxY + 114, 62, 18)) {
+                selected.shapeRadius = Math.max(0, selected.shapeRadius - stepInt(1));
+                return true;
+            }
+            if (containsBox(click.x(), click.y(), boxX + 392, boxY + 114, 64, 18)) {
+                selected.shapeRadius = Math.min(64, selected.shapeRadius + stepInt(1));
+                return true;
+            }
+            if (containsBox(click.x(), click.y(), boxX + 326, boxY + 138, 62, 18)) {
+                selected.shapeThickness = Math.max(1, selected.shapeThickness - stepInt(1));
+                return true;
+            }
+            if (containsBox(click.x(), click.y(), boxX + 392, boxY + 138, 64, 18)) {
+                selected.shapeThickness = Math.min(24, selected.shapeThickness + stepInt(1));
+                return true;
+            }
+        } else if (selected.type == MacroHudDataHandler.ElementType.STATE_BADGE) {
+            if (containsBox(click.x(), click.y(), boxX + 232, boxY + 114, 108, 18)) {
+                selected.stateOnText = cyclePreset(selected.stateOnText, new String[]{"ON", "YES", "ENABLED", "ACTIVE"}, true);
+                return true;
+            }
+            if (containsBox(click.x(), click.y(), boxX + 344, boxY + 114, 112, 18)) {
+                selected.stateOffText = cyclePreset(selected.stateOffText, new String[]{"OFF", "NO", "DISABLED", "IDLE"}, true);
+                return true;
+            }
+            if (containsBox(click.x(), click.y(), boxX + 232, boxY + 138, 54, 18)) {
+                selected.colorStart = cycleStyleColor(selected.colorStart, false);
+                return true;
+            }
+            if (containsBox(click.x(), click.y(), boxX + 290, boxY + 138, 54, 18)) {
+                selected.colorStart = cycleStyleColor(selected.colorStart, true);
+                return true;
+            }
+            if (containsBox(click.x(), click.y(), boxX + 348, boxY + 138, 54, 18)) {
+                selected.colorEnd = cycleStyleColor(selected.colorEnd, false);
+                return true;
+            }
+            if (containsBox(click.x(), click.y(), boxX + 406, boxY + 138, 50, 18)) {
+                selected.colorEnd = cycleStyleColor(selected.colorEnd, true);
+                return true;
+            }
+            if (containsBox(click.x(), click.y(), boxX + 232, boxY + 162, 224, 18)) {
+                selected.stateShowValue = !selected.stateShowValue;
+                return true;
+            }
+        }
+
+        if (selected.type == MacroHudDataHandler.ElementType.BAR) {
+            int rangeX = boxX + 232;
+            int rangeY = boxY + 198;
+            int rangeW = 124;
+            int segX = boxX + 360;
+            int segY = boxY + 198;
+            int segW = 96;
+            if (containsBox(click.x(), click.y(), rangeX, rangeY, rangeW, 18)) {
+                advancedBgColorFocused = true;
+                advancedBorderColorFocused = false;
+                advancedTextFocused = false;
+                advancedActionFocused = false;
+                advancedBgCursor = cursorIndexFromPoint(advancedBgColor, (int) (click.x() - (rangeX + 4)), 0, 9);
+                return true;
+            }
+            if (containsBox(click.x(), click.y(), segX, segY, segW, 18)) {
+                advancedBorderColorFocused = true;
+                advancedBgColorFocused = false;
+                advancedTextFocused = false;
+                advancedActionFocused = false;
+                advancedBorderCursor = cursorIndexFromPoint(advancedBorderColor, (int) (click.x() - (segX + 4)), 0, 9);
+                return true;
+            }
+        }
+
+        if (selected.type == MacroHudDataHandler.ElementType.VALUE) {
+            if (containsBox(click.x(), click.y(), boxX + 232, boxY + 196, 108, 18)) {
+                advancedBgColorFocused = true;
+                advancedBorderColorFocused = false;
+                advancedTextFocused = false;
+                advancedActionFocused = false;
+                advancedBgSelectionAnchor = -1;
+                advancedBgCursor = cursorIndexFromPoint(advancedBgColor, (int) (click.x() - (boxX + 236)), 0, 9);
+                return true;
+            }
+            if (containsBox(click.x(), click.y(), boxX + 344, boxY + 196, 112, 18)) {
+                advancedBorderColorFocused = true;
+                advancedBgColorFocused = false;
+                advancedTextFocused = false;
+                advancedActionFocused = false;
+                advancedBorderSelectionAnchor = -1;
+                advancedBorderCursor = cursorIndexFromPoint(advancedBorderColor, (int) (click.x() - (boxX + 348)), 0, 9);
+                return true;
+            }
+        }
+
+        advancedTextFocused = containsBox(click.x(), click.y(), labelX, labelY, labelW, labelH);
+        if (advancedTextFocused) {
+            advancedActionFocused = false;
+            advancedBgColorFocused = false;
+            advancedBorderColorFocused = false;
+            advancedSelectionAnchor = -1;
+            advancedCursor = cursorIndexFromPoint(advancedText, (int) (click.x() - (labelX + 4)), 0, 9);
+            return true;
+        }
+
+        advancedActionFocused = containsBox(click.x(), click.y(), sourceX, sourceY, sourceW, sourceH);
+        if (advancedActionFocused) {
+            advancedTextFocused = false;
+            advancedBgColorFocused = false;
+            advancedBorderColorFocused = false;
+            advancedActionSelectionAnchor = -1;
+            advancedActionCursor = cursorIndexFromPoint(advancedAction, (int) (click.x() - (sourceX + 4)), 0, 9);
+            return true;
+        }
+
+        return true;
+    }
+
+    private static boolean isCustomWidgetType(MacroHudDataHandler.HudElement element) {
+        if (element == null) {
+            return false;
+        }
+        return element.type == MacroHudDataHandler.ElementType.ICON
+                || element.type == MacroHudDataHandler.ElementType.BAR
+                || element.type == MacroHudDataHandler.ElementType.VALUE
+                || element.type == MacroHudDataHandler.ElementType.LIST
+                || element.type == MacroHudDataHandler.ElementType.SHAPE
+                || element.type == MacroHudDataHandler.ElementType.STATE_BADGE;
+    }
+
+    private int stepInt(int base) {
+        return base * (isShiftDown() ? 10 : 1);
+    }
+
+    private double stepDouble(double base) {
+        return base * (isShiftDown() ? 10.0 : 1.0);
+    }
+
+    private List<String> sourceTokenSuggestions(String prefix) {
+        String p = safe(prefix).toLowerCase(Locale.ROOT);
+        List<String> starts = new ArrayList<>();
+        List<String> contains = new ArrayList<>();
+        for (String token : SOURCE_TOKEN_SUGGESTIONS) {
+            String lower = token.toLowerCase(Locale.ROOT);
+            if (p.isBlank() || lower.startsWith(p)) {
+                starts.add(token);
+            } else if (lower.contains(p)) {
+                contains.add(token);
+            }
+        }
+        starts.addAll(contains);
+        return starts;
+    }
+
+    private List<String> advancedActionSuggestions() {
+        if (selected != null && selected.type == MacroHudDataHandler.ElementType.ICON) {
+            String prefix = safe(advancedAction).toLowerCase(Locale.ROOT);
+            List<String> matches = new ArrayList<>();
+            for (String id : iconIdSuggestionsForKind(selected.iconKind)) {
+                String candidate = safe(id);
+                String lower = candidate.toLowerCase(Locale.ROOT);
+                if (prefix.isBlank() || lower.startsWith(prefix) || lower.contains(prefix)) {
+                    matches.add(candidate);
+                }
+            }
+            return matches;
+        }
+        return sourceTokenSuggestions(advancedAction);
+    }
+
+    private static String[] iconIdSuggestionsForKind(String kind) {
+        if ("block".equalsIgnoreCase(kind)) {
+            return ICON_BLOCK_ID_PRESETS;
+        }
+        if ("entity".equalsIgnoreCase(kind)) {
+            return ICON_ENTITY_ID_PRESETS;
+        }
+        return ICON_ITEM_ID_PRESETS;
+    }
+
+    private static MacroHudDataHandler.HorizontalAlign cycleHorizontalAlign(MacroHudDataHandler.HorizontalAlign current, boolean forward) {
+        return switch (current) {
+            case LEFT -> forward ? MacroHudDataHandler.HorizontalAlign.CENTER : MacroHudDataHandler.HorizontalAlign.RIGHT;
+            case CENTER -> forward ? MacroHudDataHandler.HorizontalAlign.RIGHT : MacroHudDataHandler.HorizontalAlign.LEFT;
+            case RIGHT -> forward ? MacroHudDataHandler.HorizontalAlign.LEFT : MacroHudDataHandler.HorizontalAlign.CENTER;
+        };
+    }
+
+    private static MacroHudDataHandler.VerticalAlign cycleVerticalAlign(MacroHudDataHandler.VerticalAlign current, boolean forward) {
+        return switch (current) {
+            case TOP -> forward ? MacroHudDataHandler.VerticalAlign.CENTER : MacroHudDataHandler.VerticalAlign.BOTTOM;
+            case CENTER -> forward ? MacroHudDataHandler.VerticalAlign.BOTTOM : MacroHudDataHandler.VerticalAlign.TOP;
+            case BOTTOM -> forward ? MacroHudDataHandler.VerticalAlign.TOP : MacroHudDataHandler.VerticalAlign.CENTER;
+        };
+    }
+
+    private static MacroHudDataHandler.Anchor cycleAnchor(MacroHudDataHandler.Anchor current, boolean forward) {
+        MacroHudDataHandler.Anchor[] order = {
+                MacroHudDataHandler.Anchor.TOP_LEFT,
+                MacroHudDataHandler.Anchor.TOP_CENTER,
+                MacroHudDataHandler.Anchor.TOP_RIGHT,
+                MacroHudDataHandler.Anchor.BOTTOM_RIGHT,
+                MacroHudDataHandler.Anchor.BOTTOM_CENTER,
+                MacroHudDataHandler.Anchor.BOTTOM_LEFT,
+                MacroHudDataHandler.Anchor.MIDDLE_CENTER
+        };
+        MacroHudDataHandler.Anchor base = current == MacroHudDataHandler.Anchor.CENTER ? MacroHudDataHandler.Anchor.MIDDLE_CENTER : current;
+        int idx = 0;
+        for (int i = 0; i < order.length; i++) {
+            if (order[i] == base) {
+                idx = i;
+                break;
+            }
+        }
+        int next = forward ? idx + 1 : idx - 1;
+        if (next < 0) {
+            next = order.length - 1;
+        }
+        if (next >= order.length) {
+            next = 0;
+        }
+        return order[next];
+    }
+
+    private static String cyclePreset(String current, String[] presets, boolean forward) {
+        if (presets == null || presets.length == 0) {
+            return current == null ? "" : current;
+        }
+        String c = current == null ? "" : current;
+        int idx = -1;
+        for (int i = 0; i < presets.length; i++) {
+            if (Objects.equals(c, presets[i])) {
+                idx = i;
+                break;
+            }
+        }
+        if (idx < 0) {
+            return presets[0];
+        }
+        int next = forward ? idx + 1 : idx - 1;
+        if (next < 0) {
+            next = presets.length - 1;
+        }
+        if (next >= presets.length) {
+            next = 0;
+        }
+        return presets[next];
+    }
+
     private void applyAdvancedAndClose() {
         if (selected != null) {
-            applyAdvancedColorFieldsToSelection();
+            boolean valueCustom = selected.type == MacroHudDataHandler.ElementType.VALUE;
+            if (!valueCustom) {
+                applyAdvancedColorFieldsToSelection();
+            }
             if (isSecondaryChatProxy(selected)) {
                 final boolean showWhileGui = advancedSecondaryShowWhileGuiOpen;
                 final boolean fadeEnabled = advancedSecondaryFadeEnabled;
@@ -1637,6 +2906,33 @@ public class MacroWorkbenchV2Screen extends Screen {
                 });
             } else if (isExternalCanvasProxy(selected)) {
                 // External canvas elements only use size/position/style edits.
+            } else if (isCustomWidgetType(selected)) {
+                selected.label = safe(advancedText);
+                if (selected.type == MacroHudDataHandler.ElementType.ICON) {
+                    selected.iconId = safe(advancedAction);
+                    selected.sourceToken = "";
+                } else {
+                    selected.sourceToken = safe(advancedAction);
+                }
+                if (selected.type == MacroHudDataHandler.ElementType.BAR) {
+                    try {
+                        String[] parts = safe(advancedBgColor).split(",");
+                        if (parts.length >= 2) {
+                            selected.minValue = Double.parseDouble(parts[0].trim());
+                            selected.maxValue = Double.parseDouble(parts[1].trim());
+                        }
+                    } catch (Exception ignored) {
+                        // keep previous values when parse fails
+                    }
+                    try {
+                        selected.segments = Math.clamp(Integer.parseInt(safe(advancedBorderColor).trim()), 1, 120);
+                    } catch (Exception ignored) {
+                        // keep previous segment value when parse fails
+                    }
+                } else if (selected.type == MacroHudDataHandler.ElementType.VALUE) {
+                    selected.prefix = advancedBgColor == null ? "" : advancedBgColor;
+                    selected.suffix = advancedBorderColor == null ? "" : advancedBorderColor;
+                }
             } else if (selected.type == MacroHudDataHandler.ElementType.BUTTON) {
                 selected.label = advancedText;
                 selected.buttonAction = advancedAction;
@@ -1650,6 +2946,7 @@ public class MacroWorkbenchV2Screen extends Screen {
 
     private void closeAdvancedModal() {
         this.advancedOpen = false;
+        this.advancedModalDragging = false;
         this.advancedTextFocused = false;
         this.advancedActionFocused = false;
         this.advancedBgColorFocused = false;
@@ -1685,14 +2982,14 @@ public class MacroWorkbenchV2Screen extends Screen {
         int textH = 150;
 
         context.fill(0, 0, this.width, this.height, 0x88000000);
-        context.fill(boxX, boxY, boxX + MODAL_W, boxY + MODAL_H, 0xEE1A1A1A);
-        context.fill(boxX, boxY, boxX + MODAL_W, boxY + 1, 0x80FFFFFF);
+        GuiSystem.drawPanel(context, boxX, boxY, MODAL_W, MODAL_H);
 
         context.drawTextWithShadow(this.textRenderer, "Edit Commands", boxX + 12, boxY + 12, 0xFFFFFFFF);
         context.drawTextWithShadow(this.textRenderer, "One command per line", boxX + 12, boxY + 22, 0xFFB0B0B0);
 
         context.fill(textX, textY, textX + textW, textY + textH, kbCommandsFocused ? 0xFF0F0F0F : 0xFF141414);
         context.fill(textX, textY, textX + textW, textY + 1, 0x60FFFFFF);
+        drawMultilineSelection(context, textX + 4, textY + 4, textY + textH - 12, kbCommandsText, kbCommandsSelectionAnchor, kbCommandsCursor, 9);
 
         List<String> lines = splitLinesRaw(kbCommandsText);
         int yy = textY + 4;
@@ -1737,46 +3034,155 @@ public class MacroWorkbenchV2Screen extends Screen {
         kbCommandsFocused = containsBox(click.x(), click.y(), textX, textY, textW, textH);
         if (kbCommandsFocused) {
             kbCommandsCursor = cursorIndexFromPoint(kbCommandsText, (int) (click.x() - (textX + 4)), (int) (click.y() - (textY + 4)), 9);
+            kbCommandsSelectionAnchor = -1;
         }
         return true;
     }
 
+    private void renderAddElementModal(DrawContext context, int mouseX, int mouseY) {
+        int boxX = this.width / 2 - 160;
+        int boxY = this.height / 2 - 110;
+        int boxW = 320;
+        int boxH = 220;
+        context.fill(0, 0, this.width, this.height, 0x88000000);
+        GuiSystem.drawPanel(context, boxX, boxY, boxW, boxH);
+        context.drawTextWithShadow(this.textRenderer, "Add Element", boxX + 12, boxY + 10, 0xFFFFFFFF);
+        context.drawTextWithShadow(this.textRenderer, "Pick element type", boxX + 12, boxY + 22, 0xFFB0B0B0);
+
+        String[] labels = {"Button", "Text", "Macro List", "Icon", "Bar", "Value", "List", "Shape", "State Badge"};
+        for (int i = 0; i < labels.length; i++) {
+            int row = i / 3;
+            int col = i % 3;
+            int bx = boxX + 12 + col * 100;
+            int by = boxY + 42 + row * 26;
+            drawModalButton(context, bx, by, 92, 20, labels[i], containsBox(mouseX, mouseY, bx, by, 92, 20));
+        }
+        drawModalButton(context, boxX + boxW - 70, boxY + boxH - 24, 58, 18, "Close", containsBox(mouseX, mouseY, boxX + boxW - 70, boxY + boxH - 24, 58, 18));
+    }
+
+    private boolean onAddElementModalClick(Click click) {
+        if (click.button() != 0) {
+            return true;
+        }
+        int boxX = this.width / 2 - 160;
+        int boxY = this.height / 2 - 110;
+        int boxW = 320;
+        int boxH = 220;
+        if (containsBox(click.x(), click.y(), boxX + boxW - 70, boxY + boxH - 24, 58, 18)) {
+            addElementModalOpen = false;
+            return true;
+        }
+
+        MacroHudDataHandler.ElementType[] types = {
+                MacroHudDataHandler.ElementType.BUTTON,
+                MacroHudDataHandler.ElementType.TEXT,
+                MacroHudDataHandler.ElementType.MACRO_KEYBINDS,
+                MacroHudDataHandler.ElementType.ICON,
+                MacroHudDataHandler.ElementType.BAR,
+                MacroHudDataHandler.ElementType.VALUE,
+                MacroHudDataHandler.ElementType.LIST,
+                MacroHudDataHandler.ElementType.SHAPE,
+                MacroHudDataHandler.ElementType.STATE_BADGE
+        };
+
+        for (int i = 0; i < types.length; i++) {
+            int row = i / 3;
+            int col = i % 3;
+            int bx = boxX + 12 + col * 100;
+            int by = boxY + 42 + row * 26;
+            if (containsBox(click.x(), click.y(), bx, by, 92, 20)) {
+                createCanvasElement(types[i]);
+                addElementModalOpen = false;
+                return true;
+            }
+        }
+        return true;
+    }
+
+    private void createCanvasElement(MacroHudDataHandler.ElementType type) {
+        MacroHudDataHandler.HudElement e = MacroHudDataHandler.createElement(type);
+        int centerX = Math.max(0, (this.width - e.width) / 2);
+        int centerY = Math.max(CANVAS_CONTENT_TOP, ((this.height - BOTTOM_BAR_H) - e.height) / 2);
+        setElementScreenPosition(e, centerX, centerY);
+        if (type == MacroHudDataHandler.ElementType.BUTTON) {
+            e.label = "Macro";
+        }
+        if (type == MacroHudDataHandler.ElementType.TEXT) {
+            e.text = "Text";
+        }
+        this.working.elements.add(e);
+        this.selected = e;
+        this.selectedElementIds.clear();
+        this.selectedElementIds.add(e.id);
+        clampElementToCanvas(e);
+        syncCanvasFields();
+    }
+
     private boolean handleKeyboardCommandsKey(int keyCode) {
+        if (isCtrlDown() && keyCode == GLFW.GLFW_KEY_A) {
+            kbCommandsSelectionAnchor = 0;
+            kbCommandsCursor = kbCommandsText.length();
+            return true;
+        }
         if (keyCode == GLFW.GLFW_KEY_BACKSPACE) {
+            if (hasSelection(kbCommandsSelectionAnchor, kbCommandsCursor)) {
+                int start = selectionStart(kbCommandsSelectionAnchor, kbCommandsCursor);
+                int end = selectionEnd(kbCommandsSelectionAnchor, kbCommandsCursor);
+                kbCommandsText = kbCommandsText.substring(0, start) + kbCommandsText.substring(end);
+                kbCommandsCursor = start;
+                kbCommandsSelectionAnchor = -1;
+                return true;
+            }
             if (kbCommandsCursor > 0) {
                 kbCommandsText = kbCommandsText.substring(0, kbCommandsCursor - 1) + kbCommandsText.substring(kbCommandsCursor);
                 kbCommandsCursor--;
             }
+            kbCommandsSelectionAnchor = -1;
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_DELETE) {
+            if (hasSelection(kbCommandsSelectionAnchor, kbCommandsCursor)) {
+                int start = selectionStart(kbCommandsSelectionAnchor, kbCommandsCursor);
+                int end = selectionEnd(kbCommandsSelectionAnchor, kbCommandsCursor);
+                kbCommandsText = kbCommandsText.substring(0, start) + kbCommandsText.substring(end);
+                kbCommandsCursor = start;
+                kbCommandsSelectionAnchor = -1;
+                return true;
+            }
             if (kbCommandsCursor < kbCommandsText.length()) {
                 kbCommandsText = kbCommandsText.substring(0, kbCommandsCursor) + kbCommandsText.substring(kbCommandsCursor + 1);
             }
+            kbCommandsSelectionAnchor = -1;
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_LEFT) {
             kbCommandsCursor = Math.max(0, kbCommandsCursor - 1);
+            kbCommandsSelectionAnchor = -1;
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_RIGHT) {
             kbCommandsCursor = Math.min(kbCommandsText.length(), kbCommandsCursor + 1);
+            kbCommandsSelectionAnchor = -1;
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_UP) {
             kbCommandsCursor = moveCursorVertical(kbCommandsText, kbCommandsCursor, -1);
+            kbCommandsSelectionAnchor = -1;
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_DOWN) {
             kbCommandsCursor = moveCursorVertical(kbCommandsText, kbCommandsCursor, 1);
+            kbCommandsSelectionAnchor = -1;
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_HOME) {
             kbCommandsCursor = lineStart(kbCommandsText, kbCommandsCursor);
+            kbCommandsSelectionAnchor = -1;
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_END) {
             kbCommandsCursor = lineEnd(kbCommandsText, kbCommandsCursor);
+            kbCommandsSelectionAnchor = -1;
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_ENTER || keyCode == GLFW.GLFW_KEY_KP_ENTER) {
@@ -1788,7 +3194,25 @@ public class MacroWorkbenchV2Screen extends Screen {
             return true;
         }
         if (isCtrlDown() && keyCode == GLFW.GLFW_KEY_C && this.client != null) {
-            this.client.keyboard.setClipboard(kbCommandsText);
+            this.client.keyboard.setClipboard(hasSelection(kbCommandsSelectionAnchor, kbCommandsCursor)
+                    ? selectedText(kbCommandsText, kbCommandsSelectionAnchor, kbCommandsCursor)
+                    : kbCommandsText);
+            return true;
+        }
+        if (isCtrlDown() && keyCode == GLFW.GLFW_KEY_X && this.client != null) {
+            this.client.keyboard.setClipboard(hasSelection(kbCommandsSelectionAnchor, kbCommandsCursor)
+                    ? selectedText(kbCommandsText, kbCommandsSelectionAnchor, kbCommandsCursor)
+                    : kbCommandsText);
+            if (hasSelection(kbCommandsSelectionAnchor, kbCommandsCursor)) {
+                int start = selectionStart(kbCommandsSelectionAnchor, kbCommandsCursor);
+                int end = selectionEnd(kbCommandsSelectionAnchor, kbCommandsCursor);
+                kbCommandsText = kbCommandsText.substring(0, start) + kbCommandsText.substring(end);
+                kbCommandsCursor = start;
+            } else {
+                kbCommandsText = "";
+                kbCommandsCursor = 0;
+            }
+            kbCommandsSelectionAnchor = -1;
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
@@ -1802,8 +3226,15 @@ public class MacroWorkbenchV2Screen extends Screen {
         if (s == null || s.isEmpty()) {
             return;
         }
+        if (hasSelection(kbCommandsSelectionAnchor, kbCommandsCursor)) {
+            int start = selectionStart(kbCommandsSelectionAnchor, kbCommandsCursor);
+            int end = selectionEnd(kbCommandsSelectionAnchor, kbCommandsCursor);
+            kbCommandsText = kbCommandsText.substring(0, start) + kbCommandsText.substring(end);
+            kbCommandsCursor = start;
+        }
         kbCommandsText = kbCommandsText.substring(0, kbCommandsCursor) + s + kbCommandsText.substring(kbCommandsCursor);
         kbCommandsCursor += s.length();
+        kbCommandsSelectionAnchor = -1;
     }
 
     private void applyKeyboardCommandsModal() {
@@ -1813,14 +3244,19 @@ public class MacroWorkbenchV2Screen extends Screen {
         }
         MacroDataHandler.MacroEntry existing = MacroDataHandler.getMacro(selectedMacroId);
         if (existing == null) {
-            closeKeyboardCommandsModal();
             return;
         }
 
-        List<String> commands = splitLinesRaw(kbCommandsText).stream()
-                .map(String::trim)
-                .filter(s -> !s.isEmpty())
-                .toList();
+        List<String> commands = new ArrayList<>();
+        String raw = kbCommandsField.getText() == null ? "" : kbCommandsField.getText().trim();
+        if (!raw.isBlank()) {
+            for (String part : raw.split("[;\\n]+")) {
+                String t = part.trim();
+                if (!t.isEmpty()) {
+                    commands.add(t);
+                }
+            }
+        }
 
         MacroDataHandler.updateMacro(
                 selectedMacroId,
@@ -1835,7 +3271,6 @@ public class MacroWorkbenchV2Screen extends Screen {
         kbCommandsField.setText(String.join(";", commands));
         CommandMacros.refreshKeybindings();
         rebuildBindingMaps();
-        closeKeyboardCommandsModal();
     }
 
     private int parseDelayOrDefault(int fallback) {
@@ -1849,41 +3284,70 @@ public class MacroWorkbenchV2Screen extends Screen {
     }
 
     private boolean handleAdvancedTextKey(int keyCode) {
+        if (isCtrlDown() && keyCode == GLFW.GLFW_KEY_A) {
+            advancedSelectionAnchor = 0;
+            advancedCursor = advancedText.length();
+            return true;
+        }
         if (keyCode == GLFW.GLFW_KEY_BACKSPACE) {
+            if (hasSelection(advancedSelectionAnchor, advancedCursor)) {
+                int start = selectionStart(advancedSelectionAnchor, advancedCursor);
+                int end = selectionEnd(advancedSelectionAnchor, advancedCursor);
+                advancedText = advancedText.substring(0, start) + advancedText.substring(end);
+                advancedCursor = start;
+                advancedSelectionAnchor = -1;
+                return true;
+            }
             if (advancedCursor > 0) {
                 advancedText = advancedText.substring(0, advancedCursor - 1) + advancedText.substring(advancedCursor);
                 advancedCursor--;
             }
+            advancedSelectionAnchor = -1;
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_DELETE) {
+            if (hasSelection(advancedSelectionAnchor, advancedCursor)) {
+                int start = selectionStart(advancedSelectionAnchor, advancedCursor);
+                int end = selectionEnd(advancedSelectionAnchor, advancedCursor);
+                advancedText = advancedText.substring(0, start) + advancedText.substring(end);
+                advancedCursor = start;
+                advancedSelectionAnchor = -1;
+                return true;
+            }
             if (advancedCursor < advancedText.length()) {
                 advancedText = advancedText.substring(0, advancedCursor) + advancedText.substring(advancedCursor + 1);
             }
+            advancedSelectionAnchor = -1;
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_LEFT) {
             advancedCursor = Math.max(0, advancedCursor - 1);
+            advancedSelectionAnchor = -1;
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_RIGHT) {
             advancedCursor = Math.min(advancedText.length(), advancedCursor + 1);
+            advancedSelectionAnchor = -1;
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_HOME) {
             advancedCursor = lineStart(advancedText, advancedCursor);
+            advancedSelectionAnchor = -1;
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_END) {
             advancedCursor = lineEnd(advancedText, advancedCursor);
+            advancedSelectionAnchor = -1;
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_UP) {
             advancedCursor = moveCursorVertical(advancedText, advancedCursor, -1);
+            advancedSelectionAnchor = -1;
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_DOWN) {
             advancedCursor = moveCursorVertical(advancedText, advancedCursor, 1);
+            advancedSelectionAnchor = -1;
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_ENTER || keyCode == GLFW.GLFW_KEY_KP_ENTER) {
@@ -1892,10 +3356,29 @@ public class MacroWorkbenchV2Screen extends Screen {
         }
         if (isCtrlDown() && keyCode == GLFW.GLFW_KEY_V && this.client != null) {
             insertAtCursor(this.client.keyboard.getClipboard());
+            advancedActionSuggestionIndex = -1;
             return true;
         }
         if (isCtrlDown() && keyCode == GLFW.GLFW_KEY_C && this.client != null) {
-            this.client.keyboard.setClipboard(advancedText);
+            this.client.keyboard.setClipboard(hasSelection(advancedSelectionAnchor, advancedCursor)
+                    ? selectedText(advancedText, advancedSelectionAnchor, advancedCursor)
+                    : advancedText);
+            return true;
+        }
+        if (isCtrlDown() && keyCode == GLFW.GLFW_KEY_X && this.client != null) {
+            this.client.keyboard.setClipboard(hasSelection(advancedSelectionAnchor, advancedCursor)
+                    ? selectedText(advancedText, advancedSelectionAnchor, advancedCursor)
+                    : advancedText);
+            if (hasSelection(advancedSelectionAnchor, advancedCursor)) {
+                int start = selectionStart(advancedSelectionAnchor, advancedCursor);
+                int end = selectionEnd(advancedSelectionAnchor, advancedCursor);
+                advancedText = advancedText.substring(0, start) + advancedText.substring(end);
+                advancedCursor = start;
+            } else {
+                advancedText = "";
+                advancedCursor = 0;
+            }
+            advancedSelectionAnchor = -1;
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
@@ -1906,41 +3389,139 @@ public class MacroWorkbenchV2Screen extends Screen {
     }
 
     private boolean handleAdvancedActionKey(int keyCode) {
+        if (isCtrlDown() && keyCode == GLFW.GLFW_KEY_A) {
+            advancedActionSelectionAnchor = 0;
+            advancedActionCursor = advancedAction.length();
+            return true;
+        }
+        if (keyCode == GLFW.GLFW_KEY_UP || keyCode == GLFW.GLFW_KEY_DOWN) {
+            List<String> suggestions = advancedActionSuggestions();
+            if (!suggestions.isEmpty()) {
+                int dir = keyCode == GLFW.GLFW_KEY_UP ? -1 : 1;
+                int start = advancedActionSuggestionIndex < 0
+                        ? suggestions.indexOf(advancedAction)
+                        : advancedActionSuggestionIndex;
+                if (start < 0) {
+                    start = dir < 0 ? suggestions.size() : -1;
+                }
+                int next = start + dir;
+                if (next < 0) {
+                    next = suggestions.size() - 1;
+                }
+                if (next >= suggestions.size()) {
+                    next = 0;
+                }
+                advancedActionSuggestionIndex = next;
+                advancedAction = suggestions.get(next);
+                advancedActionCursor = advancedAction.length();
+                return true;
+            }
+        }
         if (keyCode == GLFW.GLFW_KEY_BACKSPACE) {
+            if (hasSelection(advancedActionSelectionAnchor, advancedActionCursor)) {
+                int start = selectionStart(advancedActionSelectionAnchor, advancedActionCursor);
+                int end = selectionEnd(advancedActionSelectionAnchor, advancedActionCursor);
+                advancedAction = advancedAction.substring(0, start) + advancedAction.substring(end);
+                advancedActionCursor = start;
+                advancedActionSelectionAnchor = -1;
+                advancedActionSuggestionIndex = -1;
+                return true;
+            }
             if (advancedActionCursor > 0) {
                 advancedAction = advancedAction.substring(0, advancedActionCursor - 1) + advancedAction.substring(advancedActionCursor);
                 advancedActionCursor--;
+                advancedActionSuggestionIndex = -1;
             }
+            advancedActionSelectionAnchor = -1;
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_DELETE) {
+            if (hasSelection(advancedActionSelectionAnchor, advancedActionCursor)) {
+                int start = selectionStart(advancedActionSelectionAnchor, advancedActionCursor);
+                int end = selectionEnd(advancedActionSelectionAnchor, advancedActionCursor);
+                advancedAction = advancedAction.substring(0, start) + advancedAction.substring(end);
+                advancedActionCursor = start;
+                advancedActionSelectionAnchor = -1;
+                advancedActionSuggestionIndex = -1;
+                return true;
+            }
             if (advancedActionCursor < advancedAction.length()) {
                 advancedAction = advancedAction.substring(0, advancedActionCursor) + advancedAction.substring(advancedActionCursor + 1);
+                advancedActionSuggestionIndex = -1;
             }
+            advancedActionSelectionAnchor = -1;
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_LEFT) {
             advancedActionCursor = Math.max(0, advancedActionCursor - 1);
+            advancedActionSelectionAnchor = -1;
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_RIGHT) {
             advancedActionCursor = Math.min(advancedAction.length(), advancedActionCursor + 1);
+            advancedActionSelectionAnchor = -1;
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_HOME) {
             advancedActionCursor = 0;
+            advancedActionSelectionAnchor = -1;
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_END) {
             advancedActionCursor = advancedAction.length();
+            advancedActionSelectionAnchor = -1;
+            return true;
+        }
+        if (keyCode == GLFW.GLFW_KEY_TAB) {
+            List<String> suggestions = advancedActionSuggestions();
+            if (!suggestions.isEmpty()) {
+                int dir = isShiftDown() ? -1 : 1;
+                int start = advancedActionSuggestionIndex < 0
+                        ? suggestions.indexOf(advancedAction)
+                        : advancedActionSuggestionIndex;
+                if (start < 0) {
+                    start = isShiftDown() ? suggestions.size() : -1;
+                }
+                int next = start + dir;
+                if (next < 0) {
+                    next = suggestions.size() - 1;
+                }
+                if (next >= suggestions.size()) {
+                    next = 0;
+                }
+                advancedActionSuggestionIndex = next;
+                advancedAction = suggestions.get(next);
+                advancedActionCursor = advancedAction.length();
+                advancedActionSelectionAnchor = -1;
+            }
             return true;
         }
         if (isCtrlDown() && keyCode == GLFW.GLFW_KEY_V && this.client != null) {
             insertAtAdvancedActionCursor(this.client.keyboard.getClipboard());
+            advancedActionSuggestionIndex = -1;
             return true;
         }
         if (isCtrlDown() && keyCode == GLFW.GLFW_KEY_C && this.client != null) {
-            this.client.keyboard.setClipboard(advancedAction);
+            this.client.keyboard.setClipboard(hasSelection(advancedActionSelectionAnchor, advancedActionCursor)
+                    ? selectedText(advancedAction, advancedActionSelectionAnchor, advancedActionCursor)
+                    : advancedAction);
+            return true;
+        }
+        if (isCtrlDown() && keyCode == GLFW.GLFW_KEY_X && this.client != null) {
+            this.client.keyboard.setClipboard(hasSelection(advancedActionSelectionAnchor, advancedActionCursor)
+                    ? selectedText(advancedAction, advancedActionSelectionAnchor, advancedActionCursor)
+                    : advancedAction);
+            if (hasSelection(advancedActionSelectionAnchor, advancedActionCursor)) {
+                int start = selectionStart(advancedActionSelectionAnchor, advancedActionCursor);
+                int end = selectionEnd(advancedActionSelectionAnchor, advancedActionCursor);
+                advancedAction = advancedAction.substring(0, start) + advancedAction.substring(end);
+                advancedActionCursor = start;
+            } else {
+                advancedAction = "";
+                advancedActionCursor = 0;
+            }
+            advancedActionSelectionAnchor = -1;
+            advancedActionSuggestionIndex = -1;
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
@@ -1961,36 +3542,70 @@ public class MacroWorkbenchV2Screen extends Screen {
     private boolean handleAdvancedColorKey(int keyCode, boolean background) {
         String value = background ? advancedBgColor : advancedBorderColor;
         int cursor = background ? advancedBgCursor : advancedBorderCursor;
+        int selectionAnchor = background ? advancedBgSelectionAnchor : advancedBorderSelectionAnchor;
+
+        if (isCtrlDown() && keyCode == GLFW.GLFW_KEY_A) {
+            if (background) {
+                advancedBgSelectionAnchor = 0;
+                advancedBgCursor = value.length();
+            } else {
+                advancedBorderSelectionAnchor = 0;
+                advancedBorderCursor = value.length();
+            }
+            return true;
+        }
 
         if (keyCode == GLFW.GLFW_KEY_BACKSPACE) {
+            if (hasSelection(selectionAnchor, cursor)) {
+                int start = selectionStart(selectionAnchor, cursor);
+                int end = selectionEnd(selectionAnchor, cursor);
+                value = value.substring(0, start) + value.substring(end);
+                setAdvancedColorState(background, value, start);
+                if (background) advancedBgSelectionAnchor = -1; else advancedBorderSelectionAnchor = -1;
+                return true;
+            }
             if (cursor > 0) {
                 value = value.substring(0, cursor - 1) + value.substring(cursor);
                 cursor--;
             }
             setAdvancedColorState(background, value, cursor);
+            if (background) advancedBgSelectionAnchor = -1; else advancedBorderSelectionAnchor = -1;
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_DELETE) {
+            if (hasSelection(selectionAnchor, cursor)) {
+                int start = selectionStart(selectionAnchor, cursor);
+                int end = selectionEnd(selectionAnchor, cursor);
+                value = value.substring(0, start) + value.substring(end);
+                setAdvancedColorState(background, value, start);
+                if (background) advancedBgSelectionAnchor = -1; else advancedBorderSelectionAnchor = -1;
+                return true;
+            }
             if (cursor < value.length()) {
                 value = value.substring(0, cursor) + value.substring(cursor + 1);
             }
             setAdvancedColorState(background, value, cursor);
+            if (background) advancedBgSelectionAnchor = -1; else advancedBorderSelectionAnchor = -1;
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_LEFT) {
             setAdvancedColorState(background, value, Math.max(0, cursor - 1));
+            if (background) advancedBgSelectionAnchor = -1; else advancedBorderSelectionAnchor = -1;
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_RIGHT) {
             setAdvancedColorState(background, value, Math.min(value.length(), cursor + 1));
+            if (background) advancedBgSelectionAnchor = -1; else advancedBorderSelectionAnchor = -1;
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_HOME) {
             setAdvancedColorState(background, value, 0);
+            if (background) advancedBgSelectionAnchor = -1; else advancedBorderSelectionAnchor = -1;
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_END) {
             setAdvancedColorState(background, value, value.length());
+            if (background) advancedBgSelectionAnchor = -1; else advancedBorderSelectionAnchor = -1;
             return true;
         }
         if (isCtrlDown() && keyCode == GLFW.GLFW_KEY_V && this.client != null) {
@@ -2002,7 +3617,24 @@ public class MacroWorkbenchV2Screen extends Screen {
             return true;
         }
         if (isCtrlDown() && keyCode == GLFW.GLFW_KEY_C && this.client != null) {
-            this.client.keyboard.setClipboard(value);
+            this.client.keyboard.setClipboard(hasSelection(selectionAnchor, cursor)
+                    ? selectedText(value, selectionAnchor, cursor)
+                    : value);
+            return true;
+        }
+        if (isCtrlDown() && keyCode == GLFW.GLFW_KEY_X && this.client != null) {
+            this.client.keyboard.setClipboard(hasSelection(selectionAnchor, cursor)
+                    ? selectedText(value, selectionAnchor, cursor)
+                    : value);
+            if (hasSelection(selectionAnchor, cursor)) {
+                int start = selectionStart(selectionAnchor, cursor);
+                int end = selectionEnd(selectionAnchor, cursor);
+                value = value.substring(0, start) + value.substring(end);
+                setAdvancedColorState(background, value, start);
+            } else {
+                setAdvancedColorState(background, "", 0);
+            }
+            if (background) advancedBgSelectionAnchor = -1; else advancedBorderSelectionAnchor = -1;
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
@@ -2026,32 +3658,61 @@ public class MacroWorkbenchV2Screen extends Screen {
         if (s == null || s.isEmpty()) {
             return;
         }
+        if (hasSelection(advancedSelectionAnchor, advancedCursor)) {
+            int start = selectionStart(advancedSelectionAnchor, advancedCursor);
+            int end = selectionEnd(advancedSelectionAnchor, advancedCursor);
+            this.advancedText = advancedText.substring(0, start) + advancedText.substring(end);
+            this.advancedCursor = start;
+        }
         this.advancedText = advancedText.substring(0, advancedCursor) + s + advancedText.substring(advancedCursor);
         this.advancedCursor += s.length();
+        this.advancedSelectionAnchor = -1;
     }
 
     private void insertAtAdvancedActionCursor(String s) {
         if (s == null || s.isEmpty()) {
             return;
         }
+        if (hasSelection(advancedActionSelectionAnchor, advancedActionCursor)) {
+            int start = selectionStart(advancedActionSelectionAnchor, advancedActionCursor);
+            int end = selectionEnd(advancedActionSelectionAnchor, advancedActionCursor);
+            this.advancedAction = advancedAction.substring(0, start) + advancedAction.substring(end);
+            this.advancedActionCursor = start;
+        }
         this.advancedAction = advancedAction.substring(0, advancedActionCursor) + s + advancedAction.substring(advancedActionCursor);
         this.advancedActionCursor += s.length();
+        this.advancedActionSelectionAnchor = -1;
+        this.advancedActionSuggestionIndex = -1;
     }
 
     private void insertAtAdvancedBgCursor(String s) {
         if (s == null || s.isEmpty()) {
             return;
         }
+        if (hasSelection(advancedBgSelectionAnchor, advancedBgCursor)) {
+            int start = selectionStart(advancedBgSelectionAnchor, advancedBgCursor);
+            int end = selectionEnd(advancedBgSelectionAnchor, advancedBgCursor);
+            this.advancedBgColor = advancedBgColor.substring(0, start) + advancedBgColor.substring(end);
+            this.advancedBgCursor = start;
+        }
         this.advancedBgColor = advancedBgColor.substring(0, advancedBgCursor) + s + advancedBgColor.substring(advancedBgCursor);
         this.advancedBgCursor += s.length();
+        this.advancedBgSelectionAnchor = -1;
     }
 
     private void insertAtAdvancedBorderCursor(String s) {
         if (s == null || s.isEmpty()) {
             return;
         }
+        if (hasSelection(advancedBorderSelectionAnchor, advancedBorderCursor)) {
+            int start = selectionStart(advancedBorderSelectionAnchor, advancedBorderCursor);
+            int end = selectionEnd(advancedBorderSelectionAnchor, advancedBorderCursor);
+            this.advancedBorderColor = advancedBorderColor.substring(0, start) + advancedBorderColor.substring(end);
+            this.advancedBorderCursor = start;
+        }
         this.advancedBorderColor = advancedBorderColor.substring(0, advancedBorderCursor) + s + advancedBorderColor.substring(advancedBorderCursor);
         this.advancedBorderCursor += s.length();
+        this.advancedBorderSelectionAnchor = -1;
     }
 
     private void applyAdvancedColorFieldsToSelection() {
@@ -2322,15 +3983,25 @@ public class MacroWorkbenchV2Screen extends Screen {
 
         persistExternalCanvasElements();
 
-        MacroHudDataHandler.HudConfig next = new MacroHudDataHandler.HudConfig();
+        MacroHudDataHandler.HudConfig next = MacroHudDataHandler.getConfigCopy();
         next.enabled = this.working.enabled;
-        next.elements = new ArrayList<>();
+        next.activePresetId = safe(this.working.activePresetId).isBlank() ? MacroHudDataHandler.getActivePresetId() : safe(this.working.activePresetId);
+        if (next.presetElements == null) {
+            next.presetElements = new LinkedHashMap<>();
+        }
+
+        List<MacroHudDataHandler.HudElement> filtered = new ArrayList<>();
         for (MacroHudDataHandler.HudElement element : this.working.elements) {
             if (!isExternalCanvasProxy(element)) {
-                next.elements.add(element);
+                filtered.add(element);
             }
         }
+        next.presetElements.put(next.activePresetId, new ArrayList<>(filtered));
+        next.elements = new ArrayList<>(filtered);
         MacroHudDataHandler.setConfig(next);
+        this.working = MacroHudDataHandler.getConfigCopy();
+        syncExternalCanvasElementsFromSources();
+        syncPresetControls();
     }
 
     private void syncExternalCanvasElementsFromSources() {
@@ -2354,23 +4025,8 @@ public class MacroWorkbenchV2Screen extends Screen {
             if (!isExternalCanvasProxy(element)) {
                 continue;
             }
-            String hudId = isSecondaryChatProxy(element)
-                    ? HudCanvasDataHandler.ELEMENT_SECONDARY_CHAT
-                    : HudCanvasDataHandler.ELEMENT_NBT_INSPECTOR;
-            HudCanvasDataHandler.HudCanvasElement external = HudCanvasDataHandler.getMutableElement(hudId,
-                    isSecondaryChatProxy(element) ? this::defaultSecondaryChatCanvas : this::defaultNbtInspectorCanvas);
-            external.x = element.x;
-            external.y = element.y;
-            external.width = element.width;
-            external.height = element.height;
-            external.lineHeight = element.lineHeight;
-            external.fontScale = element.fontScale;
-            external.backgroundColor = element.backgroundColor;
-            external.textColor = element.textColor;
-            external.borderColor = element.borderColor;
-            external.drawBackground = element.drawBackground;
-            external.drawBorder = element.drawBorder;
-            external.visible = element.visible;
+            HudCanvasDataHandler.HudCanvasElement external = getMutableExternalCanvasElement(element);
+            applyProxyToExternalCanvas(element, external);
             changed = true;
         }
         if (changed) {
@@ -2449,6 +4105,12 @@ public class MacroWorkbenchV2Screen extends Screen {
         proxy.horizontalAlign = MacroHudDataHandler.HorizontalAlign.LEFT;
         proxy.verticalAlign = MacroHudDataHandler.VerticalAlign.TOP;
         proxy.visibilityMode = MacroHudDataHandler.VisibilityMode.ALWAYS;
+        applyExternalCanvasToProxy(external, proxy);
+
+        clampProxyToCanvas(proxy);
+    }
+
+    private void applyExternalCanvasToProxy(HudCanvasDataHandler.HudCanvasElement external, MacroHudDataHandler.HudElement proxy) {
         proxy.visible = external.visible;
         proxy.x = external.x;
         proxy.y = external.y;
@@ -2461,8 +4123,49 @@ public class MacroWorkbenchV2Screen extends Screen {
         proxy.borderColor = external.borderColor;
         proxy.drawBackground = external.drawBackground;
         proxy.drawBorder = external.drawBorder;
+    }
 
-        clampProxyToCanvas(proxy);
+    private void applyProxyToExternalCanvas(MacroHudDataHandler.HudElement proxy, HudCanvasDataHandler.HudCanvasElement external) {
+        external.x = proxy.x;
+        external.y = proxy.y;
+        external.width = proxy.width;
+        external.height = proxy.height;
+        external.lineHeight = proxy.lineHeight;
+        external.fontScale = proxy.fontScale;
+        external.backgroundColor = proxy.backgroundColor;
+        external.textColor = proxy.textColor;
+        external.borderColor = proxy.borderColor;
+        external.drawBackground = proxy.drawBackground;
+        external.drawBorder = proxy.drawBorder;
+        external.visible = proxy.visible;
+    }
+
+    private HudCanvasDataHandler.HudCanvasElement getMutableExternalCanvasElement(MacroHudDataHandler.HudElement proxy) {
+        boolean secondaryChat = isSecondaryChatProxy(proxy);
+        return HudCanvasDataHandler.getMutableElement(
+                secondaryChat ? HudCanvasDataHandler.ELEMENT_SECONDARY_CHAT : HudCanvasDataHandler.ELEMENT_NBT_INSPECTOR,
+                secondaryChat ? this::defaultSecondaryChatCanvas : this::defaultNbtInspectorCanvas
+        );
+    }
+
+    private List<String> buildExternalProxyPreviewLines(MacroHudDataHandler.HudElement element, String title) {
+        ExternalProxyRenderState state = getExternalProxyRenderState(element);
+        if (state == ExternalProxyRenderState.MODULE_DISABLED) {
+            return List.of(title, "&cUnified HUD element [DISABLED]");
+        }
+        return List.of(title, "&aUnified HUD element [ACTIVE]");
+    }
+
+    private ExternalProxyRenderState getExternalProxyRenderState(MacroHudDataHandler.HudElement element) {
+        if (isSecondaryChatProxy(element)) {
+            boolean active = ModConfig.secondaryChatEnabled && ModConfig.secondaryChatShowOverlay;
+            return active ? ExternalProxyRenderState.ACTIVE : ExternalProxyRenderState.MODULE_DISABLED;
+        }
+        if (isNbtInspectorProxy(element)) {
+            boolean active = NBTInfoHudOverlayModule.INSTANCE.isEnabled();
+            return active ? ExternalProxyRenderState.ACTIVE : ExternalProxyRenderState.MODULE_DISABLED;
+        }
+        return ExternalProxyRenderState.ACTIVE;
     }
 
     private void clampProxyToCanvas(MacroHudDataHandler.HudElement proxy) {
@@ -2473,6 +4176,195 @@ public class MacroWorkbenchV2Screen extends Screen {
         proxy.height = Math.clamp(proxy.height, 20, Math.max(20, this.height - BOTTOM_BAR_H - CANVAS_CONTENT_TOP));
         proxy.x = Math.clamp(proxy.x, 0, Math.max(0, this.width - proxy.width));
         proxy.y = Math.clamp(proxy.y, CANVAS_CONTENT_TOP, Math.max(CANVAS_CONTENT_TOP, (this.height - BOTTOM_BAR_H) - proxy.height));
+    }
+
+    private void clampElementToCanvas(MacroHudDataHandler.HudElement element) {
+        if (element == null) {
+            return;
+        }
+        element.width = Math.clamp(element.width, 1, Math.max(1, this.width));
+        element.height = Math.clamp(element.height, 1, Math.max(1, this.height - BOTTOM_BAR_H - CANVAS_CONTENT_TOP));
+        int screenX = Math.clamp(resolveElementX(element), 0, Math.max(0, this.width - element.width));
+        int screenY = Math.clamp(resolveElementY(element), CANVAS_CONTENT_TOP,
+                Math.max(CANVAS_CONTENT_TOP, (this.height - BOTTOM_BAR_H) - element.height));
+        setElementScreenPosition(element, screenX, screenY);
+    }
+
+    private boolean isAnyCanvasTextFieldFocused() {
+        return (quickField != null && quickField.isFocused())
+                || (macroField != null && macroField.isFocused())
+                || (actionField != null && actionField.isFocused())
+                || (presetNameField != null && presetNameField.isFocused());
+    }
+
+    private List<MacroHudDataHandler.HudElement> getSelectedElements() {
+        if (selectedElementIds.isEmpty() && selected != null) {
+            selectedElementIds.add(selected.id);
+        }
+        List<MacroHudDataHandler.HudElement> out = new ArrayList<>();
+        for (MacroHudDataHandler.HudElement e : this.working.elements) {
+            if (e != null && selectedElementIds.contains(e.id)) {
+                out.add(e);
+            }
+        }
+        return out;
+    }
+
+    private MacroHudDataHandler.HudElement findElementById(String id) {
+        if (id == null || this.working == null) {
+            return null;
+        }
+        for (MacroHudDataHandler.HudElement e : this.working.elements) {
+            if (e != null && id.equals(e.id)) {
+                return e;
+            }
+        }
+        return null;
+    }
+
+    private List<ElementSnapshot> captureSnapshots(List<MacroHudDataHandler.HudElement> elements) {
+        List<ElementSnapshot> snapshots = new ArrayList<>();
+        for (MacroHudDataHandler.HudElement e : elements) {
+            snapshots.add(new ElementSnapshot(e.id, e.x, e.y, e.width, e.height));
+        }
+        return snapshots;
+    }
+
+    private boolean hasSnapshotChanges(List<ElementSnapshot> snapshots) {
+        for (ElementSnapshot snapshot : snapshots) {
+            MacroHudDataHandler.HudElement e = findElementById(snapshot.id());
+            if (e == null) {
+                continue;
+            }
+            if (e.x != snapshot.x() || e.y != snapshot.y() || e.width != snapshot.width() || e.height != snapshot.height()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void undoLastMove() {
+        if (moveUndoStack.isEmpty()) {
+            return;
+        }
+        List<ElementSnapshot> snapshots = moveUndoStack.pop();
+        for (ElementSnapshot snapshot : snapshots) {
+            MacroHudDataHandler.HudElement e = findElementById(snapshot.id());
+            if (e == null) {
+                continue;
+            }
+            e.x = snapshot.x();
+            e.y = snapshot.y();
+            e.width = snapshot.width();
+            e.height = snapshot.height();
+            clampElementToCanvas(e);
+        }
+        syncCanvasFields();
+    }
+
+    private void copySelectedElements() {
+        elementClipboard.clear();
+        for (MacroHudDataHandler.HudElement e : getSelectedElements()) {
+            elementClipboard.add(cloneElement(e));
+        }
+    }
+
+    private void pasteElementsFromClipboard() {
+        if (elementClipboard.isEmpty()) {
+            return;
+        }
+        List<MacroHudDataHandler.HudElement> pasted = new ArrayList<>();
+        for (int i = 0; i < elementClipboard.size(); i++) {
+            MacroHudDataHandler.HudElement clone = cloneElement(elementClipboard.get(i));
+            clone.id = UUID.randomUUID().toString().substring(0, 8);
+            int offset = 12 + i * 4;
+            clone.x += offset;
+            clone.y += offset;
+            clampElementToCanvas(clone);
+            this.working.elements.add(clone);
+            pasted.add(clone);
+        }
+        selectedElementIds.clear();
+        for (MacroHudDataHandler.HudElement e : pasted) {
+            selectedElementIds.add(e.id);
+        }
+        selected = pasted.get(pasted.size() - 1);
+        syncCanvasFields();
+    }
+
+    private void copySelectedDimensions() {
+        if (selected == null) {
+            return;
+        }
+        clipboardWidth = Math.max(1, selected.width);
+        clipboardHeight = Math.max(1, selected.height);
+    }
+
+    private void pasteDimensionsToSelection() {
+        if (clipboardWidth <= 0 || clipboardHeight <= 0) {
+            return;
+        }
+        for (MacroHudDataHandler.HudElement e : getSelectedElements()) {
+            e.width = clipboardWidth;
+            e.height = clipboardHeight;
+            clampElementToCanvas(e);
+        }
+        syncCanvasFields();
+    }
+
+    private static MacroHudDataHandler.HudElement cloneElement(MacroHudDataHandler.HudElement e) {
+        MacroHudDataHandler.HudElement cloned = new MacroHudDataHandler.HudElement();
+        cloned.id = e.id;
+        cloned.type = e.type;
+        cloned.label = e.label;
+        cloned.text = e.text;
+        cloned.macroId = e.macroId;
+        cloned.buttonAction = e.buttonAction;
+        cloned.x = e.x;
+        cloned.y = e.y;
+        cloned.anchor = e.anchor;
+        cloned.width = e.width;
+        cloned.height = e.height;
+        cloned.lineHeight = e.lineHeight;
+        cloned.fontScale = e.fontScale;
+        cloned.backgroundColor = e.backgroundColor;
+        cloned.borderColor = e.borderColor;
+        cloned.textColor = e.textColor;
+        cloned.drawBackground = e.drawBackground;
+        cloned.drawBorder = e.drawBorder;
+        cloned.horizontalAlign = e.horizontalAlign;
+        cloned.verticalAlign = e.verticalAlign;
+        cloned.visibilityMode = e.visibilityMode;
+        cloned.visible = e.visible;
+        cloned.sourceToken = e.sourceToken;
+        cloned.sourceTokenMax = e.sourceTokenMax;
+        cloned.prefix = e.prefix;
+        cloned.suffix = e.suffix;
+        cloned.minValue = e.minValue;
+        cloned.maxValue = e.maxValue;
+        cloned.colorStart = e.colorStart;
+        cloned.colorEnd = e.colorEnd;
+        cloned.colorWarn = e.colorWarn;
+        cloned.colorCrit = e.colorCrit;
+        cloned.warnThreshold = e.warnThreshold;
+        cloned.critThreshold = e.critThreshold;
+        cloned.segmented = e.segmented;
+        cloned.segments = e.segments;
+        cloned.maxLines = e.maxLines;
+        cloned.listScroll = e.listScroll;
+        cloned.iconKind = e.iconKind;
+        cloned.iconId = e.iconId;
+        cloned.iconShowCount = e.iconShowCount;
+        cloned.iconShowDurability = e.iconShowDurability;
+        cloned.iconShowCooldown = e.iconShowCooldown;
+        cloned.shapeType = e.shapeType;
+        cloned.shapeFilled = e.shapeFilled;
+        cloned.shapeRadius = e.shapeRadius;
+        cloned.shapeThickness = e.shapeThickness;
+        cloned.stateOnText = e.stateOnText;
+        cloned.stateOffText = e.stateOffText;
+        cloned.stateShowValue = e.stateShowValue;
+        return cloned;
     }
 
     private boolean isShiftDown() {
@@ -2525,57 +4417,86 @@ public class MacroWorkbenchV2Screen extends Screen {
         return mouseX >= x && mouseX <= x + e.width && mouseY >= y && mouseY <= y + e.height;
     }
 
-    private static void drawBorder(DrawContext context, int x1, int y1, int x2, int y2, int color) {
-        context.fill(x1, y1, x2, y1 + 1, color);
-        context.fill(x1, y2 - 1, x2, y2, color);
-        context.fill(x1, y1, x1 + 1, y2, color);
-        context.fill(x2 - 1, y1, x2, y2, color);
+    private static boolean isResizeHandleHit(int x, int y, MacroHudDataHandler.HudElement e, double mouseX, double mouseY) {
+        int handleSize = 8;
+        int hx = x + e.width - handleSize;
+        int hy = y + e.height - handleSize;
+        return containsBox(mouseX, mouseY, hx, hy, handleSize, handleSize);
     }
+
 
     private int resolveElementX(MacroHudDataHandler.HudElement e) {
         return switch (e.anchor) {
             case TOP_LEFT, BOTTOM_LEFT -> e.x;
             case TOP_RIGHT, BOTTOM_RIGHT -> this.width - e.width - e.x;
-            case CENTER -> (this.width - e.width) / 2 + e.x;
+            case TOP_CENTER, BOTTOM_CENTER, MIDDLE_CENTER, CENTER -> (this.width - e.width) / 2 + e.x;
         };
     }
 
     private int resolveElementY(MacroHudDataHandler.HudElement e) {
+        int canvasBottom = this.height - BOTTOM_BAR_H;
+        int canvasHeight = Math.max(1, canvasBottom - CANVAS_CONTENT_TOP);
         return switch (e.anchor) {
-            case TOP_LEFT, TOP_RIGHT -> e.y;
-            case BOTTOM_LEFT, BOTTOM_RIGHT -> this.height - e.height - e.y;
-            case CENTER -> (this.height - e.height) / 2 + e.y;
+            case TOP_LEFT, TOP_CENTER, TOP_RIGHT -> e.y;
+            case BOTTOM_LEFT, BOTTOM_CENTER, BOTTOM_RIGHT -> canvasBottom - e.height - e.y;
+            case MIDDLE_CENTER, CENTER -> CANVAS_CONTENT_TOP + (canvasHeight - e.height) / 2 + e.y;
         };
     }
 
     private void setElementScreenPosition(MacroHudDataHandler.HudElement e, int screenX, int screenY) {
+        int canvasBottom = this.height - BOTTOM_BAR_H;
+        int canvasHeight = Math.max(1, canvasBottom - CANVAS_CONTENT_TOP);
         e.x = switch (e.anchor) {
             case TOP_LEFT, BOTTOM_LEFT -> screenX;
             case TOP_RIGHT, BOTTOM_RIGHT -> this.width - e.width - screenX;
-            case CENTER -> screenX - (this.width - e.width) / 2;
+            case TOP_CENTER, BOTTOM_CENTER, MIDDLE_CENTER, CENTER -> screenX - (this.width - e.width) / 2;
         };
         e.y = switch (e.anchor) {
-            case TOP_LEFT, TOP_RIGHT -> screenY;
-            case BOTTOM_LEFT, BOTTOM_RIGHT -> this.height - e.height - screenY;
-            case CENTER -> screenY - (this.height - e.height) / 2;
+            case TOP_LEFT, TOP_CENTER, TOP_RIGHT -> screenY;
+            case BOTTOM_LEFT, BOTTOM_CENTER, BOTTOM_RIGHT -> canvasBottom - e.height - screenY;
+            case MIDDLE_CENTER, CENTER -> screenY - (CANVAS_CONTENT_TOP + (canvasHeight - e.height) / 2);
         };
     }
 
-    private static String shortAnchor(MacroHudDataHandler.Anchor anchor) {
-        return switch (anchor) {
-            case TOP_LEFT -> "TL";
-            case TOP_RIGHT -> "TR";
-            case BOTTOM_LEFT -> "BL";
-            case BOTTOM_RIGHT -> "BR";
-            case CENTER -> "C";
-        };
+    private static boolean hasSelection(int anchor, int cursor) { return anchor >= 0 && anchor != cursor; }
+    private static int selectionStart(int anchor, int cursor) { return Math.min(anchor, cursor); }
+    private static int selectionEnd(int anchor, int cursor) { return Math.max(anchor, cursor); }
+    private static String selectedText(String text, int anchor, int cursor) {
+        if (!hasSelection(anchor, cursor)) return "";
+        return text.substring(selectionStart(anchor, cursor), selectionEnd(anchor, cursor));
     }
-
-    private static String shortVisibility(MacroHudDataHandler.VisibilityMode mode) {
-        return switch (mode) {
-            case ALWAYS -> "ALL";
-            case CHAT_ONLY -> "CHAT";
-        };
+    private static int updateSelectionAnchor(int currentAnchor, int oldCursor, int newCursor, boolean shiftDown) {
+        if (!shiftDown) return -1;
+        if (oldCursor == newCursor) return currentAnchor;
+        return currentAnchor < 0 ? oldCursor : currentAnchor;
+    }
+    private void drawSingleLineSelection(DrawContext context, int textX, int textY, String text, int anchor, int cursor) {
+        if (!hasSelection(anchor, cursor)) return;
+        int sx = textX + this.textRenderer.getWidth(text.substring(0, selectionStart(anchor, cursor)));
+        int ex = textX + this.textRenderer.getWidth(text.substring(0, selectionEnd(anchor, cursor)));
+        if (ex > sx) context.fill(sx, textY, ex, textY + 9, 0x704A7CC7);
+    }
+    private void drawMultilineSelection(DrawContext context, int textX, int textY, int maxY, String text, int anchor, int cursor, int lineHeight) {
+        if (!hasSelection(anchor, cursor)) return;
+        int start = selectionStart(anchor, cursor);
+        int end = selectionEnd(anchor, cursor);
+        List<String> lines = splitLinesRaw(text);
+        int y = textY;
+        int index = 0;
+        for (String line : lines) {
+            if (y > maxY) break;
+            int lineStart = index;
+            int lineEnd = lineStart + line.length();
+            int selStart = Math.max(start, lineStart);
+            int selEnd = Math.min(end, lineEnd);
+            if (selEnd > selStart) {
+                int sx = textX + this.textRenderer.getWidth(line.substring(0, selStart - lineStart));
+                int ex = textX + this.textRenderer.getWidth(line.substring(0, selEnd - lineStart));
+                context.fill(sx, y, ex, y + 9, 0x704A7CC7);
+            }
+            y += lineHeight;
+            index = lineEnd + 1;
+        }
     }
 
     private static boolean containsBox(double x, double y, int boxX, int boxY, int boxW, int boxH) {
@@ -2650,7 +4571,6 @@ public class MacroWorkbenchV2Screen extends Screen {
         int i = 0;
         while (i < raw.length()) {
             char c = raw.charAt(i);
-
             if (c == '&' && i + 1 < raw.length()) {
                 int mapped = mapLegacyColor(raw.charAt(i + 1));
                 if (mapped != Integer.MIN_VALUE) {
@@ -2724,7 +4644,6 @@ public class MacroWorkbenchV2Screen extends Screen {
         int x = Math.max(0, localX);
         int bestCol = 0;
         int bestDist = Integer.MAX_VALUE;
-
         for (int col = 0; col <= line.length(); col++) {
             int w = this.textRenderer.getWidth(line.substring(0, col));
             int d = Math.abs(w - x);
@@ -2733,7 +4652,6 @@ public class MacroWorkbenchV2Screen extends Screen {
                 bestCol = col;
             }
         }
-
         return Math.clamp(base + bestCol, 0, safeText.length());
     }
 
@@ -2757,6 +4675,58 @@ public class MacroWorkbenchV2Screen extends Screen {
         }
         return out;
     }
+
+    private ItemStack resolvePreviewIconStack(String kind, String iconId) {
+        Identifier id = Identifier.tryParse(safe(iconId));
+        if (id == null) {
+            return new ItemStack(Items.STONE);
+        }
+        if ("block".equalsIgnoreCase(kind) && Registries.BLOCK.containsId(id)) {
+            return new ItemStack(Registries.BLOCK.get(id).asItem());
+        }
+        if (Registries.ITEM.containsId(id)) {
+            return new ItemStack(Registries.ITEM.get(id));
+        }
+        return new ItemStack(Items.STONE);
+    }
+
+    private static int blendColor(int c1, int c2, float t) {
+        float tt = Math.clamp(t, 0.0f, 1.0f);
+        int a1 = (c1 >>> 24) & 0xFF;
+        int r1 = (c1 >>> 16) & 0xFF;
+        int g1 = (c1 >>> 8) & 0xFF;
+        int b1 = c1 & 0xFF;
+        int a2 = (c2 >>> 24) & 0xFF;
+        int r2 = (c2 >>> 16) & 0xFF;
+        int g2 = (c2 >>> 8) & 0xFF;
+        int b2 = c2 & 0xFF;
+        int a = Math.round(a1 + (a2 - a1) * tt);
+        int r = Math.round(r1 + (r2 - r1) * tt);
+        int g = Math.round(g1 + (g2 - g1) * tt);
+        int b = Math.round(b1 + (b2 - b1) * tt);
+        return (a << 24) | (r << 16) | (g << 8) | b;
+    }
+
+    private static String shortAnchor(MacroHudDataHandler.Anchor anchor) {
+        return switch (anchor) {
+            case TOP_LEFT -> "TL";
+            case TOP_CENTER -> "TC";
+            case TOP_RIGHT -> "TR";
+            case BOTTOM_LEFT -> "BL";
+            case BOTTOM_CENTER -> "BC";
+            case BOTTOM_RIGHT -> "BR";
+            case MIDDLE_CENTER -> "MC";
+            case CENTER -> "C*";
+        };
+    }
+
+    private static String shortVisibility(MacroHudDataHandler.VisibilityMode mode) {
+        return switch (mode) {
+            case ALWAYS -> "ALL";
+            case CHAT_ONLY -> "CHAT";
+        };
+    }
+
 
     private static String keyLabel(int keyCode) {
         return switch (keyCode) {
@@ -2832,55 +4802,18 @@ public class MacroWorkbenchV2Screen extends Screen {
         return STYLE_COLOR_PALETTE[0];
     }
 
-    private static List<String> placeholderDocs() {
-        return List.of(
-                "[How to use]",
-                "Write placeholders as {token}. Example: /msg {player.name} hi",
-                "Button Action supports cmd:/ msg:/ say:/ copy:/ bar:/ plain chat text",
-                "Button Action and macro commands both support placeholders",
-                "",
-                "[Player]",
-                "{player.name} => your name",
-                "{player.uuid} => your UUID",
-                "{hp} {max_hp} {food} {saturation} {xp} {level}",
-                "{yaw} {pitch} {player.gamemode}",
-                "",
-                "[Position]",
-                "{pos.x} {pos.y} {pos.z} => block coords",
-                "{pos.xf} {pos.yf} {pos.zf} => decimal coords",
-                "{pos.xyz} => x y z",
-                "{pos.biome} {pos.dim} {pos.light} {pos.facing}",
-                "",
-                "[Look target]",
-                "{look.block.xyz} {look.block.x} {look.block.y} {look.block.z}",
-                "{look.entity.name} {look.entity.uuid} {look.entity.id}",
-                "{look.dir.x} {look.dir.y} {look.dir.z}",
-                "",
-                "[Selectors and lists]",
-                "{sel.self} {sel.nearest} {sel.random} {sel.all} {sel.entities}",
-                "{players.count} {players.count.other} {players.nearby.count}",
-                "{players.list} {players.list.other} {.nl for newline}",
-                "{players.nearby.3} {.r128 .with_distance .unique .sort=name}",
-                "{entities.nearby.3} {.r64 .with_distance .unique .sort=distance}",
-                "",
-                "[Item and misc]",
-                "{hand.item} {hand.id} {hand.count}",
-                "{hand.damage} {hand.max_damage} {hand.durability}",
-                "{dim} => current dimension id",
-                "{rand.int(1,10)} => random integer in range",
-                "",
-                "[Conditionals in macro commands]",
-                "if:<left>==<right>::<when_true>:else:<when_false>",
-                "Example: if:{player.gamemode}==creative::cmd:/say yes:else:cmd:/say no"
-        );
-    }
+
 
     private int modalX() {
-        return this.width / 2 - (MODAL_W / 2);
+        int defaultX = this.width / 2 - (MODAL_W / 2);
+        int x = advancedModalPosX == null ? defaultX : advancedModalPosX;
+        return Math.clamp(x, 0, Math.max(0, this.width - MODAL_W));
     }
 
     private int modalY() {
-        return this.height / 2 - (MODAL_H / 2);
+        int defaultY = this.height / 2 - (MODAL_H / 2);
+        int y = advancedModalPosY == null ? defaultY : advancedModalPosY;
+        return Math.clamp(y, 0, Math.max(0, this.height - MODAL_H));
     }
 
     private void drawModalButton(DrawContext context, int x, int y, int w, int h, String label, boolean hovered) {

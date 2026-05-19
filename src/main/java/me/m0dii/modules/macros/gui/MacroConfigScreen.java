@@ -2,6 +2,7 @@ package me.m0dii.modules.macros.gui;
 
 import me.m0dii.modules.macros.CommandMacros;
 import me.m0dii.modules.macros.MacroDataHandler;
+import me.m0dii.modules.macros.MacroPlaceholders;
 import me.m0dii.utils.ModConfig;
 import me.shedaniel.clothconfig2.api.*;
 import me.shedaniel.clothconfig2.impl.builders.SubCategoryBuilder;
@@ -55,32 +56,7 @@ public final class MacroConfigScreen {
                 .setExpanded(false);
 
         subInstructors.add(eb.startTextDescription(
-                Text.literal("""
-                        Commands prefixes:
-                         • cmd:... or /... => server command
-                         • msg:... or say:... => chat message
-                         • bar:... => action bar message
-                         • copy:... => copy text to clipboard
-                        
-                        Placeholders (use {token}):
-                         • {player.___} (name, uuid, hp, max_hp, food, saturation, xp, level, yaw, pitch, facing, gamemode)
-                         • {pos.___} (x, y, z, biome, dim, light, block, facing)
-                         • {sel.self/@s}, {sel.nearest/@p}, {sel.random/@r}, {sel.all/@a}, {sel.entities/@e}
-                         • {players.count}, {players.count.other}
-                         • {players.list}, {players.list.other}, {players.list.nl}, {players.list.other.nl}
-                         • {players.nearby.3}, {players.nearby.3.nl}, {players.nearby.3.r128}, {players.nearby.3.r128.nl}
-                         • {players.nearby.3.with_distance}, {players.nearby.3.with_distance.nl}, {players.nearby.3.unique}
-                         • sort suffixes: .sort=name or .sort=distance (default distance)
-                         • {entities.nearby.3}, {entities.nearby.3.nl}, {entities.nearby.3.r64}, {entities.nearby.3.r64.nl}
-                         • {entities.nearby.3.with_distance}, {entities.nearby.3.with_distance.nl}, {entities.nearby.3.unique}
-                         • {look.block.xyz}, {look.entity.name}, {dim}, rand.int(a,b)
-                         • {hand.___} (item, id, count, damage, max_damage, durability)
-                        
-                        Conditional syntax support:
-                         • if:<cond>::<command_if_true>:else:<command_if_false?> (or omit :else: part)
-                         • Example: if:{player.gamemode}==creative::cmd:/gamemode spectator:else:cmd:/gamemode creative
-                        """
-                )
+                Text.literal(MacroPlaceholders.PLACEHOLDER_DOCS.stream().reduce((a, b) -> a + "\n" + b).orElse(""))
         ).build());
 
         category.addEntry(subInstructors.build());
