@@ -466,6 +466,12 @@ public final class MacroHudRuntime {
                 return block == null ? new ItemStack(Items.BARRIER) : new ItemStack(block.asItem());
             }
             if ("entity".equals(kind)) {
+                if (Registries.ITEM.containsId(id)) {
+                    var directItem = Registries.ITEM.get(id);
+                    if (directItem != null && directItem != Items.AIR) {
+                        return new ItemStack(directItem);
+                    }
+                }
                 Identifier eggId = Identifier.tryParse(id.getNamespace() + ":" + id.getPath() + "_spawn_egg");
                 if (eggId != null && Registries.ITEM.containsId(eggId)) {
                     return new ItemStack(Registries.ITEM.get(eggId));

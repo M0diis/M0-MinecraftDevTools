@@ -59,7 +59,16 @@ public class MacroWorkbenchV2Screen extends Screen {
             "hp", "max_hp", "food", "saturation", "xp", "level", "client.fps", "players.count", "players.nearby.count"
     };
     private static final String[] LIST_SOURCE_PRESETS = {
-            "players.nearby.5.with_distance", "players.list.other", "entities.nearby.6.with_distance", "players.nearby.10.nl"
+            "players.nearby.5.with_distance",
+            "players.nearby.8.with_distance.with_direction.nl",
+            "players.nearby.8.with_distance.with_direction_arrow.nl",
+            "players.nearby.16.r96.with_distance.sort=distance.nl",
+            "players.list.other",
+            "players.list.other.nl",
+            "entities.nearby.6.with_distance",
+            "entities.nearby.10.with_distance.with_direction_arrow.nl",
+            "entities.nearby.20.r96.unique.with_distance.with_direction.sort=name",
+            "players.nearby.10.nl"
     };
     private static final String[] STATE_SOURCE_PRESETS = {
             "player.sprinting", "player.sneaking", "player.swimming", "player.on_ground", "world.is_day", "client.server.singleplayer"
@@ -153,12 +162,20 @@ public class MacroWorkbenchV2Screen extends Screen {
     private int advancedCursor = 0;
     private int advancedActionCursor = 0;
     private int advancedActionSuggestionIndex = -1;
+    private int advancedActionSuggestionScroll = 0;
     private int advancedSelectionAnchor = -1;
     private int advancedActionSelectionAnchor = -1;
     private int advancedBgCursor = 0;
     private int advancedBorderCursor = 0;
     private int advancedBgSelectionAnchor = -1;
     private int advancedBorderSelectionAnchor = -1;
+    private ModalDragSelectionField activeDragSelectionField = ModalDragSelectionField.NONE;
+    private int snapGuideX = Integer.MIN_VALUE;
+    private int snapGuideY = Integer.MIN_VALUE;
+
+    private static List<String> ALL_ITEM_IDS;
+    private static List<String> ALL_BLOCK_IDS;
+    private static List<String> ALL_ENTITY_IDS;
 
     private int placeholderScroll = 0;
     private boolean gridEnabled = GRID_ENABLED_PREF;
@@ -196,6 +213,15 @@ public class MacroWorkbenchV2Screen extends Screen {
     }
 
     private record ElementSnapshot(String id, int x, int y, int width, int height) {
+    }
+
+    private enum ModalDragSelectionField {
+        NONE,
+        ADVANCED_TEXT,
+        ADVANCED_ACTION,
+        ADVANCED_BG,
+        ADVANCED_BORDER,
+        KB_COMMANDS
     }
 
     private enum ExternalProxyRenderState {
@@ -500,9 +526,11 @@ public class MacroWorkbenchV2Screen extends Screen {
 
         if (advancedOpen) {
             renderAdvancedModal(context, mouseX, mouseY);
+            updateModalDragSelection(mouseX, mouseY);
         }
         if (kbCommandsModalOpen) {
             renderKeyboardCommandsModal(context, mouseX, mouseY);
+            updateModalDragSelection(mouseX, mouseY);
         }
         if (this.tab == Tab.CANVAS && addElementModalOpen && !advancedOpen && !kbCommandsModalOpen) {
             renderAddElementModal(context, mouseX, mouseY);
@@ -541,6 +569,7 @@ public class MacroWorkbenchV2Screen extends Screen {
                 drawCanvasElement(context, element);
             }
         }
+        drawSnapGuides(context);
 
         int y = this.height - BOTTOM_BAR_H;
         context.fill(0, y, this.width, this.height, 0xA0000000);
@@ -682,6 +711,25 @@ public class MacroWorkbenchV2Screen extends Screen {
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
         if (advancedOpen) {
+            if (selected != null && isCustomWidgetType(selected)) {
+                int boxX = modalX();
+                int boxY = modalY();
+                int sourceX = boxX + 12;
+                int sourceY = boxY + 72;
+                int sourceW = 214;
+                List<String> suggestions = advancedActionSuggestions();
+                if (!suggestions.isEmpty()) {
+                    int rowH = 10;
+                    int maxVisible = Math.max(1, Math.min(suggestions.size(), ((boxY + MODAL_H - 28) - (sourceY + 22)) / rowH));
+                    int dropY = sourceY + 22;
+                    int dropH = maxVisible * rowH;
+                    if (containsBox(mouseX, mouseY, sourceX, dropY, sourceW, dropH)) {
+                        int delta = verticalAmount > 0 ? -1 : 1;
+                        int maxScroll = Math.max(0, suggestions.size() - maxVisible);
+                        advancedActionSuggestionScroll = Math.clamp(advancedActionSuggestionScroll + delta, 0, maxScroll);
+                    }
+                }
+            }
             return true;
         }
 
@@ -1049,6 +1097,7 @@ public class MacroWorkbenchV2Screen extends Screen {
                 advancedActionSelectionAnchor = -1;
                 int localX = (int) (click.x() - (outgoingX + 4));
                 advancedActionCursor = cursorIndexFromPoint(advancedAction, localX, 0, 9);
+                beginModalSelectionDrag(ModalDragSelectionField.ADVANCED_ACTION);
                 return true;
             }
 
@@ -1059,6 +1108,7 @@ public class MacroWorkbenchV2Screen extends Screen {
                 advancedBorderColorFocused = false;
                 advancedSelectionAnchor = -1;
                 advancedCursor = cursorIndexFromPoint(advancedText, (int) (click.x() - (regexX + 4)), (int) (click.y() - (regexY + 4)), 9);
+                beginModalSelectionDrag(ModalDragSelectionField.ADVANCED_TEXT);
             }
             return true;
         }
@@ -1251,6 +1301,7 @@ public class MacroWorkbenchV2Screen extends Screen {
             advancedBgSelectionAnchor = -1;
             int localX = (int) (click.x() - (bgFieldX + 4));
             advancedBgCursor = cursorIndexFromPoint(advancedBgColor, localX, 0, 9);
+            beginModalSelectionDrag(ModalDragSelectionField.ADVANCED_BG);
             return true;
         }
 
@@ -1262,6 +1313,7 @@ public class MacroWorkbenchV2Screen extends Screen {
             advancedBorderSelectionAnchor = -1;
             int localX = (int) (click.x() - (borderFieldX + 4));
             advancedBorderCursor = cursorIndexFromPoint(advancedBorderColor, localX, 0, 9);
+            beginModalSelectionDrag(ModalDragSelectionField.ADVANCED_BORDER);
             return true;
         }
 
@@ -1273,6 +1325,7 @@ public class MacroWorkbenchV2Screen extends Screen {
             advancedActionSelectionAnchor = -1;
             int localX = (int) (click.x() - (actionX + 4));
             advancedActionCursor = cursorIndexFromPoint(advancedAction, localX, 0, 9);
+            beginModalSelectionDrag(ModalDragSelectionField.ADVANCED_ACTION);
             return true;
         }
 
@@ -1283,6 +1336,7 @@ public class MacroWorkbenchV2Screen extends Screen {
             advancedBorderColorFocused = false;
             advancedSelectionAnchor = -1;
             advancedCursor = cursorIndexFromPoint(advancedText, (int) (click.x() - (textX + 4)), (int) (click.y() - (textY + 4)), 9);
+            beginModalSelectionDrag(ModalDragSelectionField.ADVANCED_TEXT);
         }
         return true;
     }
@@ -1305,6 +1359,8 @@ public class MacroWorkbenchV2Screen extends Screen {
             dragPrimaryElementId = null;
             dragging = false;
             resizing = false;
+            snapGuideX = Integer.MIN_VALUE;
+            snapGuideY = Integer.MIN_VALUE;
             return;
         }
 
@@ -1338,6 +1394,9 @@ public class MacroWorkbenchV2Screen extends Screen {
             int[] snappedToElements = snapElementToNeighbors(selected, screenX, screenY);
             screenX = snappedToElements[0];
             screenY = snappedToElements[1];
+        } else {
+            snapGuideX = Integer.MIN_VALUE;
+            snapGuideY = Integer.MIN_VALUE;
         }
 
         if (selectedElementIds.size() <= 1 || dragPrimaryElementId == null || !dragStartScreenPositions.containsKey(dragPrimaryElementId)) {
@@ -1465,7 +1524,22 @@ public class MacroWorkbenchV2Screen extends Screen {
 
         snappedX = Math.clamp(snappedX, 0, Math.max(0, this.width - moving.width));
         snappedY = Math.clamp(snappedY, CANVAS_CONTENT_TOP, Math.max(CANVAS_CONTENT_TOP, this.height - BOTTOM_BAR_H - moving.height));
+        snapGuideX = Math.abs(snappedX - screenX) > 0 ? snappedX : Integer.MIN_VALUE;
+        snapGuideY = Math.abs(snappedY - screenY) > 0 ? snappedY : Integer.MIN_VALUE;
         return new int[]{snappedX, snappedY};
+    }
+
+    private void drawSnapGuides(DrawContext context) {
+        if (!dragging || !isShiftDown()) {
+            return;
+        }
+        int canvasBottom = Math.max(CANVAS_CONTENT_TOP + 1, this.height - BOTTOM_BAR_H);
+        if (snapGuideX != Integer.MIN_VALUE) {
+            context.fill(snapGuideX, CANVAS_CONTENT_TOP, snapGuideX + 1, canvasBottom, 0x90FFD75A);
+        }
+        if (snapGuideY != Integer.MIN_VALUE) {
+            context.fill(0, snapGuideY, this.width, snapGuideY + 1, 0x90FFD75A);
+        }
     }
 
     private void drawGridOverlay(DrawContext context) {
@@ -1572,8 +1646,11 @@ public class MacroWorkbenchV2Screen extends Screen {
         context.drawItem(stack, ix, iy);
         String label = safe(e.label);
         if (!label.isBlank()) {
-            int ty = Math.min(y2 - 9, y1 + Math.max(0, e.height - 9));
-            drawStyledTextLine(context, label, x1 + 2, ty, e.textColor, Math.max(0.5f, e.fontScale));
+            float scale = Math.max(0.5f, e.fontScale);
+            int textW = Math.max(1, Math.round(styledLineWidth(label) * scale));
+            int tx = alignedStartX(x1, e, textW, true);
+            int ty = alignedStartY(e, Math.max(9, Math.round(9 * scale)), true);
+            drawStyledTextLine(context, label, tx, ty, e.textColor, scale);
         }
     }
 
@@ -1811,8 +1888,8 @@ public class MacroWorkbenchV2Screen extends Screen {
             idx = 0;
         }
         presetDeleteButton.active = ids.size() > 1;
-        presetPrevButton.active = idx > 0;
-        presetNextButton.active = idx >= 0 && idx < ids.size() - 1;
+        presetPrevButton.active = ids.size() > 1;
+        presetNextButton.active = ids.size() > 1;
     }
 
     private void cyclePreset(boolean forward) {
@@ -1830,8 +1907,11 @@ public class MacroWorkbenchV2Screen extends Screen {
             idx = 0;
         }
         int next = forward ? idx + 1 : idx - 1;
-        if (next < 0 || next >= ids.size()) {
-            return;
+        if (next < 0) {
+            next = ids.size() - 1;
+        }
+        if (next >= ids.size()) {
+            next = 0;
         }
         MacroHudDataHandler.setActivePresetId(ids.get(next));
         this.working = MacroHudDataHandler.getConfigCopy();
@@ -1846,6 +1926,7 @@ public class MacroWorkbenchV2Screen extends Screen {
         if (name.isBlank()) {
             name = "preset_" + (MacroHudDataHandler.listPresetIds().size() + 1);
         }
+        name = uniquePresetName(name);
         saveAll();
         MacroHudDataHandler.createPreset(name, true);
         this.working = MacroHudDataHandler.getConfigCopy();
@@ -1867,6 +1948,17 @@ public class MacroWorkbenchV2Screen extends Screen {
         this.selected = null;
         syncCanvasFields();
         syncPresetControls();
+    }
+
+    private String uniquePresetName(String base) {
+        String candidate = base;
+        Set<String> existing = new HashSet<>(MacroHudDataHandler.listPresetIds());
+        int i = 2;
+        while (existing.contains(candidate)) {
+            candidate = base + "_" + i;
+            i++;
+        }
+        return candidate;
     }
 
     private void refreshCanvasChromeVisibility() {
@@ -1898,6 +1990,8 @@ public class MacroWorkbenchV2Screen extends Screen {
         this.advancedCursor = this.advancedText.length();
         this.advancedActionCursor = this.advancedAction.length();
         this.advancedActionSuggestionIndex = -1;
+        this.advancedActionSuggestionScroll = 0;
+        this.activeDragSelectionField = ModalDragSelectionField.NONE;
         this.advancedSelectionAnchor = -1;
         this.advancedActionSelectionAnchor = -1;
         this.advancedBgSelectionAnchor = -1;
@@ -2243,18 +2337,23 @@ public class MacroWorkbenchV2Screen extends Screen {
             int dropW = sourceW;
             int rowH = 10;
             int maxVisible = Math.max(1, Math.min(suggestions.size(), ((boxY + MODAL_H - 28) - dropY) / rowH));
+            int maxScroll = Math.max(0, suggestions.size() - maxVisible);
+            advancedActionSuggestionScroll = Math.clamp(advancedActionSuggestionScroll, 0, maxScroll);
             context.fill(dropX, dropY, dropX + dropW, dropY + maxVisible * rowH, 0xC0101010);
             for (int i = 0; i < maxVisible; i++) {
-                String token = suggestions.get(i);
+                int idx = advancedActionSuggestionScroll + i;
+                String token = suggestions.get(idx);
                 int yy = dropY + i * rowH;
-                boolean selectedSuggestion = (advancedActionSuggestionIndex == i);
+                boolean selectedSuggestion = (advancedActionSuggestionIndex == idx);
                 if (selectedSuggestion) {
                     context.fill(dropX, yy, dropX + dropW, yy + rowH, 0x503777AA);
                 }
                 context.drawTextWithShadow(this.textRenderer, token, dropX + 3, yy + 1, 0xFF8FC8FF);
             }
             if (suggestions.size() > maxVisible) {
-                context.drawTextWithShadow(this.textRenderer, "+" + (suggestions.size() - maxVisible) + " more...", dropX + 3, dropY + maxVisible * rowH + 1, 0xFF909090);
+                context.drawTextWithShadow(this.textRenderer,
+                        "scroll " + (advancedActionSuggestionScroll + 1) + "/" + (maxScroll + 1),
+                        dropX + 3, dropY + maxVisible * rowH + 1, 0xFF909090);
             }
         }
 
@@ -2410,12 +2509,15 @@ public class MacroWorkbenchV2Screen extends Screen {
             int dropW = sourceW;
             int rowH = 10;
             int maxVisible = Math.max(1, Math.min(suggestions.size(), ((boxY + MODAL_H - 28) - dropY) / rowH));
+            int maxScroll = Math.max(0, suggestions.size() - maxVisible);
+            advancedActionSuggestionScroll = Math.clamp(advancedActionSuggestionScroll, 0, maxScroll);
             for (int i = 0; i < maxVisible; i++) {
                 int yy = dropY + i * rowH;
                 if (containsBox(click.x(), click.y(), dropX, yy, dropW, rowH)) {
-                    advancedAction = suggestions.get(i);
+                    int idx = advancedActionSuggestionScroll + i;
+                    advancedAction = suggestions.get(idx);
                     advancedActionCursor = advancedAction.length();
-                    advancedActionSuggestionIndex = i;
+                    advancedActionSuggestionIndex = idx;
                     return true;
                 }
             }
@@ -2455,6 +2557,7 @@ public class MacroWorkbenchV2Screen extends Screen {
             };
             advancedAction = cyclePreset(advancedAction, presets, forward);
             advancedActionCursor = advancedAction.length();
+            advancedActionSuggestionScroll = 0;
             return true;
         }
 
@@ -2679,6 +2782,7 @@ public class MacroWorkbenchV2Screen extends Screen {
                 advancedTextFocused = false;
                 advancedActionFocused = false;
                 advancedBgCursor = cursorIndexFromPoint(advancedBgColor, (int) (click.x() - (rangeX + 4)), 0, 9);
+                beginModalSelectionDrag(ModalDragSelectionField.ADVANCED_BG);
                 return true;
             }
             if (containsBox(click.x(), click.y(), segX, segY, segW, 18)) {
@@ -2687,6 +2791,7 @@ public class MacroWorkbenchV2Screen extends Screen {
                 advancedTextFocused = false;
                 advancedActionFocused = false;
                 advancedBorderCursor = cursorIndexFromPoint(advancedBorderColor, (int) (click.x() - (segX + 4)), 0, 9);
+                beginModalSelectionDrag(ModalDragSelectionField.ADVANCED_BORDER);
                 return true;
             }
         }
@@ -2699,6 +2804,7 @@ public class MacroWorkbenchV2Screen extends Screen {
                 advancedActionFocused = false;
                 advancedBgSelectionAnchor = -1;
                 advancedBgCursor = cursorIndexFromPoint(advancedBgColor, (int) (click.x() - (boxX + 236)), 0, 9);
+                beginModalSelectionDrag(ModalDragSelectionField.ADVANCED_BG);
                 return true;
             }
             if (containsBox(click.x(), click.y(), boxX + 344, boxY + 196, 112, 18)) {
@@ -2708,6 +2814,7 @@ public class MacroWorkbenchV2Screen extends Screen {
                 advancedActionFocused = false;
                 advancedBorderSelectionAnchor = -1;
                 advancedBorderCursor = cursorIndexFromPoint(advancedBorderColor, (int) (click.x() - (boxX + 348)), 0, 9);
+                beginModalSelectionDrag(ModalDragSelectionField.ADVANCED_BORDER);
                 return true;
             }
         }
@@ -2719,6 +2826,7 @@ public class MacroWorkbenchV2Screen extends Screen {
             advancedBorderColorFocused = false;
             advancedSelectionAnchor = -1;
             advancedCursor = cursorIndexFromPoint(advancedText, (int) (click.x() - (labelX + 4)), 0, 9);
+            beginModalSelectionDrag(ModalDragSelectionField.ADVANCED_TEXT);
             return true;
         }
 
@@ -2729,6 +2837,7 @@ public class MacroWorkbenchV2Screen extends Screen {
             advancedBorderColorFocused = false;
             advancedActionSelectionAnchor = -1;
             advancedActionCursor = cursorIndexFromPoint(advancedAction, (int) (click.x() - (sourceX + 4)), 0, 9);
+            beginModalSelectionDrag(ModalDragSelectionField.ADVANCED_ACTION);
             return true;
         }
 
@@ -2788,13 +2897,32 @@ public class MacroWorkbenchV2Screen extends Screen {
     }
 
     private static String[] iconIdSuggestionsForKind(String kind) {
+        ensureIconSuggestionCaches();
         if ("block".equalsIgnoreCase(kind)) {
-            return ICON_BLOCK_ID_PRESETS;
+            return ALL_BLOCK_IDS.toArray(String[]::new);
         }
         if ("entity".equalsIgnoreCase(kind)) {
-            return ICON_ENTITY_ID_PRESETS;
+            return ALL_ENTITY_IDS.toArray(String[]::new);
         }
-        return ICON_ITEM_ID_PRESETS;
+        return ALL_ITEM_IDS.toArray(String[]::new);
+    }
+
+    private static void ensureIconSuggestionCaches() {
+        if (ALL_ITEM_IDS != null && ALL_BLOCK_IDS != null && ALL_ENTITY_IDS != null) {
+            return;
+        }
+        ALL_ITEM_IDS = Registries.ITEM.getIds().stream()
+                .map(Identifier::toString)
+                .sorted()
+                .toList();
+        ALL_BLOCK_IDS = Registries.BLOCK.getIds().stream()
+                .map(Identifier::toString)
+                .sorted()
+                .toList();
+        ALL_ENTITY_IDS = Registries.ENTITY_TYPE.getIds().stream()
+                .map(Identifier::toString)
+                .sorted()
+                .toList();
     }
 
     private static MacroHudDataHandler.HorizontalAlign cycleHorizontalAlign(MacroHudDataHandler.HorizontalAlign current, boolean forward) {
@@ -2951,6 +3079,7 @@ public class MacroWorkbenchV2Screen extends Screen {
         this.advancedActionFocused = false;
         this.advancedBgColorFocused = false;
         this.advancedBorderColorFocused = false;
+        this.activeDragSelectionField = ModalDragSelectionField.NONE;
     }
 
     private void openKeyboardCommandsModal() {
@@ -2971,6 +3100,7 @@ public class MacroWorkbenchV2Screen extends Screen {
     private void closeKeyboardCommandsModal() {
         this.kbCommandsModalOpen = false;
         this.kbCommandsFocused = false;
+        this.activeDragSelectionField = ModalDragSelectionField.NONE;
     }
 
     private void renderKeyboardCommandsModal(DrawContext context, int mouseX, int mouseY) {
@@ -3035,6 +3165,7 @@ public class MacroWorkbenchV2Screen extends Screen {
         if (kbCommandsFocused) {
             kbCommandsCursor = cursorIndexFromPoint(kbCommandsText, (int) (click.x() - (textX + 4)), (int) (click.y() - (textY + 4)), 9);
             kbCommandsSelectionAnchor = -1;
+            beginModalSelectionDrag(ModalDragSelectionField.KB_COMMANDS);
         }
         return true;
     }
@@ -3156,33 +3287,39 @@ public class MacroWorkbenchV2Screen extends Screen {
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_LEFT) {
+            int old = kbCommandsCursor;
             kbCommandsCursor = Math.max(0, kbCommandsCursor - 1);
-            kbCommandsSelectionAnchor = -1;
+            kbCommandsSelectionAnchor = updateSelectionAnchor(kbCommandsSelectionAnchor, old, kbCommandsCursor, isShiftDown());
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_RIGHT) {
+            int old = kbCommandsCursor;
             kbCommandsCursor = Math.min(kbCommandsText.length(), kbCommandsCursor + 1);
-            kbCommandsSelectionAnchor = -1;
+            kbCommandsSelectionAnchor = updateSelectionAnchor(kbCommandsSelectionAnchor, old, kbCommandsCursor, isShiftDown());
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_UP) {
+            int old = kbCommandsCursor;
             kbCommandsCursor = moveCursorVertical(kbCommandsText, kbCommandsCursor, -1);
-            kbCommandsSelectionAnchor = -1;
+            kbCommandsSelectionAnchor = updateSelectionAnchor(kbCommandsSelectionAnchor, old, kbCommandsCursor, isShiftDown());
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_DOWN) {
+            int old = kbCommandsCursor;
             kbCommandsCursor = moveCursorVertical(kbCommandsText, kbCommandsCursor, 1);
-            kbCommandsSelectionAnchor = -1;
+            kbCommandsSelectionAnchor = updateSelectionAnchor(kbCommandsSelectionAnchor, old, kbCommandsCursor, isShiftDown());
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_HOME) {
+            int old = kbCommandsCursor;
             kbCommandsCursor = lineStart(kbCommandsText, kbCommandsCursor);
-            kbCommandsSelectionAnchor = -1;
+            kbCommandsSelectionAnchor = updateSelectionAnchor(kbCommandsSelectionAnchor, old, kbCommandsCursor, isShiftDown());
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_END) {
+            int old = kbCommandsCursor;
             kbCommandsCursor = lineEnd(kbCommandsText, kbCommandsCursor);
-            kbCommandsSelectionAnchor = -1;
+            kbCommandsSelectionAnchor = updateSelectionAnchor(kbCommandsSelectionAnchor, old, kbCommandsCursor, isShiftDown());
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_ENTER || keyCode == GLFW.GLFW_KEY_KP_ENTER) {
@@ -3248,7 +3385,7 @@ public class MacroWorkbenchV2Screen extends Screen {
         }
 
         List<String> commands = new ArrayList<>();
-        String raw = kbCommandsField.getText() == null ? "" : kbCommandsField.getText().trim();
+        String raw = kbCommandsText == null ? "" : kbCommandsText.trim();
         if (!raw.isBlank()) {
             for (String part : raw.split("[;\\n]+")) {
                 String t = part.trim();
@@ -3268,9 +3405,11 @@ public class MacroWorkbenchV2Screen extends Screen {
                 existing.showInOverlay
         );
 
+        kbCommandsText = String.join("\n", commands);
         kbCommandsField.setText(String.join(";", commands));
         CommandMacros.refreshKeybindings();
         rebuildBindingMaps();
+        closeKeyboardCommandsModal();
     }
 
     private int parseDelayOrDefault(int fallback) {
@@ -3321,33 +3460,39 @@ public class MacroWorkbenchV2Screen extends Screen {
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_LEFT) {
+            int old = advancedCursor;
             advancedCursor = Math.max(0, advancedCursor - 1);
-            advancedSelectionAnchor = -1;
+            advancedSelectionAnchor = updateSelectionAnchor(advancedSelectionAnchor, old, advancedCursor, isShiftDown());
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_RIGHT) {
+            int old = advancedCursor;
             advancedCursor = Math.min(advancedText.length(), advancedCursor + 1);
-            advancedSelectionAnchor = -1;
+            advancedSelectionAnchor = updateSelectionAnchor(advancedSelectionAnchor, old, advancedCursor, isShiftDown());
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_HOME) {
+            int old = advancedCursor;
             advancedCursor = lineStart(advancedText, advancedCursor);
-            advancedSelectionAnchor = -1;
+            advancedSelectionAnchor = updateSelectionAnchor(advancedSelectionAnchor, old, advancedCursor, isShiftDown());
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_END) {
+            int old = advancedCursor;
             advancedCursor = lineEnd(advancedText, advancedCursor);
-            advancedSelectionAnchor = -1;
+            advancedSelectionAnchor = updateSelectionAnchor(advancedSelectionAnchor, old, advancedCursor, isShiftDown());
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_UP) {
+            int old = advancedCursor;
             advancedCursor = moveCursorVertical(advancedText, advancedCursor, -1);
-            advancedSelectionAnchor = -1;
+            advancedSelectionAnchor = updateSelectionAnchor(advancedSelectionAnchor, old, advancedCursor, isShiftDown());
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_DOWN) {
+            int old = advancedCursor;
             advancedCursor = moveCursorVertical(advancedText, advancedCursor, 1);
-            advancedSelectionAnchor = -1;
+            advancedSelectionAnchor = updateSelectionAnchor(advancedSelectionAnchor, old, advancedCursor, isShiftDown());
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_ENTER || keyCode == GLFW.GLFW_KEY_KP_ENTER) {
@@ -3394,7 +3539,7 @@ public class MacroWorkbenchV2Screen extends Screen {
             advancedActionCursor = advancedAction.length();
             return true;
         }
-        if (keyCode == GLFW.GLFW_KEY_UP || keyCode == GLFW.GLFW_KEY_DOWN) {
+        if (!isShiftDown() && (keyCode == GLFW.GLFW_KEY_UP || keyCode == GLFW.GLFW_KEY_DOWN)) {
             List<String> suggestions = advancedActionSuggestions();
             if (!suggestions.isEmpty()) {
                 int dir = keyCode == GLFW.GLFW_KEY_UP ? -1 : 1;
@@ -3414,6 +3559,7 @@ public class MacroWorkbenchV2Screen extends Screen {
                 advancedActionSuggestionIndex = next;
                 advancedAction = suggestions.get(next);
                 advancedActionCursor = advancedAction.length();
+                ensureSuggestionVisible(suggestions.size(), next, modalY() + 94);
                 return true;
             }
         }
@@ -3453,23 +3599,27 @@ public class MacroWorkbenchV2Screen extends Screen {
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_LEFT) {
+            int old = advancedActionCursor;
             advancedActionCursor = Math.max(0, advancedActionCursor - 1);
-            advancedActionSelectionAnchor = -1;
+            advancedActionSelectionAnchor = updateSelectionAnchor(advancedActionSelectionAnchor, old, advancedActionCursor, isShiftDown());
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_RIGHT) {
+            int old = advancedActionCursor;
             advancedActionCursor = Math.min(advancedAction.length(), advancedActionCursor + 1);
-            advancedActionSelectionAnchor = -1;
+            advancedActionSelectionAnchor = updateSelectionAnchor(advancedActionSelectionAnchor, old, advancedActionCursor, isShiftDown());
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_HOME) {
+            int old = advancedActionCursor;
             advancedActionCursor = 0;
-            advancedActionSelectionAnchor = -1;
+            advancedActionSelectionAnchor = updateSelectionAnchor(advancedActionSelectionAnchor, old, advancedActionCursor, isShiftDown());
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_END) {
+            int old = advancedActionCursor;
             advancedActionCursor = advancedAction.length();
-            advancedActionSelectionAnchor = -1;
+            advancedActionSelectionAnchor = updateSelectionAnchor(advancedActionSelectionAnchor, old, advancedActionCursor, isShiftDown());
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_TAB) {
@@ -3493,6 +3643,7 @@ public class MacroWorkbenchV2Screen extends Screen {
                 advancedAction = suggestions.get(next);
                 advancedActionCursor = advancedAction.length();
                 advancedActionSelectionAnchor = -1;
+                ensureSuggestionVisible(suggestions.size(), next, modalY() + 94);
             }
             return true;
         }
@@ -3589,23 +3740,34 @@ public class MacroWorkbenchV2Screen extends Screen {
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_LEFT) {
-            setAdvancedColorState(background, value, Math.max(0, cursor - 1));
-            if (background) advancedBgSelectionAnchor = -1; else advancedBorderSelectionAnchor = -1;
+            int old = cursor;
+            int next = Math.max(0, cursor - 1);
+            setAdvancedColorState(background, value, next);
+            if (background) advancedBgSelectionAnchor = updateSelectionAnchor(advancedBgSelectionAnchor, old, next, isShiftDown());
+            else advancedBorderSelectionAnchor = updateSelectionAnchor(advancedBorderSelectionAnchor, old, next, isShiftDown());
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_RIGHT) {
-            setAdvancedColorState(background, value, Math.min(value.length(), cursor + 1));
-            if (background) advancedBgSelectionAnchor = -1; else advancedBorderSelectionAnchor = -1;
+            int old = cursor;
+            int next = Math.min(value.length(), cursor + 1);
+            setAdvancedColorState(background, value, next);
+            if (background) advancedBgSelectionAnchor = updateSelectionAnchor(advancedBgSelectionAnchor, old, next, isShiftDown());
+            else advancedBorderSelectionAnchor = updateSelectionAnchor(advancedBorderSelectionAnchor, old, next, isShiftDown());
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_HOME) {
+            int old = cursor;
             setAdvancedColorState(background, value, 0);
-            if (background) advancedBgSelectionAnchor = -1; else advancedBorderSelectionAnchor = -1;
+            if (background) advancedBgSelectionAnchor = updateSelectionAnchor(advancedBgSelectionAnchor, old, 0, isShiftDown());
+            else advancedBorderSelectionAnchor = updateSelectionAnchor(advancedBorderSelectionAnchor, old, 0, isShiftDown());
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_END) {
-            setAdvancedColorState(background, value, value.length());
-            if (background) advancedBgSelectionAnchor = -1; else advancedBorderSelectionAnchor = -1;
+            int old = cursor;
+            int next = value.length();
+            setAdvancedColorState(background, value, next);
+            if (background) advancedBgSelectionAnchor = updateSelectionAnchor(advancedBgSelectionAnchor, old, next, isShiftDown());
+            else advancedBorderSelectionAnchor = updateSelectionAnchor(advancedBorderSelectionAnchor, old, next, isShiftDown());
             return true;
         }
         if (isCtrlDown() && keyCode == GLFW.GLFW_KEY_V && this.client != null) {
@@ -3667,6 +3829,7 @@ public class MacroWorkbenchV2Screen extends Screen {
         this.advancedText = advancedText.substring(0, advancedCursor) + s + advancedText.substring(advancedCursor);
         this.advancedCursor += s.length();
         this.advancedSelectionAnchor = -1;
+        this.advancedActionSuggestionScroll = 0;
     }
 
     private void insertAtAdvancedActionCursor(String s) {
@@ -3683,6 +3846,7 @@ public class MacroWorkbenchV2Screen extends Screen {
         this.advancedActionCursor += s.length();
         this.advancedActionSelectionAnchor = -1;
         this.advancedActionSuggestionIndex = -1;
+        this.advancedActionSuggestionScroll = 0;
     }
 
     private void insertAtAdvancedBgCursor(String s) {
@@ -4470,6 +4634,89 @@ public class MacroWorkbenchV2Screen extends Screen {
         if (oldCursor == newCursor) return currentAnchor;
         return currentAnchor < 0 ? oldCursor : currentAnchor;
     }
+
+    private void beginModalSelectionDrag(ModalDragSelectionField field) {
+        this.activeDragSelectionField = field == null ? ModalDragSelectionField.NONE : field;
+    }
+
+    private void updateModalDragSelection(int mouseX, int mouseY) {
+        if (this.client == null || activeDragSelectionField == ModalDragSelectionField.NONE) {
+            return;
+        }
+        long window = this.client.getWindow().getHandle();
+        if (GLFW.glfwGetMouseButton(window, GLFW.GLFW_MOUSE_BUTTON_LEFT) != GLFW.GLFW_PRESS) {
+            activeDragSelectionField = ModalDragSelectionField.NONE;
+            return;
+        }
+
+        int boxX = modalX();
+        int boxY = modalY();
+        switch (activeDragSelectionField) {
+            case ADVANCED_TEXT -> {
+                int textLeft = boxX + 16;
+                int textTop = boxY + 38;
+                if (isCustomWidgetType(selected)) {
+                    textTop = boxY + 49;
+                } else if (isSecondaryChatProxy(selected)) {
+                    textTop = boxY + 104;
+                }
+                int cursor = cursorIndexFromPoint(advancedText, mouseX - textLeft, mouseY - textTop, 9);
+                if (advancedSelectionAnchor < 0) {
+                    advancedSelectionAnchor = advancedCursor;
+                }
+                advancedCursor = cursor;
+            }
+            case ADVANCED_ACTION -> {
+                int actionLeft = boxX + 16;
+                if (isSecondaryChatProxy(selected)) {
+                    actionLeft = boxX + 16;
+                }
+                int cursor = cursorIndexFromPoint(advancedAction, mouseX - actionLeft, 0, 9);
+                if (advancedActionSelectionAnchor < 0) {
+                    advancedActionSelectionAnchor = advancedActionCursor;
+                }
+                advancedActionCursor = Math.clamp(cursor, 0, advancedAction.length());
+            }
+            case ADVANCED_BG -> {
+                int cursor = cursorIndexFromPoint(advancedBgColor, mouseX - (boxX + 242), 0, 9);
+                if (advancedBgSelectionAnchor < 0) {
+                    advancedBgSelectionAnchor = advancedBgCursor;
+                }
+                advancedBgCursor = Math.clamp(cursor, 0, advancedBgColor.length());
+            }
+            case ADVANCED_BORDER -> {
+                int cursor = cursorIndexFromPoint(advancedBorderColor, mouseX - (boxX + 360), 0, 9);
+                if (advancedBorderSelectionAnchor < 0) {
+                    advancedBorderSelectionAnchor = advancedBorderCursor;
+                }
+                advancedBorderCursor = Math.clamp(cursor, 0, advancedBorderColor.length());
+            }
+            case KB_COMMANDS -> {
+                int cursor = cursorIndexFromPoint(kbCommandsText, mouseX - (boxX + 16), mouseY - (boxY + 38), 9);
+                if (kbCommandsSelectionAnchor < 0) {
+                    kbCommandsSelectionAnchor = kbCommandsCursor;
+                }
+                kbCommandsCursor = cursor;
+            }
+            case NONE -> {
+                // no-op
+            }
+        }
+    }
+
+    private void ensureSuggestionVisible(int totalSuggestions, int selectedIndex, int dropY) {
+        int rowH = 10;
+        int visible = Math.max(1, Math.min(totalSuggestions, ((modalY() + MODAL_H - 28) - dropY) / rowH));
+        if (selectedIndex < advancedActionSuggestionScroll) {
+            advancedActionSuggestionScroll = selectedIndex;
+            return;
+        }
+        int lastVisible = advancedActionSuggestionScroll + visible - 1;
+        if (selectedIndex > lastVisible) {
+            advancedActionSuggestionScroll = selectedIndex - visible + 1;
+        }
+    }
+
     private void drawSingleLineSelection(DrawContext context, int textX, int textY, String text, int anchor, int cursor) {
         if (!hasSelection(anchor, cursor)) return;
         int sx = textX + this.textRenderer.getWidth(text.substring(0, selectionStart(anchor, cursor)));

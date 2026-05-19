@@ -271,6 +271,12 @@ public final class MacroPlaceholders {
             case "dir.compass", "dir.facing" -> {
                 return yawToCompass(p.getYaw(), false);
             }
+            case "dir.compass.short_arrow", "dir.compass.short.arrow" -> {
+                return yawToCompassWithArrow(p.getYaw(), true);
+            }
+            case "dir.compass.arrow", "dir.facing.arrow" -> {
+                return yawToCompassWithArrow(p.getYaw(), false);
+            }
             default -> {
                 // no-op
             }
@@ -645,6 +651,7 @@ public final class MacroPlaceholders {
         boolean unique = false;
         boolean withDistance = false;
         boolean withDirection = false;
+        boolean withDirectionArrow = false;
         boolean sortByName = false;
 
         for (int i = 3; i < parts.length; i++) {
@@ -663,6 +670,10 @@ public final class MacroPlaceholders {
             }
             if ("with_direction".equals(part)) {
                 withDirection = true;
+                continue;
+            }
+            if ("with_direction_arrow".equals(part)) {
+                withDirectionArrow = true;
                 continue;
             }
             if ("sort_name".equals(part) || "sort=name".equals(part)) {
@@ -684,6 +695,7 @@ public final class MacroPlaceholders {
 
         final boolean withDistanceFinal = withDistance;
         final boolean withDirectionFinal = withDirection;
+        final boolean withDirectionArrowFinal = withDirectionArrow;
         var nearbyEntities = world.getOtherEntities(p, p.getBoundingBox().expand(radius)).stream()
                 .filter(entity -> !(entity instanceof PlayerEntity));
 
@@ -705,7 +717,7 @@ public final class MacroPlaceholders {
                         extras.add(meters + "m");
                     }
                     if (withDirectionFinal) {
-                        extras.add(directionFromToShort(p.getX(), p.getZ(), entity.getX(), entity.getZ()));
+                        extras.add(directionFromToShort(p.getX(), p.getZ(), entity.getX(), entity.getZ(), withDirectionArrowFinal));
                     }
                     return name + " (" + String.join(" ", extras) + ")";
                 })
@@ -790,6 +802,7 @@ public final class MacroPlaceholders {
             boolean unique = false;
             boolean withDistance = false;
             boolean withDirection = false;
+            boolean withDirectionArrow = false;
             boolean sortByName = false;
 
             for (int i = 3; i < parts.length; i++) {
@@ -808,6 +821,10 @@ public final class MacroPlaceholders {
                 }
                 if ("with_direction".equals(part)) {
                     withDirection = true;
+                    continue;
+                }
+                if ("with_direction_arrow".equals(part)) {
+                    withDirectionArrow = true;
                     continue;
                 }
                 if ("sort_name".equals(part) || "sort=name".equals(part)) {
@@ -840,6 +857,7 @@ public final class MacroPlaceholders {
 
             final boolean withDistanceFinal = withDistance;
             final boolean withDirectionFinal = withDirection;
+            final boolean withDirectionArrowFinal = withDirectionArrow;
 
             List<String> nearby = nearbyPlayers
                     .map(other -> {
@@ -853,7 +871,7 @@ public final class MacroPlaceholders {
                             extras.add(meters + "m");
                         }
                         if (withDirectionFinal) {
-                            extras.add(directionFromToShort(p.getX(), p.getZ(), other.getX(), other.getZ()));
+                            extras.add(directionFromToShort(p.getX(), p.getZ(), other.getX(), other.getZ(), withDirectionArrowFinal));
                         }
                         return name + " (" + String.join(" ", extras) + ")";
                     })
@@ -949,6 +967,7 @@ public final class MacroPlaceholders {
             "{pos.xyz} => x y z",
             "{pos.biome} {pos.dim} {pos.light} {pos.facing}",
             "{dir.compass} {dir.compass.short} => North / N (supports diagonals)",
+            "{dir.compass.arrow} {dir.compass.short_arrow} => North ↑ / N ↑",
             "",
             "[Look target]",
             "{look.block.xyz} {look.block.x} {look.block.y} {look.block.z}",
@@ -961,8 +980,8 @@ public final class MacroPlaceholders {
             "{sel.self} {sel.nearest} {sel.random} {sel.all} {sel.entities}",
             "{players.count} {players.count.other} {players.nearby.count}",
             "{players.list} {players.list.other} {.nl for newline}",
-            "{players.nearby.3} {.r128 .with_distance .with_direction .unique .sort=name}",
-            "{entities.nearby.3} {.r64 .with_distance .with_direction .unique .sort=distance}",
+            "{players.nearby.3} {.r128 .with_distance .with_direction .with_direction_arrow .unique .sort=name}",
+            "{entities.nearby.3} {.r64 .with_distance .with_direction .with_direction_arrow .unique .sort=distance}",
             "",
             "[Item and misc]",
             "{hand.item} {hand.id} {hand.count}",
@@ -1002,14 +1021,25 @@ public final class MacroPlaceholders {
         return shortName ? shortDirs[idx] : longDirs[idx];
     }
 
-    private static String directionFromToShort(double fromX, double fromZ, double toX, double toZ) {
+    private static String yawToCompassWithArrow(float yaw, boolean shortName) {
+        String base = yawToCompass(yaw, shortName);
+        int idx = Math.floorMod(Math.round(yaw / 45.0f), 8);
+        return base + " " + compassArrow(idx);
+    }
+
+    private static String directionFromToShort(double fromX, double fromZ, double toX, double toZ, boolean withArrow) {
         double dx = toX - fromX;
         double dz = toZ - fromZ;
         if (Math.abs(dx) < 0.0001 && Math.abs(dz) < 0.0001) {
             return "HERE";
         }
         float yaw = (float) Math.toDegrees(Math.atan2(-dx, dz));
-        return yawToCompass(yaw, true);
+        return withArrow ? yawToCompassWithArrow(yaw, true) : yawToCompass(yaw, true);
+    }
+
+    private static String compassArrow(int idx) {
+        String[] arrows = {"↓", "↙", "←", "↖", "↑", "↗", "→", "↘"};
+        return arrows[Math.floorMod(idx, arrows.length)];
     }
 }
 
