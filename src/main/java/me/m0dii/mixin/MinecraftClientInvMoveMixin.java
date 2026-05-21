@@ -1,5 +1,6 @@
 package me.m0dii.mixin;
 
+import me.m0dii.modules.inventorymove.InventoryMoveModule;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.screen.ingame.HandledScreen;
@@ -16,7 +17,7 @@ public class MinecraftClientInvMoveMixin {
     @Inject(method = "tick", at = @At("TAIL"))
     private void onClientTick(CallbackInfo ci) {
         MinecraftClient client = MinecraftClient.getInstance();
-        if (client.player == null) {
+        if (client.player == null || !InventoryMoveModule.INSTANCE.isEnabled()) {
             return;
         }
         Screen screen = client.currentScreen;

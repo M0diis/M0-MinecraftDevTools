@@ -3,6 +3,7 @@ package me.m0dii.mixin;
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import me.m0dii.modules.chat.SecondaryChatManager;
 import me.m0dii.modules.messagehistory.MessageHistoryManager;
+import me.m0dii.modules.watson.CoreProtectTracker;
 import me.m0dii.utils.ModConfig;
 import net.minecraft.client.gui.hud.ChatHud;
 import net.minecraft.client.gui.hud.MessageIndicator;
@@ -21,6 +22,8 @@ public class ChatHudMixin {
     @Inject(method = "addMessage(Lnet/minecraft/text/Text;)V", at = @At("HEAD"), cancellable = true)
     private void onAddMessageSecondaryChat(Text message, CallbackInfo ci) {
         handleMessage(message, ci);
+        MessageHistoryManager.addMessage(message);
+        CoreProtectTracker.onChatMessage(message);
     }
 
     // Hook the full signature addMessage - catches actual chat messages
@@ -33,6 +36,7 @@ public class ChatHudMixin {
         handleMessage(message, ci);
 
         MessageHistoryManager.addMessage(message);
+        CoreProtectTracker.onChatMessage(message);
     }
 
     @Unique

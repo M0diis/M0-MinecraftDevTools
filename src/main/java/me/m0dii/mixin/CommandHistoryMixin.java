@@ -10,17 +10,21 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(ClientPlayNetworkHandler.class)
 public class CommandHistoryMixin {
 
-    @Inject(method = "sendChatCommand", at = @At("HEAD"))
+    @Inject(method = "sendChatCommand", at = @At("HEAD"), require = 0)
     private void onSendCommand(String command, CallbackInfo ci) {
-        if (command != null && !command.trim().isEmpty()) {
-            CommandHistoryManager.addCommand("/" + command);
-        }
+        recordCommand(command);
     }
 
-    @Inject(method = "sendChatMessage", at = @At("HEAD"))
+    @Inject(method = "sendChatMessage", at = @At("HEAD"), require = 0)
     private void onSendChatMessage(String message, CallbackInfo ci) {
         if (message != null && !message.trim().isEmpty() && message.startsWith("/")) {
             CommandHistoryManager.addCommand(message);
+        }
+    }
+
+    private static void recordCommand(String command) {
+        if (command != null && !command.trim().isEmpty()) {
+            CommandHistoryManager.addCommand("/" + command);
         }
     }
 }

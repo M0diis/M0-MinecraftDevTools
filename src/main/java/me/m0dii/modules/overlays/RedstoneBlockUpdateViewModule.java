@@ -1,7 +1,6 @@
 package me.m0dii.modules.overlays;
 
 import com.google.common.collect.Lists;
-import com.google.common.collect.Sets;
 import me.m0dii.modules.BlockTargetTextModule;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.RedstoneWireBlock;
@@ -9,13 +8,11 @@ import net.minecraft.client.render.Camera;
 import net.minecraft.client.util.InputUtil;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
 import org.jetbrains.annotations.NotNull;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.List;
-import java.util.Set;
 
 public class RedstoneBlockUpdateViewModule extends BlockTargetTextModule {
 
@@ -53,11 +50,14 @@ public class RedstoneBlockUpdateViewModule extends BlockTargetTextModule {
     }
 
     private static List<BlockPos> getDustUpdateOrderAt(BlockPos pos) {
-        Set<BlockPos> set = Sets.newHashSet();
-        set.add(pos);
-        for (Direction direction : Direction.values()) {
-            set.add(pos.offset(direction));
-        }
-        return Lists.newArrayList(set);
+        List<BlockPos> ordered = Lists.newArrayList();
+        ordered.add(pos);
+        ordered.add(pos.west());
+        ordered.add(pos.east());
+        ordered.add(pos.down());
+        ordered.add(pos.up());
+        ordered.add(pos.north());
+        ordered.add(pos.south());
+        return ordered;
     }
 }

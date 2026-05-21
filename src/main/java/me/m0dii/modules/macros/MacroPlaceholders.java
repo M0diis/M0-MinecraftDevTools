@@ -431,6 +431,20 @@ public final class MacroPlaceholders {
             return client.currentScreen == null ? "none" : client.currentScreen.getClass().getSimpleName();
         }
 
+        if ("client.screen.width".equals(token)) {
+            if (client.getWindow() == null) {
+                return "0";
+            }
+            return Integer.toString(Math.max(0, client.getWindow().getScaledWidth()));
+        }
+
+        if ("client.screen.height".equals(token)) {
+            if (client.getWindow() == null) {
+                return "0";
+            }
+            return Integer.toString(Math.max(0, client.getWindow().getScaledHeight()));
+        }
+
         if ("client.fps".equals(token)) {
             Integer fps = resolveCurrentFps(client);
             return fps == null ? "0" : Integer.toString(Math.max(0, fps));
@@ -582,6 +596,40 @@ public final class MacroPlaceholders {
         } catch (Exception ignored) {
             // no-op
         }
+
+        // Newer mappings can expose FPS only as a field.
+        Integer reflected = readIntField(MinecraftClient.class, null, "currentFps");
+        if (reflected != null) {
+            return reflected;
+        }
+        reflected = readIntField(client.getClass(), client, "currentFps");
+        if (reflected != null) {
+            return reflected;
+        }
+
+        reflected = readIntField(MinecraftClient.class, null, "fps");
+        if (reflected != null) {
+            return reflected;
+        }
+        reflected = readIntField(client.getClass(), client, "fps");
+        if (reflected != null) {
+            return reflected;
+        }
+
+        return null;
+    }
+
+    private static Integer readIntField(Class<?> owner, Object target, String fieldName) {
+        try {
+            Field f = owner.getDeclaredField(fieldName);
+            f.setAccessible(true);
+            Object value = f.get(target);
+            if (value instanceof Integer i) {
+                return i;
+            }
+        } catch (Exception ignored) {
+            // no-op
+        }
         return null;
     }
 
@@ -673,6 +721,7 @@ public final class MacroPlaceholders {
                 continue;
             }
             if ("with_direction_arrow".equals(part)) {
+                withDirection = true;
                 withDirectionArrow = true;
                 continue;
             }
@@ -824,6 +873,7 @@ public final class MacroPlaceholders {
                     continue;
                 }
                 if ("with_direction_arrow".equals(part)) {
+                    withDirection = true;
                     withDirectionArrow = true;
                     continue;
                 }
@@ -993,6 +1043,7 @@ public final class MacroPlaceholders {
             "",
             "[Client and server session]",
             "{client.fps} {client.screen}",
+            "{client.screen.width} {client.screen.height}",
             "{client.server.singleplayer}",
             "{client.server.name} {client.server.address}",
             "",

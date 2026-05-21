@@ -24,10 +24,17 @@ public class CommandHistoryManager {
     private static boolean loaded = false;
 
     public static void addCommand(String command) {
-        if (command == null || command.trim().isEmpty() && CommandHistoryModule.INSTANCE.isEnabled()) {
+        if (!loaded) {
+            load();
+        }
+        if (!CommandHistoryModule.INSTANCE.isEnabled()) {
+            return;
+        }
+        if (command == null || command.trim().isEmpty()) {
             return;
         }
 
+        command = command.trim();
         commandHistory.remove(command);
         commandHistory.addFirst(command);
 

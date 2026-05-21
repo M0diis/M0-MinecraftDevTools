@@ -18,6 +18,7 @@ import me.m0dii.modules.overlays.*;
 import me.m0dii.modules.quicktp.QuickTeleportModule;
 import me.m0dii.modules.scripting.ClientCommandRunScript;
 import me.m0dii.modules.scripting.InGameScriptingKeybinds;
+import me.m0dii.modules.watson.WatsonCoreProtectModule;
 import me.m0dii.modules.waypoints.WaypointModule;
 import me.m0dii.modules.zoom.ZoomModule;
 import me.m0dii.utils.KeybindManager;
@@ -61,6 +62,7 @@ public class M0DevToolsClient implements ClientModInitializer {
         InventoryMoveModule.INSTANCE.register();
         ClickGuiModule.INSTANCE.register();
         CommandBlockOverlayModule.INSTANCE.register();
+        WatsonCoreProtectModule.INSTANCE.register();
         me.m0dii.modules.actionrunner.ActionRunnerClientInit.register();
         me.m0dii.modules.actionrunner.ActionRunnerClientTick.register();
 

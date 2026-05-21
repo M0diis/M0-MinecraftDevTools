@@ -45,15 +45,15 @@ public class EntityRadarHudOverlay implements Toggleable {
 
         String countText = String.format("Entities: %d (§aP:%d §7N:%d §cH:%d§r)",
                 totalCount, passiveCount, neutralCount, hostileCount);
-        context.drawTextWithShadow(client.textRenderer, countText, x, y, 0xFFFFFF);
+        context.drawTextWithShadow(client.textRenderer, countText, x, y, 0xFFFFFFFF);
         y += Math.round(12 / scale);
 
-        context.drawTextWithShadow(client.textRenderer, "─────────────────", x, y, 0x808080);
+        context.drawTextWithShadow(client.textRenderer, "─────────────────", x, y, 0xFF808080);
         y += lineHeight;
 
         for (Entity entity : entities) {
             String text = String.format("%s - %.2fm", entity.getName().getString(), entity.distanceTo(client.player));
-            context.drawTextWithShadow(client.textRenderer, text, x, y, 0xFFFFFF);
+            context.drawTextWithShadow(client.textRenderer, text, x, y, 0xFFFFFFFF);
             y += lineHeight;
         }
 

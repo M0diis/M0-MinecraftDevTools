@@ -54,6 +54,8 @@ public final class MacroHudDataHandler {
         TOP_LEFT,
         TOP_CENTER,
         TOP_RIGHT,
+        MIDDLE_LEFT,
+        MIDDLE_RIGHT,
         BOTTOM_LEFT,
         BOTTOM_CENTER,
         BOTTOM_RIGHT,
@@ -111,14 +113,21 @@ public final class MacroHudDataHandler {
         public int listScroll = 0;
 
         // ICON behavior.
-        public String iconKind = "item"; // item|block|entity
+        public String iconKind = "item"; // item|block|entity|entity_model
         public String iconId = "minecraft:stone";
         public boolean iconShowCount = true;
         public boolean iconShowDurability = true;
         public boolean iconShowCooldown = true;
+        public float modelZoom = 0.85f;
+        public float modelYaw = 0.0f;
+        public float modelPitch = 0.0f;
+        public int modelOffsetX = 0;
+        public int modelOffsetY = 0;
+        public boolean modelAutoFit = true;
+        public boolean modelFollowLook = true;
 
         // SHAPE behavior.
-        public String shapeType = "rounded_rect"; // rect|rounded_rect|circle|line
+        public String shapeType = "rounded_rect"; // rect|rounded_rect|circle|line|triangle|cross|diamond
         public boolean shapeFilled = true;
         public int shapeRadius = 6;
         public int shapeThickness = 2;
@@ -282,7 +291,7 @@ public final class MacroHudDataHandler {
         if (type == ElementType.ICON) {
             element.label = "Icon";
             element.width = 22;
-            element.height = 22;
+            element.height = 30;
             element.drawBackground = true;
             element.drawBorder = true;
             element.backgroundColor = 0xAA101010;
@@ -398,7 +407,12 @@ public final class MacroHudDataHandler {
             HudElement e = new HudElement();
             e.id = (raw.id == null || raw.id.isBlank()) ? shortId() : raw.id.trim();
             e.type = raw.type == null ? ElementType.BUTTON : raw.type;
-            e.label = safe(raw.label, "Button");
+            if (e.type == ElementType.ICON) {
+                // Keep explicit empty labels for icon widgets; only null falls back to default.
+                e.label = raw.label == null ? "Icon" : raw.label.trim();
+            } else {
+                e.label = safe(raw.label, "Button");
+            }
             e.text = safe(raw.text, "Text");
             e.macroId = raw.macroId == null ? "" : raw.macroId.trim();
             e.buttonAction = raw.buttonAction == null ? "" : raw.buttonAction.trim();
@@ -436,9 +450,20 @@ public final class MacroHudDataHandler {
             e.listScroll = Math.max(0, raw.listScroll);
             e.iconKind = safe(raw.iconKind, "item").toLowerCase();
             e.iconId = safe(raw.iconId, "minecraft:stone");
+            if ("entity_model".equals(e.iconKind)
+                    && (e.iconId.isBlank() || "minecraft:stone".equalsIgnoreCase(e.iconId))) {
+                e.iconId = "minecraft:player";
+            }
             e.iconShowCount = raw.iconShowCount;
             e.iconShowDurability = raw.iconShowDurability;
             e.iconShowCooldown = raw.iconShowCooldown;
+            e.modelZoom = raw.modelZoom <= 0.0f ? 0.85f : Math.clamp(raw.modelZoom, 0.2f, 2.5f);
+            e.modelYaw = Math.clamp(raw.modelYaw, -180.0f, 180.0f);
+            e.modelPitch = Math.clamp(raw.modelPitch, -90.0f, 90.0f);
+            e.modelOffsetX = Math.clamp(raw.modelOffsetX, -200, 200);
+            e.modelOffsetY = Math.clamp(raw.modelOffsetY, -200, 200);
+            e.modelAutoFit = raw.modelAutoFit || raw.modelZoom <= 0.0f;
+            e.modelFollowLook = raw.modelFollowLook || raw.modelZoom <= 0.0f;
             e.shapeType = safe(raw.shapeType, "rounded_rect").toLowerCase();
             e.shapeFilled = raw.shapeFilled;
             e.shapeRadius = Math.clamp(raw.shapeRadius, 0, 64);
@@ -538,6 +563,13 @@ public final class MacroHudDataHandler {
         cloned.iconShowCount = e.iconShowCount;
         cloned.iconShowDurability = e.iconShowDurability;
         cloned.iconShowCooldown = e.iconShowCooldown;
+        cloned.modelZoom = e.modelZoom;
+        cloned.modelYaw = e.modelYaw;
+        cloned.modelPitch = e.modelPitch;
+        cloned.modelOffsetX = e.modelOffsetX;
+        cloned.modelOffsetY = e.modelOffsetY;
+        cloned.modelAutoFit = e.modelAutoFit;
+        cloned.modelFollowLook = e.modelFollowLook;
         cloned.shapeType = e.shapeType;
         cloned.shapeFilled = e.shapeFilled;
         cloned.shapeRadius = e.shapeRadius;

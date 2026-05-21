@@ -22,6 +22,10 @@ public class EntityHighlightRenderer implements Toggleable {
     @Setter
     private boolean enabled = false;
 
+    @Getter
+    @Setter
+    private boolean tracersEnabled = true;
+
     public void register() {
         WorldRenderEvents.AFTER_ENTITIES.register(context -> {
             if (!enabled) {
@@ -73,6 +77,14 @@ public class EntityHighlightRenderer implements Toggleable {
                         box.maxZ - cameraZ,
                         1.0f, 0.25f, 0.25f, 0.55f
                 );
+
+                if (tracersEnabled) {
+                    double centerX = entity.getX() - cameraX;
+                    double centerY = entity.getY() + (entity.getHeight() * 0.5) - cameraY;
+                    double centerZ = entity.getZ() - cameraZ;
+                    drawLineSafe(lineBuffer, 0.0, 0.0, 0.0, centerX, centerY, centerZ, 1.0f, 0.8f, 0.2f, 0.9f);
+                    drawLineSafe(occludedLineBuffer, 0.0, 0.0, 0.0, centerX, centerY, centerZ, 1.0f, 0.8f, 0.2f, 0.5f);
+                }
             }
 
             List<Chunk> nearbyChunks = new ArrayList<>();
@@ -174,6 +186,24 @@ public class EntityHighlightRenderer implements Toggleable {
                                  float a) {
         lineBuffer.vertex((float) x1, (float) y1, (float) z1).color(r, g, b, a).normal(0.0f, 1.0f, 0.0f).lineWidth(1.0f);
         lineBuffer.vertex((float) x2, (float) y2, (float) z2).color(r, g, b, a).normal(0.0f, 1.0f, 0.0f).lineWidth(1.0f);
+    }
+
+    private static void drawLineSafe(VertexConsumer lineBuffer,
+                                     double x1,
+                                     double y1,
+                                     double z1,
+                                     double x2,
+                                     double y2,
+                                     double z2,
+                                     float r,
+                                     float g,
+                                     float b,
+                                     float a) {
+        try {
+            drawLine(lineBuffer, x1, y1, z1, x2, y2, z2, r, g, b, a);
+        } catch (IllegalStateException ignored) {
+            // Optional pass: skip if this buffer is not building in the current phase.
+        }
     }
 }
 

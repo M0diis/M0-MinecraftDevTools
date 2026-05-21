@@ -37,7 +37,7 @@ public abstract class BlockTextOverlayModule extends Module {
 
             MatrixStack matrices = context.matrices();
             if (matrices == null) {
-                return;
+                matrices = new MatrixStack();
             }
 
             TextRenderer textRenderer = getClient().textRenderer;
@@ -88,6 +88,7 @@ public abstract class BlockTextOverlayModule extends Module {
 
         matrices.translate(renderPos.x - cameraPos.x, renderPos.y - cameraPos.y, renderPos.z - cameraPos.z);
 
+        // Keep text aligned to the top face of the block.
         matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(renderInfo.rotationX));
         matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(renderInfo.rotationY));
         matrices.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(renderInfo.rotationZ));
@@ -99,11 +100,12 @@ public abstract class BlockTextOverlayModule extends Module {
         int textWidth = textRenderer.getWidth(text);
         Matrix4f model = matrices.peek().getPositionMatrix();
         int brightness = renderInfo.brightness;
+        int textColor = toOpaqueColor(renderInfo.color);
 
         textRenderer.draw(text,
                 -textWidth / 2f,
                 0,
-                renderInfo.color,
+                textColor,
                 true,
                 model,
                 vcp,
@@ -170,6 +172,13 @@ public abstract class BlockTextOverlayModule extends Module {
             this(text, color, 0x00F000F0, offsetX, offsetY, offsetZ, 0.04F, 90f, 0f, 0f);
         }
 
+    }
+
+    private static int toOpaqueColor(int color) {
+        if ((color & 0xFF000000) == 0) {
+            return color | 0xFF000000;
+        }
+        return color;
     }
 }
 

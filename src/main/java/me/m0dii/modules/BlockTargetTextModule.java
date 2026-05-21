@@ -38,8 +38,11 @@ public abstract class BlockTargetTextModule extends Module {
         MatrixStack matrices = context.matrices();
         Camera camera = context.gameRenderer().getCamera();
 
-        if (matrices == null || camera == null) {
+        if (camera == null) {
             return;
+        }
+        if (matrices == null) {
+            matrices = new MatrixStack();
         }
 
         HitResult hitResult = getClient().crosshairTarget;
@@ -132,7 +135,7 @@ public abstract class BlockTargetTextModule extends Module {
                 text,
                 x,
                 0,
-                color,
+                toOpaqueColor(color),
                 false,
                 matrix,
                 immediate,
@@ -172,6 +175,13 @@ public abstract class BlockTargetTextModule extends Module {
      */
     protected Vec3d getBlockCenterWithVerticalOffset(BlockPos pos, double verticalOffset) {
         return Vec3d.of(pos).add(0.5, 0.5 + verticalOffset, 0.5);
+    }
+
+    private static int toOpaqueColor(int color) {
+        if ((color & 0xFF000000) == 0) {
+            return color | 0xFF000000;
+        }
+        return color;
     }
 }
 

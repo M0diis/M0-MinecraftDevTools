@@ -42,6 +42,7 @@ public class EntityRadarModule extends Module {
     public List<String> getSettingsDisplay() {
         List<String> settings = new ArrayList<>();
         settings.add("World Renderer: " + (worldRenderer.isEnabled() ? "ON" : "OFF"));
+        settings.add("Tracers: " + (worldRenderer.isTracersEnabled() ? "ON" : "OFF"));
         settings.add("HUD Renderer: " + (hudRenderer.isEnabled() ? "ON" : "OFF"));
         return settings;
     }
@@ -50,7 +51,8 @@ public class EntityRadarModule extends Module {
     public void onSettingSelected(int settingIndex) {
         switch (settingIndex) {
             case 0 -> worldRenderer.setEnabled(!worldRenderer.isEnabled());
-            case 1 -> hudRenderer.setEnabled(!hudRenderer.isEnabled());
+            case 1 -> worldRenderer.setTracersEnabled(!worldRenderer.isTracersEnabled());
+            case 2 -> hudRenderer.setEnabled(!hudRenderer.isEnabled());
             default -> {
                 // Do nothing
             }

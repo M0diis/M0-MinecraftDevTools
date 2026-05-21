@@ -25,13 +25,24 @@ public class MessageHistoryManager {
     private static boolean loaded = false;
 
     public static void addMessage(Text message) {
+        if (!loaded) {
+            load();
+        }
+        if (!MessageHistoryModule.INSTANCE.isEnabled()) {
+            return;
+        }
         if (message == null) {
             return;
         }
 
         String messageStr = message.getString();
 
-        if (messageStr == null || messageStr.trim().isEmpty() && MessageHistoryModule.INSTANCE.isEnabled()) {
+        if (messageStr == null || messageStr.trim().isEmpty()) {
+            return;
+        }
+
+        messageStr = messageStr.trim();
+        if (!messageHistory.isEmpty() && messageStr.equals(messageHistory.getFirst())) {
             return;
         }
 

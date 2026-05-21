@@ -214,6 +214,8 @@ public class CameraEntity extends ClientPlayerEntity {
         originalCameraEntity = mc.getCameraEntity();
         originalCameraWasPlayer = originalCameraEntity == mc.player;
         cullChunksOriginal = mc.chunkCullingEnabled;
+        cameraMotion = Vec3d.ZERO;
+        sprinting = false;
 
         mc.setCameraEntity(camera);
         mc.chunkCullingEnabled = false; // Disable chunk culling
@@ -225,12 +227,14 @@ public class CameraEntity extends ClientPlayerEntity {
             mc.setCameraEntity(originalCameraWasPlayer ? mc.player : originalCameraEntity);
             mc.chunkCullingEnabled = cullChunksOriginal;
 
-            final int chunkX = MathHelper.floor(camera.getX() / 16.0) >> 4;
-            final int chunkZ = MathHelper.floor(camera.getZ() / 16.0) >> 4;
+            final int chunkX = MathHelper.floor(camera.getX()) >> 4;
+            final int chunkZ = MathHelper.floor(camera.getZ()) >> 4;
             CameraUtils.markChunksForRebuildOnDeactivation(chunkX, chunkZ);
         }
 
         originalCameraEntity = null;
         camera = null;
+        cameraMotion = Vec3d.ZERO;
+        sprinting = false;
     }
 }

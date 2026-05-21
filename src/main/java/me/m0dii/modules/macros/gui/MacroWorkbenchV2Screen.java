@@ -1,11 +1,14 @@
 package me.m0dii.modules.macros.gui;
 
 import me.m0dii.gui.GuiSystem;
+import me.m0dii.modules.commandhistory.CommandHistoryManager;
+import me.m0dii.modules.entityradar.EntityRadarModule;
 import me.m0dii.modules.hudcanvas.HudCanvasDataHandler;
 import me.m0dii.modules.macros.CommandMacros;
 import me.m0dii.modules.macros.MacroDataHandler;
 import me.m0dii.modules.macros.MacroPlaceholders;
 import me.m0dii.modules.macros.hud.MacroHudDataHandler;
+import me.m0dii.modules.messagehistory.MessageHistoryManager;
 import me.m0dii.modules.nbthud.NBTInfoHudOverlayModule;
 import me.m0dii.utils.ModConfig;
 import net.minecraft.client.gui.Click;
@@ -18,6 +21,10 @@ import net.minecraft.client.input.CharInput;
 import net.minecraft.client.input.KeyInput;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.LivingEntity;
+import net.minecraft.entity.mob.HostileEntity;
+import net.minecraft.entity.passive.PassiveEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.registry.Registries;
@@ -35,14 +42,17 @@ public class MacroWorkbenchV2Screen extends Screen {
     public enum Tab {
         CANVAS,
         KEYBOARD,
-        PLACEHOLDERS
+        PLACEHOLDERS,
+        ENTITY_RADAR,
+        COMMAND_HISTORY,
+        MESSAGE_HISTORY
     }
 
     private static final int TOP_BAR_H = 54;
     private static final int BOTTOM_BAR_H = 44;
     private static final int CANVAS_CONTENT_TOP = 0;
-    private static final int MODAL_W = 468;
-    private static final int MODAL_H = 268;
+    private static final int MODAL_W = 500;
+    private static final int MODAL_H = 320;
     private static final String EXTERNAL_NBT_INSPECTOR_ID = "__ext_nbt_inspector";
     private static final String EXTERNAL_SECONDARY_CHAT_ID = "__ext_secondary_chat";
     private static final Pattern HEX_COLOR = Pattern.compile("#[0-9a-fA-F]{6}");
@@ -73,7 +83,7 @@ public class MacroWorkbenchV2Screen extends Screen {
     private static final String[] STATE_SOURCE_PRESETS = {
             "player.sprinting", "player.sneaking", "player.swimming", "player.on_ground", "world.is_day", "client.server.singleplayer"
     };
-    private static final String[] ICON_KIND_PRESETS = {"item", "block", "entity"};
+    private static final String[] ICON_KIND_PRESETS = {"item", "block", "entity", "entity_model"};
     private static final String[] ICON_ITEM_ID_PRESETS = {
             "minecraft:stone", "minecraft:diamond_sword", "minecraft:ender_pearl", "minecraft:totem_of_undying"
     };
@@ -83,12 +93,13 @@ public class MacroWorkbenchV2Screen extends Screen {
     private static final String[] ICON_ENTITY_ID_PRESETS = {
             "minecraft:zombie", "minecraft:skeleton", "minecraft:creeper", "minecraft:enderman"
     };
-    private static final String[] SHAPE_TYPE_PRESETS = {"rounded_rect", "rect", "circle", "line"};
+    private static final String[] SHAPE_TYPE_PRESETS = {"rounded_rect", "rect", "circle", "line", "triangle", "cross", "diamond"};
     private static final String[] SOURCE_TOKEN_SUGGESTIONS = {
             "hp", "max_hp", "food", "saturation", "xp", "level", "client.fps", "player.speed",
             "players.count", "players.nearby.count", "players.nearby.5.with_distance",
             "entities.nearby.6.with_distance", "world.time.clock", "world.is_day", "world.is_night",
             "player.sprinting", "player.sneaking", "player.swimming", "player.on_ground",
+            "client.screen.width", "client.screen.height",
             "key.pressed.w", "key.held.w", "key.pressed.space", "key.held.space"
     };
 
@@ -137,6 +148,9 @@ public class MacroWorkbenchV2Screen extends Screen {
     private final List<ClickableWidget> topBarWidgets = new ArrayList<>();
     private final List<ClickableWidget> canvasWidgets = new ArrayList<>();
     private final List<ClickableWidget> keyboardWidgets = new ArrayList<>();
+    private final List<ClickableWidget> entityRadarWidgets = new ArrayList<>();
+    private final List<ClickableWidget> cmdHistoryWidgets = new ArrayList<>();
+    private final List<ClickableWidget> msgHistoryWidgets = new ArrayList<>();
 
     private final List<KeyCell> cells = new ArrayList<>();
     private final Map<Integer, List<String>> macroBindingNames = new HashMap<>();
@@ -179,6 +193,14 @@ public class MacroWorkbenchV2Screen extends Screen {
 
     private int placeholderScroll = 0;
     private boolean gridEnabled = GRID_ENABLED_PREF;
+
+    private List<String> cmdHistoryItems = new ArrayList<>();
+    private int cmdHistoryScroll = 0;
+    private List<String> msgHistoryItems = new ArrayList<>();
+    private int msgHistoryScroll = 0;
+    private List<Entity> entityRadarItems = new ArrayList<>();
+    private int entityRadarScroll = 0;
+    private static final int HISTORY_LINE_HEIGHT = 20;
     private int gridRows = GRID_ROWS_PREF;
     private int gridCols = GRID_COLS_PREF;
     private boolean centerLinesEnabled = CENTER_LINES_ENABLED_PREF;
@@ -254,6 +276,9 @@ public class MacroWorkbenchV2Screen extends Screen {
         ButtonWidget tabCanvas = ButtonWidget.builder(Text.literal("Canvas"), b -> setTab(Tab.CANVAS)).dimensions(8, 8, 70, 20).build();
         ButtonWidget tabKeyboard = ButtonWidget.builder(Text.literal("Keyboard"), b -> setTab(Tab.KEYBOARD)).dimensions(82, 8, 80, 20).build();
         ButtonWidget tabPlaceholders = ButtonWidget.builder(Text.literal("Placeholders"), b -> setTab(Tab.PLACEHOLDERS)).dimensions(166, 8, 102, 20).build();
+        ButtonWidget tabEntityRadar = ButtonWidget.builder(Text.literal("Entity Radar"), b -> setTab(Tab.ENTITY_RADAR)).dimensions(272, 8, 92, 20).build();
+        ButtonWidget tabCmdHistory = ButtonWidget.builder(Text.literal("Cmd History"), b -> setTab(Tab.COMMAND_HISTORY)).dimensions(368, 8, 90, 20).build();
+        ButtonWidget tabMsgHistory = ButtonWidget.builder(Text.literal("Msg History"), b -> setTab(Tab.MESSAGE_HISTORY)).dimensions(462, 8, 90, 20).build();
         ButtonWidget saveButton = ButtonWidget.builder(Text.literal("Save"), b -> saveAll()).dimensions(this.width - 152, 8, 66, 20).build();
         ButtonWidget doneButton = ButtonWidget.builder(Text.literal("Done"), b -> {
             saveAll();
@@ -262,11 +287,17 @@ public class MacroWorkbenchV2Screen extends Screen {
         this.topBarWidgets.add(tabCanvas);
         this.topBarWidgets.add(tabKeyboard);
         this.topBarWidgets.add(tabPlaceholders);
+        this.topBarWidgets.add(tabEntityRadar);
+        this.topBarWidgets.add(tabCmdHistory);
+        this.topBarWidgets.add(tabMsgHistory);
         this.topBarWidgets.add(saveButton);
         this.topBarWidgets.add(doneButton);
         addDrawableChild(tabCanvas);
         addDrawableChild(tabKeyboard);
         addDrawableChild(tabPlaceholders);
+        addDrawableChild(tabEntityRadar);
+        addDrawableChild(tabCmdHistory);
+        addDrawableChild(tabMsgHistory);
         addDrawableChild(saveButton);
         addDrawableChild(doneButton);
 
@@ -446,6 +477,19 @@ public class MacroWorkbenchV2Screen extends Screen {
         addDrawableChild(kbNew);
         addDrawableChild(kbOpenManager);
 
+        ButtonWidget clearCmdHistoryButton = ButtonWidget.builder(
+                Text.literal("Clear History"),
+                b -> { CommandHistoryManager.clearHistory(); cmdHistoryItems.clear(); })
+                .dimensions(this.width / 2 + 5, this.height - 30, 110, 20).build();
+        ButtonWidget clearMsgHistoryButton = ButtonWidget.builder(
+                Text.literal("Clear History"),
+                b -> { MessageHistoryManager.clearHistory(); msgHistoryItems.clear(); })
+                .dimensions(this.width / 2 + 5, this.height - 30, 110, 20).build();
+        this.cmdHistoryWidgets.add(clearCmdHistoryButton);
+        this.msgHistoryWidgets.add(clearMsgHistoryButton);
+        addDrawableChild(clearCmdHistoryButton);
+        addDrawableChild(clearMsgHistoryButton);
+
         syncCanvasFields();
         syncGridButtons();
         syncPresetControls();
@@ -477,18 +521,45 @@ public class MacroWorkbenchV2Screen extends Screen {
             closeAdvancedModal();
             closeKeyboardCommandsModal();
             dragging = false;
+        } else if (next == Tab.ENTITY_RADAR) {
+            applyQuickEdit();
+            closeAdvancedModal();
+            closeKeyboardCommandsModal();
+            dragging = false;
+            entityRadarItems = new ArrayList<>(EntityRadarModule.INSTANCE.getEntities());
+            entityRadarScroll = 0;
+        } else if (next == Tab.COMMAND_HISTORY) {
+            applyQuickEdit();
+            closeAdvancedModal();
+            closeKeyboardCommandsModal();
+            dragging = false;
+            cmdHistoryItems = new ArrayList<>(CommandHistoryManager.getHistory());
+            cmdHistoryScroll = 0;
+        } else if (next == Tab.MESSAGE_HISTORY) {
+            applyQuickEdit();
+            closeAdvancedModal();
+            closeKeyboardCommandsModal();
+            dragging = false;
+            msgHistoryItems = new ArrayList<>(MessageHistoryManager.getHistory());
+            msgHistoryScroll = 0;
         }
     }
 
     private void refreshTabWidgetVisibility() {
         boolean canvasTab = this.tab == Tab.CANVAS;
         boolean keyboardTab = this.tab == Tab.KEYBOARD;
+        boolean entityRadarTab = this.tab == Tab.ENTITY_RADAR;
+        boolean cmdHistoryTab = this.tab == Tab.COMMAND_HISTORY;
+        boolean msgHistoryTab = this.tab == Tab.MESSAGE_HISTORY;
         // In canvas, F1 controls visibility; in other tabs controls are always visible.
         boolean showChrome = !canvasTab || canvasChromeVisible;
 
         setWidgetState(topBarWidgets, showChrome);
         setWidgetState(canvasWidgets, canvasTab && showChrome);
         setWidgetState(keyboardWidgets, keyboardTab && showChrome);
+        setWidgetState(entityRadarWidgets, entityRadarTab && showChrome);
+        setWidgetState(cmdHistoryWidgets, cmdHistoryTab && showChrome);
+        setWidgetState(msgHistoryWidgets, msgHistoryTab && showChrome);
     }
 
     private static void setWidgetState(List<ClickableWidget> widgets, boolean visible) {
@@ -507,6 +578,12 @@ public class MacroWorkbenchV2Screen extends Screen {
             renderCanvasTab(context, mouseX, mouseY);
         } else if (this.tab == Tab.KEYBOARD) {
             renderKeyboardTab(context);
+        } else if (this.tab == Tab.ENTITY_RADAR) {
+            renderEntityRadarTab(context);
+        } else if (this.tab == Tab.COMMAND_HISTORY) {
+            renderCommandHistoryTab(context, mouseX, mouseY);
+        } else if (this.tab == Tab.MESSAGE_HISTORY) {
+            renderMessageHistoryTab(context, mouseX, mouseY);
         } else {
             renderPlaceholdersTab(context);
         }
@@ -608,6 +685,194 @@ public class MacroWorkbenchV2Screen extends Screen {
     }
 
 
+    private int getHistoryVisibleLines() {
+        return Math.max(1, (this.height - TOP_BAR_H - 80) / HISTORY_LINE_HEIGHT);
+    }
+
+    private void renderCommandHistoryTab(DrawContext context, int mouseX, int mouseY) {
+        int top = TOP_BAR_H + 8;
+        context.drawCenteredTextWithShadow(this.textRenderer, Text.literal("Command History"), width / 2, top, 0xFFFFFF);
+        String info = cmdHistoryItems.isEmpty() ? "No commands in history yet." : "Click any command to copy it to clipboard";
+        context.drawCenteredTextWithShadow(this.textRenderer, Text.literal(info), width / 2, top + 14, 0xAAAAAA);
+
+        if (!cmdHistoryItems.isEmpty()) {
+            int listY = top + 32;
+            int maxVisible = Math.min(getHistoryVisibleLines(), cmdHistoryItems.size() - cmdHistoryScroll);
+            for (int i = 0; i < maxVisible; i++) {
+                int index = i + cmdHistoryScroll;
+                if (index >= cmdHistoryItems.size()) break;
+                String command = cmdHistoryItems.get(index);
+                int y = listY + (i * HISTORY_LINE_HEIGHT);
+                int boxX1 = 20, boxX2 = width - 20;
+                int boxY1 = y - 2, boxY2 = y + HISTORY_LINE_HEIGHT - 2;
+                boolean hovering = mouseX >= boxX1 && mouseX <= boxX2 && mouseY >= boxY1 && mouseY <= boxY2;
+                if (hovering) context.fill(boxX1, boxY1, boxX2, boxY2, 0x80FFFFFF);
+                String displayText = (index + 1) + ". " + command;
+                int textColor = hovering ? 0xFFFF00 : 0xFFFFFF;
+                int maxWidth = width - 50;
+                if (textRenderer.getWidth(displayText) > maxWidth) {
+                    while (textRenderer.getWidth(displayText + "...") > maxWidth && displayText.length() > 10)
+                        displayText = displayText.substring(0, displayText.length() - 1);
+                    displayText += "...";
+                }
+                context.drawTextWithShadow(this.textRenderer, displayText, 25, y, textColor);
+                if (hovering) {
+                    String hint = "[Click to copy]";
+                    context.drawTextWithShadow(this.textRenderer, Text.literal(hint), boxX2 - textRenderer.getWidth(hint) - 5, y, 0xFFFF00);
+                }
+            }
+            if (cmdHistoryItems.size() > getHistoryVisibleLines()) {
+                int total = (cmdHistoryItems.size() + getHistoryVisibleLines() - 1) / getHistoryVisibleLines();
+                int cur = (cmdHistoryScroll / getHistoryVisibleLines()) + 1;
+                context.drawCenteredTextWithShadow(this.textRenderer,
+                        Text.literal("Page " + cur + "/" + total + " (Scroll to navigate)"),
+                        width / 2, height - 52, 0x888888);
+            }
+        }
+    }
+
+    private void renderMessageHistoryTab(DrawContext context, int mouseX, int mouseY) {
+        int top = TOP_BAR_H + 8;
+        context.drawCenteredTextWithShadow(this.textRenderer, Text.literal("Message History"), width / 2, top, 0xFFFFFF);
+        String info = msgHistoryItems.isEmpty() ? "No messages in history yet." : "Click any message to copy it to clipboard";
+        context.drawCenteredTextWithShadow(this.textRenderer, Text.literal(info), width / 2, top + 14, 0xAAAAAA);
+
+        if (!msgHistoryItems.isEmpty()) {
+            int listY = top + 32;
+            int maxVisible = Math.min(getHistoryVisibleLines(), msgHistoryItems.size() - msgHistoryScroll);
+            for (int i = 0; i < maxVisible; i++) {
+                int index = i + msgHistoryScroll;
+                if (index >= msgHistoryItems.size()) break;
+                String message = msgHistoryItems.get(index);
+                int y = listY + (i * HISTORY_LINE_HEIGHT);
+                int boxX1 = 20, boxX2 = width - 20;
+                int boxY1 = y - 2, boxY2 = y + HISTORY_LINE_HEIGHT - 2;
+                boolean hovering = mouseX >= boxX1 && mouseX <= boxX2 && mouseY >= boxY1 && mouseY <= boxY2;
+                if (hovering) context.fill(boxX1, boxY1, boxX2, boxY2, 0x80FFFFFF);
+                String displayText = (index + 1) + ". " + message;
+                int textColor = hovering ? 0xFFFF00 : 0xFFFFFF;
+                int maxWidth = width - 50;
+                if (textRenderer.getWidth(displayText) > maxWidth) {
+                    while (textRenderer.getWidth(displayText + "...") > maxWidth && displayText.length() > 10)
+                        displayText = displayText.substring(0, displayText.length() - 1);
+                    displayText += "...";
+                }
+                context.drawTextWithShadow(this.textRenderer, displayText, 25, y, textColor);
+                if (hovering) {
+                    String hint = "[Click to copy]";
+                    context.drawTextWithShadow(this.textRenderer, Text.literal(hint), boxX2 - textRenderer.getWidth(hint) - 5, y, 0xFFFF00);
+                }
+            }
+            if (msgHistoryItems.size() > getHistoryVisibleLines()) {
+                int total = (msgHistoryItems.size() + getHistoryVisibleLines() - 1) / getHistoryVisibleLines();
+                int cur = (msgHistoryScroll / getHistoryVisibleLines()) + 1;
+                context.drawCenteredTextWithShadow(this.textRenderer,
+                        Text.literal("Page " + cur + "/" + total + " (Scroll to navigate)"),
+                        width / 2, height - 52, 0x888888);
+            }
+        }
+    }
+
+    private void renderEntityRadarTab(DrawContext context) {
+        int top = TOP_BAR_H + 8;
+        context.drawCenteredTextWithShadow(this.textRenderer, Text.literal("Entity Radar"), width / 2, top, 0xFFFFFFFF);
+
+        if (this.client != null && this.client.world != null && this.client.player != null) {
+            entityRadarItems = new ArrayList<>(EntityRadarModule.INSTANCE.getEntities());
+            entityRadarScroll = Math.clamp(entityRadarScroll, 0, Math.max(0, entityRadarItems.size() - getHistoryVisibleLines()));
+        } else {
+            entityRadarItems = List.of();
+            entityRadarScroll = 0;
+        }
+
+        int passive = 0;
+        int hostile = 0;
+        int neutral = 0;
+        for (Entity entity : entityRadarItems) {
+            if (entity instanceof HostileEntity) {
+                hostile++;
+            } else if (entity instanceof PassiveEntity) {
+                passive++;
+            } else {
+                neutral++;
+            }
+        }
+
+        String info = entityRadarItems.isEmpty()
+                ? "No nearby entities."
+                : "Total: " + entityRadarItems.size() + " | Passive: " + passive + " | Neutral: " + neutral + " | Hostile: " + hostile;
+        context.drawCenteredTextWithShadow(this.textRenderer, Text.literal(info), width / 2, top + 14, 0xFFAAAAAA);
+
+        if (!entityRadarItems.isEmpty()) {
+            int listY = top + 32;
+            int maxVisible = Math.min(getHistoryVisibleLines(), entityRadarItems.size() - entityRadarScroll);
+            for (int i = 0; i < maxVisible; i++) {
+                int index = i + entityRadarScroll;
+                if (index >= entityRadarItems.size()) {
+                    break;
+                }
+
+                Entity entity = entityRadarItems.get(index);
+                String name = entity.getName().getString();
+                double distance = this.client == null || this.client.player == null
+                        ? 0.0
+                        : entity.distanceTo(this.client.player);
+                String line = String.format(Locale.ROOT, "%d. %s - %.1fm", index + 1, name, distance);
+
+                int y = listY + (i * HISTORY_LINE_HEIGHT);
+                int color = 0xFFFFFFFF;
+                if (entity instanceof HostileEntity) {
+                    color = 0xFFFF6666;
+                } else if (entity instanceof PassiveEntity) {
+                    color = 0xFF66FF66;
+                }
+
+                int maxWidth = width - 50;
+                if (textRenderer.getWidth(line) > maxWidth) {
+                    while (textRenderer.getWidth(line + "...") > maxWidth && line.length() > 10) {
+                        line = line.substring(0, line.length() - 1);
+                    }
+                    line += "...";
+                }
+                context.drawTextWithShadow(this.textRenderer, line, 25, y, color);
+            }
+        }
+    }
+
+    private boolean onCommandHistoryClick(double mouseX, double mouseY) {
+        if (cmdHistoryItems.isEmpty()) return false;
+        int listY = TOP_BAR_H + 8 + 32;
+        int maxVisible = Math.min(getHistoryVisibleLines(), cmdHistoryItems.size() - cmdHistoryScroll);
+        for (int i = 0; i < maxVisible; i++) {
+            int index = i + cmdHistoryScroll;
+            if (index >= cmdHistoryItems.size()) break;
+            String command = cmdHistoryItems.get(index);
+            int y = listY + (i * HISTORY_LINE_HEIGHT);
+            if (mouseX >= 20 && mouseX <= width - 20 && mouseY >= y - 2 && mouseY <= y + HISTORY_LINE_HEIGHT - 2) {
+                if (client != null) client.keyboard.setClipboard(command);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean onMessageHistoryClick(double mouseX, double mouseY) {
+        if (msgHistoryItems.isEmpty()) return false;
+        int listY = TOP_BAR_H + 8 + 32;
+        int maxVisible = Math.min(getHistoryVisibleLines(), msgHistoryItems.size() - msgHistoryScroll);
+        for (int i = 0; i < maxVisible; i++) {
+            int index = i + msgHistoryScroll;
+            if (index >= msgHistoryItems.size()) break;
+            String message = msgHistoryItems.get(index);
+            int y = listY + (i * HISTORY_LINE_HEIGHT);
+            if (mouseX >= 20 && mouseX <= width - 20 && mouseY >= y - 2 && mouseY <= y + HISTORY_LINE_HEIGHT - 2) {
+                if (client != null) client.keyboard.setClipboard(message);
+                return true;
+            }
+        }
+        return false;
+    }
+
     private void renderKeyboardTab(DrawContext context) {
         int panelX = this.width - 320;
         context.drawTextWithShadow(this.textRenderer, "Macros = Green, Game binds = Blue", 8, TOP_BAR_H + 4, 0xFFB0FFB0);
@@ -705,6 +970,15 @@ public class MacroWorkbenchV2Screen extends Screen {
         if (this.tab == Tab.KEYBOARD) {
             return onKeyboardClick(click.x(), click.y());
         }
+        if (this.tab == Tab.ENTITY_RADAR) {
+            return false;
+        }
+        if (this.tab == Tab.COMMAND_HISTORY) {
+            return onCommandHistoryClick(click.x(), click.y());
+        }
+        if (this.tab == Tab.MESSAGE_HISTORY) {
+            return onMessageHistoryClick(click.x(), click.y());
+        }
         return false;
     }
 
@@ -716,11 +990,12 @@ public class MacroWorkbenchV2Screen extends Screen {
                 int boxY = modalY();
                 int sourceX = boxX + 12;
                 int sourceY = boxY + 72;
-                int sourceW = 214;
+                int sourceW = 198;
                 List<String> suggestions = advancedActionSuggestions();
                 if (!suggestions.isEmpty()) {
                     int rowH = 10;
-                    int maxVisible = Math.max(1, Math.min(suggestions.size(), ((boxY + MODAL_H - 28) - (sourceY + 22)) / rowH));
+                    int bottomLimit = boxY + 208;
+                    int maxVisible = Math.max(1, Math.min(suggestions.size(), Math.max(1, (bottomLimit - (sourceY + 22)) / rowH)));
                     int dropY = sourceY + 22;
                     int dropH = maxVisible * rowH;
                     if (containsBox(mouseX, mouseY, sourceX, dropY, sourceW, dropH)) {
@@ -738,7 +1013,40 @@ public class MacroWorkbenchV2Screen extends Screen {
             return true;
         }
 
+        if (this.tab == Tab.COMMAND_HISTORY) {
+            int maxScroll = Math.max(0, cmdHistoryItems.size() - getHistoryVisibleLines());
+            cmdHistoryScroll = Math.clamp((int) (cmdHistoryScroll + (verticalAmount > 0 ? -1 : 1)), 0, maxScroll);
+            return true;
+        }
+
+        if (this.tab == Tab.ENTITY_RADAR) {
+            int maxScroll = Math.max(0, entityRadarItems.size() - getHistoryVisibleLines());
+            entityRadarScroll = Math.clamp((int) (entityRadarScroll + (verticalAmount > 0 ? -1 : 1)), 0, maxScroll);
+            return true;
+        }
+
+        if (this.tab == Tab.MESSAGE_HISTORY) {
+            int maxScroll = Math.max(0, msgHistoryItems.size() - getHistoryVisibleLines());
+            msgHistoryScroll = Math.clamp((int) (msgHistoryScroll + (verticalAmount > 0 ? -1 : 1)), 0, maxScroll);
+            return true;
+        }
+
         if (this.tab == Tab.CANVAS && selected != null) {
+            if (selected.type == MacroHudDataHandler.ElementType.LIST) {
+                int sx = resolveElementX(selected);
+                int sy = resolveElementY(selected);
+                if (containsBox(mouseX, mouseY, sx, sy, selected.width, selected.height)) {
+                    int delta = verticalAmount > 0 ? -1 : 1;
+                    var window = this.client == null ? null : this.client.getWindow();
+                    boolean shiftDown = window != null && (
+                            InputUtil.isKeyPressed(window, GLFW.GLFW_KEY_LEFT_SHIFT)
+                                    || InputUtil.isKeyPressed(window, GLFW.GLFW_KEY_RIGHT_SHIFT)
+                    );
+                    int step = shiftDown ? 5 : 1;
+                    selected.listScroll = Math.max(0, selected.listScroll + (delta * step));
+                    return true;
+                }
+            }
             return false;
         }
 
@@ -965,11 +1273,11 @@ public class MacroWorkbenchV2Screen extends Screen {
 
         if (isSecondaryChatProxy(selected)) {
             int regexX = boxX + 12;
-            int regexY = boxY + 100;
+            int regexY = boxY + 112;
             int regexW = MODAL_W - 24;
-            int regexH = 74;
+            int regexH = 86;
             int outgoingX = boxX + 12;
-            int outgoingY = boxY + 182;
+            int outgoingY = boxY + 206;
             int outgoingW = 244;
             int outgoingH = 18;
             if (containsBox(click.x(), click.y(), boxX + 12, boxY + 44, 150, 18)) {
@@ -1010,49 +1318,49 @@ public class MacroWorkbenchV2Screen extends Screen {
                 advancedSecondaryLineHeight = Math.min(30, advancedSecondaryLineHeight + stepInt(1));
                 return true;
             }
-            if (containsBox(click.x(), click.y(), boxX + 12, boxY + 222, 48, 18)) {
+            if (containsBox(click.x(), click.y(), boxX + 12, boxY + 236, 48, 18)) {
                 advancedSecondaryFadeDurationMs = Math.max(1000, advancedSecondaryFadeDurationMs - stepInt(1000));
                 return true;
             }
-            if (containsBox(click.x(), click.y(), boxX + 64, boxY + 222, 48, 18)) {
+            if (containsBox(click.x(), click.y(), boxX + 64, boxY + 236, 48, 18)) {
                 advancedSecondaryFadeDurationMs = Math.min(120000, advancedSecondaryFadeDurationMs + stepInt(1000));
                 return true;
             }
-            if (containsBox(click.x(), click.y(), boxX + 116, boxY + 222, 48, 18)) {
+            if (containsBox(click.x(), click.y(), boxX + 116, boxY + 236, 48, 18)) {
                 advancedSecondaryMinAlpha = Math.max(0, advancedSecondaryMinAlpha - stepInt(5));
                 return true;
             }
-            if (containsBox(click.x(), click.y(), boxX + 168, boxY + 222, 48, 18)) {
+            if (containsBox(click.x(), click.y(), boxX + 168, boxY + 236, 48, 18)) {
                 advancedSecondaryMinAlpha = Math.min(255, advancedSecondaryMinAlpha + stepInt(5));
                 return true;
             }
-            if (containsBox(click.x(), click.y(), boxX + 220, boxY + 222, 48, 18)) {
+            if (containsBox(click.x(), click.y(), boxX + 220, boxY + 236, 48, 18)) {
                 advancedSecondaryMaxLines = Math.max(10, advancedSecondaryMaxLines - stepInt(10));
                 return true;
             }
-            if (containsBox(click.x(), click.y(), boxX + 272, boxY + 222, 48, 18)) {
+            if (containsBox(click.x(), click.y(), boxX + 272, boxY + 236, 48, 18)) {
                 advancedSecondaryMaxLines = Math.min(500, advancedSecondaryMaxLines + stepInt(10));
                 return true;
             }
-            if (containsBox(click.x(), click.y(), boxX + 324, boxY + 222, 64, 18)) {
+            if (containsBox(click.x(), click.y(), boxX + 324, boxY + 236, 64, 18)) {
                 selected.backgroundColor = cycleStyleColor(selected.backgroundColor, false);
                 advancedBgColor = formatColor(selected.backgroundColor);
                 advancedBgCursor = advancedBgColor.length();
                 return true;
             }
-            if (containsBox(click.x(), click.y(), boxX + 392, boxY + 222, 64, 18)) {
+            if (containsBox(click.x(), click.y(), boxX + 392, boxY + 236, 64, 18)) {
                 selected.backgroundColor = cycleStyleColor(selected.backgroundColor, true);
                 advancedBgColor = formatColor(selected.backgroundColor);
                 advancedBgCursor = advancedBgColor.length();
                 return true;
             }
-            if (containsBox(click.x(), click.y(), boxX + 324, boxY + 246, 64, 18)) {
+            if (containsBox(click.x(), click.y(), boxX + 324, boxY + 274, 64, 18)) {
                 selected.textColor = cycleStyleColor(selected.textColor, false);
                 advancedBorderColor = formatColor(selected.textColor);
                 advancedBorderCursor = advancedBorderColor.length();
                 return true;
             }
-            if (containsBox(click.x(), click.y(), boxX + 392, boxY + 246, 64, 18)) {
+            if (containsBox(click.x(), click.y(), boxX + 392, boxY + 274, 64, 18)) {
                 selected.textColor = cycleStyleColor(selected.textColor, true);
                 advancedBorderColor = formatColor(selected.textColor);
                 advancedBorderCursor = advancedBorderColor.length();
@@ -1067,7 +1375,7 @@ public class MacroWorkbenchV2Screen extends Screen {
                 return true;
             }
 
-            advancedBgColorFocused = containsBox(click.x(), click.y(), boxX + 324, boxY + 246, 64, 18);
+            advancedBgColorFocused = containsBox(click.x(), click.y(), boxX + 324, boxY + 274, 64, 18);
             if (advancedBgColorFocused) {
                 advancedTextFocused = false;
                 advancedActionFocused = false;
@@ -1078,7 +1386,7 @@ public class MacroWorkbenchV2Screen extends Screen {
                 return true;
             }
 
-            advancedBorderColorFocused = containsBox(click.x(), click.y(), boxX + 392, boxY + 246, 64, 18);
+            advancedBorderColorFocused = containsBox(click.x(), click.y(), boxX + 392, boxY + 274, 64, 18);
             if (advancedBorderColorFocused) {
                 advancedTextFocused = false;
                 advancedActionFocused = false;
@@ -1391,7 +1699,12 @@ public class MacroWorkbenchV2Screen extends Screen {
         }
 
         if (isShiftDown()) {
-            int[] snappedToElements = snapElementToNeighbors(selected, screenX, screenY);
+            MacroHudDataHandler.HudElement snapTarget = dragPrimaryElementId == null ? selected : findElementById(dragPrimaryElementId);
+            if (snapTarget == null) {
+                snapTarget = selected;
+            }
+            Set<String> excludedIds = selectedElementIds.size() > 1 ? new HashSet<>(selectedElementIds) : Set.of();
+            int[] snappedToElements = snapElementToNeighbors(snapTarget, screenX, screenY, excludedIds);
             screenX = snappedToElements[0];
             screenY = snappedToElements[1];
         } else {
@@ -1407,13 +1720,29 @@ public class MacroWorkbenchV2Screen extends Screen {
         int[] primaryStart = dragStartScreenPositions.get(dragPrimaryElementId);
         int dx = screenX - primaryStart[0];
         int dy = screenY - primaryStart[1];
+
+        int boundedDx = dx;
+        int boundedDy = dy;
+        int canvasBottom = this.height - BOTTOM_BAR_H;
         for (MacroHudDataHandler.HudElement e : getSelectedElements()) {
             int[] start = dragStartScreenPositions.get(e.id);
             if (start == null) {
                 continue;
             }
-            setElementScreenPosition(e, start[0] + dx, start[1] + dy);
-            clampElementToCanvas(e);
+            int minDx = -start[0];
+            int maxDx = this.width - e.width - start[0];
+            int minDy = CANVAS_CONTENT_TOP - start[1];
+            int maxDy = canvasBottom - e.height - start[1];
+            boundedDx = Math.clamp(boundedDx, minDx, maxDx);
+            boundedDy = Math.clamp(boundedDy, minDy, maxDy);
+        }
+
+        for (MacroHudDataHandler.HudElement e : getSelectedElements()) {
+            int[] start = dragStartScreenPositions.get(e.id);
+            if (start == null) {
+                continue;
+            }
+            setElementScreenPosition(e, start[0] + boundedDx, start[1] + boundedDy);
         }
     }
 
@@ -1438,7 +1767,7 @@ public class MacroWorkbenchV2Screen extends Screen {
         return new int[]{snappedX, snappedY + CANVAS_CONTENT_TOP, snappedW, snappedH};
     }
 
-    private int[] snapElementToNeighbors(MacroHudDataHandler.HudElement moving, int screenX, int screenY) {
+    private int[] snapElementToNeighbors(MacroHudDataHandler.HudElement moving, int screenX, int screenY, Set<String> excludedIds) {
         if (moving == null) {
             return new int[]{screenX, screenY};
         }
@@ -1456,7 +1785,7 @@ public class MacroWorkbenchV2Screen extends Screen {
         int movingCenterY = screenY + moving.height / 2;
 
         for (MacroHudDataHandler.HudElement other : this.working.elements) {
-            if (other == null || other.id.equals(moving.id)) {
+            if (other == null || other.id.equals(moving.id) || excludedIds.contains(other.id)) {
                 continue;
             }
             int ox = resolveElementX(other);
@@ -1640,10 +1969,14 @@ public class MacroWorkbenchV2Screen extends Screen {
         if (e.drawBorder) {
             GuiSystem.drawOutline(context, x1, y1, x2, y2, e.borderColor);
         }
-        ItemStack stack = resolvePreviewIconStack(e.iconKind, e.iconId);
-        int ix = x1 + Math.max(0, (e.width - 16) / 2);
-        int iy = y1 + Math.max(0, (e.height - 16) / 2);
-        context.drawItem(stack, ix, iy);
+        if ("entity_model".equalsIgnoreCase(safe(e.iconKind))) {
+            drawCanvasPlayerModelPreview(context, e, x1, y1, e.width, e.height);
+        } else {
+            ItemStack stack = resolvePreviewIconStack(e.iconKind, e.iconId);
+            int ix = x1 + Math.max(0, (e.width - 16) / 2);
+            int iy = y1 + Math.max(0, (e.height - 16) / 2);
+            context.drawItem(stack, ix, iy);
+        }
         String label = safe(e.label);
         if (!label.isBlank()) {
             float scale = Math.max(0.5f, e.fontScale);
@@ -1661,7 +1994,18 @@ public class MacroWorkbenchV2Screen extends Screen {
         if (e.drawBorder) {
             GuiSystem.drawOutline(context, x1, y1, x2, y2, e.borderColor);
         }
-        float progress = 0.66f;
+        double min = e.minValue;
+        double max = e.maxValue;
+        Double maxToken = resolveCanvasNumericToken(e.sourceTokenMax);
+        if (maxToken != null) {
+            max = maxToken;
+        }
+        Double valueToken = resolveCanvasNumericToken(e.sourceToken);
+        double value = valueToken == null ? min : valueToken;
+        if (max <= min) {
+            max = min + 1.0;
+        }
+        float progress = (float) Math.clamp((value - min) / (max - min), 0.0, 1.0);
         int innerX = x1 + 1;
         int innerY = y1 + 1;
         int innerW = Math.max(1, e.width - 2);
@@ -1681,7 +2025,16 @@ public class MacroWorkbenchV2Screen extends Screen {
         if (e.drawBorder) {
             GuiSystem.drawOutline(context, x1, y1, x2, y2, e.borderColor);
         }
-        String text = (safe(e.prefix).isBlank() ? "" : e.prefix) + "42" + safe(e.suffix);
+        Double valueToken = resolveCanvasNumericToken(e.sourceToken);
+        double value = valueToken == null ? 0.0 : valueToken;
+        String prefix = safe(e.prefix);
+        if (prefix.isBlank()) {
+            String label = safe(e.label);
+            if (!label.isBlank() && !"Value".equalsIgnoreCase(label)) {
+                prefix = label + ": ";
+            }
+        }
+        String text = prefix + formatCanvasValue(value) + safe(e.suffix);
         float scale = Math.max(0.5f, e.fontScale);
         int tw = Math.max(1, Math.round(styledLineWidth(text) * scale));
         int tx = alignedStartX(x1, e, tw, true);
@@ -1696,33 +2049,90 @@ public class MacroWorkbenchV2Screen extends Screen {
         if (e.drawBorder) {
             GuiSystem.drawOutline(context, x1, y1, x2, y2, e.borderColor);
         }
-        List<String> lines = List.of("List", safe(e.sourceToken), "Line A", "Line B");
+        String src = MacroPlaceholders.expandForCanvas(this.client, "{" + safe(e.sourceToken) + "}");
+        List<String> lines = splitListSourceForCanvas(src);
+        if (lines.isEmpty()) {
+            lines = List.of("(none)");
+        }
+        int maxLines = Math.max(1, e.maxLines);
+        int scroll = Math.clamp(e.listScroll, 0, Math.max(0, lines.size() - 1));
+        int end = Math.min(lines.size(), scroll + maxLines);
+        List<String> visible = lines.subList(scroll, end);
         int startY = y1 + 3;
-        for (int i = 0; i < Math.min(lines.size(), Math.max(1, e.maxLines)); i++) {
-            int yy = startY + i * Math.max(8, e.lineHeight);
+        int lineHeight = Math.max(8, Math.round(Math.max(6, e.lineHeight) * Math.max(0.5f, e.fontScale)));
+        for (int i = 0; i < visible.size(); i++) {
+            int yy = startY + i * lineHeight;
             if (yy > y2 - 10) {
                 break;
             }
-            context.drawTextWithShadow(this.textRenderer, lines.get(i), x1 + 4, yy, e.textColor);
+            drawStyledTextLine(context, visible.get(i), x1 + 4, yy, e.textColor, Math.max(0.5f, e.fontScale));
         }
     }
 
     private void drawCanvasShapePreview(DrawContext context, MacroHudDataHandler.HudElement e, int x1, int y1, int x2, int y2) {
         String type = safe(e.shapeType).toLowerCase(Locale.ROOT);
-        if ("line".equals(type)) {
-            int w = Math.max(1, x2 - x1);
-            int h = Math.max(1, y2 - y1);
-            for (int i = 0; i < Math.max(1, e.shapeThickness); i++) {
-                int yy = y2 - 1 - i;
-                int xx = x1 + i;
-                context.fill(xx, yy, xx + w - i * 2, yy + 1, e.borderColor);
+        int w = Math.max(1, x2 - x1);
+        int h = Math.max(1, y2 - y1);
+        if ("triangle".equals(type)) {
+            drawCanvasTriangleShape(context, x1, y1, w, h,
+                    e.backgroundColor, e.borderColor,
+                    e.shapeFilled || e.drawBackground,
+                    e.drawBorder,
+                    Math.max(1, e.shapeThickness));
+            return;
+        }
+        if ("diamond".equals(type)) {
+            drawCanvasDiamondShape(context, x1, y1, w, h,
+                    e.backgroundColor, e.borderColor,
+                    e.shapeFilled || e.drawBackground,
+                    e.drawBorder,
+                    Math.max(1, e.shapeThickness));
+            return;
+        }
+        if ("line".equals(type) || "cross".equals(type)) {
+            if (!e.drawBorder && !e.shapeFilled) {
+                return;
+            }
+            int color = e.drawBorder ? e.borderColor : e.backgroundColor;
+            if ("line".equals(type)) {
+                for (int i = 0; i < Math.max(1, e.shapeThickness); i++) {
+                    int yy = y2 - 1 - i;
+                    int xx = x1 + i;
+                    context.fill(xx, yy, xx + w - i * 2, yy + 1, color);
+                }
+            } else {
+                int cx = x1 + w / 2;
+                int cy = y1 + h / 2;
+                int t = Math.max(1, e.shapeThickness);
+                context.fill(cx - t / 2, y1, cx - t / 2 + t, y2, color);
+                context.fill(x1, cy - t / 2, x2, cy - t / 2 + t, color);
             }
             return;
         }
         if (e.drawBackground || e.shapeFilled) {
-            context.fill(x1, y1, x2, y2, e.backgroundColor);
+            if ("triangle".equals(type)) {
+                for (int row = 0; row < h; row++) {
+                    float t = h <= 1 ? 1.0f : (row / (float) (h - 1));
+                    int halfW = Math.max(0, Math.round((w / 2f) * t));
+                    int cx = x1 + w / 2;
+                    int yy = y1 + row;
+                    context.fill(cx - halfW, yy, cx + halfW + 1, yy + 1, e.backgroundColor);
+                }
+            } else if ("diamond".equals(type)) {
+                int cy = y1 + h / 2;
+                int ry = Math.max(1, h / 2);
+                int cx = x1 + w / 2;
+                for (int row = -ry; row <= ry; row++) {
+                    float t = 1.0f - (Math.abs(row) / (float) ry);
+                    int halfW = Math.max(0, Math.round((w / 2f) * t));
+                    int yy = cy + row;
+                    context.fill(cx - halfW, yy, cx + halfW + 1, yy + 1, e.backgroundColor);
+                }
+            } else {
+                context.fill(x1, y1, x2, y2, e.backgroundColor);
+            }
         }
-        if (e.drawBorder || !e.shapeFilled) {
+        if (e.drawBorder) {
             GuiSystem.drawOutline(context, x1, y1, x2, y2, e.borderColor);
         }
     }
@@ -2187,9 +2597,9 @@ public class MacroWorkbenchV2Screen extends Screen {
                 boxX + 304, boxY + 96, 0xFFEAEAEA);
 
         int regexX = boxX + 12;
-        int regexY = boxY + 100;
+        int regexY = boxY + 112;
         int regexW = MODAL_W - 24;
-        int regexH = 74;
+        int regexH = 86;
         context.drawTextWithShadow(this.textRenderer, "Regex List (one pattern per line)", regexX, regexY - 10, 0xFFB8B8B8);
         context.fill(regexX, regexY, regexX + regexW, regexY + regexH, advancedTextFocused ? 0xFF0F0F0F : 0xFF161616);
         context.fill(regexX, regexY, regexX + regexW, regexY + 1, 0x60FFFFFF);
@@ -2209,7 +2619,7 @@ public class MacroWorkbenchV2Screen extends Screen {
         }
 
         int outgoingX = boxX + 12;
-        int outgoingY = boxY + 182;
+        int outgoingY = boxY + 206;
         int outgoingW = 244;
         int outgoingH = 18;
         context.drawTextWithShadow(this.textRenderer, "Outgoing Regex", outgoingX, outgoingY - 10, 0xFFB8B8B8);
@@ -2222,28 +2632,28 @@ public class MacroWorkbenchV2Screen extends Screen {
             context.fill(ax, outgoingY + 4, ax + 1, outgoingY + 13, 0xFFFFFFFF);
         }
 
-        drawModalButton(context, boxX + 12, boxY + 222, 48, 18, "FD-", containsBox(mouseX, mouseY, boxX + 12, boxY + 222, 48, 18));
-        drawModalButton(context, boxX + 64, boxY + 222, 48, 18, "FD+", containsBox(mouseX, mouseY, boxX + 64, boxY + 222, 48, 18));
-        drawModalButton(context, boxX + 116, boxY + 222, 48, 18, "A-", containsBox(mouseX, mouseY, boxX + 116, boxY + 222, 48, 18));
-        drawModalButton(context, boxX + 168, boxY + 222, 48, 18, "A+", containsBox(mouseX, mouseY, boxX + 168, boxY + 222, 48, 18));
-        drawModalButton(context, boxX + 220, boxY + 222, 48, 18, "L-", containsBox(mouseX, mouseY, boxX + 220, boxY + 222, 48, 18));
-        drawModalButton(context, boxX + 272, boxY + 222, 48, 18, "L+", containsBox(mouseX, mouseY, boxX + 272, boxY + 222, 48, 18));
+        drawModalButton(context, boxX + 12, boxY + 236, 48, 18, "FD-", containsBox(mouseX, mouseY, boxX + 12, boxY + 236, 48, 18));
+        drawModalButton(context, boxX + 64, boxY + 236, 48, 18, "FD+", containsBox(mouseX, mouseY, boxX + 64, boxY + 236, 48, 18));
+        drawModalButton(context, boxX + 116, boxY + 236, 48, 18, "A-", containsBox(mouseX, mouseY, boxX + 116, boxY + 236, 48, 18));
+        drawModalButton(context, boxX + 168, boxY + 236, 48, 18, "A+", containsBox(mouseX, mouseY, boxX + 168, boxY + 236, 48, 18));
+        drawModalButton(context, boxX + 220, boxY + 236, 48, 18, "L-", containsBox(mouseX, mouseY, boxX + 220, boxY + 236, 48, 18));
+        drawModalButton(context, boxX + 272, boxY + 236, 48, 18, "L+", containsBox(mouseX, mouseY, boxX + 272, boxY + 236, 48, 18));
         context.drawTextWithShadow(this.textRenderer,
                 "Fade: " + advancedSecondaryFadeDurationMs + "ms  Alpha: " + advancedSecondaryMinAlpha + "  Max: " + advancedSecondaryMaxLines,
-                boxX + 12, boxY + 246, 0xFFEAEAEA);
+                boxX + 12, boxY + 260, 0xFFEAEAEA);
 
-        drawModalButton(context, boxX + 324, boxY + 222, 64, 18, "BG-", containsBox(mouseX, mouseY, boxX + 324, boxY + 222, 64, 18));
-        drawModalButton(context, boxX + 392, boxY + 222, 64, 18, "BG+", containsBox(mouseX, mouseY, boxX + 392, boxY + 222, 64, 18));
-        context.drawTextWithShadow(this.textRenderer, "BG", boxX + 324, boxY + 240, 0xFFEAEAEA);
-        context.drawTextWithShadow(this.textRenderer, "TX", boxX + 392, boxY + 240, 0xFFEAEAEA);
+        drawModalButton(context, boxX + 324, boxY + 236, 64, 18, "BG-", containsBox(mouseX, mouseY, boxX + 324, boxY + 236, 64, 18));
+        drawModalButton(context, boxX + 392, boxY + 236, 64, 18, "BG+", containsBox(mouseX, mouseY, boxX + 392, boxY + 236, 64, 18));
+        context.drawTextWithShadow(this.textRenderer, "BG", boxX + 324, boxY + 268, 0xFFEAEAEA);
+        context.drawTextWithShadow(this.textRenderer, "TX", boxX + 392, boxY + 268, 0xFFEAEAEA);
         int bgInputBg = advancedBgColorFocused ? 0xFF0F0F0F : 0xFF161616;
-        context.fill(boxX + 324, boxY + 246, boxX + 388, boxY + 264, bgInputBg);
-        context.fill(boxX + 324, boxY + 246, boxX + 388, boxY + 247, 0x60FFFFFF);
-        context.drawTextWithShadow(this.textRenderer, advancedBgColor, boxX + 328, boxY + 251, 0xFFEAEAEA);
+        context.fill(boxX + 324, boxY + 274, boxX + 388, boxY + 292, bgInputBg);
+        context.fill(boxX + 324, boxY + 274, boxX + 388, boxY + 275, 0x60FFFFFF);
+        context.drawTextWithShadow(this.textRenderer, advancedBgColor, boxX + 328, boxY + 279, 0xFFEAEAEA);
         int txInputBg = advancedBorderColorFocused ? 0xFF0F0F0F : 0xFF161616;
-        context.fill(boxX + 392, boxY + 246, boxX + 456, boxY + 264, txInputBg);
-        context.fill(boxX + 392, boxY + 246, boxX + 456, boxY + 247, 0x60FFFFFF);
-        context.drawTextWithShadow(this.textRenderer, advancedBorderColor, boxX + 396, boxY + 251, 0xFFEAEAEA);
+        context.fill(boxX + 392, boxY + 274, boxX + 456, boxY + 292, txInputBg);
+        context.fill(boxX + 392, boxY + 274, boxX + 456, boxY + 275, 0x60FFFFFF);
+        context.drawTextWithShadow(this.textRenderer, advancedBorderColor, boxX + 396, boxY + 279, 0xFFEAEAEA);
 
         drawModalButton(context, boxX + MODAL_W - 134, boxY + MODAL_H - 24, 60, 18, "Apply",
                 containsBox(mouseX, mouseY, boxX + MODAL_W - 134, boxY + MODAL_H - 24, 60, 18));
@@ -2252,11 +2662,11 @@ public class MacroWorkbenchV2Screen extends Screen {
 
         if (advancedBgColorFocused && (System.currentTimeMillis() / 500L) % 2L == 0L) {
             int cx = boxX + 328 + this.textRenderer.getWidth(advancedBgColor.substring(0, Math.clamp(advancedBgCursor, 0, advancedBgColor.length())));
-            context.fill(cx, boxY + 250, cx + 1, boxY + 259, 0xFFFFFFFF);
+            context.fill(cx, boxY + 278, cx + 1, boxY + 287, 0xFFFFFFFF);
         }
         if (advancedBorderColorFocused && (System.currentTimeMillis() / 500L) % 2L == 0L) {
             int cx = boxX + 396 + this.textRenderer.getWidth(advancedBorderColor.substring(0, Math.clamp(advancedBorderCursor, 0, advancedBorderColor.length())));
-            context.fill(cx, boxY + 250, cx + 1, boxY + 259, 0xFFFFFFFF);
+            context.fill(cx, boxY + 278, cx + 1, boxY + 287, 0xFFFFFFFF);
         }
     }
 
@@ -2307,7 +2717,7 @@ public class MacroWorkbenchV2Screen extends Screen {
         int labelH = 18;
         int sourceX = boxX + 12;
         int sourceY = boxY + 72;
-        int sourceW = 214;
+        int sourceW = 198;
         int sourceH = 18;
 
         context.drawTextWithShadow(this.textRenderer, selected.type + " Widget", boxX + 12, boxY + 12, 0xFFFFFFFF);
@@ -2336,7 +2746,8 @@ public class MacroWorkbenchV2Screen extends Screen {
             int dropY = sourceY + 22;
             int dropW = sourceW;
             int rowH = 10;
-            int maxVisible = Math.max(1, Math.min(suggestions.size(), ((boxY + MODAL_H - 28) - dropY) / rowH));
+            int bottomLimit = boxY + 208;
+            int maxVisible = Math.max(1, Math.min(suggestions.size(), Math.max(1, (bottomLimit - dropY) / rowH)));
             int maxScroll = Math.max(0, suggestions.size() - maxVisible);
             advancedActionSuggestionScroll = Math.clamp(advancedActionSuggestionScroll, 0, maxScroll);
             context.fill(dropX, dropY, dropX + dropW, dropY + maxVisible * rowH, 0xC0101010);
@@ -2353,7 +2764,7 @@ public class MacroWorkbenchV2Screen extends Screen {
             if (suggestions.size() > maxVisible) {
                 context.drawTextWithShadow(this.textRenderer,
                         "scroll " + (advancedActionSuggestionScroll + 1) + "/" + (maxScroll + 1),
-                        dropX + 3, dropY + maxVisible * rowH + 1, 0xFF909090);
+                        dropX + 3, dropY + maxVisible * rowH - 9, 0xFF909090);
             }
         }
 
@@ -2370,15 +2781,44 @@ public class MacroWorkbenchV2Screen extends Screen {
         drawModalButton(context, boxX + 290, boxY + 38, 54, 18, "BG+", containsBox(mouseX, mouseY, boxX + 290, boxY + 38, 54, 18));
         drawModalButton(context, boxX + 348, boxY + 38, 54, 18, "BR-", containsBox(mouseX, mouseY, boxX + 348, boxY + 38, 54, 18));
         drawModalButton(context, boxX + 406, boxY + 38, 50, 18, "BR+", containsBox(mouseX, mouseY, boxX + 406, boxY + 38, 50, 18));
-        drawModalButton(context, boxX + 232, boxY + 64, 224, 18, "Pick Src", containsBox(mouseX, mouseY, boxX + 232, boxY + 64, 224, 18));
+        drawModalButton(context, boxX + 232, boxY + 64, 54, 18, "FS-", containsBox(mouseX, mouseY, boxX + 232, boxY + 64, 54, 18));
+        drawModalButton(context, boxX + 290, boxY + 64, 54, 18, "FS+", containsBox(mouseX, mouseY, boxX + 290, boxY + 64, 54, 18));
+        drawModalButton(context, boxX + 348, boxY + 64, 108, 18, "Pick Src", containsBox(mouseX, mouseY, boxX + 348, boxY + 64, 108, 18));
+        context.drawTextWithShadow(this.textRenderer, "Scale: " + String.format(Locale.ROOT, "%.2f", selected.fontScale), boxX + 232, boxY + 76, 0xFFEAEAEA);
 
         if (selected.type == MacroHudDataHandler.ElementType.ICON) {
             drawModalButton(context, boxX + 232, boxY + 90, 124, 18, "Kind: " + selected.iconKind, containsBox(mouseX, mouseY, boxX + 232, boxY + 90, 124, 18));
             drawModalButton(context, boxX + 360, boxY + 90, 96, 18, "Pick Id", containsBox(mouseX, mouseY, boxX + 360, boxY + 90, 96, 18));
-            drawModalButton(context, boxX + 232, boxY + 114, 72, 18, "Count: " + (selected.iconShowCount ? "ON" : "OFF"), containsBox(mouseX, mouseY, boxX + 232, boxY + 114, 72, 18));
-            drawModalButton(context, boxX + 308, boxY + 114, 72, 18, "Dur: " + (selected.iconShowDurability ? "ON" : "OFF"), containsBox(mouseX, mouseY, boxX + 308, boxY + 114, 72, 18));
-            drawModalButton(context, boxX + 384, boxY + 114, 72, 18, "CD: " + (selected.iconShowCooldown ? "ON" : "OFF"), containsBox(mouseX, mouseY, boxX + 384, boxY + 114, 72, 18));
-            context.drawTextWithShadow(this.textRenderer, "Id: " + selected.iconId, boxX + 232, boxY + 136, 0xFFEAEAEA);
+            if ("entity_model".equalsIgnoreCase(selected.iconKind)) {
+                drawModalButton(context, boxX + 232, boxY + 138, 54, 18, "Z-", containsBox(mouseX, mouseY, boxX + 232, boxY + 138, 54, 18));
+                drawModalButton(context, boxX + 290, boxY + 138, 54, 18, "Z+", containsBox(mouseX, mouseY, boxX + 290, boxY + 138, 54, 18));
+                drawModalButton(context, boxX + 348, boxY + 138, 54, 18, "Y-", containsBox(mouseX, mouseY, boxX + 348, boxY + 138, 54, 18));
+                drawModalButton(context, boxX + 406, boxY + 138, 50, 18, "Y+", containsBox(mouseX, mouseY, boxX + 406, boxY + 138, 50, 18));
+                drawModalButton(context, boxX + 232, boxY + 162, 54, 18, "P-", containsBox(mouseX, mouseY, boxX + 232, boxY + 162, 54, 18));
+                drawModalButton(context, boxX + 290, boxY + 162, 54, 18, "P+", containsBox(mouseX, mouseY, boxX + 290, boxY + 162, 54, 18));
+                drawModalButton(context, boxX + 348, boxY + 162, 54, 18, "OX-", containsBox(mouseX, mouseY, boxX + 348, boxY + 162, 54, 18));
+                drawModalButton(context, boxX + 406, boxY + 162, 50, 18, "OX+", containsBox(mouseX, mouseY, boxX + 406, boxY + 162, 50, 18));
+                drawModalButton(context, boxX + 232, boxY + 186, 54, 18, "OY-", containsBox(mouseX, mouseY, boxX + 232, boxY + 186, 54, 18));
+                drawModalButton(context, boxX + 290, boxY + 186, 54, 18, "OY+", containsBox(mouseX, mouseY, boxX + 290, boxY + 186, 54, 18));
+                drawModalButton(context, boxX + 348, boxY + 186, 52, 18,
+                        "Fit: " + (selected.modelAutoFit ? "ON" : "OFF"),
+                        containsBox(mouseX, mouseY, boxX + 348, boxY + 186, 52, 18));
+                drawModalButton(context, boxX + 404, boxY + 186, 52, 18,
+                        "Look: " + (selected.modelFollowLook ? "ON" : "OFF"),
+                        containsBox(mouseX, mouseY, boxX + 404, boxY + 186, 52, 18));
+                context.drawTextWithShadow(this.textRenderer, "Id: " + selected.iconId, boxX + 232, boxY + 114, 0xFFEAEAEA);
+                context.drawTextWithShadow(this.textRenderer,
+                        String.format(Locale.ROOT, "Zoom %.2f  Yaw %.0f  Pitch %.0f", selected.modelZoom, selected.modelYaw, selected.modelPitch),
+                        boxX + 232, boxY + 126, 0xFFEAEAEA);
+                context.drawTextWithShadow(this.textRenderer,
+                        "Offset X: " + selected.modelOffsetX + "  Y: " + selected.modelOffsetY,
+                        boxX + 232, boxY + 210, 0xFFEAEAEA);
+            } else {
+                drawModalButton(context, boxX + 232, boxY + 114, 72, 18, "Count: " + (selected.iconShowCount ? "ON" : "OFF"), containsBox(mouseX, mouseY, boxX + 232, boxY + 114, 72, 18));
+                drawModalButton(context, boxX + 308, boxY + 114, 72, 18, "Dur: " + (selected.iconShowDurability ? "ON" : "OFF"), containsBox(mouseX, mouseY, boxX + 308, boxY + 114, 72, 18));
+                drawModalButton(context, boxX + 384, boxY + 114, 72, 18, "CD: " + (selected.iconShowCooldown ? "ON" : "OFF"), containsBox(mouseX, mouseY, boxX + 384, boxY + 114, 72, 18));
+                context.drawTextWithShadow(this.textRenderer, "Id: " + selected.iconId, boxX + 232, boxY + 136, 0xFFEAEAEA);
+            }
         } else if (selected.type == MacroHudDataHandler.ElementType.BAR) {
             drawModalButton(context, boxX + 232, boxY + 90, 224, 18, "Max Src: " + (safe(selected.sourceTokenMax).isBlank() ? "(none)" : selected.sourceTokenMax), containsBox(mouseX, mouseY, boxX + 232, boxY + 90, 224, 18));
             drawModalButton(context, boxX + 232, boxY + 114, 90, 18, "Segmented: " + (selected.segmented ? "ON" : "OFF"), containsBox(mouseX, mouseY, boxX + 232, boxY + 114, 90, 18));
@@ -2392,15 +2832,15 @@ public class MacroWorkbenchV2Screen extends Screen {
             drawModalButton(context, boxX + 290, boxY + 162, 54, 18, "C1+", containsBox(mouseX, mouseY, boxX + 290, boxY + 162, 54, 18));
             drawModalButton(context, boxX + 348, boxY + 162, 54, 18, "C2-", containsBox(mouseX, mouseY, boxX + 348, boxY + 162, 54, 18));
             drawModalButton(context, boxX + 406, boxY + 162, 50, 18, "C2+", containsBox(mouseX, mouseY, boxX + 406, boxY + 162, 50, 18));
-            context.drawTextWithShadow(this.textRenderer, "Range: " + String.format(Locale.ROOT, "%.1f..%.1f", selected.minValue, selected.maxValue) + "  Segments: " + selected.segments, boxX + 232, boxY + 184, 0xFFEAEAEA);
+            context.drawTextWithShadow(this.textRenderer, "Range: " + String.format(Locale.ROOT, "%.1f..%.1f", selected.minValue, selected.maxValue) + "  Segments: " + selected.segments, boxX + 232, boxY + 176, 0xFFEAEAEA);
 
             int rangeX = boxX + 232;
-            int rangeY = boxY + 198;
+            int rangeY = boxY + 206;
             int rangeW = 124;
             int segX = boxX + 360;
-            int segY = boxY + 198;
+            int segY = boxY + 206;
             int segW = 96;
-            context.drawTextWithShadow(this.textRenderer, "Range min,max", rangeX, rangeY - 10, 0xFFB8B8B8);
+            context.drawTextWithShadow(this.textRenderer, "Range (min,max)", rangeX, rangeY - 10, 0xFFB8B8B8);
             context.fill(rangeX, rangeY, rangeX + rangeW, rangeY + 18, advancedBgColorFocused ? 0xFF0F0F0F : 0xFF161616);
             context.fill(rangeX, rangeY, rangeX + rangeW, rangeY + 1, 0x60FFFFFF);
             context.drawTextWithShadow(this.textRenderer, advancedBgColor, rangeX + 4, rangeY + 5, 0xFFEAEAEA);
@@ -2499,7 +2939,7 @@ public class MacroWorkbenchV2Screen extends Screen {
         int labelH = 18;
         int sourceX = boxX + 12;
         int sourceY = boxY + 72;
-        int sourceW = 214;
+        int sourceW = 198;
         int sourceH = 18;
 
         List<String> suggestions = advancedActionSuggestions();
@@ -2508,7 +2948,8 @@ public class MacroWorkbenchV2Screen extends Screen {
             int dropY = sourceY + 22;
             int dropW = sourceW;
             int rowH = 10;
-            int maxVisible = Math.max(1, Math.min(suggestions.size(), ((boxY + MODAL_H - 28) - dropY) / rowH));
+            int bottomLimit = boxY + 208;
+            int maxVisible = Math.max(1, Math.min(suggestions.size(), Math.max(1, (bottomLimit - dropY) / rowH)));
             int maxScroll = Math.max(0, suggestions.size() - maxVisible);
             advancedActionSuggestionScroll = Math.clamp(advancedActionSuggestionScroll, 0, maxScroll);
             for (int i = 0; i < maxVisible; i++) {
@@ -2548,7 +2989,15 @@ public class MacroWorkbenchV2Screen extends Screen {
             selected.borderColor = cycleStyleColor(selected.borderColor, true);
             return true;
         }
-        if (containsBox(click.x(), click.y(), boxX + 232, boxY + 64, 224, 18)) {
+        if (containsBox(click.x(), click.y(), boxX + 232, boxY + 64, 54, 18)) {
+            selected.fontScale = Math.clamp((float) (selected.fontScale - stepDouble(0.1)), 0.5f, 4.0f);
+            return true;
+        }
+        if (containsBox(click.x(), click.y(), boxX + 290, boxY + 64, 54, 18)) {
+            selected.fontScale = Math.clamp((float) (selected.fontScale + stepDouble(0.1)), 0.5f, 4.0f);
+            return true;
+        }
+        if (containsBox(click.x(), click.y(), boxX + 348, boxY + 64, 108, 18)) {
             String[] presets = switch (selected.type) {
                 case LIST -> LIST_SOURCE_PRESETS;
                 case STATE_BADGE -> STATE_SOURCE_PRESETS;
@@ -2581,25 +3030,79 @@ public class MacroWorkbenchV2Screen extends Screen {
         if (selected.type == MacroHudDataHandler.ElementType.ICON) {
             if (containsBox(click.x(), click.y(), boxX + 232, boxY + 90, 124, 18)) {
                 selected.iconKind = cyclePreset(selected.iconKind, ICON_KIND_PRESETS, forward);
+                if ("entity_model".equalsIgnoreCase(selected.iconKind)
+                        && (safe(selected.iconId).isBlank() || "minecraft:stone".equalsIgnoreCase(safe(selected.iconId)))) {
+                    selected.iconId = "minecraft:player";
+                }
                 return true;
             }
             if (containsBox(click.x(), click.y(), boxX + 360, boxY + 90, 96, 18)) {
-                String[] ids = "block".equalsIgnoreCase(selected.iconKind) ? ICON_BLOCK_ID_PRESETS
-                        : "entity".equalsIgnoreCase(selected.iconKind) ? ICON_ENTITY_ID_PRESETS : ICON_ITEM_ID_PRESETS;
+                String[] ids = iconIdSuggestionsForKind(selected.iconKind);
                 selected.iconId = cyclePreset(selected.iconId, ids, forward);
                 return true;
             }
-            if (containsBox(click.x(), click.y(), boxX + 232, boxY + 114, 72, 18)) {
-                selected.iconShowCount = !selected.iconShowCount;
-                return true;
-            }
-            if (containsBox(click.x(), click.y(), boxX + 308, boxY + 114, 72, 18)) {
-                selected.iconShowDurability = !selected.iconShowDurability;
-                return true;
-            }
-            if (containsBox(click.x(), click.y(), boxX + 384, boxY + 114, 72, 18)) {
-                selected.iconShowCooldown = !selected.iconShowCooldown;
-                return true;
+            if ("entity_model".equalsIgnoreCase(selected.iconKind)) {
+                if (containsBox(click.x(), click.y(), boxX + 232, boxY + 138, 54, 18)) {
+                    selected.modelZoom = Math.clamp((float) (selected.modelZoom - stepDouble(0.05)), 0.2f, 2.5f);
+                    return true;
+                }
+                if (containsBox(click.x(), click.y(), boxX + 290, boxY + 138, 54, 18)) {
+                    selected.modelZoom = Math.clamp((float) (selected.modelZoom + stepDouble(0.05)), 0.2f, 2.5f);
+                    return true;
+                }
+                if (containsBox(click.x(), click.y(), boxX + 348, boxY + 138, 54, 18)) {
+                    selected.modelYaw = Math.clamp((float) (selected.modelYaw - stepDouble(5.0)), -180.0f, 180.0f);
+                    return true;
+                }
+                if (containsBox(click.x(), click.y(), boxX + 406, boxY + 138, 50, 18)) {
+                    selected.modelYaw = Math.clamp((float) (selected.modelYaw + stepDouble(5.0)), -180.0f, 180.0f);
+                    return true;
+                }
+                if (containsBox(click.x(), click.y(), boxX + 232, boxY + 162, 54, 18)) {
+                    selected.modelPitch = Math.clamp((float) (selected.modelPitch - stepDouble(5.0)), -90.0f, 90.0f);
+                    return true;
+                }
+                if (containsBox(click.x(), click.y(), boxX + 290, boxY + 162, 54, 18)) {
+                    selected.modelPitch = Math.clamp((float) (selected.modelPitch + stepDouble(5.0)), -90.0f, 90.0f);
+                    return true;
+                }
+                if (containsBox(click.x(), click.y(), boxX + 348, boxY + 162, 54, 18)) {
+                    selected.modelOffsetX = Math.clamp(selected.modelOffsetX - stepInt(1), -200, 200);
+                    return true;
+                }
+                if (containsBox(click.x(), click.y(), boxX + 406, boxY + 162, 50, 18)) {
+                    selected.modelOffsetX = Math.clamp(selected.modelOffsetX + stepInt(1), -200, 200);
+                    return true;
+                }
+                if (containsBox(click.x(), click.y(), boxX + 232, boxY + 186, 54, 18)) {
+                    selected.modelOffsetY = Math.clamp(selected.modelOffsetY - stepInt(1), -200, 200);
+                    return true;
+                }
+                if (containsBox(click.x(), click.y(), boxX + 290, boxY + 186, 54, 18)) {
+                    selected.modelOffsetY = Math.clamp(selected.modelOffsetY + stepInt(1), -200, 200);
+                    return true;
+                }
+                if (containsBox(click.x(), click.y(), boxX + 348, boxY + 186, 52, 18)) {
+                    selected.modelAutoFit = !selected.modelAutoFit;
+                    return true;
+                }
+                if (containsBox(click.x(), click.y(), boxX + 404, boxY + 186, 52, 18)) {
+                    selected.modelFollowLook = !selected.modelFollowLook;
+                    return true;
+                }
+            } else {
+                if (containsBox(click.x(), click.y(), boxX + 232, boxY + 114, 72, 18)) {
+                    selected.iconShowCount = !selected.iconShowCount;
+                    return true;
+                }
+                if (containsBox(click.x(), click.y(), boxX + 308, boxY + 114, 72, 18)) {
+                    selected.iconShowDurability = !selected.iconShowDurability;
+                    return true;
+                }
+                if (containsBox(click.x(), click.y(), boxX + 384, boxY + 114, 72, 18)) {
+                    selected.iconShowCooldown = !selected.iconShowCooldown;
+                    return true;
+                }
             }
         } else if (selected.type == MacroHudDataHandler.ElementType.BAR) {
             if (containsBox(click.x(), click.y(), boxX + 232, boxY + 90, 224, 18)) {
@@ -2771,10 +3274,10 @@ public class MacroWorkbenchV2Screen extends Screen {
 
         if (selected.type == MacroHudDataHandler.ElementType.BAR) {
             int rangeX = boxX + 232;
-            int rangeY = boxY + 198;
+            int rangeY = boxY + 206;
             int rangeW = 124;
             int segX = boxX + 360;
-            int segY = boxY + 198;
+            int segY = boxY + 206;
             int segW = 96;
             if (containsBox(click.x(), click.y(), rangeX, rangeY, rangeW, 18)) {
                 advancedBgColorFocused = true;
@@ -2904,6 +3407,9 @@ public class MacroWorkbenchV2Screen extends Screen {
         if ("entity".equalsIgnoreCase(kind)) {
             return ALL_ENTITY_IDS.toArray(String[]::new);
         }
+        if ("entity_model".equalsIgnoreCase(kind)) {
+            return new String[]{"player", "minecraft:player"};
+        }
         return ALL_ITEM_IDS.toArray(String[]::new);
     }
 
@@ -2946,10 +3452,12 @@ public class MacroWorkbenchV2Screen extends Screen {
                 MacroHudDataHandler.Anchor.TOP_LEFT,
                 MacroHudDataHandler.Anchor.TOP_CENTER,
                 MacroHudDataHandler.Anchor.TOP_RIGHT,
+                MacroHudDataHandler.Anchor.MIDDLE_RIGHT,
+                MacroHudDataHandler.Anchor.MIDDLE_CENTER,
+                MacroHudDataHandler.Anchor.MIDDLE_LEFT,
                 MacroHudDataHandler.Anchor.BOTTOM_RIGHT,
                 MacroHudDataHandler.Anchor.BOTTOM_CENTER,
                 MacroHudDataHandler.Anchor.BOTTOM_LEFT,
-                MacroHudDataHandler.Anchor.MIDDLE_CENTER
         };
         MacroHudDataHandler.Anchor base = current == MacroHudDataHandler.Anchor.CENTER ? MacroHudDataHandler.Anchor.MIDDLE_CENTER : current;
         int idx = 0;
@@ -4521,6 +5029,13 @@ public class MacroWorkbenchV2Screen extends Screen {
         cloned.iconShowCount = e.iconShowCount;
         cloned.iconShowDurability = e.iconShowDurability;
         cloned.iconShowCooldown = e.iconShowCooldown;
+        cloned.modelZoom = e.modelZoom;
+        cloned.modelYaw = e.modelYaw;
+        cloned.modelPitch = e.modelPitch;
+        cloned.modelOffsetX = e.modelOffsetX;
+        cloned.modelOffsetY = e.modelOffsetY;
+        cloned.modelAutoFit = e.modelAutoFit;
+        cloned.modelFollowLook = e.modelFollowLook;
         cloned.shapeType = e.shapeType;
         cloned.shapeFilled = e.shapeFilled;
         cloned.shapeRadius = e.shapeRadius;
@@ -4591,8 +5106,8 @@ public class MacroWorkbenchV2Screen extends Screen {
 
     private int resolveElementX(MacroHudDataHandler.HudElement e) {
         return switch (e.anchor) {
-            case TOP_LEFT, BOTTOM_LEFT -> e.x;
-            case TOP_RIGHT, BOTTOM_RIGHT -> this.width - e.width - e.x;
+            case TOP_LEFT, MIDDLE_LEFT, BOTTOM_LEFT -> e.x;
+            case TOP_RIGHT, MIDDLE_RIGHT, BOTTOM_RIGHT -> this.width - e.width - e.x;
             case TOP_CENTER, BOTTOM_CENTER, MIDDLE_CENTER, CENTER -> (this.width - e.width) / 2 + e.x;
         };
     }
@@ -4602,8 +5117,8 @@ public class MacroWorkbenchV2Screen extends Screen {
         int canvasHeight = Math.max(1, canvasBottom - CANVAS_CONTENT_TOP);
         return switch (e.anchor) {
             case TOP_LEFT, TOP_CENTER, TOP_RIGHT -> e.y;
+            case MIDDLE_LEFT, MIDDLE_CENTER, MIDDLE_RIGHT, CENTER -> CANVAS_CONTENT_TOP + (canvasHeight - e.height) / 2 + e.y;
             case BOTTOM_LEFT, BOTTOM_CENTER, BOTTOM_RIGHT -> canvasBottom - e.height - e.y;
-            case MIDDLE_CENTER, CENTER -> CANVAS_CONTENT_TOP + (canvasHeight - e.height) / 2 + e.y;
         };
     }
 
@@ -4611,23 +5126,37 @@ public class MacroWorkbenchV2Screen extends Screen {
         int canvasBottom = this.height - BOTTOM_BAR_H;
         int canvasHeight = Math.max(1, canvasBottom - CANVAS_CONTENT_TOP);
         e.x = switch (e.anchor) {
-            case TOP_LEFT, BOTTOM_LEFT -> screenX;
-            case TOP_RIGHT, BOTTOM_RIGHT -> this.width - e.width - screenX;
+            case TOP_LEFT, MIDDLE_LEFT, BOTTOM_LEFT -> screenX;
+            case TOP_RIGHT, MIDDLE_RIGHT, BOTTOM_RIGHT -> this.width - e.width - screenX;
             case TOP_CENTER, BOTTOM_CENTER, MIDDLE_CENTER, CENTER -> screenX - (this.width - e.width) / 2;
         };
         e.y = switch (e.anchor) {
             case TOP_LEFT, TOP_CENTER, TOP_RIGHT -> screenY;
+            case MIDDLE_LEFT, MIDDLE_CENTER, MIDDLE_RIGHT, CENTER -> screenY - (CANVAS_CONTENT_TOP + (canvasHeight - e.height) / 2);
             case BOTTOM_LEFT, BOTTOM_CENTER, BOTTOM_RIGHT -> canvasBottom - e.height - screenY;
-            case MIDDLE_CENTER, CENTER -> screenY - (CANVAS_CONTENT_TOP + (canvasHeight - e.height) / 2);
         };
     }
 
     private static boolean hasSelection(int anchor, int cursor) { return anchor >= 0 && anchor != cursor; }
     private static int selectionStart(int anchor, int cursor) { return Math.min(anchor, cursor); }
     private static int selectionEnd(int anchor, int cursor) { return Math.max(anchor, cursor); }
+    private static int clampTextIndex(String text, int index) {
+        int len = text == null ? 0 : text.length();
+        return Math.clamp(index, 0, len);
+    }
+    private static int[] clampedSelectionRange(String text, int anchor, int cursor) {
+        int start = clampTextIndex(text, selectionStart(anchor, cursor));
+        int end = clampTextIndex(text, selectionEnd(anchor, cursor));
+        if (end < start) {
+            end = start;
+        }
+        return new int[]{start, end};
+    }
     private static String selectedText(String text, int anchor, int cursor) {
         if (!hasSelection(anchor, cursor)) return "";
-        return text.substring(selectionStart(anchor, cursor), selectionEnd(anchor, cursor));
+        String safeText = text == null ? "" : text;
+        int[] range = clampedSelectionRange(safeText, anchor, cursor);
+        return safeText.substring(range[0], range[1]);
     }
     private static int updateSelectionAnchor(int currentAnchor, int oldCursor, int newCursor, boolean shiftDown) {
         if (!shiftDown) return -1;
@@ -4658,7 +5187,7 @@ public class MacroWorkbenchV2Screen extends Screen {
                 if (isCustomWidgetType(selected)) {
                     textTop = boxY + 49;
                 } else if (isSecondaryChatProxy(selected)) {
-                    textTop = boxY + 104;
+                    textTop = boxY + 116;
                 }
                 int cursor = cursorIndexFromPoint(advancedText, mouseX - textLeft, mouseY - textTop, 9);
                 if (advancedSelectionAnchor < 0) {
@@ -4706,7 +5235,8 @@ public class MacroWorkbenchV2Screen extends Screen {
 
     private void ensureSuggestionVisible(int totalSuggestions, int selectedIndex, int dropY) {
         int rowH = 10;
-        int visible = Math.max(1, Math.min(totalSuggestions, ((modalY() + MODAL_H - 28) - dropY) / rowH));
+        int bottomLimit = modalY() + 208;
+        int visible = Math.max(1, Math.min(totalSuggestions, Math.max(1, (bottomLimit - dropY) / rowH)));
         if (selectedIndex < advancedActionSuggestionScroll) {
             advancedActionSuggestionScroll = selectedIndex;
             return;
@@ -4719,15 +5249,19 @@ public class MacroWorkbenchV2Screen extends Screen {
 
     private void drawSingleLineSelection(DrawContext context, int textX, int textY, String text, int anchor, int cursor) {
         if (!hasSelection(anchor, cursor)) return;
-        int sx = textX + this.textRenderer.getWidth(text.substring(0, selectionStart(anchor, cursor)));
-        int ex = textX + this.textRenderer.getWidth(text.substring(0, selectionEnd(anchor, cursor)));
+        String safeText = text == null ? "" : text;
+        int[] range = clampedSelectionRange(safeText, anchor, cursor);
+        int sx = textX + this.textRenderer.getWidth(safeText.substring(0, range[0]));
+        int ex = textX + this.textRenderer.getWidth(safeText.substring(0, range[1]));
         if (ex > sx) context.fill(sx, textY, ex, textY + 9, 0x704A7CC7);
     }
     private void drawMultilineSelection(DrawContext context, int textX, int textY, int maxY, String text, int anchor, int cursor, int lineHeight) {
         if (!hasSelection(anchor, cursor)) return;
-        int start = selectionStart(anchor, cursor);
-        int end = selectionEnd(anchor, cursor);
-        List<String> lines = splitLinesRaw(text);
+        String safeText = text == null ? "" : text;
+        int[] range = clampedSelectionRange(safeText, anchor, cursor);
+        int start = range[0];
+        int end = range[1];
+        List<String> lines = splitLinesRaw(safeText);
         int y = textY;
         int index = 0;
         for (String line : lines) {
@@ -4931,10 +5465,658 @@ public class MacroWorkbenchV2Screen extends Screen {
         if ("block".equalsIgnoreCase(kind) && Registries.BLOCK.containsId(id)) {
             return new ItemStack(Registries.BLOCK.get(id).asItem());
         }
+        if ("entity".equalsIgnoreCase(kind)) {
+            if (Registries.ITEM.containsId(id)) {
+                return new ItemStack(Registries.ITEM.get(id));
+            }
+            Identifier eggId = Identifier.tryParse(id.getNamespace() + ":" + id.getPath() + "_spawn_egg");
+            if (eggId != null && Registries.ITEM.containsId(eggId)) {
+                return new ItemStack(Registries.ITEM.get(eggId));
+            }
+            return new ItemStack(Items.BARRIER);
+        }
         if (Registries.ITEM.containsId(id)) {
             return new ItemStack(Registries.ITEM.get(id));
         }
         return new ItemStack(Items.STONE);
+    }
+
+    private void drawCanvasPlayerModelPreview(DrawContext context, MacroHudDataHandler.HudElement element, int x, int y, int w, int h) {
+        if (this.client == null) {
+            return;
+        }
+        net.minecraft.entity.Entity target = resolveCanvasModelTargetEntity(element);
+        if (target == null) {
+            return;
+        }
+        int safeW = Math.max(1, w);
+        int safeH = Math.max(1, h);
+        int innerPad = element.drawBorder ? 2 : 1;
+        int boxW = Math.max(1, safeW - (innerPad * 2));
+        int boxH = Math.max(1, safeH - (innerPad * 2));
+        int baseSize = element.modelAutoFit
+                ? Math.max(8, Math.round(Math.min(boxW, boxH) * 0.48f))
+                : Math.max(8, Math.min(safeW, safeH) - 4);
+        int size = Math.max(8, Math.round(baseSize * Math.clamp(element.modelZoom, 0.2f, 2.5f)));
+        int left = x + innerPad + element.modelOffsetX;
+        int top = y + innerPad + element.modelOffsetY;
+        int right = x + safeW - innerPad + element.modelOffsetX;
+        int bottom = y + safeH - innerPad + element.modelOffsetY;
+        if (right <= left) {
+            right = left + 1;
+        }
+        if (bottom <= top) {
+            bottom = top + 1;
+        }
+        drawEntityModelReflective(context, target, left, top, right, bottom, size,
+                element.modelYaw, element.modelPitch, element.modelFollowLook);
+    }
+
+    private net.minecraft.entity.Entity resolveCanvasModelTargetEntity(MacroHudDataHandler.HudElement element) {
+        if (this.client == null) {
+            return null;
+        }
+        String id = safe(element == null ? null : element.iconId).toLowerCase(Locale.ROOT);
+        if (id.isBlank() || "player".equals(id) || "minecraft:player".equals(id)) {
+            return this.client.player;
+        }
+        return this.client.player != null ? this.client.player : this.client.getCameraEntity();
+    }
+
+    private void drawEntityModelReflective(DrawContext context, net.minecraft.entity.Entity entity,
+                                           int left, int top, int right, int bottom,
+                                           int size, float yaw, float pitch, boolean followLook) {
+        if (entity == null || size < 1) {
+            return;
+        }
+        try {
+            Class<?> inventoryScreen = Class.forName("net.minecraft.client.gui.screen.ingame.InventoryScreen");
+            Class<?> drawContextClass = Class.forName("net.minecraft.client.gui.DrawContext");
+            Class<?> entityClass = Class.forName("net.minecraft.entity.Entity");
+            Class<?> vectorClass = Class.forName("org.joml.Vector3f");
+            Class<?> quaternionClass = Class.forName("org.joml.Quaternionf");
+            Class<?> livingEntityClass = Class.forName("net.minecraft.entity.LivingEntity");
+
+            float[] resolvedAngles = resolveModelAngles(entity, yaw, pitch, followLook);
+            float resolvedYaw = resolvedAngles[0];
+            float resolvedPitch = resolvedAngles[1];
+
+            Object vecZero = vectorClass.getConstructor(float.class, float.class, float.class).newInstance(0.0f, 0.0f, 0.0f);
+            Object modelQuat = buildModelQuaternion(quaternionClass, resolvedYaw, resolvedPitch);
+            Object identityQuat = quaternionClass.getConstructor().newInstance();
+
+            if (invokePreferredEntityDrawPreview(inventoryScreen, context, entity,
+                    left, top, right, bottom, size,
+                    vecZero, modelQuat, identityQuat,
+                    drawContextClass, vectorClass, quaternionClass, entityClass, livingEntityClass,
+                    resolvedYaw, resolvedPitch)) {
+                return;
+            }
+
+            List<Class<?>> owners = List.of(inventoryScreen, drawContextClass);
+            for (Class<?> owner : owners) {
+                for (Method method : owner.getMethods()) {
+                    if (!"drawEntity".equals(method.getName())) {
+                        continue;
+                    }
+                    boolean staticMethod = java.lang.reflect.Modifier.isStatic(method.getModifiers());
+                    if (!staticMethod && !drawContextClass.isAssignableFrom(owner)) {
+                        continue;
+                    }
+
+                    Class<?>[] paramTypes = method.getParameterTypes();
+                    int intParams = 0;
+                    for (Class<?> type : paramTypes) {
+                        if (type == int.class || type == Integer.class) {
+                            intParams++;
+                        }
+                    }
+                    if (intParams < 3) {
+                        continue;
+                    }
+
+                    int[] intArgValues = buildEntityDrawIntArgs(left, top, right, bottom, size, intParams);
+                    if (intArgValues == null) {
+                        continue;
+                    }
+
+                    float fallbackCx = (intArgValues.length >= 2)
+                            ? (intArgValues[0] + (intArgValues.length >= 4 ? intArgValues[2] : intArgValues[0])) / 2.0f
+                            : 0.0f;
+                    float fallbackCy = (intArgValues.length >= 2)
+                            ? (intArgValues[1] + (intArgValues.length >= 4 ? intArgValues[3] : intArgValues[1])) / 2.0f
+                            : 0.0f;
+                    float mouseX = fallbackCx - 40.0f * (float) Math.tan(Math.clamp(resolvedYaw, -30f, 30f) / 20.0f);
+                    float mouseY = fallbackCy + 40.0f * (float) Math.tan(Math.clamp(resolvedPitch, -30f, 30f) / 20.0f);
+
+                    Object[] args = new Object[paramTypes.length];
+                    int intArg = 0;
+                    int quatArg = 0;
+                    int floatArg = 0;
+                    boolean accepted = true;
+                    for (int i = 0; i < paramTypes.length; i++) {
+                        Class<?> type = paramTypes[i];
+                        if (drawContextClass.isAssignableFrom(type)) {
+                            args[i] = context;
+                        } else if (type == int.class || type == Integer.class) {
+                            args[i] = intArgValues[Math.min(intArg++, intArgValues.length - 1)];
+                        } else if (type == float.class || type == Float.class) {
+                            switch (floatArg++) {
+                                case 0 -> args[i] = 0.0625f;
+                                case 1 -> args[i] = mouseX;
+                                case 2 -> args[i] = mouseY;
+                                default -> args[i] = 0.0f;
+                            }
+                        } else if (type == double.class || type == Double.class) {
+                            args[i] = 0.0d;
+                        } else if (type == boolean.class || type == Boolean.class) {
+                            args[i] = false;
+                        } else if (type.getName().equals("org.joml.Vector3f")) {
+                            args[i] = vecZero;
+                        } else if (type.getName().equals("org.joml.Quaternionf")) {
+                            args[i] = (quatArg++ == 0) ? modelQuat : identityQuat;
+                        } else if (entityClass.isAssignableFrom(type)) {
+                            args[i] = entity;
+                        } else {
+                            accepted = false;
+                            break;
+                        }
+                    }
+                    if (!accepted) {
+                        continue;
+                    }
+                    EntityOrientationSnapshot snapshot = captureEntityOrientation(entity);
+                    applyEntityOrientationForScreen(entity, 180.0f + resolvedYaw, resolvedPitch);
+                    try {
+                        method.invoke(staticMethod ? null : context, args);
+                        return;
+                    } catch (Throwable ignoredInvokeFailure) {
+                        // Keep trying compatible signatures.
+                    } finally {
+                        restoreEntityOrientation(entity, snapshot);
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+            // Graceful fallback when mapped signatures differ across versions.
+        }
+    }
+
+    private boolean invokePreferredEntityDrawPreview(Class<?> inventoryScreen,
+                                                     DrawContext context,
+                                                     net.minecraft.entity.Entity entity,
+                                                     int left, int top, int right, int bottom, int size,
+                                                     Object vecZero, Object modelQuat, Object identityQuat,
+                                                     Class<?> drawContextClass, Class<?> vectorClass, Class<?> quaternionClass,
+                                                     Class<?> entityClass, Class<?> livingEntityClass,
+                                                     float resolvedYaw, float resolvedPitch) {
+        int cx = left + ((right - left) / 2);
+        int cy = bottom;
+
+        // Collect all static drawEntity methods so we can prioritise.
+        java.util.List<Method> candidates = new java.util.ArrayList<>();
+        for (Method m : inventoryScreen.getMethods()) {
+            if ("drawEntity".equals(m.getName()) && java.lang.reflect.Modifier.isStatic(m.getModifiers())) {
+                candidates.add(m);
+            }
+        }
+
+        // ── Priority 1: MC 1.21.x low-level 8-param overload ───────────────────────
+        // drawEntity(DrawContext, float x, float y, float size,
+        //            Vector3f, Quaternionf, @Nullable Quaternionf, LivingEntity)
+        for (Method method : candidates) {
+            Class<?>[] p = method.getParameterTypes();
+            if (!matchesFloatXYSizeVecQuatSignature(p, drawContextClass, vectorClass, quaternionClass, livingEntityClass)) {
+                continue;
+            }
+            if (!p[7].isInstance(entity)) {
+                continue;
+            }
+            try {
+                float entityScale = (entity instanceof LivingEntity le) ? le.getScale() : 1.0f;
+                float q = (float) size / entityScale;
+                float mcYaw = 180.0f + resolvedYaw;
+                float pitchRad = (float) (-resolvedPitch * Math.PI / 180.0);
+                Object uiQuat = quaternionClass.getConstructor().newInstance();
+                Method rotZ = quaternionClass.getMethod("rotateZ", float.class);
+                Method rotX = quaternionClass.getMethod("rotateX", float.class);
+                rotZ.invoke(uiQuat, (float) Math.PI);
+                rotX.invoke(uiQuat, pitchRad);
+                Object lightQuat = quaternionClass.getConstructor().newInstance();
+                rotX.invoke(lightQuat, pitchRad);
+                Object vec = vectorClass.getConstructor(float.class, float.class, float.class)
+                        .newInstance(0.0f, entity.getHeight() / 2.0f + 0.0625f * entityScale, 0.0f);
+                float fcx = (left + right) / 2.0f;
+                float fcy = (top + bottom) / 2.0f;
+                EntityOrientationSnapshot snapshot = captureEntityOrientation(entity);
+                applyEntityOrientationForScreen(entity, mcYaw, resolvedPitch);
+                try {
+                    method.invoke(null, context, fcx, fcy, q, vec, uiQuat, lightQuat, entity);
+                    return true;
+                } finally {
+                    restoreEntityOrientation(entity, snapshot);
+                }
+            } catch (Throwable ignored) {
+            }
+        }
+
+        // ── Priority 2: MC 1.21.x primary 10-param overload ────────────────────────
+        // drawEntity(DrawContext, int x1, int y1, int x2, int y2, int size,
+        //            float f, float mouseX, float mouseY, LivingEntity)
+        for (Method method : candidates) {
+            Class<?>[] p = method.getParameterTypes();
+            if (!matchesRectMouseFloat3Signature(p, drawContextClass, livingEntityClass)) {
+                continue;
+            }
+            if (!p[9].isInstance(entity)) {
+                continue;
+            }
+            try {
+                float fcx = (left + right) / 2.0f;
+                float fcy = (top + bottom) / 2.0f;
+                float clampedYaw = Math.clamp(resolvedYaw, -30.0f, 30.0f);
+                float clampedPitch = Math.clamp(resolvedPitch, -30.0f, 30.0f);
+                float mx = fcx - 40.0f * (float) Math.tan(clampedYaw / 20.0f);
+                float my = fcy + 40.0f * (float) Math.tan(clampedPitch / 20.0f);
+                method.invoke(null, context, left, top, right, bottom, size, 0.0625f, mx, my, entity);
+                return true;
+            } catch (Throwable ignored) {
+            }
+        }
+
+        // ── Priority 3: legacy quaternion-based APIs (pre-1.20.5) ───────────────────
+        for (Method method : candidates) {
+            Class<?>[] p = method.getParameterTypes();
+            try {
+                if (matchesRectQuatSignature(p, drawContextClass, vectorClass, quaternionClass)
+                        && p[9].isInstance(entity)) {
+                    EntityOrientationSnapshot snapshot = captureEntityOrientation(entity);
+                    applyEntityOrientationForScreen(entity, 180.0f + resolvedYaw, resolvedPitch);
+                    try {
+                        method.invoke(null, context, left, top, right, bottom, size, vecZero, modelQuat, identityQuat, entity);
+                        return true;
+                    } finally {
+                        restoreEntityOrientation(entity, snapshot);
+                    }
+                }
+
+                if (matchesCenterQuatSignature(p, drawContextClass, quaternionClass, entityClass)
+                        && p[6].isInstance(entity)) {
+                    EntityOrientationSnapshot snapshot = captureEntityOrientation(entity);
+                    applyEntityOrientationForScreen(entity, 180.0f + resolvedYaw, resolvedPitch);
+                    try {
+                        method.invoke(null, context, cx, cy, size, modelQuat, identityQuat, entity);
+                        return true;
+                    } finally {
+                        restoreEntityOrientation(entity, snapshot);
+                    }
+                }
+
+                if (matchesMouseFloatSignature(p, drawContextClass, entityClass)
+                        && p[6].isInstance(entity)) {
+                    float clampedYaw = Math.clamp(resolvedYaw, -30.0f, 30.0f);
+                    float clampedPitch = Math.clamp(resolvedPitch, -30.0f, 30.0f);
+                    float mx = cx - 40.0f * (float) Math.tan(clampedYaw / 20.0f);
+                    float my = cy + 40.0f * (float) Math.tan(clampedPitch / 20.0f);
+                    method.invoke(null, context, cx, cy, size, mx, my, entity);
+                    return true;
+                }
+            } catch (Throwable ignored) {
+            }
+        }
+        return false;
+    }
+
+    // ── MC 1.21.x primary overload ──────────────────────────────────────────────
+    private boolean matchesRectMouseFloat3Signature(Class<?>[] p, Class<?> dcClass, Class<?> livingEntityClass) {
+        return p.length == 10
+                && dcClass.isAssignableFrom(p[0])
+                && p[1] == int.class && p[2] == int.class && p[3] == int.class
+                && p[4] == int.class && p[5] == int.class
+                && p[6] == float.class && p[7] == float.class && p[8] == float.class
+                && livingEntityClass.isAssignableFrom(p[9]);
+    }
+
+    // ── MC 1.21.x low-level 8-param overload ────────────────────────────────────
+    private boolean matchesFloatXYSizeVecQuatSignature(Class<?>[] p, Class<?> dcClass, Class<?> vectorClass,
+                                                        Class<?> quaternionClass, Class<?> livingEntityClass) {
+        return p.length == 8
+                && dcClass.isAssignableFrom(p[0])
+                && p[1] == float.class && p[2] == float.class && p[3] == float.class
+                && vectorClass.getName().equals(p[4].getName())
+                && quaternionClass.getName().equals(p[5].getName())
+                && (quaternionClass.getName().equals(p[6].getName()) || !p[6].isPrimitive())
+                && livingEntityClass.isAssignableFrom(p[7]);
+    }
+
+    private boolean matchesRectQuatSignature(Class<?>[] p,
+                                             Class<?> drawContextClass,
+                                             Class<?> vectorClass,
+                                             Class<?> quaternionClass) {
+        return p.length == 10
+                && drawContextClass.isAssignableFrom(p[0])
+                && p[1] == int.class && p[2] == int.class && p[3] == int.class && p[4] == int.class && p[5] == int.class
+                && vectorClass.getName().equals(p[6].getName())
+                && quaternionClass.getName().equals(p[7].getName())
+                && quaternionClass.getName().equals(p[8].getName());
+    }
+
+    private boolean matchesCenterQuatSignature(Class<?>[] p,
+                                               Class<?> drawContextClass,
+                                               Class<?> quaternionClass,
+                                               Class<?> entityClass) {
+        return p.length == 7
+                && drawContextClass.isAssignableFrom(p[0])
+                && p[1] == int.class && p[2] == int.class && p[3] == int.class
+                && quaternionClass.getName().equals(p[4].getName())
+                && quaternionClass.getName().equals(p[5].getName())
+                && entityClass.isAssignableFrom(p[6]);
+    }
+
+    private boolean matchesMouseFloatSignature(Class<?>[] p,
+                                               Class<?> drawContextClass,
+                                               Class<?> entityClass) {
+        return p.length == 7
+                && drawContextClass.isAssignableFrom(p[0])
+                && p[1] == int.class && p[2] == int.class && p[3] == int.class
+                && p[4] == float.class && p[5] == float.class
+                && entityClass.isAssignableFrom(p[6]);
+    }
+
+    private EntityOrientationSnapshot captureEntityOrientation(net.minecraft.entity.Entity entity) {
+        if (entity == null) {
+            return new EntityOrientationSnapshot(0.0f, 0.0f, null, null, null);
+        }
+        Float bodyYaw = null;
+        Float headYaw = null;
+        Float prevHeadYaw = null;
+        if (entity instanceof LivingEntity living) {
+            bodyYaw = living.getBodyYaw();
+            headYaw = living.getHeadYaw();
+            prevHeadYaw = getFieldFloat(LivingEntity.class, living, "prevHeadYaw");
+        }
+        return new EntityOrientationSnapshot(entity.getYaw(), entity.getPitch(), bodyYaw, headYaw, prevHeadYaw);
+    }
+
+    private void applyEntityOrientation(net.minecraft.entity.Entity entity, float yaw, float pitch) {
+        if (entity == null) return;
+        entity.setYaw(yaw);
+        entity.setPitch(pitch);
+        if (entity instanceof LivingEntity living) {
+            living.setBodyYaw(yaw);
+            living.setHeadYaw(yaw);
+            setFieldFloat(LivingEntity.class, living, "prevHeadYaw", yaw);
+        }
+    }
+
+    private void applyEntityOrientationForScreen(net.minecraft.entity.Entity entity, float displayYaw, float pitch) {
+        if (entity == null) return;
+        entity.setYaw(displayYaw);
+        entity.setPitch(pitch);
+        if (entity instanceof LivingEntity living) {
+            living.setBodyYaw(displayYaw);
+            living.setHeadYaw(displayYaw);
+            setFieldFloat(LivingEntity.class, living, "prevHeadYaw", displayYaw);
+        }
+    }
+
+    private void restoreEntityOrientation(net.minecraft.entity.Entity entity, EntityOrientationSnapshot snapshot) {
+        if (entity == null || snapshot == null) {
+            return;
+        }
+        entity.setYaw(snapshot.yaw());
+        entity.setPitch(snapshot.pitch());
+        if (entity instanceof LivingEntity living) {
+            if (snapshot.bodyYaw() != null) {
+                living.setBodyYaw(snapshot.bodyYaw());
+            }
+            if (snapshot.headYaw() != null) {
+                living.setHeadYaw(snapshot.headYaw());
+            }
+            if (snapshot.prevHeadYaw() != null) {
+                setFieldFloat(LivingEntity.class, living, "prevHeadYaw", snapshot.prevHeadYaw());
+            }
+        }
+    }
+
+    private Float getFieldFloat(Class<?> clazz, Object obj, String fieldName) {
+        for (Class<?> c = clazz; c != null; c = c.getSuperclass()) {
+            try {
+                java.lang.reflect.Field f = c.getDeclaredField(fieldName);
+                f.setAccessible(true);
+                return f.getFloat(obj);
+            } catch (NoSuchFieldException ignored) {
+                // Try parent
+            } catch (Exception ignored) {
+                break;
+            }
+        }
+        return null;
+    }
+
+    private void setFieldFloat(Class<?> clazz, Object obj, String fieldName, float value) {
+        for (Class<?> c = clazz; c != null; c = c.getSuperclass()) {
+            try {
+                java.lang.reflect.Field f = c.getDeclaredField(fieldName);
+                f.setAccessible(true);
+                f.setFloat(obj, value);
+                return;
+            } catch (NoSuchFieldException ignored) {
+                // Try parent
+            } catch (Exception ignored) {
+                break;
+            }
+        }
+    }
+
+    private record EntityOrientationSnapshot(float yaw, float pitch, Float bodyYaw, Float headYaw, Float prevHeadYaw) {
+    }
+
+    private float[] resolveModelAngles(net.minecraft.entity.Entity entity, float yawOffset, float pitchOffset, boolean followLook) {
+        float baseYaw = 0.0f;
+        float basePitch = 0.0f;
+        if (followLook && entity != null) {
+            baseYaw = entity instanceof LivingEntity living ? living.getHeadYaw() : entity.getYaw();
+            basePitch = entity.getPitch();
+        }
+        float resolvedYaw = wrapDegrees(baseYaw + yawOffset);
+        float resolvedPitch = Math.clamp(basePitch + pitchOffset, -90.0f, 90.0f);
+        return new float[]{resolvedYaw, resolvedPitch};
+    }
+
+
+    private float wrapDegrees(float degrees) {
+        float wrapped = degrees % 360.0f;
+        if (wrapped >= 180.0f) {
+            wrapped -= 360.0f;
+        }
+        if (wrapped < -180.0f) {
+            wrapped += 360.0f;
+        }
+        return wrapped;
+    }
+
+    private Object buildModelQuaternion(Class<?> quaternionClass, float yaw, float pitch) {
+        try {
+            Object quat = quaternionClass.getConstructor().newInstance();
+            try {
+                Method rotateZ = quaternionClass.getMethod("rotateZ", float.class);
+                rotateZ.invoke(quat, (float) Math.PI);
+            } catch (Exception ignored) {
+            }
+            float pitchRad = (float) (-pitch * Math.PI / 180.0);
+            try {
+                Method rotateX = quaternionClass.getMethod("rotateX", float.class);
+                rotateX.invoke(quat, pitchRad);
+            } catch (Exception ignored) {
+            }
+            return quat;
+        } catch (Exception ignored) {
+            try {
+                return quaternionClass.getConstructor().newInstance();
+            } catch (Exception ignored2) {
+                return null;
+            }
+        }
+    }
+
+    private int[] buildEntityDrawIntArgs(int left, int top, int right, int bottom, int size, int intParams) {
+        int safeSize = Math.max(8, size);
+        int safeLeft = left;
+        int safeTop = top;
+        int safeRight = Math.max(right, safeLeft + 1);
+        int safeBottom = Math.max(bottom, safeTop + 1);
+        if (intParams == 3) {
+            int cx = safeLeft + ((safeRight - safeLeft) / 2);
+            int cy = safeBottom;
+            return new int[]{cx, cy, safeSize};
+        }
+        if (intParams >= 5) {
+            int[] args = new int[intParams];
+            args[0] = safeLeft;
+            args[1] = safeTop;
+            args[2] = safeRight;
+            args[3] = safeBottom;
+            args[4] = safeSize;
+            for (int i = 5; i < intParams; i++) {
+                args[i] = safeSize;
+            }
+            return args;
+        }
+        // Skip ambiguous 4-int signatures instead of risking invalid x2/y2 bounds.
+        return null;
+    }
+
+    private void drawCanvasTriangleShape(DrawContext context, int x, int y, int w, int h,
+                                         int fillColor, int borderColor, boolean filled,
+                                         boolean drawBorder, int thickness) {
+        int apexX = x + w / 2;
+        int apexY = y;
+        int leftX = x;
+        int rightX = x + w - 1;
+        int baseY = y + h - 1;
+        for (int row = 0; row < h; row++) {
+            float t = h <= 1 ? 1.0f : (row / (float) (h - 1));
+            int rowHalfW = Math.max(0, Math.round((w / 2f) * t));
+            int yy = apexY + row;
+            int rowLeft = apexX - rowHalfW;
+            int rowRight = apexX + rowHalfW;
+            if (filled) {
+                context.fill(rowLeft, yy, rowRight + 1, yy + 1, fillColor);
+            }
+            if (drawBorder) {
+                context.fill(rowLeft, yy, rowLeft + 1, yy + 1, borderColor);
+                context.fill(rowRight, yy, rowRight + 1, yy + 1, borderColor);
+            }
+        }
+        if (drawBorder) {
+            for (int i = 0; i < thickness; i++) {
+                context.fill(leftX + i, baseY - i, rightX - i + 1, baseY - i + 1, borderColor);
+            }
+        }
+    }
+
+    private void drawCanvasDiamondShape(DrawContext context, int x, int y, int w, int h,
+                                        int fillColor, int borderColor, boolean filled,
+                                        boolean drawBorder, int thickness) {
+        int cx = x + w / 2;
+        int cy = y + h / 2;
+        int ry = Math.max(1, h / 2);
+        for (int row = -ry; row <= ry; row++) {
+            float t = 1.0f - (Math.abs(row) / (float) ry);
+            int halfW = Math.max(0, Math.round((w / 2f) * t));
+            int yy = cy + row;
+            int left = cx - halfW;
+            int right = cx + halfW;
+            if (filled) {
+                context.fill(left, yy, right + 1, yy + 1, fillColor);
+            }
+            if (drawBorder) {
+                context.fill(left, yy, left + 1, yy + 1, borderColor);
+                context.fill(right, yy, right + 1, yy + 1, borderColor);
+            }
+        }
+        if (drawBorder) {
+            for (int i = 1; i < Math.max(1, thickness); i++) {
+                context.fill(cx - i, y + i, cx + i + 1, y + i + 1, borderColor);
+                context.fill(cx - i, y + h - i - 1, cx + i + 1, y + h - i, borderColor);
+            }
+        }
+    }
+
+    private Double resolveCanvasNumericToken(String token) {
+        if (this.client == null || token == null || token.isBlank()) {
+            return null;
+        }
+        String expanded = MacroPlaceholders.expandForCanvas(this.client, "{" + token + "}");
+        return parseCanvasFirstDouble(expanded);
+    }
+
+    private static Double parseCanvasFirstDouble(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        String cleaned = raw.trim().replace(',', '.');
+        try {
+            return Double.parseDouble(cleaned);
+        } catch (Exception ignored) {
+            StringBuilder num = new StringBuilder();
+            boolean dotSeen = false;
+            for (int i = 0; i < cleaned.length(); i++) {
+                char c = cleaned.charAt(i);
+                if ((c >= '0' && c <= '9') || (num.isEmpty() && (c == '-' || c == '+'))) {
+                    num.append(c);
+                } else if (c == '.' && !dotSeen) {
+                    dotSeen = true;
+                    num.append(c);
+                } else if (!num.isEmpty()) {
+                    break;
+                }
+            }
+            if (!num.isEmpty()) {
+                try {
+                    return Double.parseDouble(num.toString());
+                } catch (Exception ignored2) {
+                    return null;
+                }
+            }
+            return null;
+        }
+    }
+
+    private static String formatCanvasValue(double value) {
+        if (!Double.isFinite(value)) {
+            return "0";
+        }
+        double rounded = Math.rint(value);
+        if (Math.abs(value - rounded) < 0.0001) {
+            return Integer.toString((int) rounded);
+        }
+        return String.format(Locale.ROOT, "%.2f", value);
+    }
+
+    private static List<String> splitListSourceForCanvas(String src) {
+        if (src == null || src.isBlank()) {
+            return new ArrayList<>();
+        }
+        String normalized = src.replace("\\n", "\n").replace("\r", "");
+        List<String> out = new ArrayList<>();
+        if (normalized.contains("\n")) {
+            for (String line : normalized.split("\\n")) {
+                String t = line.trim();
+                if (!t.isEmpty()) {
+                    out.add(t);
+                }
+            }
+            return out;
+        }
+        for (String part : normalized.split(",")) {
+            String t = part.trim();
+            if (!t.isEmpty()) {
+                out.add(t);
+            }
+        }
+        return out;
     }
 
     private static int blendColor(int c1, int c2, float t) {
@@ -4959,6 +6141,8 @@ public class MacroWorkbenchV2Screen extends Screen {
             case TOP_LEFT -> "TL";
             case TOP_CENTER -> "TC";
             case TOP_RIGHT -> "TR";
+            case MIDDLE_LEFT -> "ML";
+            case MIDDLE_RIGHT -> "MR";
             case BOTTOM_LEFT -> "BL";
             case BOTTOM_CENTER -> "BC";
             case BOTTOM_RIGHT -> "BR";

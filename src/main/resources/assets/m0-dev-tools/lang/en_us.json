@@ -40,6 +40,7 @@
   "key.m0-dev-tools.zoom": "Toggle Zoom",
   "key.m0-dev-tools.spectator_toggle": "Toggle Spectator Mode",
   "key.m0-dev-tools.fullbright": "Toggle Fullbright",
+  "key.m0-dev-tools.toggle_watson_cp": "Toggle Watson CoreProtect",
 
   "m0-dev-tools.nbt_tooltip": "NBT: ",
 

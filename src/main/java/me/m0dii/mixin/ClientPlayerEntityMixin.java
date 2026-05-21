@@ -23,7 +23,7 @@ public abstract class ClientPlayerEntityMixin extends AbstractClientPlayerEntity
     @Shadow
     public Input input;
     @Unique
-    private final DummyMovementInput dummyMovementInput = new DummyMovementInput(null);
+    private DummyMovementInput dummyMovementInput;
     @Unique
     private Input realInput;
 
@@ -41,6 +41,9 @@ public abstract class ClientPlayerEntityMixin extends AbstractClientPlayerEntity
     @Inject(method = "tick", at = @At("HEAD"))
     private void disableMovementInputsPre(CallbackInfo ci) {
         if (CameraUtils.shouldPreventPlayerMovement()) {
+            if (this.dummyMovementInput == null) {
+                this.dummyMovementInput = new DummyMovementInput(net.minecraft.client.MinecraftClient.getInstance().options);
+            }
             this.realInput = this.input;
             this.input = this.dummyMovementInput;
         }

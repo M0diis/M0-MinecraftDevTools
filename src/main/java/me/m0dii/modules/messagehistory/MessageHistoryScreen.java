@@ -53,9 +53,8 @@ public class MessageHistoryScreen extends Screen {
 
     @Override
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
-        this.renderBackground(context, mouseX, mouseY, delta);
-        drawContents(context, mouseX, mouseY);
         super.render(context, mouseX, mouseY, delta);
+        drawContents(context, mouseX, mouseY);
     }
 
     @Override

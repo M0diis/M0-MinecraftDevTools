@@ -45,9 +45,6 @@ public class RedstonePowerOverlayModule extends BlockTextOverlayModule {
         } catch (Exception e) {
             return null;
         }
-        if (wirePower <= 0) {
-            return null;
-        }
 
         int g = (int) Math.round((wirePower / 15.0) * 255.0);
         int color = (0xFF << 16) | (g << 8);

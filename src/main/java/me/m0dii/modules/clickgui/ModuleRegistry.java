@@ -17,6 +17,7 @@ import me.m0dii.modules.nbthud.NBTInfoHudOverlayModule;
 import me.m0dii.modules.nbttooltip.NBTTooltipModule;
 import me.m0dii.modules.overlays.*;
 import me.m0dii.modules.uiutilities.UiUtilitiesModule;
+import me.m0dii.modules.watson.WatsonCoreProtectModule;
 import me.m0dii.modules.waypoints.WaypointModule;
 import me.m0dii.modules.xray.XrayModule;
 import me.m0dii.modules.zoom.ZoomModule;
@@ -77,13 +78,13 @@ public class ModuleRegistry {
         safeAdd(utilities, InstantBreakModule.INSTANCE);
         safeAdd(utilities, NBTTooltipModule.INSTANCE);
         safeAdd(utilities, FullbrightModule.INSTANCE);
+        safeAdd(utilities, WatsonCoreProtectModule.INSTANCE);
         categories.add(utilities);
 
         ModuleCategory movement = new ModuleCategory("Movement");
         safeAdd(movement, InventoryMoveModule.INSTANCE);
         safeAdd(movement, ZoomModule.INSTANCE);
         safeAdd(movement, WaypointModule.INSTANCE);
-        safeAdd(movement, InventoryMoveModule.INSTANCE);
         safeAdd(movement, FreecamModule.INSTANCE);
         categories.add(movement);
 

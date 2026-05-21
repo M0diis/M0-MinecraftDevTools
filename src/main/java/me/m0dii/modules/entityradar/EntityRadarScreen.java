@@ -61,7 +61,7 @@ public class EntityRadarScreen extends Screen {
     }
 
     private void drawContents(@NotNull DrawContext context, int mouseX, int mouseY) {
-        context.drawCenteredTextWithShadow(this.textRenderer, this.title, this.width / 2, 10, 0xFFFFFF);
+        context.drawCenteredTextWithShadow(this.textRenderer, this.title, this.width / 2, 10, 0xFFFFFFFF);
 
         int passiveCount = EntityRadarModule.INSTANCE.getPassiveCount();
         int hostileCount = EntityRadarModule.INSTANCE.getHostileCount();
@@ -70,7 +70,7 @@ public class EntityRadarScreen extends Screen {
 
         String countText = String.format("Total: %d | §aPassive: %d §7| Neutral: %d §c| Hostile: %d",
                 totalCount, passiveCount, neutralCount, hostileCount);
-        context.drawCenteredTextWithShadow(this.textRenderer, Text.literal(countText), this.width / 2, 25, 0xFFFFFF);
+        context.drawCenteredTextWithShadow(this.textRenderer, Text.literal(countText), this.width / 2, 25, 0xFFFFFFFF);
 
         int startIndex = scrollOffset / ENTRY_HEIGHT;
         int visibleEntries = (this.height - HEADER_HEIGHT - 40) / ENTRY_HEIGHT;
@@ -98,18 +98,18 @@ public class EntityRadarScreen extends Screen {
 
                 int color;
                 if (entity instanceof HostileEntity) {
-                    color = 0xFF5555; // Red for hostile
+                    color = 0xFFFF5555; // Red for hostile
                 } else if (entity instanceof PassiveEntity) {
-                    color = 0x55FF55; // Green for passive
+                    color = 0xFF55FF55; // Green for passive
                 } else {
-                    color = 0xFFFF55; // Yellow for neutral
+                    color = 0xFFFFFF55; // Yellow for neutral
                 }
 
                 context.drawTextWithShadow(this.textRenderer, text, 15, entryY + 6, color);
 
                 if (isHovered) {
                     context.drawTextWithShadow(this.textRenderer, "Click to teleport",
-                            this.width - 150, entryY + 6, 0xFFFF00);
+                            this.width - 150, entryY + 6, 0xFFFFFF00);
                 }
             }
         }
