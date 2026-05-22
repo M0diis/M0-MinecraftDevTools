@@ -179,6 +179,10 @@ public class CameraEntity extends ClientPlayerEntity {
 
     private static CameraEntity create(@NotNull MinecraftClient mc) {
         ClientPlayerEntity player = mc.player;
+        if (player == null || mc.world == null) {
+            return null;
+        }
+
         CameraEntity camera = new CameraEntity(mc, mc.world, player.networkHandler, player.getStatHandler(), player.getRecipeBook());
         camera.noClip = true;
         float yaw = player.getYaw();
@@ -211,6 +215,10 @@ public class CameraEntity extends ClientPlayerEntity {
 
     private static void createAndSetCamera(MinecraftClient mc) {
         camera = create(mc);
+        if (camera == null) {
+            return;
+        }
+
         originalCameraEntity = mc.getCameraEntity();
         originalCameraWasPlayer = originalCameraEntity == mc.player;
         cullChunksOriginal = mc.chunkCullingEnabled;
@@ -233,6 +241,7 @@ public class CameraEntity extends ClientPlayerEntity {
         }
 
         originalCameraEntity = null;
+        originalCameraWasPlayer = false;
         camera = null;
         cameraMotion = Vec3d.ZERO;
         sprinting = false;

@@ -1,12 +1,41 @@
 package me.m0dii.modules.freecam;
 
 import me.m0dii.modules.Module;
+import me.m0dii.modules.macros.MacroPlaceholderProvider;
+import me.m0dii.modules.macros.MacroPlaceholders;
+import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.util.InputUtil;
+import net.minecraft.entity.player.PlayerEntity;
 import org.lwjgl.glfw.GLFW;
+
+import java.util.List;
 
 public class FreecamModule extends Module {
 
     public static final FreecamModule INSTANCE = new FreecamModule();
+
+    private static final MacroPlaceholderProvider PLACEHOLDER_PROVIDER = new MacroPlaceholderProvider() {
+        @Override
+        public String getProviderId() {
+            return "freecam";
+        }
+
+        @Override
+        public List<String> getPlaceholderDocs() {
+            return List.of(
+                    "[Module placeholders: Freecam]",
+                    "{freecam.enabled} => true when freecam is active"
+            );
+        }
+
+        @Override
+        public String resolvePlaceholder(String token, MinecraftClient client, PlayerEntity player, boolean canvasMode) {
+            if ("freecam.enabled".equals(token)) {
+                return Boolean.toString(INSTANCE.isEnabled());
+            }
+            return null;
+        }
+    };
 
     protected FreecamModule() {
         super("freecam", "Freecam", false);
@@ -14,6 +43,7 @@ public class FreecamModule extends Module {
 
     @Override
     public void register() {
+        MacroPlaceholders.registerProvider(PLACEHOLDER_PROVIDER);
         registerPressedKeybind("key.m0-dev-tools.freecam",
                 InputUtil.Type.KEYSYM,
                 GLFW.GLFW_KEY_U,
@@ -22,6 +52,10 @@ public class FreecamModule extends Module {
 
     @Override
     public void onEnable() {
+        if (getClient().world == null || getClient().player == null) {
+            this.enabled = false;
+            return;
+        }
         CameraEntity.setCameraState(true);
     }
 

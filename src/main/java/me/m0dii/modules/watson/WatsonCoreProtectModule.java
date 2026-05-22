@@ -1,9 +1,13 @@
 package me.m0dii.modules.watson;
 
 import me.m0dii.modules.Module;
+import me.m0dii.modules.macros.MacroPlaceholderProvider;
+import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.util.InputUtil;
+import net.minecraft.entity.player.PlayerEntity;
 import org.lwjgl.glfw.GLFW;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -12,6 +16,104 @@ import java.util.List;
  */
 public final class WatsonCoreProtectModule extends Module {
     public static final WatsonCoreProtectModule INSTANCE = new WatsonCoreProtectModule();
+
+    private static final MacroPlaceholderProvider PLACEHOLDER_PROVIDER = new MacroPlaceholderProvider() {
+        @Override
+        public String getProviderId() {
+            return "watson";
+        }
+
+        @Override
+        public List<String> getPlaceholderDocs() {
+            return List.of(
+                    "[Module placeholders: Watson]",
+                    "{watson.enabled} => true when  watson is active",
+                    "{watson.entries} => number of recent CP entries being tracked",
+                    "{watson.entries.first.loc} => location of the oldest tracked CP entry, or 'N/A' if none",
+                    "{watson.entries.first.loc.x} => x coordinate of the oldest tracked CP entry",
+                    "{watson.entries.first.loc.y} => y coordinate of the oldest tracked CP entry",
+                    "{watson.entries.first.loc.z} => z coordinate of the oldest tracked CP entry",
+                    "{watson.entries.first.time} => timestamp of the oldest tracked CP entry, or 'N/A' if none",
+                    "{watson.entries.first.action} => action of the oldest tracked CP entry, or 'N/A' if none",
+                    "{watson.entries.last.loc} => location of the most recent tracked CP entry, or 'N/A' if none",
+                    "{watson.entries.last.loc.x} => x coordinate of the most recent tracked CP entry",
+                    "{watson.entries.last.loc.y} => y coordinate of the most recent tracked CP entry",
+                    "{watson.entries.last.loc.z} => z coordinate of the most recent tracked CP entry",
+                    "{watson.entries.last.time} => timestamp of the most recent tracked CP entry, or 'N/A' if none",
+                    "{watson.entries.last.action} => action of the most recent tracked CP entry, or 'N/A' if none"
+            );
+        }
+
+        @Override
+        public String resolvePlaceholder(String token, MinecraftClient client, PlayerEntity player, boolean canvasMode) {
+            return switch (token) {
+                case "watson.enabled" -> String.valueOf(INSTANCE.enabled);
+                case "watson.entries" -> String.valueOf(CoreProtectTracker.size());
+                case "watson.entries.first.loc" -> {
+                    List<CoreProtectEntry> snapshot = CoreProtectTracker.snapshot();
+
+                    yield snapshot.isEmpty() ? "N/A" : snapshot.getFirst().pos().toShortString();
+                }
+                case  "watson.entries.first.loc.x" -> {
+                    List<CoreProtectEntry> snapshot = CoreProtectTracker.snapshot();
+
+                    yield snapshot.isEmpty() ? "N/A" : String.valueOf(snapshot.getFirst().pos().getX());
+                }
+                case "watson.entries.first.loc.y" -> {
+                    List<CoreProtectEntry> snapshot = CoreProtectTracker.snapshot();
+
+                    yield snapshot.isEmpty() ? "N/A" : String.valueOf(snapshot.getFirst().pos().getY());
+                }
+                case "watson.entries.first.loc.z" -> {
+                    List<CoreProtectEntry> snapshot = CoreProtectTracker.snapshot();
+
+                    yield snapshot.isEmpty() ? "N/A" : String.valueOf(snapshot.getFirst().pos().getZ());
+                }
+                case "watson.entries.first.time" -> {
+                    List<CoreProtectEntry> snapshot = CoreProtectTracker.snapshot();
+
+                    yield snapshot.isEmpty() ? "N/A" : String.valueOf(Instant.ofEpochMilli(snapshot.getFirst().observedAt()));
+                }
+                case "watson.entries.first.action" -> {
+                    List<CoreProtectEntry> snapshot = CoreProtectTracker.snapshot();
+
+                    yield snapshot.isEmpty() ? "N/A" : snapshot.getFirst().action().name();
+                }
+                case "watson.entries.last.loc" -> {
+                    List<CoreProtectEntry> snapshot = CoreProtectTracker.snapshot();
+
+                    yield snapshot.isEmpty() ? "N/A" : snapshot.getLast().pos().toShortString();
+                }
+                case "watson.entries.last.loc.x" -> {
+                    List<CoreProtectEntry> snapshot = CoreProtectTracker.snapshot();
+
+                    yield snapshot.isEmpty() ? "N/A" : String.valueOf(snapshot.getLast().pos().getX());
+                }
+                case "watson.entries.last.loc.y" -> {
+                    List<CoreProtectEntry> snapshot = CoreProtectTracker.snapshot();
+
+                    yield snapshot.isEmpty() ? "N/A" : String.valueOf(snapshot.getLast().pos().getY());
+                }
+                case "watson.entries.last.loc.z" -> {
+                    List<CoreProtectEntry> snapshot = CoreProtectTracker.snapshot();
+
+                    yield snapshot.isEmpty() ? "N/A" : String.valueOf(snapshot.getLast().pos().getZ());
+                }
+                case "watson.entries.last.time" -> {
+                    List<CoreProtectEntry> snapshot = CoreProtectTracker.snapshot();
+
+                    yield snapshot.isEmpty() ? "N/A" : String.valueOf(Instant.ofEpochMilli(snapshot.getLast().observedAt()));
+                }
+                case "watson.entries.last.action" -> {
+                    List<CoreProtectEntry> snapshot = CoreProtectTracker.snapshot();
+
+                    yield snapshot.isEmpty() ? "N/A" : snapshot.getLast().action().name();
+                }
+
+                default -> "N/A";
+            };
+        }
+    };
 
     private WatsonCoreProtectModule() {
         super("watson_coreprotect", "Watson CP", false);

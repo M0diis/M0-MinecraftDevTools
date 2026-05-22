@@ -1,6 +1,7 @@
 package me.m0dii.modules.overlays;
 
 import me.m0dii.modules.Module;
+import me.m0dii.utils.DrawUtil;
 import me.m0dii.utils.ModConfig;
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
 import net.minecraft.client.MinecraftClient;
@@ -104,20 +105,15 @@ public class SlimeChunkOverlayModule extends Module {
         VertexConsumer vertexConsumer = vcp.getBuffer(RenderLayers.LINES);
         Matrix4f matrix = matrices.peek().getPositionMatrix();
 
-        drawLine(vertexConsumer, matrix, new Vec3d(minX, minY, minZ), new Vec3d(minX, maxY, minZ));
-        drawLine(vertexConsumer, matrix, new Vec3d(maxX, minY, minZ), new Vec3d(maxX, maxY, minZ));
-        drawLine(vertexConsumer, matrix, new Vec3d(minX, minY, maxZ), new Vec3d(minX, maxY, maxZ));
-        drawLine(vertexConsumer, matrix, new Vec3d(maxX, minY, maxZ), new Vec3d(maxX, maxY, maxZ));
+        DrawUtil.drawLine(vertexConsumer, matrix, minX, minY, minZ, minX, maxY, minZ,
+                0.0f, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f);
+        DrawUtil.drawLine(vertexConsumer, matrix, maxX, minY, minZ, maxX, maxY, minZ,
+                0.0f, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f);
+        DrawUtil.drawLine(vertexConsumer, matrix, minX, minY, maxZ, minX, maxY, maxZ,
+                0.0f, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f);
+        DrawUtil.drawLine(vertexConsumer, matrix, maxX, minY, maxZ, maxX, maxY, maxZ,
+                0.0f, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f);
 
         matrices.pop();
-    }
-
-    private static void drawLine(VertexConsumer vertexConsumer,
-                                 Matrix4f matrix,
-                                 Vec3d a,
-                                 Vec3d b) {
-        // Green color for slime chunks (0.0f red, 1.0f green, 0.0f blue, 1.0f alpha)
-        vertexConsumer.vertex(matrix, (float) a.x, (float) a.y, (float) a.z).color(0.0f, 1.0f, 0.0f, 1.0f).normal(0.0f, 0.0f, 0.0f).lineWidth(1.0f);
-        vertexConsumer.vertex(matrix, (float) b.x, (float) b.y, (float) b.z).color(0.0f, 1.0f, 0.0f, 1.0f).normal(0.0f, 0.0f, 0.0f).lineWidth(1.0f);
     }
 }

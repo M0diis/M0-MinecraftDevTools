@@ -3,6 +3,8 @@ package me.m0dii.modules.entityradar;
 import lombok.Getter;
 import lombok.Setter;
 import me.m0dii.modules.Toggleable;
+import me.m0dii.utils.CustomRenderLayers;
+import me.m0dii.utils.DrawUtil;
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.RenderLayers;
@@ -45,7 +47,7 @@ public class EntityHighlightRenderer implements Toggleable {
             }
 
             VertexConsumer lineBuffer = vertexConsumers.getBuffer(RenderLayers.LINES);
-            VertexConsumer occludedLineBuffer = vertexConsumers.getBuffer(RenderLayers.LINES_TRANSLUCENT);
+            VertexConsumer occludedLineBuffer = vertexConsumers.getBuffer(CustomRenderLayers.LINES_NO_DEPTH);
 
             double cameraX = context.gameRenderer().getCamera().getCameraPos().x;
             double cameraY = context.gameRenderer().getCamera().getCameraPos().y;
@@ -57,7 +59,7 @@ public class EntityHighlightRenderer implements Toggleable {
                 }
 
                 Box box = entity.getBoundingBox().expand(0.03);
-                drawOutlinedBoxSafe(
+                DrawUtil.drawOutlinedBoxSafe(
                         lineBuffer,
                         box.minX - cameraX,
                         box.minY - cameraY,
@@ -67,7 +69,7 @@ public class EntityHighlightRenderer implements Toggleable {
                         box.maxZ - cameraZ,
                         1.0f, 0.25f, 0.25f, 0.9f
                 );
-                drawOutlinedBoxSafe(
+                DrawUtil.drawOutlinedBoxSafe(
                         occludedLineBuffer,
                         box.minX - cameraX,
                         box.minY - cameraY,
@@ -75,15 +77,15 @@ public class EntityHighlightRenderer implements Toggleable {
                         box.maxX - cameraX,
                         box.maxY - cameraY,
                         box.maxZ - cameraZ,
-                        1.0f, 0.25f, 0.25f, 0.55f
+                        1.0f, 0.25f, 0.25f, 0.45f
                 );
 
                 if (tracersEnabled) {
                     double centerX = entity.getX() - cameraX;
                     double centerY = entity.getY() + (entity.getHeight() * 0.5) - cameraY;
                     double centerZ = entity.getZ() - cameraZ;
-                    drawLineSafe(lineBuffer, 0.0, 0.0, 0.0, centerX, centerY, centerZ, 1.0f, 0.8f, 0.2f, 0.9f);
-                    drawLineSafe(occludedLineBuffer, 0.0, 0.0, 0.0, centerX, centerY, centerZ, 1.0f, 0.8f, 0.2f, 0.5f);
+                    DrawUtil.drawLineSafe(lineBuffer, 0.0, 0.0, 0.0, centerX, centerY, centerZ, 1.0f, 0.8f, 0.2f, 0.9f);
+                    DrawUtil.drawLineSafe(occludedLineBuffer, 0.0, 0.0, 0.0, centerX, centerY, centerZ, 1.0f, 0.8f, 0.2f, 0.45f);
                 }
             }
 
@@ -103,6 +105,11 @@ public class EntityHighlightRenderer implements Toggleable {
                         drawBlockEntityBoxSafe(occludedLineBuffer, pos, cameraX, cameraY, cameraZ);
                     }));
 
+            // Explicitly flush our line buffers so vertices are sent to the GPU in this pass.
+            if (vertexConsumers instanceof VertexConsumerProvider.Immediate immediate) {
+                immediate.draw(RenderLayers.LINES);
+                immediate.draw(CustomRenderLayers.LINES_NO_DEPTH);
+            }
         });
     }
 
@@ -114,7 +121,7 @@ public class EntityHighlightRenderer implements Toggleable {
         double maxY = minY + 1.0;
         double maxZ = minZ + 1.0;
 
-        drawOutlinedBox(lineBuffer, minX, minY, minZ, maxX, maxY, maxZ, 0.25f, 0.8f, 1.0f, 0.9f);
+        DrawUtil.drawOutlinedBox(lineBuffer, minX, minY, minZ, maxX, maxY, maxZ, 0.25f, 0.8f, 1.0f, 0.9f);
     }
 
     private static void drawBlockEntityBoxSafe(VertexConsumer lineBuffer, BlockPos pos, double cameraX, double cameraY, double cameraZ) {
@@ -125,85 +132,4 @@ public class EntityHighlightRenderer implements Toggleable {
         }
     }
 
-    private static void drawOutlinedBox(VertexConsumer lineBuffer,
-                                        double minX,
-                                        double minY,
-                                        double minZ,
-                                        double maxX,
-                                        double maxY,
-                                        double maxZ,
-                                        float r,
-                                        float g,
-                                        float b,
-                                        float a) {
-        // Bottom ring
-        drawLine(lineBuffer, minX, minY, minZ, maxX, minY, minZ, r, g, b, a);
-        drawLine(lineBuffer, maxX, minY, minZ, maxX, minY, maxZ, r, g, b, a);
-        drawLine(lineBuffer, maxX, minY, maxZ, minX, minY, maxZ, r, g, b, a);
-        drawLine(lineBuffer, minX, minY, maxZ, minX, minY, minZ, r, g, b, a);
-
-        // Top ring
-        drawLine(lineBuffer, minX, maxY, minZ, maxX, maxY, minZ, r, g, b, a);
-        drawLine(lineBuffer, maxX, maxY, minZ, maxX, maxY, maxZ, r, g, b, a);
-        drawLine(lineBuffer, maxX, maxY, maxZ, minX, maxY, maxZ, r, g, b, a);
-        drawLine(lineBuffer, minX, maxY, maxZ, minX, maxY, minZ, r, g, b, a);
-
-        // Vertical edges
-        drawLine(lineBuffer, minX, minY, minZ, minX, maxY, minZ, r, g, b, a);
-        drawLine(lineBuffer, maxX, minY, minZ, maxX, maxY, minZ, r, g, b, a);
-        drawLine(lineBuffer, maxX, minY, maxZ, maxX, maxY, maxZ, r, g, b, a);
-        drawLine(lineBuffer, minX, minY, maxZ, minX, maxY, maxZ, r, g, b, a);
-    }
-
-    private static void drawOutlinedBoxSafe(VertexConsumer lineBuffer,
-                                            double minX,
-                                            double minY,
-                                            double minZ,
-                                            double maxX,
-                                            double maxY,
-                                            double maxZ,
-                                            float r,
-                                            float g,
-                                            float b,
-                                            float a) {
-        try {
-            drawOutlinedBox(lineBuffer, minX, minY, minZ, maxX, maxY, maxZ, r, g, b, a);
-        } catch (IllegalStateException ignored) {
-            // Optional pass: skip if this buffer is not building in the current phase.
-        }
-    }
-
-    private static void drawLine(VertexConsumer lineBuffer,
-                                 double x1,
-                                 double y1,
-                                 double z1,
-                                 double x2,
-                                 double y2,
-                                 double z2,
-                                 float r,
-                                 float g,
-                                 float b,
-                                 float a) {
-        lineBuffer.vertex((float) x1, (float) y1, (float) z1).color(r, g, b, a).normal(0.0f, 1.0f, 0.0f).lineWidth(1.0f);
-        lineBuffer.vertex((float) x2, (float) y2, (float) z2).color(r, g, b, a).normal(0.0f, 1.0f, 0.0f).lineWidth(1.0f);
-    }
-
-    private static void drawLineSafe(VertexConsumer lineBuffer,
-                                     double x1,
-                                     double y1,
-                                     double z1,
-                                     double x2,
-                                     double y2,
-                                     double z2,
-                                     float r,
-                                     float g,
-                                     float b,
-                                     float a) {
-        try {
-            drawLine(lineBuffer, x1, y1, z1, x2, y2, z2, r, g, b, a);
-        } catch (IllegalStateException ignored) {
-            // Optional pass: skip if this buffer is not building in the current phase.
-        }
-    }
 }
-

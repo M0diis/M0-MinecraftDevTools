@@ -12,6 +12,7 @@
     "ChatHudMixin",
     "ClientPlayerEntityMixin",
     "ClientPlayerInteractionManagerMixin",
+    "ClientPlayNetworkHandlerFreecamMixin",
     "CommandHistoryMixin",
     "EntityMixin",
     "GameRendererMixin",

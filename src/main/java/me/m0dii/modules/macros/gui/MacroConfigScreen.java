@@ -56,7 +56,7 @@ public final class MacroConfigScreen {
                 .setExpanded(false);
 
         subInstructors.add(eb.startTextDescription(
-                Text.literal(MacroPlaceholders.PLACEHOLDER_DOCS.stream().reduce((a, b) -> a + "\n" + b).orElse(""))
+                Text.literal(MacroPlaceholders.getPlaceholderDocs().stream().reduce((a, b) -> a + "\n" + b).orElse(""))
         ).build());
 
         category.addEntry(subInstructors.build());

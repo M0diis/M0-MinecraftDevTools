@@ -1,10 +1,10 @@
 package me.m0dii.modules.overlays;
 
 import me.m0dii.modules.Module;
+import me.m0dii.utils.DrawUtil;
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
 import net.minecraft.client.render.Camera;
 import net.minecraft.client.render.RenderLayers;
-import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.client.render.VertexConsumerProvider;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.structure.StructureStart;
@@ -92,34 +92,7 @@ public class StructureBoundingBoxOverlay extends Module {
         double maxY = box.getMaxY() + 1 - cameraPos.y;
         double maxZ = box.getMaxZ() + 1 - cameraPos.z;
 
-        // Draw 12 edges of the box
-        drawLine(vertexConsumer, minX, minY, minZ, maxX, minY, minZ, r, g, b, a);
-        drawLine(vertexConsumer, minX, minY, minZ, minX, minY, maxZ, r, g, b, a);
-        drawLine(vertexConsumer, maxX, minY, minZ, maxX, minY, maxZ, r, g, b, a);
-        drawLine(vertexConsumer, minX, minY, maxZ, maxX, minY, maxZ, r, g, b, a);
-        drawLine(vertexConsumer, minX, maxY, minZ, maxX, maxY, minZ, r, g, b, a);
-        drawLine(vertexConsumer, minX, maxY, minZ, minX, maxY, maxZ, r, g, b, a);
-        drawLine(vertexConsumer, maxX, maxY, minZ, maxX, maxY, maxZ, r, g, b, a);
-        drawLine(vertexConsumer, minX, maxY, maxZ, maxX, maxY, maxZ, r, g, b, a);
-        drawLine(vertexConsumer, minX, minY, minZ, minX, maxY, minZ, r, g, b, a);
-        drawLine(vertexConsumer, maxX, minY, minZ, maxX, maxY, minZ, r, g, b, a);
-        drawLine(vertexConsumer, minX, minY, maxZ, minX, maxY, maxZ, r, g, b, a);
-        drawLine(vertexConsumer, maxX, minY, maxZ, maxX, maxY, maxZ, r, g, b, a);
+        DrawUtil.drawOutlinedBox(vertexConsumer, minX, minY, minZ, maxX, maxY, maxZ, r, g, b, a);
         matrices.pop();
-    }
-
-    private static void drawLine(VertexConsumer vertexConsumer,
-                                 double x1,
-                                 double y1,
-                                 double z1,
-                                 double x2,
-                                 double y2,
-                                 double z2,
-                                 float r,
-                                 float g,
-                                 float b,
-                                 float a) {
-        vertexConsumer.vertex((float) x1, (float) y1, (float) z1).color(r, g, b, a).normal(0.0f, 1.0f, 0.0f).lineWidth(1.0f);
-        vertexConsumer.vertex((float) x2, (float) y2, (float) z2).color(r, g, b, a).normal(0.0f, 1.0f, 0.0f).lineWidth(1.0f);
     }
 }

@@ -1,6 +1,7 @@
 package me.m0dii.modules.overlays;
 
 import me.m0dii.modules.Module;
+import me.m0dii.utils.DrawUtil;
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
 import net.minecraft.client.render.RenderLayers;
 import net.minecraft.client.render.VertexConsumer;
@@ -78,18 +79,15 @@ public class ChunkBorderOverlayModule extends Module {
         Matrix4f matrix = matrices.peek().getPositionMatrix();
 
         // Draw vertical lines at chunk corners
-        drawLine(vertexConsumer, matrix, (float) minX, (float) minY, (float) minZ, (float) minX, (float) maxY, (float) minZ);
-        drawLine(vertexConsumer, matrix, (float) maxX, (float) minY, (float) minZ, (float) maxX, (float) maxY, (float) minZ);
-        drawLine(vertexConsumer, matrix, (float) minX, (float) minY, (float) maxZ, (float) minX, (float) maxY, (float) maxZ);
-        drawLine(vertexConsumer, matrix, (float) maxX, (float) minY, (float) maxZ, (float) maxX, (float) maxY, (float) maxZ);
+        DrawUtil.drawLine(vertexConsumer, matrix, (float) minX, (float) minY, (float) minZ, (float) minX, (float) maxY, (float) minZ,
+                0.0f, 0.5f, 1.0f, 0.8f, 0.0f, 1.0f, 0.0f, 1.0f);
+        DrawUtil.drawLine(vertexConsumer, matrix, (float) maxX, (float) minY, (float) minZ, (float) maxX, (float) maxY, (float) minZ,
+                0.0f, 0.5f, 1.0f, 0.8f, 0.0f, 1.0f, 0.0f, 1.0f);
+        DrawUtil.drawLine(vertexConsumer, matrix, (float) minX, (float) minY, (float) maxZ, (float) minX, (float) maxY, (float) maxZ,
+                0.0f, 0.5f, 1.0f, 0.8f, 0.0f, 1.0f, 0.0f, 1.0f);
+        DrawUtil.drawLine(vertexConsumer, matrix, (float) maxX, (float) minY, (float) maxZ, (float) maxX, (float) maxY, (float) maxZ,
+                0.0f, 0.5f, 1.0f, 0.8f, 0.0f, 1.0f, 0.0f, 1.0f);
 
         matrices.pop();
-    }
-
-    private static void drawLine(VertexConsumer vertexConsumer, Matrix4f matrix,
-                                 float x1, float y1, float z1, float x2, float y2, float z2) {
-        // Blue color for chunk borders
-        vertexConsumer.vertex(matrix, x1, y1, z1).color(0.0f, 0.5f, 1.0f, 0.8f).normal(0.0f, 1.0f, 0.0f).lineWidth(1.0f);
-        vertexConsumer.vertex(matrix, x2, y2, z2).color(0.0f, 0.5f, 1.0f, 0.8f).normal(0.0f, 1.0f, 0.0f).lineWidth(1.0f);
     }
 }

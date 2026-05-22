@@ -63,14 +63,14 @@ public class CommandHistoryScreen extends Screen {
     }
 
     private void drawContents(DrawContext context, int mouseX, int mouseY) {
-        context.drawCenteredTextWithShadow(textRenderer, title, width / 2, 15, 0xFFFFFF);
+        context.drawCenteredTextWithShadow(textRenderer, title, width / 2, 15, 0xFFFFFFFF);
 
         String info = commands.isEmpty()
                 ? "No commands in history yet."
                 : "Click any command to copy it to clipboard";
         context.drawCenteredTextWithShadow(textRenderer,
                 Text.literal(info).formatted(Formatting.GRAY),
-                width / 2, 30, 0xAAAAAA);
+                width / 2, 30, 0xFFAAAAAA);
 
         if (!commands.isEmpty()) {
             // Draw commands
@@ -98,7 +98,7 @@ public class CommandHistoryScreen extends Screen {
                 }
 
                 String displayText = (index + 1) + ". " + command;
-                int textColor = hovering ? 0xFFFF00 : 0xFFFFFF;
+                int textColor = hovering ? 0xFFFFFF00 : 0xFFFFFFFF;
 
                 int maxWidth = width - 50;
                 if (textRenderer.getWidth(displayText) > maxWidth) {
@@ -115,7 +115,7 @@ public class CommandHistoryScreen extends Screen {
                     int hintX = boxX2 - textRenderer.getWidth(hint) - 5;
                     context.drawTextWithShadow(textRenderer,
                             Text.literal(hint).formatted(Formatting.YELLOW),
-                            hintX, y, 0xFFFF00);
+                            hintX, y, 0xFFFFFF00);
                 }
             }
 
@@ -125,7 +125,7 @@ public class CommandHistoryScreen extends Screen {
                 String pageText = "Page " + currentPage + "/" + totalPages + " (Scroll to navigate)";
                 context.drawCenteredTextWithShadow(textRenderer,
                         Text.literal(pageText).formatted(Formatting.DARK_GRAY),
-                        width / 2, height - 50, 0x888888);
+                        width / 2, height - 50, 0xFF888888);
             }
         }
     }

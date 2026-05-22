@@ -668,7 +668,7 @@ public class MacroWorkbenchV2Screen extends Screen {
         int bottom = this.height - 14;
         int lineHeight = 11;
         int maxLines = Math.max(1, (bottom - top) / lineHeight);
-        List<String> docs = MacroPlaceholders.PLACEHOLDER_DOCS;
+        List<String> docs = MacroPlaceholders.getPlaceholderDocs();
         int maxScroll = Math.max(0, docs.size() - maxLines);
         placeholderScroll = Math.clamp(placeholderScroll, 0, maxScroll);
 
@@ -691,9 +691,9 @@ public class MacroWorkbenchV2Screen extends Screen {
 
     private void renderCommandHistoryTab(DrawContext context, int mouseX, int mouseY) {
         int top = TOP_BAR_H + 8;
-        context.drawCenteredTextWithShadow(this.textRenderer, Text.literal("Command History"), width / 2, top, 0xFFFFFF);
+        context.drawCenteredTextWithShadow(this.textRenderer, Text.literal("Command History"), width / 2, top, 0xFFFFFFFF);
         String info = cmdHistoryItems.isEmpty() ? "No commands in history yet." : "Click any command to copy it to clipboard";
-        context.drawCenteredTextWithShadow(this.textRenderer, Text.literal(info), width / 2, top + 14, 0xAAAAAA);
+        context.drawCenteredTextWithShadow(this.textRenderer, Text.literal(info), width / 2, top + 14, 0xFFAAAAAA);
 
         if (!cmdHistoryItems.isEmpty()) {
             int listY = top + 32;
@@ -708,7 +708,7 @@ public class MacroWorkbenchV2Screen extends Screen {
                 boolean hovering = mouseX >= boxX1 && mouseX <= boxX2 && mouseY >= boxY1 && mouseY <= boxY2;
                 if (hovering) context.fill(boxX1, boxY1, boxX2, boxY2, 0x80FFFFFF);
                 String displayText = (index + 1) + ". " + command;
-                int textColor = hovering ? 0xFFFF00 : 0xFFFFFF;
+                int textColor = hovering ? 0xFFFFFF00 : 0xFFFFFFFF;
                 int maxWidth = width - 50;
                 if (textRenderer.getWidth(displayText) > maxWidth) {
                     while (textRenderer.getWidth(displayText + "...") > maxWidth && displayText.length() > 10)
@@ -718,7 +718,7 @@ public class MacroWorkbenchV2Screen extends Screen {
                 context.drawTextWithShadow(this.textRenderer, displayText, 25, y, textColor);
                 if (hovering) {
                     String hint = "[Click to copy]";
-                    context.drawTextWithShadow(this.textRenderer, Text.literal(hint), boxX2 - textRenderer.getWidth(hint) - 5, y, 0xFFFF00);
+                    context.drawTextWithShadow(this.textRenderer, Text.literal(hint), boxX2 - textRenderer.getWidth(hint) - 5, y, 0xFFFFFF00);
                 }
             }
             if (cmdHistoryItems.size() > getHistoryVisibleLines()) {
@@ -726,16 +726,16 @@ public class MacroWorkbenchV2Screen extends Screen {
                 int cur = (cmdHistoryScroll / getHistoryVisibleLines()) + 1;
                 context.drawCenteredTextWithShadow(this.textRenderer,
                         Text.literal("Page " + cur + "/" + total + " (Scroll to navigate)"),
-                        width / 2, height - 52, 0x888888);
+                        width / 2, height - 52, 0xFF888888);
             }
         }
     }
 
     private void renderMessageHistoryTab(DrawContext context, int mouseX, int mouseY) {
         int top = TOP_BAR_H + 8;
-        context.drawCenteredTextWithShadow(this.textRenderer, Text.literal("Message History"), width / 2, top, 0xFFFFFF);
+        context.drawCenteredTextWithShadow(this.textRenderer, Text.literal("Message History"), width / 2, top, 0xFFFFFFFF);
         String info = msgHistoryItems.isEmpty() ? "No messages in history yet." : "Click any message to copy it to clipboard";
-        context.drawCenteredTextWithShadow(this.textRenderer, Text.literal(info), width / 2, top + 14, 0xAAAAAA);
+        context.drawCenteredTextWithShadow(this.textRenderer, Text.literal(info), width / 2, top + 14, 0xFFAAAAAA);
 
         if (!msgHistoryItems.isEmpty()) {
             int listY = top + 32;
@@ -750,7 +750,7 @@ public class MacroWorkbenchV2Screen extends Screen {
                 boolean hovering = mouseX >= boxX1 && mouseX <= boxX2 && mouseY >= boxY1 && mouseY <= boxY2;
                 if (hovering) context.fill(boxX1, boxY1, boxX2, boxY2, 0x80FFFFFF);
                 String displayText = (index + 1) + ". " + message;
-                int textColor = hovering ? 0xFFFF00 : 0xFFFFFF;
+                int textColor = hovering ? 0xFFFFFF00 : 0xFFFFFFFF;
                 int maxWidth = width - 50;
                 if (textRenderer.getWidth(displayText) > maxWidth) {
                     while (textRenderer.getWidth(displayText + "...") > maxWidth && displayText.length() > 10)
@@ -760,7 +760,7 @@ public class MacroWorkbenchV2Screen extends Screen {
                 context.drawTextWithShadow(this.textRenderer, displayText, 25, y, textColor);
                 if (hovering) {
                     String hint = "[Click to copy]";
-                    context.drawTextWithShadow(this.textRenderer, Text.literal(hint), boxX2 - textRenderer.getWidth(hint) - 5, y, 0xFFFF00);
+                    context.drawTextWithShadow(this.textRenderer, Text.literal(hint), boxX2 - textRenderer.getWidth(hint) - 5, y, 0xFFFFFF00);
                 }
             }
             if (msgHistoryItems.size() > getHistoryVisibleLines()) {
@@ -768,7 +768,7 @@ public class MacroWorkbenchV2Screen extends Screen {
                 int cur = (msgHistoryScroll / getHistoryVisibleLines()) + 1;
                 context.drawCenteredTextWithShadow(this.textRenderer,
                         Text.literal("Page " + cur + "/" + total + " (Scroll to navigate)"),
-                        width / 2, height - 52, 0x888888);
+                        width / 2, height - 52, 0xFF888888);
             }
         }
     }

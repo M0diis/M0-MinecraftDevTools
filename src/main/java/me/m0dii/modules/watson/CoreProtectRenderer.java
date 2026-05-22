@@ -2,6 +2,8 @@ package me.m0dii.modules.watson;
 
 import lombok.Getter;
 import lombok.Setter;
+import me.m0dii.utils.CustomRenderLayers;
+import me.m0dii.utils.DrawUtil;
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.font.TextRenderer;
@@ -54,7 +56,10 @@ public final class CoreProtectRenderer {
             new ColorPreset("Cyan", 0.25f, 0.95f, 1.00f),
             new ColorPreset("Gold", 1.00f, 0.85f, 0.25f),
             new ColorPreset("Red", 1.00f, 0.35f, 0.35f),
-            new ColorPreset("White", 0.95f, 0.95f, 0.95f)
+            new ColorPreset("Pink", 1.00f, 0.50f, 0.75f),
+            new ColorPreset("Purple", 0.70f, 0.35f, 0.95f),
+            new ColorPreset("White", 0.95f, 0.95f, 0.95f),
+            new ColorPreset("Olive", 0.65f, 0.70f, 0.25f)
     };
 
     private static final ColorPreset[] VECTOR_COLOR_PRESETS = new ColorPreset[] {
@@ -62,7 +67,10 @@ public final class CoreProtectRenderer {
             new ColorPreset("Blue", 0.35f, 0.55f, 1.00f),
             new ColorPreset("Cyan", 0.20f, 0.95f, 0.95f),
             new ColorPreset("Orange", 1.00f, 0.55f, 0.20f),
-            new ColorPreset("White", 0.95f, 0.95f, 0.95f)
+            new ColorPreset("Teal", 0.20f, 0.80f, 0.70f),
+            new ColorPreset("Rose", 1.00f, 0.40f, 0.60f),
+            new ColorPreset("Lavender", 0.75f, 0.60f, 1.00f),
+            new ColorPreset("Slate", 0.45f, 0.55f, 0.65f)
     };
 
     private CoreProtectRenderer() {
@@ -97,7 +105,7 @@ public final class CoreProtectRenderer {
             }
 
             VertexConsumer visible = consumers.getBuffer(RenderLayers.LINES);
-            VertexConsumer occluded = consumers.getBuffer(RenderLayers.LINES_TRANSLUCENT);
+            VertexConsumer occluded = consumers.getBuffer(CustomRenderLayers.LINES_NO_DEPTH);
 
             Vec3d cameraPos = context.gameRenderer().getCamera().getCameraPos();
             double cameraX = cameraPos.x;
@@ -150,6 +158,12 @@ public final class CoreProtectRenderer {
                             cameraZ
                     );
                 }
+            }
+
+            // Explicitly flush line buffers to ensure they are rendered in this pass.
+            if (consumers instanceof VertexConsumerProvider.Immediate immediate) {
+                immediate.draw(RenderLayers.LINES);
+                immediate.draw(CustomRenderLayers.LINES_NO_DEPTH);
             }
         });
     }
@@ -219,7 +233,7 @@ public final class CoreProtectRenderer {
             Vec3d a = Vec3d.ofCenter(prev);
             Vec3d b = Vec3d.ofCenter(next);
 
-            drawLineSafe(
+            DrawUtil.drawLineSafe(
                     visible,
                     a.x - cameraX,
                     a.y - cameraY,
@@ -233,7 +247,7 @@ public final class CoreProtectRenderer {
                     1.00f,
                     vectorLineWidth
             );
-            drawLineSafe(
+            DrawUtil.drawLineSafe(
                     occluded,
                     a.x - cameraX,
                     a.y - cameraY,
@@ -269,8 +283,8 @@ public final class CoreProtectRenderer {
 
         float[] color = getOutlineColor();
         // Draw both passes strongly so outlines remain visible even through terrain.
-        drawOutlinedBoxSafe(occluded, minX, minY, minZ, maxX, maxY, maxZ, color[0], color[1], color[2], 1.00f, outlineLineWidth + 0.5f);
-        drawOutlinedBoxSafe(visible, minX, minY, minZ, maxX, maxY, maxZ, color[0], color[1], color[2], 1.00f, outlineLineWidth);
+        DrawUtil.drawOutlinedBoxSafe(occluded, minX, minY, minZ, maxX, maxY, maxZ, color[0], color[1], color[2], 1.00f, outlineLineWidth + 0.5f);
+        DrawUtil.drawOutlinedBoxSafe(visible, minX, minY, minZ, maxX, maxY, maxZ, color[0], color[1], color[2], 1.00f, outlineLineWidth);
 
         if (!tracersEnabled) {
             return;
@@ -280,8 +294,8 @@ public final class CoreProtectRenderer {
         double cy = minY + 0.5;
         double cz = minZ + 0.5;
 
-        drawLineSafe(visible, 0.0, 0.0, 0.0, cx, cy, cz, color[0], color[1], color[2], 1.00f, vectorLineWidth);
-        drawLineSafe(occluded, 0.0, 0.0, 0.0, cx, cy, cz, color[0], color[1], color[2], 0.85f, vectorLineWidth + 0.5f);
+        DrawUtil.drawLineSafe(visible, 0.0, 0.0, 0.0, cx, cy, cz, color[0], color[1], color[2], 1.00f, vectorLineWidth);
+        DrawUtil.drawLineSafe(occluded, 0.0, 0.0, 0.0, cx, cy, cz, color[0], color[1], color[2], 0.85f, vectorLineWidth + 0.5f);
     }
 
     private static void renderLabel(MatrixStack matrices,
@@ -326,87 +340,6 @@ public final class CoreProtectRenderer {
         matrices.pop();
     }
 
-    private static void drawOutlinedBoxSafe(VertexConsumer buffer,
-                                            double minX,
-                                            double minY,
-                                            double minZ,
-                                            double maxX,
-                                            double maxY,
-                                            double maxZ,
-                                            float r,
-                                            float g,
-                                            float b,
-                                            float a,
-                                            float width) {
-        try {
-            drawOutlinedBox(buffer, minX, minY, minZ, maxX, maxY, maxZ, r, g, b, a, width);
-        } catch (IllegalStateException ignored) {
-            // Optional pass: skip if this buffer is not building in this phase.
-        }
-    }
-
-    private static void drawOutlinedBox(VertexConsumer buffer,
-                                        double minX,
-                                        double minY,
-                                        double minZ,
-                                        double maxX,
-                                        double maxY,
-                                        double maxZ,
-                                        float r,
-                                        float g,
-                                        float b,
-                                        float a,
-                                        float width) {
-        drawLine(buffer, minX, minY, minZ, maxX, minY, minZ, r, g, b, a, width);
-        drawLine(buffer, maxX, minY, minZ, maxX, minY, maxZ, r, g, b, a, width);
-        drawLine(buffer, maxX, minY, maxZ, minX, minY, maxZ, r, g, b, a, width);
-        drawLine(buffer, minX, minY, maxZ, minX, minY, minZ, r, g, b, a, width);
-
-        drawLine(buffer, minX, maxY, minZ, maxX, maxY, minZ, r, g, b, a, width);
-        drawLine(buffer, maxX, maxY, minZ, maxX, maxY, maxZ, r, g, b, a, width);
-        drawLine(buffer, maxX, maxY, maxZ, minX, maxY, maxZ, r, g, b, a, width);
-        drawLine(buffer, minX, maxY, maxZ, minX, maxY, minZ, r, g, b, a, width);
-
-        drawLine(buffer, minX, minY, minZ, minX, maxY, minZ, r, g, b, a, width);
-        drawLine(buffer, maxX, minY, minZ, maxX, maxY, minZ, r, g, b, a, width);
-        drawLine(buffer, maxX, minY, maxZ, maxX, maxY, maxZ, r, g, b, a, width);
-        drawLine(buffer, minX, minY, maxZ, minX, maxY, maxZ, r, g, b, a, width);
-    }
-
-    private static void drawLineSafe(VertexConsumer buffer,
-                                     double x1,
-                                     double y1,
-                                     double z1,
-                                     double x2,
-                                     double y2,
-                                     double z2,
-                                     float r,
-                                     float g,
-                                     float b,
-                                     float a,
-                                     float width) {
-        try {
-            drawLine(buffer, x1, y1, z1, x2, y2, z2, r, g, b, a, width);
-        } catch (IllegalStateException ignored) {
-            // Optional pass: skip if this buffer is not building in this phase.
-        }
-    }
-
-    private static void drawLine(VertexConsumer buffer,
-                                 double x1,
-                                 double y1,
-                                 double z1,
-                                 double x2,
-                                 double y2,
-                                 double z2,
-                                 float r,
-                                 float g,
-                                 float b,
-                                 float a,
-                                 float width) {
-        buffer.vertex((float) x1, (float) y1, (float) z1).color(r, g, b, a).normal(0.0f, 1.0f, 0.0f).lineWidth(width);
-        buffer.vertex((float) x2, (float) y2, (float) z2).color(r, g, b, a).normal(0.0f, 1.0f, 0.0f).lineWidth(width);
-    }
 
     private record ColorPreset(String name, float r, float g, float b) {
         private float[] rgb() {

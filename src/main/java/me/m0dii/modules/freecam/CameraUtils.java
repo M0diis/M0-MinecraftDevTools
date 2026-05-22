@@ -24,11 +24,11 @@ public class CameraUtils {
     }
 
     public static boolean shouldPreventPlayerInputs() {
-        return FreecamModule.INSTANCE.isEnabled() && true;
+        return FreecamModule.INSTANCE.isEnabled();
     }
 
     public static boolean shouldPreventPlayerMovement() {
-        return FreecamModule.INSTANCE.isEnabled() && true;
+        return FreecamModule.INSTANCE.isEnabled();
     }
 
     public static void updateCameraRotations(float yawChange, float pitchChange) {
@@ -78,9 +78,12 @@ public class CameraUtils {
     public static void markChunksForRebuildOnDeactivation(int lastChunkX, int lastChunkZ) {
         Entity entity = getCameraEntity();
         MinecraftClient client = MinecraftClient.getInstance();
+        if (entity == null || client.world == null) {
+            return;
+        }
         final int viewDistance = client.options.getViewDistance().getValue();
-        final int chunkX = MathHelper.floor(entity.getX() / 16.0) >> 4;
-        final int chunkZ = MathHelper.floor(entity.getZ() / 16.0) >> 4;
+        final int chunkX = MathHelper.floor(entity.getX()) >> 4;
+        final int chunkZ = MathHelper.floor(entity.getZ()) >> 4;
 
         final int minCameraCX = lastChunkX - viewDistance;
         final int maxCameraCX = lastChunkX + viewDistance;

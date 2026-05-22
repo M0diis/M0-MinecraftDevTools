@@ -28,8 +28,27 @@ public final class MacroPlaceholders {
     private static final Pattern PLACEHOLDER = Pattern.compile("\\{([^}]+)}");
     private static final Random RAND = new Random();
     private static final Map<Integer, Boolean> KEY_LAST_DOWN = new HashMap<>();
+    private static final Map<String, MacroPlaceholderProvider> PROVIDERS = new LinkedHashMap<>();
 
     private MacroPlaceholders() {
+    }
+
+    public static synchronized void registerProvider(MacroPlaceholderProvider provider) {
+        if (provider == null || provider.getProviderId() == null || provider.getProviderId().isBlank()) {
+            return;
+        }
+        PROVIDERS.put(provider.getProviderId(), provider);
+    }
+
+    public static synchronized void unregisterProvider(String providerId) {
+        if (providerId == null || providerId.isBlank()) {
+            return;
+        }
+        PROVIDERS.remove(providerId);
+    }
+
+    private static synchronized List<MacroPlaceholderProvider> getProvidersSnapshot() {
+        return List.copyOf(PROVIDERS.values());
     }
 
     public static String expand(MinecraftClient client, String input) {
@@ -116,6 +135,17 @@ public final class MacroPlaceholders {
         String selector = resolveSelectorToken(token, p, canvasMode);
         if (selector != null) {
             return selector;
+        }
+
+        for (MacroPlaceholderProvider provider : getProvidersSnapshot()) {
+            try {
+                String resolved = provider.resolvePlaceholder(token, client, p, canvasMode);
+                if (resolved != null) {
+                    return resolved;
+                }
+            } catch (Exception ignored) {
+                // Keep placeholder expansion resilient if a custom provider throws.
+            }
         }
 
         // Player info
@@ -996,7 +1026,7 @@ public final class MacroPlaceholders {
         };
     }
 
-    public static List<String> PLACEHOLDER_DOCS = List.of(
+    private static final List<String> BASE_PLACEHOLDER_DOCS = List.of(
             "[How to use]",
             "Write placeholders as {token}. Example: /msg {player.name} hi",
             "Button Action supports cmd:/ msg:/ say:/ copy:/ bar:/ plain chat text",
@@ -1060,6 +1090,25 @@ public final class MacroPlaceholders {
             "if:<left>==<right>::<when_true>:else:<when_false>",
             "Example: if:{player.gamemode}==creative::cmd:/say yes:else:cmd:/say no"
     );
+
+    @Deprecated
+    public static final List<String> PLACEHOLDER_DOCS = BASE_PLACEHOLDER_DOCS;
+
+    public static List<String> getPlaceholderDocs() {
+        List<String> docs = new ArrayList<>(BASE_PLACEHOLDER_DOCS);
+        for (MacroPlaceholderProvider provider : getProvidersSnapshot()) {
+            try {
+                List<String> providerDocs = provider.getPlaceholderDocs();
+                if (providerDocs != null && !providerDocs.isEmpty()) {
+                    docs.add("");
+                    docs.addAll(providerDocs);
+                }
+            } catch (Exception ignored) {
+                // Ignore provider doc errors to keep docs screen stable.
+            }
+        }
+        return docs;
+    }
 
     private static String formatDouble(double d) {
         return String.format(Locale.ROOT, "%.3f", d);
