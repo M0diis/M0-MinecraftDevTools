@@ -2,7 +2,6 @@ package me.m0dii.modules.chat;
 
 import me.m0dii.gui.GuiSystem;
 import me.m0dii.modules.hudcanvas.HudCanvasDataHandler;
-import me.m0dii.utils.ModConfig;
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.font.TextRenderer;
@@ -39,16 +38,17 @@ public final class SecondaryChatOverlay {
             return;
         }
 
-        if (!ModConfig.secondaryChatEnabled || !ModConfig.secondaryChatShowOverlay) {
+        SecondaryChatSettings.Data settings = SecondaryChatSettings.get();
+        if (!settings.enabled || !settings.showOverlay) {
             return;
         }
 
-        if (client.currentScreen != null && !ModConfig.secondaryChatShowWhileGuiOpen) {
+        if (client.currentScreen != null && !settings.showWhileGuiOpen) {
             return;
         }
 
         boolean noTransparency = client.currentScreen instanceof ChatScreen
-                && ModConfig.noTransparencyWhenChatOpen;
+                && settings.noTransparencyWhenChatOpen;
 
         TextRenderer tr = client.textRenderer;
         HudCanvasDataHandler.HudCanvasElement canvas = HudCanvasDataHandler.getMutableElement(
@@ -75,14 +75,14 @@ public final class SecondaryChatOverlay {
 
         int alpha = (canvas.backgroundColor >> 24) & 0xFF;
         int textAlpha = (canvas.textColor >> 24) & 0xFF;
-        if (ModConfig.secondaryChatFadeEnabled && !noTransparency) {
+        if (settings.fadeEnabled && !noTransparency) {
             long now = System.currentTimeMillis();
             long lastMsg = SecondaryChatManager.getLastAlphaReset();
             long dt = now - lastMsg;
             if (dt > 0) {
-                int fadeMs = Math.max(1000, ModConfig.secondaryChatFadeDurationMs);
+                int fadeMs = Math.max(1000, settings.fadeDurationMs);
                 float fade = Math.clamp(1f - (float) dt / fadeMs, 0f, 1f);
-                int minAlpha = Math.clamp(ModConfig.secondaryChatMinAlpha, 0, 255);
+                int minAlpha = Math.clamp(settings.minAlpha, 0, 255);
                 alpha = Math.round(minAlpha + (alpha - minAlpha) * fade);
                 textAlpha = Math.round(minAlpha + (textAlpha - minAlpha) * fade);
             }
@@ -196,15 +196,15 @@ public final class SecondaryChatOverlay {
 
     static HudCanvasDataHandler.HudCanvasElement defaultCanvasElement() {
         HudCanvasDataHandler.HudCanvasElement e = new HudCanvasDataHandler.HudCanvasElement();
-        e.x = ModConfig.secondaryChatX;
-        e.y = ModConfig.secondaryChatY;
-        e.width = Math.max(50, ModConfig.secondaryChatWidth);
-        e.height = Math.max(30, ModConfig.secondaryChatHeight);
-        e.fontScale = (float) Math.max(0.1, ModConfig.secondaryChatScale);
-        e.lineHeight = Math.max(1, ModConfig.secondaryChatLineHeight);
-        e.padding = Math.max(0, ModConfig.secondaryChatPadding);
-        e.backgroundColor = ModConfig.secondaryChatBackgroundColor;
-        e.textColor = ModConfig.secondaryChatTextColor;
+        e.x = 8;
+        e.y = 40;
+        e.width = 260;
+        e.height = 120;
+        e.fontScale = 0.85f;
+        e.lineHeight = 9;
+        e.padding = 4;
+        e.backgroundColor = 0x88000000;
+        e.textColor = 0xFFE0E0E0;
         e.borderColor = 0xFFFFFFFF;
         e.drawBackground = true;
         e.drawBorder = false;

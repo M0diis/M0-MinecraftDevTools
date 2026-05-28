@@ -1,6 +1,7 @@
 package me.m0dii.modules.macros.gui;
 
 import me.m0dii.modules.Module;
+import me.m0dii.modules.hudcanvas.HudCanvasDataHandler;
 import me.m0dii.modules.macros.MacroDataHandler;
 import me.m0dii.utils.ModConfig;
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
@@ -33,6 +34,14 @@ public class MacroKeybindOverlayModule extends Module {
             return;
         }
 
+        HudCanvasDataHandler.HudCanvasElement layout = HudCanvasDataHandler.getMutableElement(
+                HudCanvasDataHandler.ELEMENT_MACRO_KEYBINDS,
+                MacroKeybindOverlayModule::defaultHudCanvasLayout
+        );
+        if (!layout.visible) {
+            return;
+        }
+
         List<String> lines = getInfoLines();
         if (lines.isEmpty()) {
             return;
@@ -40,84 +49,138 @@ public class MacroKeybindOverlayModule extends Module {
 
         TextRenderer tr = client.textRenderer;
 
-        float scale = (float) ModConfig.macroOverlayTextScale;
+        float scale = layout.fontScale;
         if (Float.isNaN(scale) || scale <= 0f) {
             scale = 0.85f;
         }
         scale = Math.clamp(scale, 0.5f, 3.0f);
 
-        final int lineH = Math.max(1, ModConfig.macroOverlayLineHeight);
-        final int pad = Math.max(0, ModConfig.macroOverlayPadding);
-        final int marginX = Math.max(0, ModConfig.macroOverlayMarginX);
-        final int marginY = Math.max(0, ModConfig.macroOverlayMarginY);
+        final int lineH = Math.max(6, layout.lineHeight);
+        final int pad = Math.max(0, layout.padding);
 
-        int maxW = tr.getWidth("Macro Keybinds");
-        for (String s : lines) maxW = Math.max(maxW, tr.getWidth(s));
-
-        // Base (unscaled) measurements.
-        final int contentW = maxW;
-        final int contentH = (1 + lines.size()) * lineH;
-        final int panelW = contentW + pad * 2;
-        final int panelH = contentH + pad * 2;
+        final int panelW = Math.max(40, layout.width);
+        final int panelH = Math.max(20, layout.height);
 
         int screenW = client.getWindow().getScaledWidth();
         int screenH = client.getWindow().getScaledHeight();
 
-        // Compute anchor position in screen space (scaled pixels).
-        final int panelWScaled = Math.round(panelW * scale);
-        final int panelHScaled = Math.round(panelH * scale);
+        int panelX = resolvePanelX(layout, panelW, screenW);
+        int panelY = resolvePanelY(layout, panelH, screenH);
 
-        int panelX;
-        int panelY;
-
-        ModConfig.OverlayAnchor anchor = ModConfig.macroOverlayAnchor;
-
-        if (anchor == null) {
-            anchor = ModConfig.OverlayAnchor.TOP_RIGHT;
+        if (layout.drawBackground) {
+            ctx.fill(panelX, panelY, panelX + panelW, panelY + panelH, layout.backgroundColor);
+        }
+        if (layout.drawBorder) {
+            int border = layout.borderColor;
+            ctx.fill(panelX, panelY, panelX + panelW, panelY + 1, border);
+            ctx.fill(panelX, panelY + panelH - 1, panelX + panelW, panelY + panelH, border);
+            ctx.fill(panelX, panelY, panelX + 1, panelY + panelH, border);
+            ctx.fill(panelX + panelW - 1, panelY, panelX + panelW, panelY + panelH, border);
         }
 
-        switch (anchor) {
-            case TOP_LEFT -> {
-                panelX = marginX;
-                panelY = marginY;
+        int innerW = Math.max(1, panelW - (pad * 2));
+        int logicalInnerW = Math.max(1, (int) Math.floor(innerW / scale));
+        int logicalInnerH = Math.max(1, (int) Math.floor(Math.max(1, panelH - (pad * 2)) / scale));
+        int maxLines = Math.max(1, logicalInnerH / lineH);
+
+        List<String> drawLines = new ArrayList<>();
+        drawLines.add(trimTextToWidth(tr, "Macro Keybinds", logicalInnerW));
+        for (String s : lines) {
+            if (drawLines.size() >= maxLines) {
+                break;
             }
-            case TOP_RIGHT -> {
-                panelX = screenW - marginX - panelWScaled;
-                panelY = marginY;
-            }
-            case BOTTOM_LEFT -> {
-                panelX = marginX;
-                panelY = screenH - marginY - panelHScaled;
-            }
-            case BOTTOM_RIGHT -> {
-                panelX = screenW - marginX - panelWScaled;
-                panelY = screenH - marginY - panelHScaled;
-            }
-            default -> {
-                panelX = screenW - marginX - panelWScaled;
-                panelY = marginY;
-            }
+            drawLines.add(trimTextToWidth(tr, s, logicalInnerW));
         }
 
-        // Draw background in screen space (unscaled).
-        ctx.fill(panelX, panelY, panelX + panelWScaled, panelY + panelHScaled, 0x88000000);
-
-        // Draw text in scaled coordinates.
         ctx.getMatrices().pushMatrix();
         ctx.getMatrices().scale(scale, scale);
 
-        // Convert screen-space to unscaled-space for text rendering.
-        final int baseX = Math.round(panelX / scale) + pad;
-        int y = Math.round(panelY / scale) + pad;
+        int textBlockHeight = drawLines.size() * lineH;
+        int textX = alignedTextX(layout, tr, drawLines, logicalInnerW);
+        int textY = alignedTextY(layout, logicalInnerH, textBlockHeight);
 
-        ctx.drawText(tr, "Macro Keybinds", baseX, y, 0xFFFFFFFF, false);
-        y += lineH;
-        for (String s : lines) {
-            ctx.drawText(tr, s, baseX, y, 0xFFC0C0C0, false);
+        final int baseX = Math.round(panelX / scale) + pad + textX;
+        int y = Math.round(panelY / scale) + pad + textY;
+
+        for (String s : drawLines) {
+            ctx.drawText(tr, s, baseX, y, layout.textColor, false);
             y += lineH;
         }
 
         ctx.getMatrices().popMatrix();
+    }
+
+    private static String trimTextToWidth(TextRenderer tr, String raw, int maxWidth) {
+        String text = raw == null ? "" : raw;
+        if (maxWidth <= 0 || tr.getWidth(text) <= maxWidth) {
+            return text;
+        }
+        final String ellipsis = "...";
+        int keep = text.length();
+        while (keep > 0 && tr.getWidth(text.substring(0, keep) + ellipsis) > maxWidth) {
+            keep--;
+        }
+        return keep <= 0 ? ellipsis : text.substring(0, keep) + ellipsis;
+    }
+
+    private static HudCanvasDataHandler.HudCanvasElement defaultHudCanvasLayout() {
+        HudCanvasDataHandler.HudCanvasElement e = new HudCanvasDataHandler.HudCanvasElement();
+        e.x = 12;
+        e.y = 12;
+        e.width = 240;
+        e.height = 120;
+        e.padding = 4;
+        e.lineHeight = 9;
+        e.fontScale = 0.85f;
+        e.backgroundColor = 0x88000000;
+        e.textColor = 0xFFE0E0E0;
+        e.borderColor = 0xFFFFFFFF;
+        e.drawBackground = true;
+        e.drawBorder = false;
+        e.visible = true;
+        e.horizontalAlign = HudCanvasDataHandler.HudCanvasElement.HorizontalAlign.LEFT;
+        e.verticalAlign = HudCanvasDataHandler.HudCanvasElement.VerticalAlign.TOP;
+        e.anchor = HudCanvasDataHandler.HudCanvasElement.Anchor.TOP_RIGHT;
+        return e;
+    }
+
+    private static int resolvePanelX(HudCanvasDataHandler.HudCanvasElement canvas, int panelW, int screenW) {
+        return switch (canvas.anchor) {
+            case TOP_CENTER, MIDDLE_CENTER, BOTTOM_CENTER -> Math.clamp((screenW - panelW) / 2 + canvas.x, 0, Math.max(0, screenW - panelW));
+            case TOP_RIGHT, MIDDLE_RIGHT, BOTTOM_RIGHT -> Math.clamp(screenW - panelW - canvas.x, 0, Math.max(0, screenW - panelW));
+            default -> Math.clamp(canvas.x, 0, Math.max(0, screenW - panelW));
+        };
+    }
+
+    private static int resolvePanelY(HudCanvasDataHandler.HudCanvasElement canvas, int panelH, int screenH) {
+        return switch (canvas.anchor) {
+            case MIDDLE_LEFT, MIDDLE_CENTER, MIDDLE_RIGHT -> Math.clamp((screenH - panelH) / 2 + canvas.y, 0, Math.max(0, screenH - panelH));
+            case BOTTOM_LEFT, BOTTOM_CENTER, BOTTOM_RIGHT -> Math.clamp(screenH - panelH - canvas.y, 0, Math.max(0, screenH - panelH));
+            default -> Math.clamp(canvas.y, 0, Math.max(0, screenH - panelH));
+        };
+    }
+
+    private static int alignedTextX(HudCanvasDataHandler.HudCanvasElement canvas, TextRenderer tr, List<String> lines, int logicalInnerW) {
+        if (canvas.horizontalAlign == HudCanvasDataHandler.HudCanvasElement.HorizontalAlign.LEFT) {
+            return 0;
+        }
+        int maxLineWidth = 0;
+        for (String line : lines) {
+            maxLineWidth = Math.max(maxLineWidth, tr.getWidth(line));
+        }
+        return switch (canvas.horizontalAlign) {
+            case CENTER -> Math.max(0, (logicalInnerW - maxLineWidth) / 2);
+            case RIGHT -> Math.max(0, logicalInnerW - maxLineWidth);
+            default -> 0;
+        };
+    }
+
+    private static int alignedTextY(HudCanvasDataHandler.HudCanvasElement canvas, int logicalInnerH, int textBlockHeight) {
+        return switch (canvas.verticalAlign) {
+            case CENTER -> Math.max(0, (logicalInnerH - textBlockHeight) / 2);
+            case BOTTOM -> Math.max(0, logicalInnerH - textBlockHeight);
+            default -> 0;
+        };
     }
 
     private static List<String> getInfoLines() {

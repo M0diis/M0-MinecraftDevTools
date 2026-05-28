@@ -1,6 +1,15 @@
 package me.m0dii.modules.nbttooltip;
 
 import me.m0dii.modules.Module;
+import net.minecraft.item.ItemStack;
+import net.minecraft.text.MutableText;
+import net.minecraft.text.Text;
+import net.minecraft.util.Formatting;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class NBTTooltipModule extends Module {
 
@@ -13,6 +22,142 @@ public class NBTTooltipModule extends Module {
     @Override
     public void register() {
         // Enabled via ClickGUI
+    }
+
+    public static List<Text> getNbtTooltipText(ItemStack itemStack, List<Text> base) {
+        if (itemStack == null || base == null) {
+            return base;
+        }
+
+        String nbtLikeText = itemStack.getComponents().toString();
+        if (nbtLikeText.isBlank() || "[]".equals(nbtLikeText)) {
+            return base;
+        }
+
+        List<Text> out = new ArrayList<>(base);
+        out.add(Text.literal("[NBT/Components]").formatted(Formatting.DARK_GRAY));
+
+        Pattern pattern = Pattern.compile("[{}:\"\\[\\],']", Pattern.CASE_INSENSITIVE);
+        Matcher matcher = pattern.matcher(nbtLikeText);
+
+        int lineStep = 70;
+        int currentLineLength = 0;
+        MutableText mutableText = Text.literal("");
+
+        Formatting stringColor = Formatting.GREEN;
+        Formatting quotationColor = Formatting.WHITE;
+        Formatting separationColor = Formatting.WHITE;
+        Formatting integerColor = Formatting.GOLD;
+        Formatting typeColor = Formatting.RED;
+        Formatting fieldColor = Formatting.AQUA;
+        Formatting longStringColor = Formatting.YELLOW;
+
+        int lastIndex = 0;
+        boolean singleQuotationMark = false;
+        String lastString = "";
+
+        while (matcher.find()) {
+            int marker = matcher.start();
+            int segmentLength = marker - lastIndex;
+            if (segmentLength < 0 || marker >= nbtLikeText.length()) {
+                continue;
+            }
+            if (currentLineLength + segmentLength > lineStep) {
+                out.add(mutableText);
+                mutableText = Text.literal(" ");
+                currentLineLength = 0;
+            }
+
+            char ch = nbtLikeText.charAt(marker);
+            if (ch == '\'') {
+                if (!singleQuotationMark) {
+                    mutableText.append(Text.literal(String.valueOf(ch)).formatted(quotationColor));
+                    currentLineLength += 1;
+                    singleQuotationMark = true;
+                } else {
+                    if (marker > lastIndex + 1) {
+                        mutableText.append(Text.literal(nbtLikeText.substring(lastIndex + 1, marker)).formatted(stringColor));
+                        currentLineLength += (marker - (lastIndex + 1));
+                    }
+                    mutableText.append(Text.literal(String.valueOf(ch)).formatted(quotationColor));
+                    currentLineLength += 1;
+                    singleQuotationMark = false;
+                }
+                lastString = String.valueOf(ch);
+                lastIndex = marker;
+            }
+
+            if (!singleQuotationMark) {
+                if (ch == '{' || ch == '[') {
+                    mutableText.append(Text.literal(String.valueOf(ch)).formatted(separationColor));
+                    currentLineLength += 1;
+                    lastString = String.valueOf(ch);
+                    lastIndex = marker;
+                }
+
+                if (ch == '}' || ch == ']' || ch == ',') {
+                    if (marker > 0 && "sSbBlLfFdD".indexOf(nbtLikeText.charAt(marker - 1)) >= 0) {
+                        if (marker - 1 > lastIndex + 1) {
+                            mutableText.append(Text.literal(nbtLikeText.substring(lastIndex + 1, marker - 1)).formatted(integerColor));
+                            currentLineLength += ((marker - 1) - (lastIndex + 1));
+                        }
+                        mutableText.append(Text.literal(nbtLikeText.substring(marker - 1, marker)).formatted(typeColor));
+                        currentLineLength += 1;
+                    } else if (marker > lastIndex + 1) {
+                        mutableText.append(Text.literal(nbtLikeText.substring(lastIndex + 1, marker)).formatted(integerColor));
+                        currentLineLength += segmentLength;
+                    }
+                    mutableText.append(Text.literal(String.valueOf(ch)).formatted(separationColor));
+                    currentLineLength += 1;
+                    if (ch == ',') {
+                        mutableText.append(Text.literal(" ").formatted(separationColor));
+                        currentLineLength += 1;
+                    }
+                    lastString = String.valueOf(ch);
+                    lastIndex = marker;
+                }
+
+                if (ch == ':') {
+                    if (!"\"".equals(lastString) && marker > lastIndex + 1) {
+                        mutableText.append(Text.literal(nbtLikeText.substring(lastIndex + 1, marker)).formatted(fieldColor));
+                        currentLineLength += segmentLength;
+                    }
+                    mutableText.append(Text.literal(String.valueOf(ch)).formatted(separationColor));
+                    mutableText.append(Text.literal(" ").formatted(separationColor));
+                    currentLineLength += 2;
+                    lastString = String.valueOf(ch);
+                    lastIndex = marker;
+                }
+
+                if (ch == '"') {
+                    if ("\"".equals(lastString)) {
+                        if (currentLineLength + segmentLength > lineStep) {
+                            mutableText.append(Text.literal("....").formatted(longStringColor));
+                            currentLineLength += 4;
+                        } else if (marker > lastIndex + 1) {
+                            mutableText.append(Text.literal(nbtLikeText.substring(lastIndex + 1, marker)).formatted(stringColor));
+                            currentLineLength += segmentLength;
+                        }
+                        mutableText.append(Text.literal(String.valueOf(ch)).formatted(quotationColor));
+                        currentLineLength += 1;
+                    } else {
+                        mutableText.append(Text.literal(String.valueOf(ch)).formatted(quotationColor));
+                        currentLineLength += 1;
+                    }
+                    lastString = String.valueOf(ch);
+                    lastIndex = marker;
+                }
+            }
+        }
+
+        if (lastIndex + 1 < nbtLikeText.length()) {
+            mutableText.append(Text.literal(nbtLikeText.substring(lastIndex + 1)).formatted(Formatting.GRAY));
+        }
+        if (!mutableText.getString().isEmpty()) {
+            out.add(mutableText);
+        }
+
+        return out;
     }
 
 //    public static List<Text> getNbtTooltipText(@NotNull ItemStack itemStack, @NotNull List<Text> list) {

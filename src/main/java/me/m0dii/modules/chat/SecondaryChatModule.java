@@ -1,9 +1,8 @@
 package me.m0dii.modules.chat;
 
 import me.m0dii.modules.Module;
-import me.m0dii.utils.ModConfig;
+import me.m0dii.utils.KeybindCatalog;
 import net.minecraft.client.util.InputUtil;
-import org.lwjgl.glfw.GLFW;
 
 public class SecondaryChatModule extends Module {
 
@@ -15,17 +14,18 @@ public class SecondaryChatModule extends Module {
 
     @Override
     public void register() {
+        setEnabled(SecondaryChatSettings.get().enabled);
         SecondaryChatOverlay.register();
         SecondaryChatInputRouter.register();
         SecondaryChatCommands.register();
         SecondaryChatInteraction.register();
 
-        registerPressedKeybind("key.m0-dev-tools.toggle_secondary_chat",
+        registerPressedKeybind(KeybindCatalog.SECONDARY_CHAT_TOGGLE.translationKey(),
                 InputUtil.Type.KEYSYM,
-                GLFW.GLFW_KEY_P,
+                KeybindCatalog.SECONDARY_CHAT_TOGGLE.defaultKey(),
                 client -> {
-                    ModConfig.updateAndSave(() -> ModConfig.secondaryChatEnabled = !ModConfig.secondaryChatEnabled);
-                    setEnabled(ModConfig.secondaryChatEnabled);
+                    SecondaryChatSettings.updateAndSave(() -> SecondaryChatSettings.get().enabled = !SecondaryChatSettings.get().enabled);
+                    setEnabled(SecondaryChatSettings.get().enabled);
                 });
     }
 }

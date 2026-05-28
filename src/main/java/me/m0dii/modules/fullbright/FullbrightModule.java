@@ -2,9 +2,9 @@ package me.m0dii.modules.fullbright;
 
 import lombok.Getter;
 import me.m0dii.modules.Module;
+import me.m0dii.utils.KeybindCatalog;
 import me.m0dii.utils.ModConfig;
 import net.minecraft.client.util.InputUtil;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -23,9 +23,9 @@ public class FullbrightModule extends Module {
     @Override
     public void register() {
         registerPressedKeybind(
-                "key.m0-dev-tools.fullbright",
+                KeybindCatalog.FULLBRIGHT_TOGGLE.translationKey(),
                 InputUtil.Type.KEYSYM,
-                GLFW.GLFW_KEY_K,
+                KeybindCatalog.FULLBRIGHT_TOGGLE.defaultKey(),
                 client -> toggleEnabled()
         );
     }

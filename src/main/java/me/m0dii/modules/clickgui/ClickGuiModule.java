@@ -2,10 +2,10 @@ package me.m0dii.modules.clickgui;
 
 import lombok.Getter;
 import me.m0dii.modules.Module;
+import me.m0dii.utils.KeybindCatalog;
 import me.m0dii.utils.ModConfig;
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 import net.minecraft.client.util.InputUtil;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -28,9 +28,9 @@ public class ClickGuiModule extends Module {
         HudRenderCallback.EVENT.register(renderer::onHudRender);
 
         registerPressedKeybind(
-                "key.m0-dev-tools.clickgui",
+                KeybindCatalog.CLICKGUI_TOGGLE.translationKey(),
                 InputUtil.Type.KEYSYM,
-                GLFW.GLFW_KEY_GRAVE_ACCENT,
+                KeybindCatalog.CLICKGUI_TOGGLE.defaultKey(),
                 client -> renderer.toggle()
         );
     }

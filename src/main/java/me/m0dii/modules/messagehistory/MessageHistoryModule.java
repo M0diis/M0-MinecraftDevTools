@@ -1,8 +1,8 @@
 package me.m0dii.modules.messagehistory;
 
 import me.m0dii.modules.Module;
+import me.m0dii.utils.KeybindCatalog;
 import net.minecraft.client.util.InputUtil;
-import org.lwjgl.glfw.GLFW;
 
 public class MessageHistoryModule extends Module {
 
@@ -14,9 +14,9 @@ public class MessageHistoryModule extends Module {
 
     @Override
     public void register() {
-        registerPressedKeybind("key.m0-dev-tools.message_history",
+        registerPressedKeybind(KeybindCatalog.MESSAGE_HISTORY.translationKey(),
                 InputUtil.Type.KEYSYM,
-                GLFW.GLFW_KEY_J,
+                KeybindCatalog.MESSAGE_HISTORY.defaultKey(),
                 client -> client.setScreen(MessageHistoryScreen.create(client.currentScreen)));
     }
 }

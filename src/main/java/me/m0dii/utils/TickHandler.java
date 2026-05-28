@@ -12,6 +12,8 @@ public class TickHandler {
                     FreecamModule.INSTANCE.setEnabled(false);
                 } else if (CameraEntity.getCamera() == null) {
                     CameraEntity.setCameraState(true);
+                } else if (client.getCameraEntity() != CameraEntity.getCamera()) {
+                    client.setCameraEntity(CameraEntity.getCamera());
                 }
             } else if (CameraEntity.getCamera() != null) {
                 CameraEntity.setCameraState(false);

@@ -2,7 +2,7 @@ package me.m0dii.modules.overlays;
 
 import me.m0dii.modules.Module;
 import me.m0dii.utils.DrawUtil;
-import me.m0dii.utils.ModConfig;
+import me.m0dii.utils.KeybindCatalog;
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.Camera;
@@ -16,13 +16,16 @@ import net.minecraft.util.math.ChunkPos;
 import net.minecraft.util.math.Vec3d;
 import org.jetbrains.annotations.NotNull;
 import org.joml.Matrix4f;
-import org.lwjgl.glfw.GLFW;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Random;
 
 public class SlimeChunkOverlayModule extends Module {
 
     public static final SlimeChunkOverlayModule INSTANCE = new SlimeChunkOverlayModule();
+
+    private int XZ_RADIUS = 16;
 
     private SlimeChunkOverlayModule() {
         super("slime_chunk_overlay", "Slime Chunks Overlay", false);
@@ -32,9 +35,9 @@ public class SlimeChunkOverlayModule extends Module {
     public void register() {
         WorldRenderEvents.AFTER_ENTITIES.register(getAfterEntities());
 
-        registerPressedKeybind("key.m0-dev-tools.toggle_slime_overlay",
+        registerPressedKeybind(KeybindCatalog.SLIME_OVERLAY_TOGGLE.translationKey(),
                 InputUtil.Type.KEYSYM,
-                GLFW.GLFW_KEY_F9,
+                KeybindCatalog.SLIME_OVERLAY_TOGGLE.defaultKey(),
                 client -> toggleEnabled());
     }
 
@@ -66,7 +69,7 @@ public class SlimeChunkOverlayModule extends Module {
                 vcp = getClient().getBufferBuilders().getEntityVertexConsumers();
             }
 
-            int chunkRadius = Math.max(1, ModConfig.overlayXZradius / 16);
+            int chunkRadius = Math.max(1, XZ_RADIUS / 16);
             for (int dx = -chunkRadius; dx <= chunkRadius; dx++) {
                 for (int dz = -chunkRadius; dz <= chunkRadius; dz++) {
                     ChunkPos chunkPos = new ChunkPos(playerChunk.x + dx, playerChunk.z + dz);
@@ -76,6 +79,29 @@ public class SlimeChunkOverlayModule extends Module {
                 }
             }
         };
+    }
+
+    @Override
+    public List<String> getSettingsDisplay() {
+        List<String> settings = new ArrayList<>();
+        settings.add("Toggle: " + (isEnabled() ? "ON" : "OFF"));
+        settings.add("XZ radius : " + XZ_RADIUS);
+        settings.add("XZ+");
+        settings.add("XZ-");
+
+        return settings;
+    }
+
+    @Override
+    public void onSettingSelected(int settingIndex) {
+        switch (settingIndex) {
+            case 0 -> toggleEnabled();
+            case 3 -> XZ_RADIUS++;
+            case 4 -> XZ_RADIUS = Math.max(1, XZ_RADIUS - 1);
+            default -> {
+                // Nothing
+            }
+        }
     }
 
     private static boolean isSlimeChunk(long seed, ChunkPos pos) {

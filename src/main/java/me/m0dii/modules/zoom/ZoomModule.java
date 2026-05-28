@@ -2,9 +2,9 @@ package me.m0dii.modules.zoom;
 
 import lombok.Getter;
 import me.m0dii.modules.Module;
+import me.m0dii.utils.KeybindCatalog;
 import net.minecraft.client.util.InputUtil;
 import net.minecraft.text.Text;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -26,9 +26,9 @@ public class ZoomModule extends Module {
     @Override
     public void register() {
         registerHeldKeybind(
-                "key.m0-dev-tools.zoom",
+                KeybindCatalog.ZOOM_HOLD.translationKey(),
                 InputUtil.Type.KEYSYM,
-                GLFW.GLFW_KEY_C,
+                KeybindCatalog.ZOOM_HOLD.defaultKey(),
                 client -> held = true,
                 client -> held = false
         );

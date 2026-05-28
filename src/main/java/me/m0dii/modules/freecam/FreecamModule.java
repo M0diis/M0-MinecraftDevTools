@@ -3,10 +3,10 @@ package me.m0dii.modules.freecam;
 import me.m0dii.modules.Module;
 import me.m0dii.modules.macros.MacroPlaceholderProvider;
 import me.m0dii.modules.macros.MacroPlaceholders;
+import me.m0dii.utils.KeybindCatalog;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.util.InputUtil;
 import net.minecraft.entity.player.PlayerEntity;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.List;
 
@@ -44,9 +44,9 @@ public class FreecamModule extends Module {
     @Override
     public void register() {
         MacroPlaceholders.registerProvider(PLACEHOLDER_PROVIDER);
-        registerPressedKeybind("key.m0-dev-tools.freecam",
+        registerPressedKeybind(KeybindCatalog.FREECAM_TOGGLE.translationKey(),
                 InputUtil.Type.KEYSYM,
-                GLFW.GLFW_KEY_U,
+                KeybindCatalog.FREECAM_TOGGLE.defaultKey(),
                 client -> toggleEnabled());
     }
 

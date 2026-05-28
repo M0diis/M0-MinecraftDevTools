@@ -1,10 +1,10 @@
 package me.m0dii.modules.quicktp;
 
 import me.m0dii.modules.Module;
+import me.m0dii.utils.KeybindCatalog;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.util.InputUtil;
 import net.minecraft.text.Text;
-import org.lwjgl.glfw.GLFW;
 
 public class QuickTeleportModule extends Module {
 
@@ -17,37 +17,37 @@ public class QuickTeleportModule extends Module {
     @Override
     public void register() {
         registerPressedKeybind(
-                "key.m0-dev-tools.teleport_up",
+                KeybindCatalog.QUICK_TP_UP.translationKey(),
                 InputUtil.Type.KEYSYM,
-                GLFW.GLFW_KEY_KP_8, // Numpad 8
+                KeybindCatalog.QUICK_TP_UP.defaultKey(),
                 (minecraftClient) -> teleport(0, 10, 0)
         );
 
         registerPressedKeybind(
-                "key.m0-dev-tools.teleport_down",
+                KeybindCatalog.QUICK_TP_DOWN.translationKey(),
                 InputUtil.Type.KEYSYM,
-                GLFW.GLFW_KEY_KP_2, // Numpad 2
+                KeybindCatalog.QUICK_TP_DOWN.defaultKey(),
                 (minecraftClient) -> teleport(0, -10, 0)
         );
 
         registerPressedKeybind(
-                "key.m0-dev-tools.teleport_forward",
+                KeybindCatalog.QUICK_TP_FORWARD.translationKey(),
                 InputUtil.Type.KEYSYM,
-                GLFW.GLFW_KEY_KP_5, // Numpad 5
+                KeybindCatalog.QUICK_TP_FORWARD.defaultKey(),
                 (minecraftClient) -> teleportForward(10)
         );
 
         registerPressedKeybind(
-                "key.m0-dev-tools.teleport_left",
+                KeybindCatalog.QUICK_TP_LEFT.translationKey(),
                 InputUtil.Type.KEYSYM,
-                GLFW.GLFW_KEY_KP_4, // Numpad 4
+                KeybindCatalog.QUICK_TP_LEFT.defaultKey(),
                 (minecraftClient) -> teleport(-10, 0, 0)
         );
 
         registerPressedKeybind(
-                "key.m0-dev-tools.teleport_right",
+                KeybindCatalog.QUICK_TP_RIGHT.translationKey(),
                 InputUtil.Type.KEYSYM,
-                GLFW.GLFW_KEY_KP_6, // Numpad 6
+                KeybindCatalog.QUICK_TP_RIGHT.defaultKey(),
                 (minecraftClient) -> teleport(10, 0, 0)
         );
     }

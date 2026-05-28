@@ -1,15 +1,27 @@
 package me.m0dii.modules.macros.gui;
 
 import me.m0dii.gui.GuiSystem;
+import me.m0dii.modules.chat.SecondaryChatSettings;
 import me.m0dii.modules.commandhistory.CommandHistoryManager;
 import me.m0dii.modules.entityradar.EntityRadarModule;
+import me.m0dii.modules.freecam.FreecamModule;
+import me.m0dii.modules.fullbright.FullbrightModule;
+import me.m0dii.modules.heldlight.HeldLightModule;
 import me.m0dii.modules.hudcanvas.HudCanvasDataHandler;
+import me.m0dii.modules.instantbreak.InstantBreakModule;
+import me.m0dii.modules.inventorymove.InventoryMoveModule;
 import me.m0dii.modules.macros.CommandMacros;
 import me.m0dii.modules.macros.MacroDataHandler;
 import me.m0dii.modules.macros.MacroPlaceholders;
 import me.m0dii.modules.macros.hud.MacroHudDataHandler;
 import me.m0dii.modules.messagehistory.MessageHistoryManager;
 import me.m0dii.modules.nbthud.NBTInfoHudOverlayModule;
+import me.m0dii.modules.nbttooltip.NBTTooltipModule;
+import me.m0dii.modules.nbttooltip.ShulkerTooltipModule;
+import me.m0dii.modules.overlays.*;
+import me.m0dii.modules.pickup.ItemPickupNotifierModule;
+import me.m0dii.modules.pickup.PickupFeedSettings;
+import me.m0dii.modules.waypoints.WaypointModule;
 import me.m0dii.utils.ModConfig;
 import net.minecraft.client.gui.Click;
 import net.minecraft.client.gui.DrawContext;
@@ -45,7 +57,22 @@ public class MacroWorkbenchV2Screen extends Screen {
         PLACEHOLDERS,
         ENTITY_RADAR,
         COMMAND_HISTORY,
-        MESSAGE_HISTORY
+        MESSAGE_HISTORY,
+        CONFIGURATION
+    }
+
+    private enum ConfigCategory {
+        TOOLS("Tools"),
+        OVERLAYS("Overlays"),
+        MODULES("Modules"),
+        SECONDARY_CHAT("Secondary Chat"),
+        BLOCK_ATTRIBUTES("Block Attributes");
+
+        private final String label;
+
+        ConfigCategory(String label) {
+            this.label = label;
+        }
     }
 
     private static final int TOP_BAR_H = 54;
@@ -55,6 +82,8 @@ public class MacroWorkbenchV2Screen extends Screen {
     private static final int MODAL_H = 320;
     private static final String EXTERNAL_NBT_INSPECTOR_ID = "__ext_nbt_inspector";
     private static final String EXTERNAL_SECONDARY_CHAT_ID = "__ext_secondary_chat";
+    private static final String EXTERNAL_MACRO_KEYBINDS_ID = "__ext_macro_keybinds";
+    private static final String EXTERNAL_PICKUP_NOTIFIER_ID = "__ext_pickup_notifier";
     private static final Pattern HEX_COLOR = Pattern.compile("#[0-9a-fA-F]{6}");
     private static boolean GRID_ENABLED_PREF = false;
     private static int GRID_ROWS_PREF = 12;
@@ -84,15 +113,6 @@ public class MacroWorkbenchV2Screen extends Screen {
             "player.sprinting", "player.sneaking", "player.swimming", "player.on_ground", "world.is_day", "client.server.singleplayer"
     };
     private static final String[] ICON_KIND_PRESETS = {"item", "block", "entity", "entity_model"};
-    private static final String[] ICON_ITEM_ID_PRESETS = {
-            "minecraft:stone", "minecraft:diamond_sword", "minecraft:ender_pearl", "minecraft:totem_of_undying"
-    };
-    private static final String[] ICON_BLOCK_ID_PRESETS = {
-            "minecraft:stone", "minecraft:chest", "minecraft:crafting_table", "minecraft:redstone_block"
-    };
-    private static final String[] ICON_ENTITY_ID_PRESETS = {
-            "minecraft:zombie", "minecraft:skeleton", "minecraft:creeper", "minecraft:enderman"
-    };
     private static final String[] SHAPE_TYPE_PRESETS = {"rounded_rect", "rect", "circle", "line", "triangle", "cross", "diamond"};
     private static final String[] SOURCE_TOKEN_SUGGESTIONS = {
             "hp", "max_hp", "food", "saturation", "xp", "level", "client.fps", "player.speed",
@@ -151,6 +171,40 @@ public class MacroWorkbenchV2Screen extends Screen {
     private final List<ClickableWidget> entityRadarWidgets = new ArrayList<>();
     private final List<ClickableWidget> cmdHistoryWidgets = new ArrayList<>();
     private final List<ClickableWidget> msgHistoryWidgets = new ArrayList<>();
+    private final List<ClickableWidget> configWidgets = new ArrayList<>();
+
+    private ConfigCategory selectedConfigCategory = ConfigCategory.TOOLS;
+    private ButtonWidget configToolsCategoryButton;
+    private ButtonWidget configOverlaysCategoryButton;
+    private ButtonWidget configModulesCategoryButton;
+    private ButtonWidget configSecondaryChatCategoryButton;
+    private ButtonWidget configBlockAttributesCategoryButton;
+    private ButtonWidget configBiomeBorderToggleButton;
+    private ButtonWidget configMacroOverlayToggleButton;
+    private ButtonWidget configSecondaryOverlayToggleButton;
+    private ButtonWidget configPickupDurationButton;
+    private ButtonWidget configPickupLinesButton;
+    private ButtonWidget configPickupIconScaleButton;
+    private ButtonWidget configPickupDirectionButton;
+    private ButtonWidget configFreecamToggleButton;
+    private ButtonWidget configFullbrightToggleButton;
+    private ButtonWidget configHeldLightToggleButton;
+    private ButtonWidget configInventoryMoveToggleButton;
+    private ButtonWidget configInstantBreakToggleButton;
+    private ButtonWidget configWaypointsToggleButton;
+    private ButtonWidget configNbtHudToggleButton;
+    private ButtonWidget configNbtTooltipToggleButton;
+    private ButtonWidget configShulkerTooltipToggleButton;
+    private ButtonWidget configChunkBorderToggleButton;
+    private ButtonWidget configSlimeChunksToggleButton;
+    private ButtonWidget configStructureBoundsToggleButton;
+    private ButtonWidget configCommandBlockOverlayToggleButton;
+    private ButtonWidget configLightOverlayToggleButton;
+    private ButtonWidget configCollisionMeshToggleButton;
+    private ButtonWidget configLightBlocksToggleButton;
+    private ButtonWidget configPreventInteractionsToggleButton;
+    private ButtonWidget configSolidFluidHitboxesToggleButton;
+    private ButtonWidget configBarrierBlocksToggleButton;
 
     private final List<KeyCell> cells = new ArrayList<>();
     private final Map<Integer, List<String>> macroBindingNames = new HashMap<>();
@@ -222,7 +276,7 @@ public class MacroWorkbenchV2Screen extends Screen {
     private int advancedSecondaryMaxLines;
     private double advancedSecondaryScale;
     private int advancedSecondaryLineHeight;
-    private ModConfig.ChatInterceptMode advancedSecondaryInterceptMode;
+    private SecondaryChatSettings.InterceptMode advancedSecondaryInterceptMode;
 
     private boolean addElementModalOpen = false;
     private boolean advancedModalDragging = false;
@@ -273,31 +327,48 @@ public class MacroWorkbenchV2Screen extends Screen {
         rebuildBindingMaps();
         rebuildKeyboardGrid();
 
-        ButtonWidget tabCanvas = ButtonWidget.builder(Text.literal("Canvas"), b -> setTab(Tab.CANVAS)).dimensions(8, 8, 70, 20).build();
-        ButtonWidget tabKeyboard = ButtonWidget.builder(Text.literal("Keyboard"), b -> setTab(Tab.KEYBOARD)).dimensions(82, 8, 80, 20).build();
-        ButtonWidget tabPlaceholders = ButtonWidget.builder(Text.literal("Placeholders"), b -> setTab(Tab.PLACEHOLDERS)).dimensions(166, 8, 102, 20).build();
-        ButtonWidget tabEntityRadar = ButtonWidget.builder(Text.literal("Entity Radar"), b -> setTab(Tab.ENTITY_RADAR)).dimensions(272, 8, 92, 20).build();
-        ButtonWidget tabCmdHistory = ButtonWidget.builder(Text.literal("Cmd History"), b -> setTab(Tab.COMMAND_HISTORY)).dimensions(368, 8, 90, 20).build();
-        ButtonWidget tabMsgHistory = ButtonWidget.builder(Text.literal("Msg History"), b -> setTab(Tab.MESSAGE_HISTORY)).dimensions(462, 8, 90, 20).build();
-        ButtonWidget saveButton = ButtonWidget.builder(Text.literal("Save"), b -> saveAll()).dimensions(this.width - 152, 8, 66, 20).build();
+        boolean stackedSaveDone = this.width < 760;
+        int topSaveW = stackedSaveDone ? 56 : 66;
+        int topDoneW = stackedSaveDone ? 56 : 66;
+        int saveX = this.width - topSaveW - (stackedSaveDone ? 8 : (topDoneW + 12));
+        int saveY = stackedSaveDone ? 6 : 8;
+        int doneX = this.width - topDoneW - 8;
+        int doneY = stackedSaveDone ? 28 : 8;
+        ButtonWidget saveButton = ButtonWidget.builder(Text.literal("Save"), b -> saveAll()).dimensions(saveX, saveY, topSaveW, 20).build();
         ButtonWidget doneButton = ButtonWidget.builder(Text.literal("Done"), b -> {
             saveAll();
             close();
-        }).dimensions(this.width - 82, 8, 66, 20).build();
-        this.topBarWidgets.add(tabCanvas);
-        this.topBarWidgets.add(tabKeyboard);
-        this.topBarWidgets.add(tabPlaceholders);
-        this.topBarWidgets.add(tabEntityRadar);
-        this.topBarWidgets.add(tabCmdHistory);
-        this.topBarWidgets.add(tabMsgHistory);
+        }).dimensions(doneX, doneY, topDoneW, 20).build();
+        List<Tab> tabs = List.of(
+                Tab.CANVAS,
+                Tab.KEYBOARD,
+                Tab.PLACEHOLDERS,
+                Tab.ENTITY_RADAR,
+                Tab.COMMAND_HISTORY,
+                Tab.MESSAGE_HISTORY,
+                Tab.CONFIGURATION
+        );
+        List<String> labels = List.of("Canvas", "Keyboard", "Placeholders", "Entity Radar", "Cmd Hist", "Msg Hist", "Configuration");
+        List<String> compactLabels = List.of("Canvas", "Keys", "Place", "Radar", "Cmd", "Msg", "Config");
+        List<String> tinyLabels = List.of("CV", "KB", "PH", "ER", "CH", "MH", "CF");
+        int tabGap = 4;
+        int tabsStartX = 8;
+        int tabsEndX = saveX - 8;
+        int tabWidth = Math.max(16, (tabsEndX - tabsStartX - (tabGap * (tabs.size() - 1))) / tabs.size());
+        int tabY = 8;
+        int tabX = tabsStartX;
+        for (int i = 0; i < tabs.size(); i++) {
+            Tab tabDef = tabs.get(i);
+            String tabLabel = tabWidth < 36 ? tinyLabels.get(i) : (tabWidth < 72 ? compactLabels.get(i) : labels.get(i));
+            ButtonWidget tabButton = ButtonWidget.builder(Text.literal(tabLabel), b -> setTab(tabDef))
+                    .dimensions(tabX, tabY, tabWidth, 20)
+                    .build();
+            this.topBarWidgets.add(tabButton);
+            addDrawableChild(tabButton);
+            tabX += tabWidth + tabGap;
+        }
         this.topBarWidgets.add(saveButton);
         this.topBarWidgets.add(doneButton);
-        addDrawableChild(tabCanvas);
-        addDrawableChild(tabKeyboard);
-        addDrawableChild(tabPlaceholders);
-        addDrawableChild(tabEntityRadar);
-        addDrawableChild(tabCmdHistory);
-        addDrawableChild(tabMsgHistory);
         addDrawableChild(saveButton);
         addDrawableChild(doneButton);
 
@@ -437,26 +508,42 @@ public class MacroWorkbenchV2Screen extends Screen {
         addDrawableChild(borderToggle);
         addDrawableChild(editButton);
 
-        int panelX = this.width - 320;
+        int panelW = keyboardPanelWidth();
+        int panelX = keyboardPanelX();
+        int panelInnerW = panelW - 20;
+        int keyboardRowY1 = this.height - 50;
+        int keyboardRowY2 = this.height - 28;
+
         ButtonWidget gameToggle = ButtonWidget.builder(Text.literal("Show Game Binds: OFF"), b -> {
             showGameKeybinds = !showGameKeybinds;
             b.setMessage(Text.literal("Show Game Binds: " + (showGameKeybinds ? "ON" : "OFF")));
-        }).dimensions(panelX + 10, TOP_BAR_H + 8, 300, 18).build();
+        }).dimensions(panelX + 10, TOP_BAR_H + 8, panelInnerW, 18).build();
 
-        this.kbNameField = new TextFieldWidget(this.textRenderer, panelX + 10, this.height - 94, 300, 18, Text.literal("Macro Name"));
-        this.kbCommandsField = new TextFieldWidget(this.textRenderer, panelX + 10, this.height - 72, 300, 18, Text.literal("Commands (; separated)"));
-        this.kbDelayField = new TextFieldWidget(this.textRenderer, panelX + 10, this.height - 50, 120, 18, Text.literal("Delay Ticks"));
+        this.kbNameField = new TextFieldWidget(this.textRenderer, panelX + 10, this.height - 94, panelInnerW, 18, Text.literal("Macro Name"));
+        this.kbCommandsField = new TextFieldWidget(this.textRenderer, panelX + 10, this.height - 72, panelInnerW, 18, Text.literal("Commands (; separated)"));
+
+        int delayW = Math.min(120, Math.max(72, panelInnerW / 3));
+        int row1RightW = panelInnerW - delayW - 4;
+        int editW = Math.max(70, row1RightW / 2 - 2);
+        int kbSaveW = Math.max(70, row1RightW - editW - 4);
+        int newW = Math.max(76, (panelInnerW - 8) / 3);
+        int deleteW = Math.max(66, (panelInnerW - 8 - newW) / 2);
+        int openW = Math.max(80, panelInnerW - newW - deleteW - 8);
+
+        this.kbDelayField = new TextFieldWidget(this.textRenderer, panelX + 10, keyboardRowY1, delayW, 18, Text.literal("Delay Ticks"));
         this.kbNameField.setMaxLength(80);
         this.kbCommandsField.setMaxLength(500);
         this.kbDelayField.setMaxLength(6);
 
-        ButtonWidget kbSave = ButtonWidget.builder(Text.literal("Save Macro"), b -> saveKeyboardMacro()).dimensions(panelX + 226, this.height - 50, 84, 18).build();
-        ButtonWidget kbDelete = ButtonWidget.builder(Text.literal("Delete"), b -> deleteKeyboardMacro()).dimensions(panelX + 124, this.height - 28, 80, 18).build();
-        ButtonWidget kbNew = ButtonWidget.builder(Text.literal("+ New on Key"), b -> createKeyboardMacro()).dimensions(panelX + 10, this.height - 28, 110, 18).build();
         ButtonWidget kbEditCommands = ButtonWidget.builder(Text.literal("Edit Cmds"), b -> openKeyboardCommandsModal())
-                .dimensions(panelX + 134, this.height - 50, 88, 18).build();
+                .dimensions(panelX + 10 + delayW + 4, keyboardRowY1, editW, 18).build();
+        ButtonWidget kbSave = ButtonWidget.builder(Text.literal("Save Macro"), b -> saveKeyboardMacro())
+                .dimensions(panelX + 10 + delayW + 4 + editW + 4, keyboardRowY1, kbSaveW, 18).build();
+        ButtonWidget kbNew = ButtonWidget.builder(Text.literal("+ New"), b -> createKeyboardMacro()).dimensions(panelX + 10, keyboardRowY2, newW, 18).build();
+        ButtonWidget kbDelete = ButtonWidget.builder(Text.literal("Delete"), b -> deleteKeyboardMacro())
+                .dimensions(panelX + 10 + newW + 4, keyboardRowY2, deleteW, 18).build();
         ButtonWidget kbOpenManager = ButtonWidget.builder(Text.literal("Open Macro Manager"),
-                b -> this.client.setScreen(MacroConfigScreen.create(this))).dimensions(panelX + 208, this.height - 28, 102, 18).build();
+                b -> this.client.setScreen(MacroConfigScreen.create(this))).dimensions(panelX + 10 + newW + 4 + deleteW + 4, keyboardRowY2, openW, 18).build();
 
         this.keyboardWidgets.add(gameToggle);
         this.keyboardWidgets.add(kbNameField);
@@ -489,6 +576,8 @@ public class MacroWorkbenchV2Screen extends Screen {
         this.msgHistoryWidgets.add(clearMsgHistoryButton);
         addDrawableChild(clearCmdHistoryButton);
         addDrawableChild(clearMsgHistoryButton);
+
+        initConfigurationWidgets();
 
         syncCanvasFields();
         syncGridButtons();
@@ -542,6 +631,12 @@ public class MacroWorkbenchV2Screen extends Screen {
             dragging = false;
             msgHistoryItems = new ArrayList<>(MessageHistoryManager.getHistory());
             msgHistoryScroll = 0;
+        } else if (next == Tab.CONFIGURATION) {
+            applyQuickEdit();
+            closeAdvancedModal();
+            closeKeyboardCommandsModal();
+            dragging = false;
+            syncConfigurationControls();
         }
     }
 
@@ -551,15 +646,17 @@ public class MacroWorkbenchV2Screen extends Screen {
         boolean entityRadarTab = this.tab == Tab.ENTITY_RADAR;
         boolean cmdHistoryTab = this.tab == Tab.COMMAND_HISTORY;
         boolean msgHistoryTab = this.tab == Tab.MESSAGE_HISTORY;
+        boolean configTab = this.tab == Tab.CONFIGURATION;
         // In canvas, F1 controls visibility; in other tabs controls are always visible.
         boolean showChrome = !canvasTab || canvasChromeVisible;
 
         setWidgetState(topBarWidgets, showChrome);
         setWidgetState(canvasWidgets, canvasTab && showChrome);
-        setWidgetState(keyboardWidgets, keyboardTab && showChrome);
-        setWidgetState(entityRadarWidgets, entityRadarTab && showChrome);
-        setWidgetState(cmdHistoryWidgets, cmdHistoryTab && showChrome);
-        setWidgetState(msgHistoryWidgets, msgHistoryTab && showChrome);
+        setWidgetState(keyboardWidgets, keyboardTab);
+        setWidgetState(entityRadarWidgets, entityRadarTab);
+        setWidgetState(cmdHistoryWidgets, cmdHistoryTab);
+        setWidgetState(msgHistoryWidgets, msgHistoryTab);
+        setWidgetState(configWidgets, configTab);
     }
 
     private static void setWidgetState(List<ClickableWidget> widgets, boolean visible) {
@@ -584,6 +681,8 @@ public class MacroWorkbenchV2Screen extends Screen {
             renderCommandHistoryTab(context, mouseX, mouseY);
         } else if (this.tab == Tab.MESSAGE_HISTORY) {
             renderMessageHistoryTab(context, mouseX, mouseY);
+        } else if (this.tab == Tab.CONFIGURATION) {
+            renderConfigurationTab(context);
         } else {
             renderPlaceholdersTab(context);
         }
@@ -682,6 +781,524 @@ public class MacroWorkbenchV2Screen extends Screen {
             context.drawTextWithShadow(this.textRenderer, line, left, y, color);
             y += lineHeight;
         }
+    }
+
+    private void initConfigurationWidgets() {
+        int listX = 12;
+        int listY = TOP_BAR_H + 18;
+        int categoryW = Math.max(130, (this.width / 2) - 28);
+        int rightX = (this.width / 2) + 12;
+        int settingW = Math.max(180, this.width - rightX - 12);
+
+        this.configToolsCategoryButton = ButtonWidget.builder(Text.literal(ConfigCategory.TOOLS.label), b -> setConfigurationCategory(ConfigCategory.TOOLS))
+                .dimensions(listX, listY, categoryW, 20)
+                .build();
+        this.configOverlaysCategoryButton = ButtonWidget.builder(Text.literal(ConfigCategory.OVERLAYS.label), b -> setConfigurationCategory(ConfigCategory.OVERLAYS))
+                .dimensions(listX, listY + 24, categoryW, 20)
+                .build();
+        this.configModulesCategoryButton = ButtonWidget.builder(Text.literal(ConfigCategory.MODULES.label), b -> setConfigurationCategory(ConfigCategory.MODULES))
+                .dimensions(listX, listY + 48, categoryW, 20)
+                .build();
+        this.configSecondaryChatCategoryButton = ButtonWidget.builder(Text.literal(ConfigCategory.SECONDARY_CHAT.label), b -> setConfigurationCategory(ConfigCategory.SECONDARY_CHAT))
+                .dimensions(listX, listY + 72, categoryW, 20)
+                .build();
+        this.configBlockAttributesCategoryButton = ButtonWidget.builder(Text.literal(ConfigCategory.BLOCK_ATTRIBUTES.label), b -> setConfigurationCategory(ConfigCategory.BLOCK_ATTRIBUTES))
+                .dimensions(listX, listY + 96, categoryW, 20)
+                .build();
+
+        this.configMacroOverlayToggleButton = ButtonWidget.builder(Text.literal("Macro Keybind Overlay"), b -> {
+            ModConfig.updateAndSave(() -> ModConfig.showMacroKeybindOverlay = !ModConfig.showMacroKeybindOverlay);
+            syncConfigurationControls();
+        }).dimensions(rightX, TOP_BAR_H + 36, settingW, 20).build();
+
+        this.configSecondaryOverlayToggleButton = ButtonWidget.builder(Text.literal("Secondary Chat Overlay"), b -> {
+            SecondaryChatSettings.updateAndSave(() -> SecondaryChatSettings.get().showOverlay = !SecondaryChatSettings.get().showOverlay);
+            syncConfigurationControls();
+        }).dimensions(rightX, TOP_BAR_H + 76, settingW, 20).build();
+
+        this.configPickupDurationButton = ButtonWidget.builder(Text.literal("Pickup Feed Duration"), b -> {
+            PickupFeedSettings.updateAndSave(() -> {
+                int step = isShiftDown() ? 250 : 500;
+                int current = PickupFeedSettings.get().durationMs;
+                PickupFeedSettings.get().durationMs = isControlPressed() ? current - step : current + step;
+            });
+            syncConfigurationControls();
+        }).dimensions(rightX, TOP_BAR_H + 116, settingW, 20).build();
+
+        this.configPickupLinesButton = ButtonWidget.builder(Text.literal("Pickup Feed Max Lines"), b -> {
+            PickupFeedSettings.updateAndSave(() -> {
+                int step = isShiftDown() ? 1 : 2;
+                int current = PickupFeedSettings.get().maxLines;
+                PickupFeedSettings.get().maxLines = isControlPressed() ? current - step : current + step;
+            });
+            syncConfigurationControls();
+        }).dimensions(rightX, TOP_BAR_H + 156, settingW, 20).build();
+
+        this.configPickupIconScaleButton = ButtonWidget.builder(Text.literal("Pickup Feed Icon Scale"), b -> {
+            PickupFeedSettings.updateAndSave(() -> {
+                float step = isShiftDown() ? 0.05f : 0.1f;
+                float current = PickupFeedSettings.get().iconScale;
+                PickupFeedSettings.get().iconScale = isControlPressed() ? current - step : current + step;
+            });
+            syncConfigurationControls();
+        }).dimensions(rightX, TOP_BAR_H + 196, settingW, 20).build();
+
+        this.configPickupDirectionButton = ButtonWidget.builder(Text.literal("Pickup Feed Direction"), b -> {
+            PickupFeedSettings.updateAndSave(() -> PickupFeedSettings.get().direction = PickupFeedSettings.get().direction == PickupFeedSettings.Direction.UP
+                    ? PickupFeedSettings.Direction.DOWN
+                    : PickupFeedSettings.Direction.UP);
+            syncConfigurationControls();
+        }).dimensions(rightX, TOP_BAR_H + 236, settingW, 20).build();
+
+        this.configFreecamToggleButton = ButtonWidget.builder(Text.literal("Freecam"), b -> {
+            FreecamModule.INSTANCE.setEnabled(!FreecamModule.INSTANCE.isEnabled());
+            syncConfigurationControls();
+        }).dimensions(rightX, TOP_BAR_H + 36, settingW, 20).build();
+
+        this.configFullbrightToggleButton = ButtonWidget.builder(Text.literal("Fullbright"), b -> {
+            FullbrightModule.INSTANCE.setEnabled(!FullbrightModule.INSTANCE.isEnabled());
+            syncConfigurationControls();
+        }).dimensions(rightX, TOP_BAR_H + 76, settingW, 20).build();
+
+        this.configHeldLightToggleButton = ButtonWidget.builder(Text.literal("Held Light"), b -> {
+            HeldLightModule.INSTANCE.setEnabled(!HeldLightModule.INSTANCE.isEnabled());
+            syncConfigurationControls();
+        }).dimensions(rightX, TOP_BAR_H + 116, settingW, 20).build();
+
+        this.configInventoryMoveToggleButton = ButtonWidget.builder(Text.literal("Inventory Move"), b -> {
+            InventoryMoveModule.INSTANCE.setEnabled(!InventoryMoveModule.INSTANCE.isEnabled());
+            syncConfigurationControls();
+        }).dimensions(rightX, TOP_BAR_H + 156, settingW, 20).build();
+
+        this.configInstantBreakToggleButton = ButtonWidget.builder(Text.literal("Instant Break"), b -> {
+            InstantBreakModule.INSTANCE.setEnabled(!InstantBreakModule.INSTANCE.isEnabled());
+            syncConfigurationControls();
+        }).dimensions(rightX, TOP_BAR_H + 196, settingW, 20).build();
+
+        this.configWaypointsToggleButton = ButtonWidget.builder(Text.literal("Waypoints"), b -> {
+            WaypointModule.INSTANCE.setEnabled(!WaypointModule.INSTANCE.isEnabled());
+            syncConfigurationControls();
+        }).dimensions(rightX, TOP_BAR_H + 236, settingW, 20).build();
+
+        this.configNbtHudToggleButton = ButtonWidget.builder(Text.literal("NBT Inspector HUD"), b -> {
+            NBTInfoHudOverlayModule.INSTANCE.setEnabled(!NBTInfoHudOverlayModule.INSTANCE.isEnabled());
+            syncConfigurationControls();
+        }).dimensions(rightX, TOP_BAR_H + 276, settingW, 20).build();
+
+        this.configNbtTooltipToggleButton = ButtonWidget.builder(Text.literal("NBT Tooltip"), b -> {
+            NBTTooltipModule.INSTANCE.setEnabled(!NBTTooltipModule.INSTANCE.isEnabled());
+            syncConfigurationControls();
+        }).dimensions(rightX, TOP_BAR_H + 316, settingW, 20).build();
+
+        this.configShulkerTooltipToggleButton = ButtonWidget.builder(Text.literal("Shulker Preview Tooltip"), b -> {
+            ShulkerTooltipModule.INSTANCE.setEnabled(!ShulkerTooltipModule.INSTANCE.isEnabled());
+            syncConfigurationControls();
+        }).dimensions(rightX, TOP_BAR_H + 356, settingW, 20).build();
+
+        this.configBiomeBorderToggleButton = ButtonWidget.builder(Text.literal("Biome Border Overlay"), b -> {
+            BiomeBorderOverlayModule.INSTANCE.setEnabled(!BiomeBorderOverlayModule.INSTANCE.isEnabled());
+            syncConfigurationControls();
+        }).dimensions(rightX, TOP_BAR_H + 236, settingW, 20).build();
+
+        this.configChunkBorderToggleButton = ButtonWidget.builder(Text.literal("Chunk Border Overlay"), b -> {
+            ChunkBorderOverlayModule.INSTANCE.setEnabled(!ChunkBorderOverlayModule.INSTANCE.isEnabled());
+            syncConfigurationControls();
+        }).dimensions(rightX, TOP_BAR_H + 36, settingW, 20).build();
+
+        this.configSlimeChunksToggleButton = ButtonWidget.builder(Text.literal("Slime Chunk Overlay"), b -> {
+            SlimeChunkOverlayModule.INSTANCE.setEnabled(!SlimeChunkOverlayModule.INSTANCE.isEnabled());
+            syncConfigurationControls();
+        }).dimensions(rightX, TOP_BAR_H + 76, settingW, 20).build();
+
+        this.configStructureBoundsToggleButton = ButtonWidget.builder(Text.literal("Structure Bounding Boxes"), b -> {
+            StructureBoundingBoxOverlay.INSTANCE.setEnabled(!StructureBoundingBoxOverlay.INSTANCE.isEnabled());
+            syncConfigurationControls();
+        }).dimensions(rightX, TOP_BAR_H + 116, settingW, 20).build();
+
+        this.configCommandBlockOverlayToggleButton = ButtonWidget.builder(Text.literal("Command Block Overlay"), b -> {
+            CommandBlockOverlayModule.INSTANCE.setEnabled(!CommandBlockOverlayModule.INSTANCE.isEnabled());
+            syncConfigurationControls();
+        }).dimensions(rightX, TOP_BAR_H + 156, settingW, 20).build();
+
+        this.configLightOverlayToggleButton = ButtonWidget.builder(Text.literal("Light Level Overlay"), b -> {
+            LightLevelOverlayModule.INSTANCE.setEnabled(!LightLevelOverlayModule.INSTANCE.isEnabled());
+            syncConfigurationControls();
+        }).dimensions(rightX, TOP_BAR_H + 196, settingW, 20).build();
+
+        this.configCollisionMeshToggleButton = ButtonWidget.builder(Text.literal("Show Collision Mesh"), b -> {
+            ModConfig.updateAndSave(() -> ModConfig.blockAttributesShowCollisionMesh = !ModConfig.blockAttributesShowCollisionMesh);
+            syncConfigurationControls();
+        }).dimensions(rightX, TOP_BAR_H + 36, settingW, 20).build();
+
+        this.configLightBlocksToggleButton = ButtonWidget.builder(Text.literal("Show Light Blocks"), b -> {
+            ModConfig.updateAndSave(() -> ModConfig.blockAttributesShowLightBlocks = !ModConfig.blockAttributesShowLightBlocks);
+            syncConfigurationControls();
+        }).dimensions(rightX, TOP_BAR_H + 76, settingW, 20).build();
+
+        this.configPreventInteractionsToggleButton = ButtonWidget.builder(Text.literal("Prevent Interactions"), b -> {
+            ModConfig.updateAndSave(() -> ModConfig.blockAttributesPreventInteractions = !ModConfig.blockAttributesPreventInteractions);
+            syncConfigurationControls();
+        }).dimensions(rightX, TOP_BAR_H + 116, settingW, 20).build();
+
+        this.configSolidFluidHitboxesToggleButton = ButtonWidget.builder(Text.literal("Solid Fluid Hitboxes"), b -> {
+            ModConfig.updateAndSave(() -> ModConfig.blockAttributesSolidFluidHitboxes = !ModConfig.blockAttributesSolidFluidHitboxes);
+            syncConfigurationControls();
+        }).dimensions(rightX, TOP_BAR_H + 156, settingW, 20).build();
+
+        this.configBarrierBlocksToggleButton = ButtonWidget.builder(Text.literal("Show Barrier Blocks"), b -> {
+            ModConfig.updateAndSave(() -> ModConfig.blockAttributesShowBarrierBlocks = !ModConfig.blockAttributesShowBarrierBlocks);
+            syncConfigurationControls();
+        }).dimensions(rightX, TOP_BAR_H + 196, settingW, 20).build();
+
+        this.configWidgets.add(configToolsCategoryButton);
+        this.configWidgets.add(configOverlaysCategoryButton);
+        this.configWidgets.add(configModulesCategoryButton);
+        this.configWidgets.add(configSecondaryChatCategoryButton);
+        this.configWidgets.add(configBlockAttributesCategoryButton);
+        this.configWidgets.add(configBiomeBorderToggleButton);
+        this.configWidgets.add(configMacroOverlayToggleButton);
+        this.configWidgets.add(configSecondaryOverlayToggleButton);
+        this.configWidgets.add(configPickupDurationButton);
+        this.configWidgets.add(configPickupLinesButton);
+        this.configWidgets.add(configPickupIconScaleButton);
+        this.configWidgets.add(configPickupDirectionButton);
+        this.configWidgets.add(configFreecamToggleButton);
+        this.configWidgets.add(configFullbrightToggleButton);
+        this.configWidgets.add(configHeldLightToggleButton);
+        this.configWidgets.add(configInventoryMoveToggleButton);
+        this.configWidgets.add(configInstantBreakToggleButton);
+        this.configWidgets.add(configWaypointsToggleButton);
+        this.configWidgets.add(configNbtHudToggleButton);
+        this.configWidgets.add(configNbtTooltipToggleButton);
+        this.configWidgets.add(configShulkerTooltipToggleButton);
+        this.configWidgets.add(configChunkBorderToggleButton);
+        this.configWidgets.add(configSlimeChunksToggleButton);
+        this.configWidgets.add(configStructureBoundsToggleButton);
+        this.configWidgets.add(configCommandBlockOverlayToggleButton);
+        this.configWidgets.add(configLightOverlayToggleButton);
+        this.configWidgets.add(configCollisionMeshToggleButton);
+        this.configWidgets.add(configLightBlocksToggleButton);
+        this.configWidgets.add(configPreventInteractionsToggleButton);
+        this.configWidgets.add(configSolidFluidHitboxesToggleButton);
+        this.configWidgets.add(configBarrierBlocksToggleButton);
+
+        addDrawableChild(configToolsCategoryButton);
+        addDrawableChild(configOverlaysCategoryButton);
+        addDrawableChild(configModulesCategoryButton);
+        addDrawableChild(configSecondaryChatCategoryButton);
+        addDrawableChild(configBlockAttributesCategoryButton);
+        addDrawableChild(configBiomeBorderToggleButton);
+        addDrawableChild(configMacroOverlayToggleButton);
+        addDrawableChild(configSecondaryOverlayToggleButton);
+        addDrawableChild(configPickupDurationButton);
+        addDrawableChild(configPickupLinesButton);
+        addDrawableChild(configPickupIconScaleButton);
+        addDrawableChild(configPickupDirectionButton);
+        addDrawableChild(configFreecamToggleButton);
+        addDrawableChild(configFullbrightToggleButton);
+        addDrawableChild(configHeldLightToggleButton);
+        addDrawableChild(configInventoryMoveToggleButton);
+        addDrawableChild(configInstantBreakToggleButton);
+        addDrawableChild(configWaypointsToggleButton);
+        addDrawableChild(configNbtHudToggleButton);
+        addDrawableChild(configNbtTooltipToggleButton);
+        addDrawableChild(configShulkerTooltipToggleButton);
+        addDrawableChild(configChunkBorderToggleButton);
+        addDrawableChild(configSlimeChunksToggleButton);
+        addDrawableChild(configStructureBoundsToggleButton);
+        addDrawableChild(configCommandBlockOverlayToggleButton);
+        addDrawableChild(configLightOverlayToggleButton);
+        addDrawableChild(configCollisionMeshToggleButton);
+        addDrawableChild(configLightBlocksToggleButton);
+        addDrawableChild(configPreventInteractionsToggleButton);
+        addDrawableChild(configSolidFluidHitboxesToggleButton);
+        addDrawableChild(configBarrierBlocksToggleButton);
+
+        syncConfigurationControls();
+    }
+
+    private void setConfigurationCategory(ConfigCategory category) {
+        this.selectedConfigCategory = category;
+        syncConfigurationControls();
+    }
+
+    private void syncConfigurationControls() {
+        if (this.configToolsCategoryButton == null) {
+            return;
+        }
+
+        this.configToolsCategoryButton.setMessage(Text.literal((selectedConfigCategory == ConfigCategory.TOOLS ? "> " : "") + ConfigCategory.TOOLS.label));
+        this.configOverlaysCategoryButton.setMessage(Text.literal((selectedConfigCategory == ConfigCategory.OVERLAYS ? "> " : "") + ConfigCategory.OVERLAYS.label));
+        this.configModulesCategoryButton.setMessage(Text.literal((selectedConfigCategory == ConfigCategory.MODULES ? "> " : "") + ConfigCategory.MODULES.label));
+        this.configSecondaryChatCategoryButton.setMessage(Text.literal((selectedConfigCategory == ConfigCategory.SECONDARY_CHAT ? "> " : "") + ConfigCategory.SECONDARY_CHAT.label));
+        this.configBlockAttributesCategoryButton.setMessage(Text.literal((selectedConfigCategory == ConfigCategory.BLOCK_ATTRIBUTES ? "> " : "") + ConfigCategory.BLOCK_ATTRIBUTES.label));
+
+        this.configMacroOverlayToggleButton.setMessage(Text.literal("Macro Keybind Overlay: " + (ModConfig.showMacroKeybindOverlay ? "ON" : "OFF")));
+        this.configSecondaryOverlayToggleButton.setMessage(Text.literal("Secondary Chat Overlay: " + (SecondaryChatSettings.get().showOverlay ? "ON" : "OFF")));
+        this.configPickupDurationButton.setMessage(Text.literal("Pickup Duration: " + PickupFeedSettings.get().durationMs + "ms"));
+        this.configPickupLinesButton.setMessage(Text.literal("Pickup Max Lines: " + PickupFeedSettings.get().maxLines));
+        this.configPickupIconScaleButton.setMessage(Text.literal("Pickup Icon Scale: " + String.format(Locale.ROOT, "%.2f", PickupFeedSettings.get().iconScale)));
+        this.configPickupDirectionButton.setMessage(Text.literal("Pickup Direction: " + PickupFeedSettings.get().direction.name()));
+        this.configFreecamToggleButton.setMessage(Text.literal("Freecam: " + (FreecamModule.INSTANCE.isEnabled() ? "ON" : "OFF")));
+        this.configFullbrightToggleButton.setMessage(Text.literal("Fullbright: " + (FullbrightModule.INSTANCE.isEnabled() ? "ON" : "OFF")));
+        this.configHeldLightToggleButton.setMessage(Text.literal("Held Light: " + (HeldLightModule.INSTANCE.isEnabled() ? "ON" : "OFF")));
+        this.configInventoryMoveToggleButton.setMessage(Text.literal("Inventory Move: " + (InventoryMoveModule.INSTANCE.isEnabled() ? "ON" : "OFF")));
+        this.configInstantBreakToggleButton.setMessage(Text.literal("Instant Break: " + (InstantBreakModule.INSTANCE.isEnabled() ? "ON" : "OFF")));
+        this.configWaypointsToggleButton.setMessage(Text.literal("Waypoints: " + (WaypointModule.INSTANCE.isEnabled() ? "ON" : "OFF")));
+        this.configNbtHudToggleButton.setMessage(Text.literal("NBT Inspector HUD: " + (NBTInfoHudOverlayModule.INSTANCE.isEnabled() ? "ON" : "OFF")));
+        this.configNbtTooltipToggleButton.setMessage(Text.literal("NBT Tooltip: " + (NBTTooltipModule.INSTANCE.isEnabled() ? "ON" : "OFF")));
+        this.configShulkerTooltipToggleButton.setMessage(Text.literal("Shulker Preview Tooltip: " + (ShulkerTooltipModule.INSTANCE.isEnabled() ? "ON" : "OFF")));
+        this.configBiomeBorderToggleButton.setMessage(Text.literal("Biome Border Overlay: " + (BiomeBorderOverlayModule.INSTANCE.isEnabled() ? "ON" : "OFF")));
+        this.configChunkBorderToggleButton.setMessage(Text.literal("Chunk Border Overlay: " + (ChunkBorderOverlayModule.INSTANCE.isEnabled() ? "ON" : "OFF")));
+        this.configSlimeChunksToggleButton.setMessage(Text.literal("Slime Chunk Overlay: " + (SlimeChunkOverlayModule.INSTANCE.isEnabled() ? "ON" : "OFF")));
+        this.configStructureBoundsToggleButton.setMessage(Text.literal("Structure Bounding Boxes: " + (StructureBoundingBoxOverlay.INSTANCE.isEnabled() ? "ON" : "OFF")));
+        this.configCommandBlockOverlayToggleButton.setMessage(Text.literal("Command Block Overlay: " + (CommandBlockOverlayModule.INSTANCE.isEnabled() ? "ON" : "OFF")));
+        this.configLightOverlayToggleButton.setMessage(Text.literal("Light Level Overlay: " + (LightLevelOverlayModule.INSTANCE.isEnabled() ? "ON" : "OFF")));
+        this.configCollisionMeshToggleButton.setMessage(Text.literal("Show Collision Mesh: " + (ModConfig.blockAttributesShowCollisionMesh ? "ON" : "OFF")));
+        this.configLightBlocksToggleButton.setMessage(Text.literal("Show Light Blocks: " + (ModConfig.blockAttributesShowLightBlocks ? "ON" : "OFF")));
+        this.configPreventInteractionsToggleButton.setMessage(Text.literal("Prevent Interactions: " + (ModConfig.blockAttributesPreventInteractions ? "ON" : "OFF")));
+        this.configSolidFluidHitboxesToggleButton.setMessage(Text.literal("Solid Fluid Hitboxes: " + (ModConfig.blockAttributesSolidFluidHitboxes ? "ON" : "OFF")));
+        this.configBarrierBlocksToggleButton.setMessage(Text.literal("Show Barrier Blocks: " + (ModConfig.blockAttributesShowBarrierBlocks ? "ON" : "OFF")));
+
+        boolean tools = selectedConfigCategory == ConfigCategory.TOOLS;
+        this.configMacroOverlayToggleButton.visible = tools;
+        this.configMacroOverlayToggleButton.active = tools;
+        this.configSecondaryOverlayToggleButton.visible = false;
+        this.configSecondaryOverlayToggleButton.active = false;
+        this.configPickupDurationButton.visible = false;
+        this.configPickupDurationButton.active = false;
+        this.configPickupLinesButton.visible = false;
+        this.configPickupLinesButton.active = false;
+        this.configPickupIconScaleButton.visible = false;
+        this.configPickupIconScaleButton.active = false;
+        this.configPickupDirectionButton.visible = false;
+        this.configPickupDirectionButton.active = false;
+
+        this.configBiomeBorderToggleButton.visible = false;
+        this.configBiomeBorderToggleButton.active = false;
+        this.configFreecamToggleButton.visible = false;
+        this.configFreecamToggleButton.active = false;
+        this.configFullbrightToggleButton.visible = false;
+        this.configFullbrightToggleButton.active = false;
+        this.configHeldLightToggleButton.visible = false;
+        this.configHeldLightToggleButton.active = false;
+        this.configInventoryMoveToggleButton.visible = false;
+        this.configInventoryMoveToggleButton.active = false;
+        this.configInstantBreakToggleButton.visible = false;
+        this.configInstantBreakToggleButton.active = false;
+        this.configWaypointsToggleButton.visible = false;
+        this.configWaypointsToggleButton.active = false;
+        this.configNbtHudToggleButton.visible = false;
+        this.configNbtHudToggleButton.active = false;
+        this.configNbtTooltipToggleButton.visible = false;
+        this.configNbtTooltipToggleButton.active = false;
+        this.configShulkerTooltipToggleButton.visible = false;
+        this.configShulkerTooltipToggleButton.active = false;
+
+        boolean secondaryChat = selectedConfigCategory == ConfigCategory.SECONDARY_CHAT;
+        this.configSecondaryOverlayToggleButton.visible = secondaryChat;
+        this.configSecondaryOverlayToggleButton.active = secondaryChat;
+        this.configPickupDurationButton.visible = secondaryChat;
+        this.configPickupDurationButton.active = secondaryChat;
+        this.configPickupLinesButton.visible = secondaryChat;
+        this.configPickupLinesButton.active = secondaryChat;
+        this.configPickupIconScaleButton.visible = secondaryChat;
+        this.configPickupIconScaleButton.active = secondaryChat;
+        this.configPickupDirectionButton.visible = secondaryChat;
+        this.configPickupDirectionButton.active = secondaryChat;
+
+        boolean overlays = selectedConfigCategory == ConfigCategory.OVERLAYS;
+        this.configBiomeBorderToggleButton.visible = overlays;
+        this.configBiomeBorderToggleButton.active = overlays;
+        this.configChunkBorderToggleButton.visible = overlays;
+        this.configSlimeChunksToggleButton.visible = overlays;
+        this.configStructureBoundsToggleButton.visible = overlays;
+        this.configCommandBlockOverlayToggleButton.visible = overlays;
+        this.configLightOverlayToggleButton.visible = overlays;
+        this.configChunkBorderToggleButton.active = overlays;
+        this.configSlimeChunksToggleButton.active = overlays;
+        this.configStructureBoundsToggleButton.active = overlays;
+        this.configCommandBlockOverlayToggleButton.active = overlays;
+        this.configLightOverlayToggleButton.active = overlays;
+
+        boolean modules = selectedConfigCategory == ConfigCategory.MODULES;
+        this.configFreecamToggleButton.visible = modules;
+        this.configFullbrightToggleButton.visible = modules;
+        this.configHeldLightToggleButton.visible = modules;
+        this.configInventoryMoveToggleButton.visible = modules;
+        this.configInstantBreakToggleButton.visible = modules;
+        this.configWaypointsToggleButton.visible = modules;
+        this.configNbtHudToggleButton.visible = modules;
+        this.configNbtTooltipToggleButton.visible = modules;
+        this.configShulkerTooltipToggleButton.visible = modules;
+        this.configFreecamToggleButton.active = modules;
+        this.configFullbrightToggleButton.active = modules;
+        this.configHeldLightToggleButton.active = modules;
+        this.configInventoryMoveToggleButton.active = modules;
+        this.configInstantBreakToggleButton.active = modules;
+        this.configWaypointsToggleButton.active = modules;
+        this.configNbtHudToggleButton.active = modules;
+        this.configNbtTooltipToggleButton.active = modules;
+        this.configShulkerTooltipToggleButton.active = modules;
+
+        boolean blockAttributes = selectedConfigCategory == ConfigCategory.BLOCK_ATTRIBUTES;
+        this.configCollisionMeshToggleButton.visible = blockAttributes;
+        this.configLightBlocksToggleButton.visible = blockAttributes;
+        this.configPreventInteractionsToggleButton.visible = blockAttributes;
+        this.configSolidFluidHitboxesToggleButton.visible = blockAttributes;
+        this.configBarrierBlocksToggleButton.visible = blockAttributes;
+
+        this.configCollisionMeshToggleButton.active = blockAttributes;
+        this.configLightBlocksToggleButton.active = blockAttributes;
+        this.configPreventInteractionsToggleButton.active = blockAttributes;
+        this.configSolidFluidHitboxesToggleButton.active = blockAttributes;
+        this.configBarrierBlocksToggleButton.active = blockAttributes;
+    }
+
+    private void renderConfigurationTab(DrawContext context) {
+        syncConfigurationControls();
+        int splitX = this.width / 2;
+        context.fill(splitX - 1, TOP_BAR_H + 4, splitX, this.height - 8, 0x50FFFFFF);
+
+        context.drawTextWithShadow(this.textRenderer, "Categories", 12, TOP_BAR_H + 6, 0xFFFFFFFF);
+        context.drawTextWithShadow(this.textRenderer, "Configuration", splitX + 12, TOP_BAR_H + 6, 0xFFFFFFFF);
+
+        if (selectedConfigCategory == ConfigCategory.TOOLS) {
+            context.drawTextWithShadow(this.textRenderer,
+                    "Shows the macro keybind HUD overlay in-game.",
+                    splitX + 12,
+                    TOP_BAR_H + 58,
+                    0xFFA8CFCF);
+            return;
+        }
+
+        if (selectedConfigCategory == ConfigCategory.SECONDARY_CHAT) {
+            context.drawTextWithShadow(this.textRenderer,
+                    "Secondary chat routing/filter settings are now persisted in canvas config.",
+                    splitX + 12,
+                    TOP_BAR_H + 58,
+                    0xFFA8CFCF);
+            context.drawTextWithShadow(this.textRenderer,
+                    "Pickup feed duration/max lines/icon scale/direction are configured here too.",
+                    splitX + 12,
+                    TOP_BAR_H + 98,
+                    0xFFA8CFCF);
+            context.drawTextWithShadow(this.textRenderer,
+                    "Use the Secondary Chat element advanced editor for regex/fade/intercept controls.",
+                    splitX + 12,
+                    TOP_BAR_H + 138,
+                    0xFFA8CFCF);
+            return;
+        }
+
+        if (selectedConfigCategory == ConfigCategory.OVERLAYS) {
+            context.drawTextWithShadow(this.textRenderer,
+                    "Draws biome borders as a colorized wall of square cells.",
+                    splitX + 12,
+                    TOP_BAR_H + 58,
+                    0xFFA8CFCF);
+            context.drawTextWithShadow(this.textRenderer,
+                    "Chunk borders around the player.",
+                    splitX + 12,
+                    TOP_BAR_H + 98,
+                    0xFFA8CFCF);
+            context.drawTextWithShadow(this.textRenderer,
+                    "Marks slime chunks in loaded terrain.",
+                    splitX + 12,
+                    TOP_BAR_H + 138,
+                    0xFFA8CFCF);
+            context.drawTextWithShadow(this.textRenderer,
+                    "Displays structure bounding boxes.",
+                    splitX + 12,
+                    TOP_BAR_H + 178,
+                    0xFFA8CFCF);
+            context.drawTextWithShadow(this.textRenderer,
+                    "Shows command text above command blocks.",
+                    splitX + 12,
+                    TOP_BAR_H + 218,
+                    0xFFA8CFCF);
+            context.drawTextWithShadow(this.textRenderer,
+                    "Shows light level numbers over spawnable spots.",
+                    splitX + 12,
+                    TOP_BAR_H + 258,
+                    0xFFA8CFCF);
+            return;
+        }
+
+        if (selectedConfigCategory == ConfigCategory.MODULES) {
+            context.drawTextWithShadow(this.textRenderer,
+                    "Free camera movement without moving the real player.",
+                    splitX + 12,
+                    TOP_BAR_H + 58,
+                    0xFFA8CFCF);
+            context.drawTextWithShadow(this.textRenderer,
+                    "Raises gamma for dark-area visibility.",
+                    splitX + 12,
+                    TOP_BAR_H + 98,
+                    0xFFA8CFCF);
+            context.drawTextWithShadow(this.textRenderer,
+                    "Dynamic held light from configurable held-item/tag whitelist.",
+                    splitX + 12,
+                    TOP_BAR_H + 138,
+                    0xFFA8CFCF);
+            context.drawTextWithShadow(this.textRenderer,
+                    "Allow movement while inventory/screens are open.",
+                    splitX + 12,
+                    TOP_BAR_H + 178,
+                    0xFFA8CFCF);
+            context.drawTextWithShadow(this.textRenderer,
+                    "Removes break cooldown while mining.",
+                    splitX + 12,
+                    TOP_BAR_H + 218,
+                    0xFFA8CFCF);
+            context.drawTextWithShadow(this.textRenderer,
+                    "Toggle waypoint systems and rendering.",
+                    splitX + 12,
+                    TOP_BAR_H + 258,
+                    0xFFA8CFCF);
+            context.drawTextWithShadow(this.textRenderer,
+                    "HUD inspector for targeted blocks/entities and their metadata.",
+                    splitX + 12,
+                    TOP_BAR_H + 298,
+                    0xFFA8CFCF);
+            context.drawTextWithShadow(this.textRenderer,
+                    "Appends component/NBT details to item tooltips.",
+                    splitX + 12,
+                    TOP_BAR_H + 338,
+                    0xFFA8CFCF);
+            context.drawTextWithShadow(this.textRenderer,
+                    "Shows shulker tooltip as a mini inventory grid preview.",
+                    splitX + 12,
+                    TOP_BAR_H + 378,
+                    0xFFA8CFCF);
+            return;
+        }
+
+        context.drawTextWithShadow(this.textRenderer,
+                "Always draws collision cuboids for non-full blocks (fences, lanterns, bamboo, etc.).",
+                splitX + 12,
+                TOP_BAR_H + 58,
+                0xFFA8CFCF);
+        context.drawTextWithShadow(this.textRenderer,
+                "Shows light blocks with a selectable hitbox so you can target, pick, and break them.",
+                splitX + 12,
+                TOP_BAR_H + 98,
+                0xFFA8CFCF);
+        context.drawTextWithShadow(this.textRenderer,
+                "Prevents interactions with chests, buttons, levers, repeaters, doors, etc. while holding blocks.",
+                splitX + 12,
+                TOP_BAR_H + 138,
+                0xFFA8CFCF);
+        context.drawTextWithShadow(this.textRenderer,
+                "Allows fluid blocks to be targeted and broken as if they had solid hitboxes.",
+                splitX + 12,
+                TOP_BAR_H + 178,
+                0xFFA8CFCF);
+        context.drawTextWithShadow(this.textRenderer,
+                "Makes barrier blocks visible.",
+                splitX + 12,
+                TOP_BAR_H + 218,
+                0xFFA8CFCF);
     }
 
 
@@ -874,7 +1491,9 @@ public class MacroWorkbenchV2Screen extends Screen {
     }
 
     private void renderKeyboardTab(DrawContext context) {
-        int panelX = this.width - 320;
+        int panelW = keyboardPanelWidth();
+        int panelX = keyboardPanelX();
+        int panelRight = panelX + panelW;
         context.drawTextWithShadow(this.textRenderer, "Macros = Green, Game binds = Blue", 8, TOP_BAR_H + 4, 0xFFB0FFB0);
 
         for (KeyCell cell : cells) {
@@ -901,7 +1520,7 @@ public class MacroWorkbenchV2Screen extends Screen {
             context.drawCenteredTextWithShadow(this.textRenderer, cell.label, cell.x + (cell.w / 2), cell.y + 5, 0xFFFFFFFF);
         }
 
-        context.fill(panelX, TOP_BAR_H, this.width - 8, this.height - 8, 0xAA111111);
+        context.fill(panelX, TOP_BAR_H, panelRight, this.height - 8, 0xAA111111);
         context.drawTextWithShadow(this.textRenderer, "Selected key", panelX + 10, TOP_BAR_H + 30, 0xFFFFFFFF);
         context.drawTextWithShadow(this.textRenderer, selectedKey < 0 ? "None" : keyLabel(selectedKey), panelX + 10, TOP_BAR_H + 42, 0xFFFFFF55);
 
@@ -916,7 +1535,7 @@ public class MacroWorkbenchV2Screen extends Screen {
             for (int i = 0; i < ids.size(); i++) {
                 String id = ids.get(i);
                 String name = i < names.size() ? names.get(i) : id;
-                context.fill(panelX + 8, y - 2, panelX + 312, y + 10, id.equals(selectedMacroId) ? 0x905A3A12 : 0x50202020);
+                context.fill(panelX + 8, y - 2, panelRight - 8, y + 10, id.equals(selectedMacroId) ? 0x905A3A12 : 0x50202020);
                 context.drawTextWithShadow(this.textRenderer, name + " [" + id + "]", panelX + 12, y, 0xFFE0E0E0);
                 y += 13;
                 if (y > this.height - 178) {
@@ -1221,10 +1840,11 @@ public class MacroWorkbenchV2Screen extends Screen {
             }
         }
 
-        int panelX = this.width - 320;
+        int panelX = keyboardPanelX();
+        int panelRight = panelX + keyboardPanelWidth();
         int lineY = TOP_BAR_H + 76;
         for (String id : macroBindingIds.getOrDefault(selectedKey, List.of())) {
-            if (x >= panelX + 8 && x <= panelX + 312 && y >= lineY - 2 && y <= lineY + 10) {
+            if (x >= panelX + 8 && x <= panelRight - 8 && y >= lineY - 2 && y <= lineY + 10) {
                 selectedMacroId = id;
                 syncKeyboardFields();
                 return true;
@@ -1297,9 +1917,9 @@ public class MacroWorkbenchV2Screen extends Screen {
                 return true;
             }
             if (containsBox(click.x(), click.y(), boxX + 236, boxY + 68, 64, 18)) {
-                advancedSecondaryInterceptMode = advancedSecondaryInterceptMode == ModConfig.ChatInterceptMode.COPY
-                        ? ModConfig.ChatInterceptMode.MOVE
-                        : ModConfig.ChatInterceptMode.COPY;
+                advancedSecondaryInterceptMode = advancedSecondaryInterceptMode == SecondaryChatSettings.InterceptMode.COPY
+                        ? SecondaryChatSettings.InterceptMode.MOVE
+                        : SecondaryChatSettings.InterceptMode.COPY;
                 return true;
             }
             if (containsBox(click.x(), click.y(), boxX + 304, boxY + 68, 48, 18)) {
@@ -1421,7 +2041,7 @@ public class MacroWorkbenchV2Screen extends Screen {
             return true;
         }
 
-        if (isNbtInspectorProxy(selected)) {
+        if (isNbtInspectorProxy(selected) || isMacroKeybindProxy(selected) || isPickupNotifierProxy(selected)) {
             if (containsBox(click.x(), click.y(), boxX + 12, boxY + 52, 64, 18)) {
                 selected.fontScale = Math.clamp((float) (selected.fontScale - stepDouble(0.1)), 0.5f, 4.0f);
                 return true;
@@ -1472,6 +2092,22 @@ public class MacroWorkbenchV2Screen extends Screen {
                 selected.textColor = cycleStyleColor(selected.textColor, true);
                 advancedBorderColor = formatColor(selected.textColor);
                 advancedBorderCursor = advancedBorderColor.length();
+                return true;
+            }
+            if (containsBox(click.x(), click.y(), boxX + 12, boxY + 184, 120, 18)) {
+                selected.horizontalAlign = cycleHorizontalAlign(selected.horizontalAlign, forward);
+                return true;
+            }
+            if (containsBox(click.x(), click.y(), boxX + 136, boxY + 184, 120, 18)) {
+                selected.verticalAlign = cycleVerticalAlign(selected.verticalAlign, forward);
+                return true;
+            }
+            if (containsBox(click.x(), click.y(), boxX + 260, boxY + 184, 196, 18)) {
+                int oldScreenX = resolveElementX(selected);
+                int oldScreenY = resolveElementY(selected);
+                selected.anchor = cycleAnchor(selected.anchor, forward);
+                setElementScreenPosition(selected, oldScreenX, oldScreenY);
+                clampElementToCanvas(selected);
                 return true;
             }
             if (containsBox(click.x(), click.y(), boxX + MODAL_W - 134, boxY + MODAL_H - 24, 60, 18)) {
@@ -1917,6 +2553,10 @@ public class MacroWorkbenchV2Screen extends Screen {
         List<String> lines;
         if (isSecondaryChatProxy(element)) {
             lines = buildExternalProxyPreviewLines(element, "Secondary Chat");
+        } else if (isMacroKeybindProxy(element)) {
+            lines = buildExternalProxyPreviewLines(element, "Macro Keybinds");
+        } else if (isPickupNotifierProxy(element)) {
+            lines = buildExternalProxyPreviewLines(element, "Pick-up Notifier");
         } else if (isNbtInspectorProxy(element)) {
             lines = buildExternalProxyPreviewLines(element, "NBT Inspector");
         } else if (element.type == MacroHudDataHandler.ElementType.MACRO_KEYBINDS) {
@@ -2195,9 +2835,12 @@ public class MacroWorkbenchV2Screen extends Screen {
         if (isExternalCanvasProxy(selected)) {
             ExternalProxyRenderState externalState = getExternalProxyRenderState(selected);
             quickField.setEditable(false);
-            quickField.setText(isSecondaryChatProxy(selected)
-                    ? "Secondary Chat (edit style/pos/size)" + (externalState == ExternalProxyRenderState.MODULE_DISABLED ? " [DISABLED]" : "")
-                    : "NBT Inspector (edit style/pos/size)" + (externalState == ExternalProxyRenderState.MODULE_DISABLED ? " [DISABLED]" : ""));
+            String proxyName = isSecondaryChatProxy(selected)
+                    ? "Secondary Chat"
+                    : (isMacroKeybindProxy(selected)
+                    ? "Macro Keybinds"
+                    : (isPickupNotifierProxy(selected) ? "Pick-up Notifier" : "NBT Inspector"));
+            quickField.setText(proxyName + " (edit style/pos/size)" + (externalState == ExternalProxyRenderState.MODULE_DISABLED ? " [DISABLED]" : ""));
             macroField.setEditable(false);
             macroField.setText("");
             macroField.visible = false;
@@ -2410,23 +3053,24 @@ public class MacroWorkbenchV2Screen extends Screen {
         this.advancedBorderCursor = this.advancedBorderColor.length();
         this.advancedActionSuggestionIndex = -1;
         if (isSecondaryChatProxy(selected)) {
-            this.advancedText = String.join("\n", ModConfig.secondaryChatRegexList == null ? List.of() : ModConfig.secondaryChatRegexList);
-            this.advancedAction = ModConfig.secondaryChatOutgoingRegex == null ? "" : ModConfig.secondaryChatOutgoingRegex;
+            SecondaryChatSettings.Data settings = SecondaryChatSettings.get();
+            this.advancedText = String.join("\n", settings.regexList == null ? List.of() : settings.regexList);
+            this.advancedAction = settings.outgoingRegex == null ? "" : settings.outgoingRegex;
             this.advancedBgColor = formatColor(selected.backgroundColor);
             this.advancedBorderColor = formatColor(selected.textColor);
             this.advancedBgCursor = this.advancedBgColor.length();
             this.advancedBorderCursor = this.advancedBorderColor.length();
-            this.advancedSecondaryShowWhileGuiOpen = ModConfig.secondaryChatShowWhileGuiOpen;
-            this.advancedSecondaryFadeEnabled = ModConfig.secondaryChatFadeEnabled;
-            this.advancedSecondaryResetTransparencyOnHover = ModConfig.resetTransparencyWhenHovered;
-            this.advancedSecondaryNoTransparencyWhenChatOpen = ModConfig.noTransparencyWhenChatOpen;
-            this.advancedSecondaryFadeDurationMs = ModConfig.secondaryChatFadeDurationMs;
-            this.advancedSecondaryMinAlpha = ModConfig.secondaryChatMinAlpha;
-            this.advancedSecondaryMaxLines = ModConfig.secondaryChatMaxLines;
-            this.advancedSecondaryScale = Math.max(0.1, ModConfig.secondaryChatScale);
-            this.advancedSecondaryLineHeight = Math.max(1, ModConfig.secondaryChatLineHeight);
-            this.advancedSecondaryInterceptMode = ModConfig.secondaryChatInterceptMode;
-        } else if (isNbtInspectorProxy(selected)) {
+            this.advancedSecondaryShowWhileGuiOpen = settings.showWhileGuiOpen;
+            this.advancedSecondaryFadeEnabled = settings.fadeEnabled;
+            this.advancedSecondaryResetTransparencyOnHover = settings.resetTransparencyWhenHovered;
+            this.advancedSecondaryNoTransparencyWhenChatOpen = settings.noTransparencyWhenChatOpen;
+            this.advancedSecondaryFadeDurationMs = settings.fadeDurationMs;
+            this.advancedSecondaryMinAlpha = settings.minAlpha;
+            this.advancedSecondaryMaxLines = settings.maxLines;
+            this.advancedSecondaryScale = Math.max(0.1, selected.fontScale);
+            this.advancedSecondaryLineHeight = Math.max(1, selected.lineHeight);
+            this.advancedSecondaryInterceptMode = settings.interceptMode;
+        } else if (isNbtInspectorProxy(selected) || isMacroKeybindProxy(selected) || isPickupNotifierProxy(selected)) {
             this.advancedText = "";
             this.advancedAction = "";
             this.advancedBgColor = formatColor(selected.backgroundColor);
@@ -2482,7 +3126,7 @@ public class MacroWorkbenchV2Screen extends Screen {
             renderSecondaryChatAdvancedModal(context, mouseX, mouseY, boxX, boxY);
             return;
         }
-        if (isNbtInspectorProxy(selected)) {
+        if (isNbtInspectorProxy(selected) || isMacroKeybindProxy(selected) || isPickupNotifierProxy(selected)) {
             renderNbtInspectorAdvancedModal(context, mouseX, mouseY, boxX, boxY);
             return;
         }
@@ -2671,7 +3315,10 @@ public class MacroWorkbenchV2Screen extends Screen {
     }
 
     private void renderNbtInspectorAdvancedModal(DrawContext context, int mouseX, int mouseY, int boxX, int boxY) {
-        context.drawTextWithShadow(this.textRenderer, "NBT Inspector Settings", boxX + 12, boxY + 12, 0xFFFFFFFF);
+        String title = isMacroKeybindProxy(selected)
+                ? "Macro Keybinds Settings"
+                : (isPickupNotifierProxy(selected) ? "Pick-up Notifier Settings" : "NBT Inspector Settings");
+        context.drawTextWithShadow(this.textRenderer, title, boxX + 12, boxY + 12, 0xFFFFFFFF);
         context.drawTextWithShadow(this.textRenderer, "Use canvas for positioning, this panel for style", boxX + 12, boxY + 24, 0xFFB0B0B0);
 
         drawModalButton(context, boxX + 12, boxY + 52, 64, 18, "S-", containsBox(mouseX, mouseY, boxX + 12, boxY + 52, 64, 18));
@@ -2697,6 +3344,16 @@ public class MacroWorkbenchV2Screen extends Screen {
         drawModalButton(context, boxX + 80, boxY + 132, 64, 18, "BG+", containsBox(mouseX, mouseY, boxX + 80, boxY + 132, 64, 18));
         drawModalButton(context, boxX + 148, boxY + 132, 64, 18, "TX-", containsBox(mouseX, mouseY, boxX + 148, boxY + 132, 64, 18));
         drawModalButton(context, boxX + 216, boxY + 132, 64, 18, "TX+", containsBox(mouseX, mouseY, boxX + 216, boxY + 132, 64, 18));
+
+        drawModalButton(context, boxX + 12, boxY + 184, 120, 18,
+                "H: " + (selected == null ? "-" : selected.horizontalAlign.name()),
+                containsBox(mouseX, mouseY, boxX + 12, boxY + 184, 120, 18));
+        drawModalButton(context, boxX + 136, boxY + 184, 120, 18,
+                "V: " + (selected == null ? "-" : selected.verticalAlign.name()),
+                containsBox(mouseX, mouseY, boxX + 136, boxY + 184, 120, 18));
+        drawModalButton(context, boxX + 260, boxY + 184, 196, 18,
+                "Anchor: " + (selected == null ? "-" : shortAnchor(selected.anchor)),
+                containsBox(mouseX, mouseY, boxX + 260, boxY + 184, 196, 18));
 
         context.drawTextWithShadow(this.textRenderer, "BG: " + advancedBgColor, boxX + 12, boxY + 158, 0xFFEAEAEA);
         context.drawTextWithShadow(this.textRenderer, "TX: " + advancedBorderColor, boxX + 170, boxY + 158, 0xFFEAEAEA);
@@ -3363,6 +4020,15 @@ public class MacroWorkbenchV2Screen extends Screen {
         return base * (isShiftDown() ? 10 : 1);
     }
 
+    private boolean isControlPressed() {
+        if (this.client == null) {
+            return false;
+        }
+        var window = this.client.getWindow();
+        return InputUtil.isKeyPressed(window, GLFW.GLFW_KEY_LEFT_CONTROL)
+                || InputUtil.isKeyPressed(window, GLFW.GLFW_KEY_RIGHT_CONTROL);
+    }
+
     private double stepDouble(double base) {
         return base * (isShiftDown() ? 10.0 : 1.0);
     }
@@ -3518,28 +4184,29 @@ public class MacroWorkbenchV2Screen extends Screen {
                 final int maxLines = Math.max(10, advancedSecondaryMaxLines);
                 final double scale = Math.max(0.1, advancedSecondaryScale);
                 final int lineHeight = Math.max(1, advancedSecondaryLineHeight);
-                final ModConfig.ChatInterceptMode interceptMode = advancedSecondaryInterceptMode == null
-                        ? ModConfig.ChatInterceptMode.COPY
+                final SecondaryChatSettings.InterceptMode interceptMode = advancedSecondaryInterceptMode == null
+                        ? SecondaryChatSettings.InterceptMode.COPY
                         : advancedSecondaryInterceptMode;
                 final List<String> regexList = splitLinesRaw(advancedText).stream()
                         .map(String::trim)
                         .filter(s -> !s.isEmpty())
                         .toList();
                 final String outgoingRegex = safe(advancedAction);
-                ModConfig.updateAndSave(() -> {
-                    ModConfig.secondaryChatShowWhileGuiOpen = showWhileGui;
-                    ModConfig.secondaryChatFadeEnabled = fadeEnabled;
-                    ModConfig.resetTransparencyWhenHovered = hoverReset;
-                    ModConfig.noTransparencyWhenChatOpen = noTransparencyChatOpen;
-                    ModConfig.secondaryChatFadeDurationMs = fadeMs;
-                    ModConfig.secondaryChatMinAlpha = minAlpha;
-                    ModConfig.secondaryChatMaxLines = maxLines;
-                    ModConfig.secondaryChatScale = scale;
-                    ModConfig.secondaryChatLineHeight = lineHeight;
-                    ModConfig.secondaryChatInterceptMode = interceptMode;
-                    ModConfig.secondaryChatRegexList = new ArrayList<>(regexList);
-                    ModConfig.secondaryChatOutgoingRegex = outgoingRegex;
+                SecondaryChatSettings.updateAndSave(() -> {
+                    SecondaryChatSettings.get().showWhileGuiOpen = showWhileGui;
+                    SecondaryChatSettings.get().fadeEnabled = fadeEnabled;
+                    SecondaryChatSettings.get().resetTransparencyWhenHovered = hoverReset;
+                    SecondaryChatSettings.get().noTransparencyWhenChatOpen = noTransparencyChatOpen;
+                    SecondaryChatSettings.get().fadeDurationMs = fadeMs;
+                    SecondaryChatSettings.get().minAlpha = minAlpha;
+                    SecondaryChatSettings.get().maxLines = maxLines;
+                    SecondaryChatSettings.get().interceptMode = interceptMode;
+                    SecondaryChatSettings.get().regexList = new ArrayList<>(regexList);
+                    SecondaryChatSettings.get().outgoingRegex = outgoingRegex;
                 });
+                selected.fontScale = (float) Math.max(0.1, scale);
+                selected.lineHeight = Math.max(1, lineHeight);
+                HudCanvasDataHandler.save();
             } else if (isExternalCanvasProxy(selected)) {
                 // External canvas elements only use size/position/style edits.
             } else if (isCustomWidgetType(selected)) {
@@ -4397,14 +5064,14 @@ public class MacroWorkbenchV2Screen extends Screen {
         }
         Integer parsedBorder = parseArgb(advancedBorderColor);
         if (parsedBorder != null) {
-            if (isSecondaryChatProxy(selected) || isNbtInspectorProxy(selected)) {
+            if (isSecondaryChatProxy(selected) || isNbtInspectorProxy(selected) || isMacroKeybindProxy(selected) || isPickupNotifierProxy(selected)) {
                 selected.textColor = parsedBorder;
             } else {
                 selected.borderColor = parsedBorder;
             }
         }
         advancedBgColor = formatColor(selected.backgroundColor);
-        advancedBorderColor = formatColor((isSecondaryChatProxy(selected) || isNbtInspectorProxy(selected)) ? selected.textColor : selected.borderColor);
+        advancedBorderColor = formatColor((isSecondaryChatProxy(selected) || isNbtInspectorProxy(selected) || isMacroKeybindProxy(selected) || isPickupNotifierProxy(selected)) ? selected.textColor : selected.borderColor);
         advancedBgCursor = Math.clamp(advancedBgCursor, 0, advancedBgColor.length());
         advancedBorderCursor = Math.clamp(advancedBorderCursor, 0, advancedBorderColor.length());
     }
@@ -4481,42 +5148,61 @@ public class MacroWorkbenchV2Screen extends Screen {
     private void rebuildKeyboardGrid() {
         cells.clear();
 
-        int panelX = this.width - 320;
+        int panelX = keyboardPanelX();
+        int availableW = Math.max(170, panelX - 16);
         int x0 = 10;
         int y0 = TOP_BAR_H + 14;
         int kw = 28;
         int kh = 18;
         int gap = 4;
 
-        addRow(x0, y0, kw, kh, gap,
+        int[] rowFn = {
                 GLFW.GLFW_KEY_ESCAPE,
                 GLFW.GLFW_KEY_F1, GLFW.GLFW_KEY_F2, GLFW.GLFW_KEY_F3, GLFW.GLFW_KEY_F4,
                 GLFW.GLFW_KEY_F5, GLFW.GLFW_KEY_F6, GLFW.GLFW_KEY_F7, GLFW.GLFW_KEY_F8,
-                GLFW.GLFW_KEY_F9, GLFW.GLFW_KEY_F10, GLFW.GLFW_KEY_F11, GLFW.GLFW_KEY_F12);
-
-        addRow(x0, y0 + 28, kw, kh, gap,
+                GLFW.GLFW_KEY_F9, GLFW.GLFW_KEY_F10, GLFW.GLFW_KEY_F11, GLFW.GLFW_KEY_F12
+        };
+        int[] rowDigits = {
                 GLFW.GLFW_KEY_GRAVE_ACCENT,
                 GLFW.GLFW_KEY_1, GLFW.GLFW_KEY_2, GLFW.GLFW_KEY_3, GLFW.GLFW_KEY_4, GLFW.GLFW_KEY_5,
                 GLFW.GLFW_KEY_6, GLFW.GLFW_KEY_7, GLFW.GLFW_KEY_8, GLFW.GLFW_KEY_9, GLFW.GLFW_KEY_0,
-                GLFW.GLFW_KEY_MINUS, GLFW.GLFW_KEY_EQUAL, GLFW.GLFW_KEY_BACKSPACE);
-
-        addRow(x0, y0 + 50, kw, kh, gap,
+                GLFW.GLFW_KEY_MINUS, GLFW.GLFW_KEY_EQUAL, GLFW.GLFW_KEY_BACKSPACE
+        };
+        int[] rowTab = {
                 GLFW.GLFW_KEY_TAB,
                 GLFW.GLFW_KEY_Q, GLFW.GLFW_KEY_W, GLFW.GLFW_KEY_E, GLFW.GLFW_KEY_R, GLFW.GLFW_KEY_T,
                 GLFW.GLFW_KEY_Y, GLFW.GLFW_KEY_U, GLFW.GLFW_KEY_I, GLFW.GLFW_KEY_O, GLFW.GLFW_KEY_P,
-                GLFW.GLFW_KEY_LEFT_BRACKET, GLFW.GLFW_KEY_RIGHT_BRACKET, GLFW.GLFW_KEY_BACKSLASH);
-
-        addRow(x0, y0 + 72, kw, kh, gap,
+                GLFW.GLFW_KEY_LEFT_BRACKET, GLFW.GLFW_KEY_RIGHT_BRACKET, GLFW.GLFW_KEY_BACKSLASH
+        };
+        int[] rowCaps = {
                 GLFW.GLFW_KEY_CAPS_LOCK,
                 GLFW.GLFW_KEY_A, GLFW.GLFW_KEY_S, GLFW.GLFW_KEY_D, GLFW.GLFW_KEY_F, GLFW.GLFW_KEY_G,
                 GLFW.GLFW_KEY_H, GLFW.GLFW_KEY_J, GLFW.GLFW_KEY_K, GLFW.GLFW_KEY_L,
-                GLFW.GLFW_KEY_SEMICOLON, GLFW.GLFW_KEY_APOSTROPHE, GLFW.GLFW_KEY_ENTER);
-
-        addRow(x0, y0 + 94, kw, kh, gap,
+                GLFW.GLFW_KEY_SEMICOLON, GLFW.GLFW_KEY_APOSTROPHE, GLFW.GLFW_KEY_ENTER
+        };
+        int[] rowShift = {
                 GLFW.GLFW_KEY_LEFT_SHIFT,
                 GLFW.GLFW_KEY_Z, GLFW.GLFW_KEY_X, GLFW.GLFW_KEY_C, GLFW.GLFW_KEY_V, GLFW.GLFW_KEY_B,
                 GLFW.GLFW_KEY_N, GLFW.GLFW_KEY_M, GLFW.GLFW_KEY_COMMA, GLFW.GLFW_KEY_PERIOD,
-                GLFW.GLFW_KEY_SLASH, GLFW.GLFW_KEY_RIGHT_SHIFT);
+                GLFW.GLFW_KEY_SLASH, GLFW.GLFW_KEY_RIGHT_SHIFT
+        };
+
+        while (kw > 14 && rowPixelWidth(kw, gap, rowTab) > availableW) {
+            kw--;
+        }
+        while (gap > 1 && rowPixelWidth(kw, gap, rowTab) > availableW) {
+            gap--;
+        }
+
+        addRow(x0, y0, kw, kh, gap, rowFn);
+
+        addRow(x0, y0 + 28, kw, kh, gap, rowDigits);
+
+        addRow(x0, y0 + 50, kw, kh, gap, rowTab);
+
+        addRow(x0, y0 + 72, kw, kh, gap, rowCaps);
+
+        addRow(x0, y0 + 94, kw, kh, gap, rowShift);
 
         addRow(x0, y0 + 116, kw, kh, gap,
                 GLFW.GLFW_KEY_LEFT_CONTROL, GLFW.GLFW_KEY_LEFT_ALT, GLFW.GLFW_KEY_SPACE,
@@ -4541,21 +5227,42 @@ public class MacroWorkbenchV2Screen extends Screen {
         addRow(numpadX, numpadY + 88, kw, kh, gap, GLFW.GLFW_KEY_KP_0, GLFW.GLFW_KEY_KP_DECIMAL);
     }
 
+    private int keyboardPanelWidth() {
+        return Math.min(320, Math.max(220, this.width - 16));
+    }
+
+    private int keyboardPanelX() {
+        return Math.max(8, this.width - keyboardPanelWidth() - 8);
+    }
+
+    private int rowPixelWidth(int baseWidth, int gap, int... keys) {
+        int width = 0;
+        for (int i = 0; i < keys.length; i++) {
+            width += keyCellWidth(baseWidth, keys[i]);
+            if (i < keys.length - 1) {
+                width += gap;
+            }
+        }
+        return width;
+    }
+
+    private int keyCellWidth(int baseWidth, int key) {
+        if (key == GLFW.GLFW_KEY_SPACE) {
+            return baseWidth * 4;
+        }
+        if (key == GLFW.GLFW_KEY_LEFT_SHIFT || key == GLFW.GLFW_KEY_RIGHT_SHIFT || key == GLFW.GLFW_KEY_KP_0) {
+            return baseWidth * 2;
+        }
+        if (key == GLFW.GLFW_KEY_BACKSPACE || key == GLFW.GLFW_KEY_TAB || key == GLFW.GLFW_KEY_CAPS_LOCK || key == GLFW.GLFW_KEY_ENTER) {
+            return baseWidth + 18;
+        }
+        return baseWidth;
+    }
+
     private void addRow(int xStart, int y, int w, int h, int gap, int... keys) {
         int x = xStart;
         for (int key : keys) {
-            int keyW = w;
-            if (key == GLFW.GLFW_KEY_BACKSPACE || key == GLFW.GLFW_KEY_TAB || key == GLFW.GLFW_KEY_CAPS_LOCK
-                    || key == GLFW.GLFW_KEY_ENTER || key == GLFW.GLFW_KEY_LEFT_SHIFT || key == GLFW.GLFW_KEY_RIGHT_SHIFT
-                    || key == GLFW.GLFW_KEY_SPACE || key == GLFW.GLFW_KEY_KP_0) {
-                keyW = switch (key) {
-                    case GLFW.GLFW_KEY_SPACE -> w * 4;
-                    case GLFW.GLFW_KEY_LEFT_SHIFT, GLFW.GLFW_KEY_RIGHT_SHIFT -> w * 2;
-                    case GLFW.GLFW_KEY_BACKSPACE, GLFW.GLFW_KEY_TAB, GLFW.GLFW_KEY_CAPS_LOCK, GLFW.GLFW_KEY_ENTER -> w + 18;
-                    case GLFW.GLFW_KEY_KP_0 -> w * 2;
-                    default -> w;
-                };
-            }
+            int keyW = keyCellWidth(w, key);
             cells.add(new KeyCell(key, keyLabel(key), x, y, keyW, h));
             x += keyW + gap;
         }
@@ -4689,6 +5396,18 @@ public class MacroWorkbenchV2Screen extends Screen {
                 "NBT Inspector",
                 this::defaultNbtInspectorCanvas
         );
+        syncExternalProxy(
+                EXTERNAL_MACRO_KEYBINDS_ID,
+                HudCanvasDataHandler.ELEMENT_MACRO_KEYBINDS,
+                "Macro Keybinds",
+                this::defaultMacroKeybindsCanvas
+        );
+        syncExternalProxy(
+                EXTERNAL_PICKUP_NOTIFIER_ID,
+                HudCanvasDataHandler.ELEMENT_PICKUP_NOTIFIER,
+                "Pick-up Notifier",
+                this::defaultPickupNotifierCanvas
+        );
     }
 
     private void persistExternalCanvasElements() {
@@ -4707,7 +5426,7 @@ public class MacroWorkbenchV2Screen extends Screen {
     }
 
     private boolean isExternalCanvasProxy(MacroHudDataHandler.HudElement element) {
-        return isSecondaryChatProxy(element) || isNbtInspectorProxy(element);
+        return isSecondaryChatProxy(element) || isNbtInspectorProxy(element) || isMacroKeybindProxy(element) || isPickupNotifierProxy(element);
     }
 
     private boolean isSecondaryChatProxy(MacroHudDataHandler.HudElement element) {
@@ -4718,17 +5437,25 @@ public class MacroWorkbenchV2Screen extends Screen {
         return element != null && EXTERNAL_NBT_INSPECTOR_ID.equals(element.id);
     }
 
+    private boolean isMacroKeybindProxy(MacroHudDataHandler.HudElement element) {
+        return element != null && EXTERNAL_MACRO_KEYBINDS_ID.equals(element.id);
+    }
+
+    private boolean isPickupNotifierProxy(MacroHudDataHandler.HudElement element) {
+        return element != null && EXTERNAL_PICKUP_NOTIFIER_ID.equals(element.id);
+    }
+
     private HudCanvasDataHandler.HudCanvasElement defaultSecondaryChatCanvas() {
         HudCanvasDataHandler.HudCanvasElement e = new HudCanvasDataHandler.HudCanvasElement();
-        e.x = ModConfig.secondaryChatX;
-        e.y = ModConfig.secondaryChatY;
-        e.width = Math.max(50, ModConfig.secondaryChatWidth);
-        e.height = Math.max(30, ModConfig.secondaryChatHeight);
-        e.fontScale = (float) Math.max(0.1, ModConfig.secondaryChatScale);
-        e.lineHeight = Math.max(1, ModConfig.secondaryChatLineHeight);
-        e.padding = Math.max(0, ModConfig.secondaryChatPadding);
-        e.backgroundColor = ModConfig.secondaryChatBackgroundColor;
-        e.textColor = ModConfig.secondaryChatTextColor;
+        e.x = 8;
+        e.y = 40;
+        e.width = 260;
+        e.height = 120;
+        e.fontScale = 0.85f;
+        e.lineHeight = 9;
+        e.padding = 4;
+        e.backgroundColor = 0x88000000;
+        e.textColor = 0xFFE0E0E0;
         e.borderColor = 0xFFFFFFFF;
         e.drawBackground = true;
         e.drawBorder = false;
@@ -4738,19 +5465,60 @@ public class MacroWorkbenchV2Screen extends Screen {
 
     private HudCanvasDataHandler.HudCanvasElement defaultNbtInspectorCanvas() {
         HudCanvasDataHandler.HudCanvasElement e = new HudCanvasDataHandler.HudCanvasElement();
-        e.x = Math.max(0, ModConfig.overlayInspectorMarginX);
-        e.y = Math.max(0, ModConfig.overlayInspectorMarginY);
+        e.x = 8;
+        e.y = 8;
         e.width = 260;
         e.height = 120;
-        e.fontScale = (float) Math.clamp(ModConfig.overlayInspectorTextScale, 0.25, 5.0);
-        e.lineHeight = Math.max(6, ModConfig.overlayInspectorLineHeight);
-        e.padding = Math.max(0, ModConfig.overlayInspectorPadding);
+        e.fontScale = 1.0f;
+        e.lineHeight = 9;
+        e.padding = 4;
         e.backgroundColor = 0x88000000;
         e.textColor = 0xFFE0E0E0;
         e.borderColor = 0xFFFFFFFF;
         e.drawBackground = true;
         e.drawBorder = false;
         e.visible = true;
+        e.anchor = HudCanvasDataHandler.HudCanvasElement.Anchor.TOP_LEFT;
+        return e;
+    }
+
+    private HudCanvasDataHandler.HudCanvasElement defaultMacroKeybindsCanvas() {
+        HudCanvasDataHandler.HudCanvasElement e = new HudCanvasDataHandler.HudCanvasElement();
+        e.x = 12;
+        e.y = 12;
+        e.width = 240;
+        e.height = 120;
+        e.fontScale = 0.85f;
+        e.lineHeight = 9;
+        e.padding = 4;
+        e.backgroundColor = 0x88000000;
+        e.textColor = 0xFFE0E0E0;
+        e.borderColor = 0xFFFFFFFF;
+        e.drawBackground = true;
+        e.drawBorder = false;
+        e.visible = true;
+        e.anchor = HudCanvasDataHandler.HudCanvasElement.Anchor.TOP_RIGHT;
+        return e;
+    }
+
+    private HudCanvasDataHandler.HudCanvasElement defaultPickupNotifierCanvas() {
+        HudCanvasDataHandler.HudCanvasElement e = new HudCanvasDataHandler.HudCanvasElement();
+        e.x = 12;
+        e.y = 12;
+        e.width = 220;
+        e.height = 110;
+        e.fontScale = 1.0f;
+        e.lineHeight = 18;
+        e.padding = 4;
+        e.backgroundColor = 0x88000000;
+        e.textColor = 0xFFFFFFFF;
+        e.borderColor = 0xFFFFFFFF;
+        e.drawBackground = true;
+        e.drawBorder = false;
+        e.visible = true;
+        e.anchor = HudCanvasDataHandler.HudCanvasElement.Anchor.BOTTOM_RIGHT;
+        e.horizontalAlign = HudCanvasDataHandler.HudCanvasElement.HorizontalAlign.LEFT;
+        e.verticalAlign = HudCanvasDataHandler.HudCanvasElement.VerticalAlign.BOTTOM;
         return e;
     }
 
@@ -4795,6 +5563,27 @@ public class MacroWorkbenchV2Screen extends Screen {
         proxy.borderColor = external.borderColor;
         proxy.drawBackground = external.drawBackground;
         proxy.drawBorder = external.drawBorder;
+        proxy.anchor = switch (external.anchor) {
+            case TOP_CENTER -> MacroHudDataHandler.Anchor.TOP_CENTER;
+            case TOP_RIGHT -> MacroHudDataHandler.Anchor.TOP_RIGHT;
+            case MIDDLE_LEFT -> MacroHudDataHandler.Anchor.MIDDLE_LEFT;
+            case MIDDLE_CENTER -> MacroHudDataHandler.Anchor.MIDDLE_CENTER;
+            case MIDDLE_RIGHT -> MacroHudDataHandler.Anchor.MIDDLE_RIGHT;
+            case BOTTOM_LEFT -> MacroHudDataHandler.Anchor.BOTTOM_LEFT;
+            case BOTTOM_CENTER -> MacroHudDataHandler.Anchor.BOTTOM_CENTER;
+            case BOTTOM_RIGHT -> MacroHudDataHandler.Anchor.BOTTOM_RIGHT;
+            default -> MacroHudDataHandler.Anchor.TOP_LEFT;
+        };
+        proxy.horizontalAlign = switch (external.horizontalAlign) {
+            case CENTER -> MacroHudDataHandler.HorizontalAlign.CENTER;
+            case RIGHT -> MacroHudDataHandler.HorizontalAlign.RIGHT;
+            default -> MacroHudDataHandler.HorizontalAlign.LEFT;
+        };
+        proxy.verticalAlign = switch (external.verticalAlign) {
+            case CENTER -> MacroHudDataHandler.VerticalAlign.CENTER;
+            case BOTTOM -> MacroHudDataHandler.VerticalAlign.BOTTOM;
+            default -> MacroHudDataHandler.VerticalAlign.TOP;
+        };
     }
 
     private void applyProxyToExternalCanvas(MacroHudDataHandler.HudElement proxy, HudCanvasDataHandler.HudCanvasElement external) {
@@ -4810,14 +5599,40 @@ public class MacroWorkbenchV2Screen extends Screen {
         external.drawBackground = proxy.drawBackground;
         external.drawBorder = proxy.drawBorder;
         external.visible = proxy.visible;
+        external.anchor = switch (proxy.anchor) {
+            case TOP_CENTER -> HudCanvasDataHandler.HudCanvasElement.Anchor.TOP_CENTER;
+            case TOP_RIGHT -> HudCanvasDataHandler.HudCanvasElement.Anchor.TOP_RIGHT;
+            case MIDDLE_LEFT -> HudCanvasDataHandler.HudCanvasElement.Anchor.MIDDLE_LEFT;
+            case MIDDLE_CENTER, CENTER -> HudCanvasDataHandler.HudCanvasElement.Anchor.MIDDLE_CENTER;
+            case MIDDLE_RIGHT -> HudCanvasDataHandler.HudCanvasElement.Anchor.MIDDLE_RIGHT;
+            case BOTTOM_LEFT -> HudCanvasDataHandler.HudCanvasElement.Anchor.BOTTOM_LEFT;
+            case BOTTOM_CENTER -> HudCanvasDataHandler.HudCanvasElement.Anchor.BOTTOM_CENTER;
+            case BOTTOM_RIGHT -> HudCanvasDataHandler.HudCanvasElement.Anchor.BOTTOM_RIGHT;
+            default -> HudCanvasDataHandler.HudCanvasElement.Anchor.TOP_LEFT;
+        };
+        external.horizontalAlign = switch (proxy.horizontalAlign) {
+            case CENTER -> HudCanvasDataHandler.HudCanvasElement.HorizontalAlign.CENTER;
+            case RIGHT -> HudCanvasDataHandler.HudCanvasElement.HorizontalAlign.RIGHT;
+            default -> HudCanvasDataHandler.HudCanvasElement.HorizontalAlign.LEFT;
+        };
+        external.verticalAlign = switch (proxy.verticalAlign) {
+            case CENTER -> HudCanvasDataHandler.HudCanvasElement.VerticalAlign.CENTER;
+            case BOTTOM -> HudCanvasDataHandler.HudCanvasElement.VerticalAlign.BOTTOM;
+            default -> HudCanvasDataHandler.HudCanvasElement.VerticalAlign.TOP;
+        };
     }
 
     private HudCanvasDataHandler.HudCanvasElement getMutableExternalCanvasElement(MacroHudDataHandler.HudElement proxy) {
-        boolean secondaryChat = isSecondaryChatProxy(proxy);
-        return HudCanvasDataHandler.getMutableElement(
-                secondaryChat ? HudCanvasDataHandler.ELEMENT_SECONDARY_CHAT : HudCanvasDataHandler.ELEMENT_NBT_INSPECTOR,
-                secondaryChat ? this::defaultSecondaryChatCanvas : this::defaultNbtInspectorCanvas
-        );
+        if (isSecondaryChatProxy(proxy)) {
+            return HudCanvasDataHandler.getMutableElement(HudCanvasDataHandler.ELEMENT_SECONDARY_CHAT, this::defaultSecondaryChatCanvas);
+        }
+        if (isMacroKeybindProxy(proxy)) {
+            return HudCanvasDataHandler.getMutableElement(HudCanvasDataHandler.ELEMENT_MACRO_KEYBINDS, this::defaultMacroKeybindsCanvas);
+        }
+        if (isPickupNotifierProxy(proxy)) {
+            return HudCanvasDataHandler.getMutableElement(HudCanvasDataHandler.ELEMENT_PICKUP_NOTIFIER, this::defaultPickupNotifierCanvas);
+        }
+        return HudCanvasDataHandler.getMutableElement(HudCanvasDataHandler.ELEMENT_NBT_INSPECTOR, this::defaultNbtInspectorCanvas);
     }
 
     private List<String> buildExternalProxyPreviewLines(MacroHudDataHandler.HudElement element, String title) {
@@ -4830,12 +5645,22 @@ public class MacroWorkbenchV2Screen extends Screen {
 
     private ExternalProxyRenderState getExternalProxyRenderState(MacroHudDataHandler.HudElement element) {
         if (isSecondaryChatProxy(element)) {
-            boolean active = ModConfig.secondaryChatEnabled && ModConfig.secondaryChatShowOverlay;
+            SecondaryChatSettings.Data settings = SecondaryChatSettings.get();
+            boolean active = settings.enabled && settings.showOverlay;
             return active ? ExternalProxyRenderState.ACTIVE : ExternalProxyRenderState.MODULE_DISABLED;
         }
         if (isNbtInspectorProxy(element)) {
             boolean active = NBTInfoHudOverlayModule.INSTANCE.isEnabled();
             return active ? ExternalProxyRenderState.ACTIVE : ExternalProxyRenderState.MODULE_DISABLED;
+        }
+        if (isMacroKeybindProxy(element)) {
+            boolean active = MacroKeybindOverlayModule.INSTANCE.isEnabled() && ModConfig.showMacroKeybindOverlay;
+            return active ? ExternalProxyRenderState.ACTIVE : ExternalProxyRenderState.MODULE_DISABLED;
+        }
+        if (isPickupNotifierProxy(element)) {
+            return ItemPickupNotifierModule.INSTANCE.isEnabled()
+                    ? ExternalProxyRenderState.ACTIVE
+                    : ExternalProxyRenderState.MODULE_DISABLED;
         }
         return ExternalProxyRenderState.ACTIVE;
     }

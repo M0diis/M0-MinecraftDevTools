@@ -1,17 +1,22 @@
 package me.m0dii.modules.overlays;
 
-import me.m0dii.utils.ModConfig;
+import me.m0dii.utils.KeybindCatalog;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.RedstoneWireBlock;
 import net.minecraft.client.util.InputUtil;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 import org.jetbrains.annotations.Nullable;
-import org.lwjgl.glfw.GLFW;
+
+import java.util.ArrayList;
+import java.util.List;
 
 public class RedstonePowerOverlayModule extends BlockTextOverlayModule {
 
     public static final RedstonePowerOverlayModule INSTANCE = new RedstonePowerOverlayModule();
+
+    private int XZ_RADIUS = 16;
+    private int Y_RADIUS = 4;
 
     private RedstonePowerOverlayModule() {
         super("redstone_overlay", "Redstone Overlay", false);
@@ -21,9 +26,9 @@ public class RedstonePowerOverlayModule extends BlockTextOverlayModule {
     public void register() {
         super.register();
 
-        registerPressedKeybind("key.m0-dev-tools.toggle_redstone_overlay",
+        registerPressedKeybind(KeybindCatalog.REDSTONE_OVERLAY_TOGGLE.translationKey(),
                 InputUtil.Type.KEYSYM,
-                GLFW.GLFW_KEY_F8,
+                KeybindCatalog.REDSTONE_OVERLAY_TOGGLE.defaultKey(),
                 client -> toggleEnabled());
     }
 
@@ -53,12 +58,40 @@ public class RedstonePowerOverlayModule extends BlockTextOverlayModule {
     }
 
     @Override
+    public List<String> getSettingsDisplay() {
+        List<String> settings = new ArrayList<>();
+        settings.add("Toggle: " + (isEnabled() ? "ON" : "OFF"));
+        settings.add("XZ radius : " + XZ_RADIUS);
+        settings.add("Y radius : " + Y_RADIUS);
+        settings.add("X+");
+        settings.add("X-");
+        settings.add("Y+");
+        settings.add("Y-");
+
+        return settings;
+    }
+
+    @Override
+    public void onSettingSelected(int settingIndex) {
+        switch (settingIndex) {
+            case 0 -> toggleEnabled();
+            case 3 -> XZ_RADIUS++;
+            case 4 -> XZ_RADIUS = Math.max(1, XZ_RADIUS - 1);
+            case 5 -> Y_RADIUS++;
+            case 6 -> Y_RADIUS = Math.max(1, Y_RADIUS - 1);
+            default -> {
+                // Nothing
+            }
+        }
+    }
+
+    @Override
     protected int getXZRadius() {
-        return ModConfig.overlayXZradius;
+        return XZ_RADIUS;
     }
 
     @Override
     protected int getYRadius() {
-        return ModConfig.overlayYradius;
+        return Y_RADIUS;
     }
 }

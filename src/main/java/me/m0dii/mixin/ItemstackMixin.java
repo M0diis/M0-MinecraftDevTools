@@ -22,13 +22,10 @@ public abstract class ItemstackMixin {
                                            @Nullable PlayerEntity player,
                                            TooltipType type,
                                            CallbackInfoReturnable<ArrayList<Text>> info) {
-        if (type.isAdvanced() && NBTTooltipModule.INSTANCE.isEnabled()) {
+        if (NBTTooltipModule.INSTANCE.isEnabled()) {
             ItemStack itemStack = (ItemStack) (Object) this;
             ArrayList<Text> list = info.getReturnValue();
-
-//            if (itemStack.hasNbt()) {
-//                info.setReturnValue(new ArrayList<>(NBTTooltipModule.getNbtTooltipText(itemStack, list)));
-//            }
+            info.setReturnValue(new ArrayList<>(NBTTooltipModule.getNbtTooltipText(itemStack, list)));
         }
     }
 }

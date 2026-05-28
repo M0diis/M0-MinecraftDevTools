@@ -2,6 +2,7 @@ package me.m0dii.modules.watson;
 
 import me.m0dii.modules.Module;
 import me.m0dii.modules.macros.MacroPlaceholderProvider;
+import me.m0dii.modules.macros.MacroPlaceholders;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.util.InputUtil;
 import net.minecraft.entity.player.PlayerEntity;
@@ -28,7 +29,8 @@ public final class WatsonCoreProtectModule extends Module {
             return List.of(
                     "[Module placeholders: Watson]",
                     "{watson.enabled} => true when  watson is active",
-                    "{watson.entries} => number of recent CP entries being tracked",
+                    "{watson.entries.count} => number of recent CP entries being tracked",
+                    "{watson.entries.last.n} => returns specified amount of last entries, e.g. {watson.entries.last.3} for last 3 entries, or 'N/A' if none",
                     "{watson.entries.first.loc} => location of the oldest tracked CP entry, or 'N/A' if none",
                     "{watson.entries.first.loc.x} => x coordinate of the oldest tracked CP entry",
                     "{watson.entries.first.loc.y} => y coordinate of the oldest tracked CP entry",
@@ -46,6 +48,32 @@ public final class WatsonCoreProtectModule extends Module {
 
         @Override
         public String resolvePlaceholder(String token, MinecraftClient client, PlayerEntity player, boolean canvasMode) {
+            if(token.startsWith("watson.entries.last")) {
+                int amount = 0;
+
+                try {
+                    String[] parts = token.split("\\.");
+                    amount = Integer.parseInt(parts[parts.length - 1]);
+                } catch (NumberFormatException e) {
+                    // Not a number, ignore and return null below.
+                }
+
+                List<CoreProtectEntry> snapshot = CoreProtectTracker.snapshot();
+
+                if(snapshot.isEmpty()) {
+                    return "N/A";
+                }
+
+                return snapshot.stream()
+                        .skip(Math.max(0, snapshot.size() - amount))
+                        .map(entry -> String.format("%s | %s | %s",
+                                Instant.ofEpochMilli(entry.observedAt()),
+                                entry.action().name(),
+                                entry.pos().toShortString()))
+                        .reduce((a, b) -> a + "\n" + b)
+                        .orElse("N/A");
+            }
+
             return switch (token) {
                 case "watson.enabled" -> String.valueOf(INSTANCE.enabled);
                 case "watson.entries" -> String.valueOf(CoreProtectTracker.size());
@@ -110,7 +138,7 @@ public final class WatsonCoreProtectModule extends Module {
                     yield snapshot.isEmpty() ? "N/A" : snapshot.getLast().action().name();
                 }
 
-                default -> "N/A";
+                default -> null;
             };
         }
     };
@@ -123,11 +151,12 @@ public final class WatsonCoreProtectModule extends Module {
     public void register() {
         WatsonCommands.register();
         CoreProtectRenderer.register();
+        MacroPlaceholders.registerProvider(PLACEHOLDER_PROVIDER);
 
         registerPressedKeybind(
                 "key.m0-dev-tools.toggle_watson_cp",
                 InputUtil.Type.KEYSYM,
-                GLFW.GLFW_KEY_F8,
+                GLFW.GLFW_KEY_PERIOD,
                 client -> toggleEnabled()
         );
     }

@@ -1,5 +1,6 @@
 package me.m0dii.modules.macros;
 
+import me.m0dii.utils.CpsTracker;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.PlayerEntity;
@@ -29,6 +30,7 @@ public final class MacroPlaceholders {
     private static final Random RAND = new Random();
     private static final Map<Integer, Boolean> KEY_LAST_DOWN = new HashMap<>();
     private static final Map<String, MacroPlaceholderProvider> PROVIDERS = new LinkedHashMap<>();
+    private static final PlaceholderRegistry REGISTRY = createRegistry();
 
     private MacroPlaceholders() {
     }
@@ -92,14 +94,23 @@ public final class MacroPlaceholders {
     }
 
     private static String resolveToken(String token, MinecraftClient client, PlayerEntity p, Identifier dimId, BlockPos lookBlock, Entity lookEntity, boolean canvasMode) {
+        String transformed = tryResolveTransformedToken(token, client, p, dimId, lookBlock, lookEntity, canvasMode);
+        if (transformed != null) {
+            return transformed;
+        }
+
+        return resolveTokenCore(token, client, p, dimId, lookBlock, lookEntity, canvasMode);
+    }
+
+    private static String resolveTokenCore(String token, MinecraftClient client, PlayerEntity p, Identifier dimId, BlockPos lookBlock, Entity lookEntity, boolean canvasMode) {
+        String exact = REGISTRY.resolveExact(new PlaceholderRegistry.Context(client, p, dimId, lookBlock, lookEntity, canvasMode, token));
+        if (exact != null) {
+            return exact;
+        }
+
         String keyState = resolveKeyStateToken(token, client);
         if (keyState != null) {
             return keyState;
-        }
-
-        String clientAndWorld = resolveClientAndWorldToken(token, client, p);
-        if (clientAndWorld != null) {
-            return clientAndWorld;
         }
 
         String playerList = resolvePlayerListToken(token, p);
@@ -148,386 +159,95 @@ public final class MacroPlaceholders {
             }
         }
 
-        // Player info
-        switch (token) {
-            case "player.name" -> {
-                return p.getGameProfile().name();
-            }
-            case "player.uuid" -> {
-                return p.getUuidAsString();
-            }
-            case "hp" -> {
-                return Integer.toString((int) Math.floor(p.getHealth()));
-            }
-            case "max_hp" -> {
-                return Integer.toString((int) Math.floor(p.getMaxHealth()));
-            }
-            case "food" -> {
-                return Integer.toString(p.getHungerManager().getFoodLevel());
-            }
-            case "xp" -> {
-                return Integer.toString(p.totalExperience);
-            }
-            case "level" -> {
-                return Integer.toString(p.experienceLevel);
-            }
-            case "saturation" -> {
-                return Integer.toString((int) p.getHungerManager().getSaturationLevel());
-            }
-            case "yaw" -> {
-                // Keep yaw in the typical wrapped range to avoid unbounded growth while turning.
-                return String.format("%.1f", MathHelper.wrapDegrees(p.getYaw()));
-            }
-            case "pitch" -> {
-                return String.format("%.1f", p.getPitch());
-            }
-            case "player.gamemode" -> {
-                // Provide a simple gamemode placeholder for client-side use.
-                // Prefer spectator check, then creative. Default to "survival" when unknown.
-                try {
-                    if (p.isSpectator()) {
-                        return "spectator";
-                    }
-                    var abilities = p.getAbilities();
-                    if (abilities != null && abilities.creativeMode) {
-                        return "creative";
-                    }
-                } catch (Exception ignored) {
-                    // defensive: fall back to survival
-                }
-                return "survival";
-            }
-            case "player.sneaking" -> {
-                return Boolean.toString(p.isSneaking());
-            }
-            case "player.sprinting" -> {
-                return Boolean.toString(p.isSprinting());
-            }
-            case "player.on_ground" -> {
-                return Boolean.toString(p.isOnGround());
-            }
-            case "player.swimming" -> {
-                return Boolean.toString(p.isSwimming());
-            }
-            case "player.chunk.x" -> {
-                return Integer.toString(p.getChunkPos().x);
-            }
-            case "player.chunk.z" -> {
-                return Integer.toString(p.getChunkPos().z);
-            }
-            case "player.chunk" -> {
-                return p.getChunkPos().x + " " + p.getChunkPos().z;
-            }
-            case "player.vel.x", "vel.x" -> {
-                return formatDouble(p.getVelocity().x);
-            }
-            case "player.vel.y", "vel.y" -> {
-                return formatDouble(p.getVelocity().y);
-            }
-            case "player.vel.z", "vel.z" -> {
-                return formatDouble(p.getVelocity().z);
-            }
-            case "player.speed", "speed" -> {
-                Vec3d v = p.getVelocity();
-                return formatDouble(Math.sqrt(v.x * v.x + v.z * v.z) * 20.0);
-            }
-            default -> {
-                // no-op
-            }
-        }
-
-        switch (token) {
-            case "pos.x" -> {
-                return Integer.toString(p.getBlockX());
-            }
-            case "pos.y" -> {
-                return Integer.toString(p.getBlockY());
-            }
-            case "pos.z" -> {
-                return Integer.toString(p.getBlockZ());
-            }
-            case "pos.xyz" -> {
-                return p.getBlockX() + " " + p.getBlockY() + " " + p.getBlockZ();
-            }
-            case "pos.xf" -> {
-                return formatDouble(p.getX());
-            }
-            case "pos.yf" -> {
-                return formatDouble(p.getY());
-            }
-            case "pos.zf" -> {
-                return formatDouble(p.getZ());
-            }
-            case "pos.biome" -> {
-                if (p.getEntityWorld() != null) {
-                    RegistryEntry<Biome> biomeRegistryEntry = p.getEntityWorld().getBiome(p.getBlockPos());
-
-                    if (biomeRegistryEntry != null) {
-                        RegistryKey<Biome> biomeKey = biomeRegistryEntry.getKey().orElse(null);
-                        if (biomeKey != null) {
-                            Identifier biomeId = biomeKey.getValue();
-                            if (biomeId != null) {
-                                return biomeId.toString();
-                            }
-                        }
-                    }
-                }
-                return "";
-            }
-            case "pos.dim" -> {
-                if (p.getEntityWorld() != null) {
-                    RegistryKey<?> dimKey = p.getEntityWorld().getRegistryKey();
-                    if (dimKey != null) {
-                        Identifier dimIdentifier = dimKey.getValue();
-                        if (dimIdentifier != null) {
-                            return dimIdentifier.toString();
-                        }
-                    }
-                }
-                return "";
-            }
-            case "pos.light" -> {
-                if (p.getEntityWorld() != null) {
-                    return Integer.toString(p.getEntityWorld().getLightLevel(p.getBlockPos()));
-                }
-                return "0";
-            }
-            case "pos.facing" -> {
-                return p.getHorizontalFacing().asString();
-            }
-            case "pos.facing.short", "dir.compass.short" -> {
-                return yawToCompass(p.getYaw(), true);
-            }
-            case "dir.compass", "dir.facing" -> {
-                return yawToCompass(p.getYaw(), false);
-            }
-            case "dir.compass.short_arrow", "dir.compass.short.arrow" -> {
-                return yawToCompassWithArrow(p.getYaw(), true);
-            }
-            case "dir.compass.arrow", "dir.facing.arrow" -> {
-                return yawToCompassWithArrow(p.getYaw(), false);
-            }
-            default -> {
-                // no-op
-            }
-        }
-
-        if ("dim".equals(token)) {
-            return dimId != null ? dimId.toString() : "";
-        }
-
-        if (lookBlock != null) {
-            switch (token) {
-                case "look.block.x" -> {
-                    return Integer.toString(lookBlock.getX());
-                }
-                case "look.block.y" -> {
-                    return Integer.toString(lookBlock.getY());
-                }
-                case "look.block.z" -> {
-                    return Integer.toString(lookBlock.getZ());
-                }
-                case "look.block.xyz" -> {
-                    return lookBlock.getX() + " " + lookBlock.getY() + " " + lookBlock.getZ();
-                }
-                case "look.block.id" -> {
-                    if (p.getEntityWorld() != null) {
-                        return p.getEntityWorld().getBlockState(lookBlock).getBlock().toString();
-                    }
-                    return "";
-                }
-                case "look.block.light" -> {
-                    if (p.getEntityWorld() != null) {
-                        return Integer.toString(p.getEntityWorld().getLightLevel(lookBlock));
-                    }
-                    return "0";
-                }
-                default -> {
-                    // no-op
-                }
-            }
-        }
-
-        if (lookEntity != null) {
-            switch (token) {
-                case "look.entity.name" -> {
-                    return lookEntity.getName().getString();
-                }
-                case "look.entity.uuid" -> {
-                    return lookEntity.getUuidAsString();
-                }
-                case "look.entity.id" -> {
-                    return Integer.toString(lookEntity.getId());
-                }
-                case "look.entity.type" -> {
-                    return lookEntity.getType().toString();
-                }
-                default -> {
-                    // no-op
-                }
-            }
-        }
-
-        if (token.startsWith("look.dir")) {
-            Vec3d vec = p.getRotationVec(1.0f).normalize();
-            switch (token) {
-                case "look.dir.x" -> {
-                    return formatDouble(vec.x);
-                }
-                case "look.dir.y" -> {
-                    return formatDouble(vec.y);
-                }
-                case "look.dir.z" -> {
-                    return formatDouble(vec.z);
-                }
-                default -> {
-                    // no-op
-                }
-            }
-        }
-
-        if (token.startsWith("hand")) {
-            ItemStack hand = p.getMainHandStack();
-
-            switch (token) {
-                case "hand.item" -> {
-                    return hand.getName().getString();
-                }
-                case "hand.id" -> {
-                    // getTranslationKey is @VisibleForTesting in mappings; use a safe fallback
-                    return hand.getItem().toString(); // e.g. "minecraft:diamond_sword"
-                }
-                case "hand.count" -> {
-                    return Integer.toString(hand.getCount());
-                }
-                case "hand.damage" -> {
-                    return Integer.toString(hand.getDamage());
-                }
-                case "hand.max_damage" -> {
-                    return Integer.toString(hand.getMaxDamage());
-                }
-                case "hand.durability" -> {
-                    int dmg = hand.getDamage();
-                    int max = hand.getMaxDamage();
-                    if (max <= 0) {
-                        return "0";
-                    }
-                    return Integer.toString(max - dmg);
-                }
-                default -> {
-                    // no-op
-                }
-            }
-        }
-
-        if (token.startsWith("offhand")) {
-            ItemStack offhand = p.getOffHandStack();
-
-            switch (token) {
-                case "offhand.item" -> {
-                    return offhand.getName().getString();
-                }
-                case "offhand.id" -> {
-                    return offhand.getItem().toString();
-                }
-                case "offhand.count" -> {
-                    return Integer.toString(offhand.getCount());
-                }
-                case "offhand.damage" -> {
-                    return Integer.toString(offhand.getDamage());
-                }
-                case "offhand.max_damage" -> {
-                    return Integer.toString(offhand.getMaxDamage());
-                }
-                case "offhand.durability" -> {
-                    int dmg = offhand.getDamage();
-                    int max = offhand.getMaxDamage();
-                    if (max <= 0) {
-                        return "0";
-                    }
-                    return Integer.toString(max - dmg);
-                }
-                default -> {
-                    // no-op
-                }
-            }
-        }
-
         return null;
     }
 
-    private static String resolveClientAndWorldToken(String token, MinecraftClient client, PlayerEntity p) {
-        if ("client.screen".equals(token)) {
-            return client.currentScreen == null ? "none" : client.currentScreen.getClass().getSimpleName();
+    private static String tryResolveTransformedToken(String token,
+                                                     MinecraftClient client,
+                                                     PlayerEntity p,
+                                                     Identifier dimId,
+                                                     BlockPos lookBlock,
+                                                     Entity lookEntity,
+                                                     boolean canvasMode) {
+        if (token == null || token.indexOf('|') < 0) {
+            return null;
         }
 
-        if ("client.screen.width".equals(token)) {
-            if (client.getWindow() == null) {
-                return "0";
+        String[] parts = token.split("\\|");
+        if (parts.length < 2) {
+            return null;
+        }
+
+        String baseToken = parts[0].trim();
+        if (baseToken.isEmpty()) {
+            return null;
+        }
+
+        String value = resolveTokenCore(baseToken, client, p, dimId, lookBlock, lookEntity, canvasMode);
+        if (value == null) {
+            return null;
+        }
+
+        for (int i = 1; i < parts.length; i++) {
+            String transform = parts[i].trim().toLowerCase(Locale.ROOT);
+            value = applyTransform(value, transform);
+        }
+        return value;
+    }
+
+    private static String applyTransform(String value, String transform) {
+        if (value == null || transform == null || transform.isBlank()) {
+            return value;
+        }
+
+        return switch (transform) {
+            case "lower", "lowercase" -> value.toLowerCase(Locale.ROOT);
+            case "upper", "uppercase" -> value.toUpperCase(Locale.ROOT);
+            case "trim" -> value.trim();
+            case "capitalize" -> capitalizeFirst(value);
+            case "title", "titlecase" -> toTitleCase(value);
+            case "basename", "non_namespaced", "non-namespaced", "nsless" -> stripNamespace(value);
+            default -> value;
+        };
+    }
+
+    private static String capitalizeFirst(String value) {
+        String trimmed = value == null ? "" : value.trim();
+        if (trimmed.isEmpty()) {
+            return trimmed;
+        }
+        return Character.toUpperCase(trimmed.charAt(0)) + trimmed.substring(1);
+    }
+
+    private static String toTitleCase(String value) {
+        String normalized = stripNamespace(value).replace('_', ' ').replace('-', ' ').trim();
+        if (normalized.isEmpty()) {
+            return normalized;
+        }
+        String[] words = normalized.split("\\s+");
+        StringBuilder out = new StringBuilder();
+        for (int i = 0; i < words.length; i++) {
+            String word = words[i];
+            if (word.isEmpty()) {
+                continue;
             }
-            return Integer.toString(Math.max(0, client.getWindow().getScaledWidth()));
-        }
-
-        if ("client.screen.height".equals(token)) {
-            if (client.getWindow() == null) {
-                return "0";
+            if (i > 0) {
+                out.append(' ');
             }
-            return Integer.toString(Math.max(0, client.getWindow().getScaledHeight()));
-        }
-
-        if ("client.fps".equals(token)) {
-            Integer fps = resolveCurrentFps(client);
-            return fps == null ? "0" : Integer.toString(Math.max(0, fps));
-        }
-
-        if ("client.server.singleplayer".equals(token)) {
-            try {
-                return Boolean.toString(client.isInSingleplayer());
-            } catch (Exception ignored) {
-                return "false";
+            out.append(Character.toUpperCase(word.charAt(0)));
+            if (word.length() > 1) {
+                out.append(word.substring(1).toLowerCase(Locale.ROOT));
             }
         }
+        return out.toString();
+    }
 
-        if (token.startsWith("client.server.")) {
-            Object entry = invokeNoArg(client, "getCurrentServerEntry");
-            if (entry == null) {
-                return switch (token) {
-                    case "client.server.address", "client.server.name" -> "";
-                    default -> null;
-                };
-            }
-
-            return switch (token) {
-                case "client.server.address" -> Objects.toString(readField(entry, "address"), "");
-                case "client.server.name" -> Objects.toString(readField(entry, "name"), "");
-                default -> null;
-            };
+    private static String stripNamespace(String value) {
+        if (value == null) {
+            return "";
         }
-
-        if (token.startsWith("world.time") || "world.day".equals(token) || "world.is_day".equals(token) || "world.is_night".equals(token)) {
-            if (p.getEntityWorld() == null) {
-                return "0";
-            }
-
-            long ticks = p.getEntityWorld().getTimeOfDay();
-            long day = Math.floorDiv(ticks, 24000L);
-            long dayTicks = Math.floorMod(ticks, 24000L);
-            int hour = (int) ((dayTicks / 1000L + 6L) % 24L);
-            int minute = (int) Math.floor(((dayTicks % 1000L) / 1000.0) * 60.0);
-            boolean isDay = dayTicks < 12300L || dayTicks > 23850L;
-
-            return switch (token) {
-                case "world.time", "world.time.ticks" -> Long.toString(ticks);
-                case "world.day", "world.time.day" -> Long.toString(day);
-                case "world.time.day_ticks" -> Long.toString(dayTicks);
-                case "world.time.clock" -> String.format(Locale.ROOT, "%02d:%02d", hour, minute);
-                case "world.is_day" -> Boolean.toString(isDay);
-                case "world.is_night" -> Boolean.toString(!isDay);
-                default -> null;
-            };
-        }
-
-        return null;
+        int idx = value.indexOf(':');
+        return idx >= 0 ? value.substring(idx + 1) : value;
     }
 
     private static String resolveKeyStateToken(String token, MinecraftClient client) {
@@ -642,11 +362,8 @@ public final class MacroPlaceholders {
             return reflected;
         }
         reflected = readIntField(client.getClass(), client, "fps");
-        if (reflected != null) {
-            return reflected;
-        }
 
-        return null;
+        return reflected;
     }
 
     private static Integer readIntField(Class<?> owner, Object target, String fieldName) {
@@ -1046,6 +763,7 @@ public final class MacroPlaceholders {
             "{pos.xf} {pos.yf} {pos.zf} => decimal coords",
             "{pos.xyz} => x y z",
             "{pos.biome} {pos.dim} {pos.light} {pos.facing}",
+            "{pos.biome.pretty} => Plains (no namespace, title case)",
             "{dir.compass} {dir.compass.short} => North / N (supports diagonals)",
             "{dir.compass.arrow} {dir.compass.short_arrow} => North ↑ / N ↑",
             "",
@@ -1077,6 +795,9 @@ public final class MacroPlaceholders {
             "{client.server.singleplayer}",
             "{client.server.name} {client.server.address}",
             "",
+            "[Clicks per second]",
+            "{cps.left} {cps.right} {cps.total}",
+            "",
             "[World time]",
             "{world.time} {world.time.ticks} {world.time.day} {world.day}",
             "{world.time.day_ticks} {world.time.clock}",
@@ -1085,6 +806,7 @@ public final class MacroPlaceholders {
             "[Input state]",
             "{key.pressed.w} => true once when W is pressed",
             "{key.held.space} => true while Space is held",
+            "{player.name|lower} {pos.biome|basename|title}",
             "",
             "[Conditionals in macro commands]",
             "if:<left>==<right>::<when_true>:else:<when_false>",
@@ -1108,6 +830,243 @@ public final class MacroPlaceholders {
             }
         }
         return docs;
+    }
+
+    public static List<String> getKnownPlaceholderTokens() {
+        LinkedHashSet<String> tokens = new LinkedHashSet<>(REGISTRY.tokens());
+        tokens.addAll(List.of(
+                "player.gamemode", "player.sneaking", "player.sprinting", "player.on_ground", "player.swimming",
+                "player.chunk", "player.chunk.x", "player.chunk.z", "player.vel.x", "player.vel.y", "player.vel.z", "player.speed",
+                "pos.xf", "pos.yf", "pos.zf", "pos.biome", "pos.dim", "pos.light", "pos.facing",
+                "dir.compass", "dir.compass.short", "dir.compass.arrow", "dir.compass.short_arrow",
+                "look.block.x", "look.block.y", "look.block.z", "look.block.xyz", "look.block.id", "look.block.light",
+                "look.entity.name", "look.entity.uuid", "look.entity.id", "look.entity.type", "look.dir.x", "look.dir.y", "look.dir.z",
+                "hand.item", "hand.id", "hand.count", "hand.damage", "hand.max_damage", "hand.durability",
+                "offhand.item", "offhand.id", "offhand.count", "offhand.damage", "offhand.max_damage", "offhand.durability",
+                "client.fps", "client.screen", "client.screen.width", "client.screen.height", "client.server.singleplayer", "client.server.name", "client.server.address",
+                "world.time", "world.time.ticks", "world.time.day", "world.day", "world.time.day_ticks", "world.time.clock", "world.is_day", "world.is_night",
+                "sel.self", "sel.nearest", "sel.random", "sel.all", "sel.entities", "players.count", "players.count.other", "players.nearby.count"
+        ));
+        return List.copyOf(tokens);
+    }
+
+    private static PlaceholderRegistry createRegistry() {
+        PlaceholderRegistry registry = new PlaceholderRegistry();
+
+        registry.register("dim", ctx -> ctx.dimensionId() == null ? "" : ctx.dimensionId().toString());
+        registry.register("cps.left", ctx -> Integer.toString(CpsTracker.getLeftCps()));
+        registry.register("cps.right", ctx -> Integer.toString(CpsTracker.getRightCps()));
+        registry.register("cps.total", ctx -> Integer.toString(CpsTracker.getTotalCps()));
+
+        registry.register("hp", ctx -> Integer.toString((int) Math.floor(ctx.player().getHealth())));
+        registry.register("max_hp", ctx -> Integer.toString((int) Math.floor(ctx.player().getMaxHealth())));
+        registry.register("food", ctx -> Integer.toString(ctx.player().getHungerManager().getFoodLevel()));
+        registry.register("xp", ctx -> Integer.toString(ctx.player().totalExperience));
+        registry.register("level", ctx -> Integer.toString(ctx.player().experienceLevel));
+        registry.register("saturation", ctx -> Integer.toString((int) ctx.player().getHungerManager().getSaturationLevel()));
+        registry.register("yaw", ctx -> String.format(Locale.ROOT, "%.1f", MathHelper.wrapDegrees(ctx.player().getYaw())));
+        registry.register("pitch", ctx -> String.format(Locale.ROOT, "%.1f", ctx.player().getPitch()));
+        registry.register("player.gamemode", ctx -> resolvePlayerGameMode(ctx.player()));
+        registry.register("player.sneaking", ctx -> Boolean.toString(ctx.player().isSneaking()));
+        registry.register("player.sprinting", ctx -> Boolean.toString(ctx.player().isSprinting()));
+        registry.register("player.on_ground", ctx -> Boolean.toString(ctx.player().isOnGround()));
+        registry.register("player.swimming", ctx -> Boolean.toString(ctx.player().isSwimming()));
+        registry.register("player.chunk.x", ctx -> Integer.toString(ctx.player().getChunkPos().x));
+        registry.register("player.chunk.z", ctx -> Integer.toString(ctx.player().getChunkPos().z));
+        registry.register("player.chunk", ctx -> ctx.player().getChunkPos().x + " " + ctx.player().getChunkPos().z);
+
+        registry.register("player.name", ctx -> ctx.player().getGameProfile().name());
+        registry.register("player.uuid", ctx -> ctx.player().getUuidAsString());
+        registerAliases(registry, ctx -> formatDouble(ctx.player().getVelocity().x), "player.vel.x", "vel.x");
+        registerAliases(registry, ctx -> formatDouble(ctx.player().getVelocity().y), "player.vel.y", "vel.y");
+        registerAliases(registry, ctx -> formatDouble(ctx.player().getVelocity().z), "player.vel.z", "vel.z");
+        registerAliases(registry, ctx -> {
+            Vec3d velocity = ctx.player().getVelocity();
+            return formatDouble(Math.sqrt(velocity.x * velocity.x + velocity.z * velocity.z) * 20.0);
+        }, "player.speed", "speed");
+
+        registry.register("pos.x", ctx -> Integer.toString(ctx.player().getBlockX()));
+        registry.register("pos.y", ctx -> Integer.toString(ctx.player().getBlockY()));
+        registry.register("pos.z", ctx -> Integer.toString(ctx.player().getBlockZ()));
+        registry.register("pos.xyz", ctx -> ctx.player().getBlockX() + " " + ctx.player().getBlockY() + " " + ctx.player().getBlockZ());
+        registry.register("pos.xf", ctx -> formatDouble(ctx.player().getX()));
+        registry.register("pos.yf", ctx -> formatDouble(ctx.player().getY()));
+        registry.register("pos.zf", ctx -> formatDouble(ctx.player().getZ()));
+        registry.register("pos.biome", ctx -> resolveCurrentBiomeId(ctx.player()));
+        registry.register("pos.biome.pretty", ctx -> toTitleCase(resolveCurrentBiomeId(ctx.player())));
+        registry.register("pos.dim", ctx -> resolveCurrentDimensionId(ctx.player()));
+        registry.register("pos.light", ctx -> ctx.player().getEntityWorld() == null ? "0" : Integer.toString(ctx.player().getEntityWorld().getLightLevel(ctx.player().getBlockPos())));
+        registry.register("pos.facing", ctx -> ctx.player().getHorizontalFacing().asString());
+        registerAliases(registry, ctx -> yawToCompass(ctx.player().getYaw(), true), "pos.facing.short", "dir.compass.short");
+        registerAliases(registry, ctx -> yawToCompass(ctx.player().getYaw(), false), "dir.compass", "dir.facing");
+        registerAliases(registry, ctx -> yawToCompassWithArrow(ctx.player().getYaw(), true), "dir.compass.short_arrow", "dir.compass.short.arrow");
+        registerAliases(registry, ctx -> yawToCompassWithArrow(ctx.player().getYaw(), false), "dir.compass.arrow", "dir.facing.arrow");
+
+        registry.register("look.block.x", ctx -> ctx.lookBlock() == null ? null : Integer.toString(ctx.lookBlock().getX()));
+        registry.register("look.block.y", ctx -> ctx.lookBlock() == null ? null : Integer.toString(ctx.lookBlock().getY()));
+        registry.register("look.block.z", ctx -> ctx.lookBlock() == null ? null : Integer.toString(ctx.lookBlock().getZ()));
+        registry.register("look.block.xyz", ctx -> ctx.lookBlock() == null ? null : ctx.lookBlock().getX() + " " + ctx.lookBlock().getY() + " " + ctx.lookBlock().getZ());
+        registry.register("look.block.id", ctx -> {
+            if (ctx.lookBlock() == null) {
+                return null;
+            }
+            if (ctx.player().getEntityWorld() == null) {
+                return "";
+            }
+            return ctx.player().getEntityWorld().getBlockState(ctx.lookBlock()).getBlock().toString();
+        });
+        registry.register("look.block.light", ctx -> {
+            if (ctx.lookBlock() == null) {
+                return null;
+            }
+            if (ctx.player().getEntityWorld() == null) {
+                return "0";
+            }
+            return Integer.toString(ctx.player().getEntityWorld().getLightLevel(ctx.lookBlock()));
+        });
+
+        registry.register("look.entity.name", ctx -> ctx.lookEntity() == null ? null : ctx.lookEntity().getName().getString());
+        registry.register("look.entity.uuid", ctx -> ctx.lookEntity() == null ? null : ctx.lookEntity().getUuidAsString());
+        registry.register("look.entity.id", ctx -> ctx.lookEntity() == null ? null : Integer.toString(ctx.lookEntity().getId()));
+        registry.register("look.entity.type", ctx -> ctx.lookEntity() == null ? null : ctx.lookEntity().getType().toString());
+
+        registry.register("look.dir.x", ctx -> formatDouble(ctx.player().getRotationVec(1.0f).normalize().x));
+        registry.register("look.dir.y", ctx -> formatDouble(ctx.player().getRotationVec(1.0f).normalize().y));
+        registry.register("look.dir.z", ctx -> formatDouble(ctx.player().getRotationVec(1.0f).normalize().z));
+
+        registry.register("hand.item", ctx -> ctx.player().getMainHandStack().getName().getString());
+        registry.register("hand.id", ctx -> ctx.player().getMainHandStack().getItem().toString());
+        registry.register("hand.count", ctx -> Integer.toString(ctx.player().getMainHandStack().getCount()));
+        registry.register("hand.damage", ctx -> Integer.toString(ctx.player().getMainHandStack().getDamage()));
+        registry.register("hand.max_damage", ctx -> Integer.toString(ctx.player().getMainHandStack().getMaxDamage()));
+        registry.register("hand.durability", ctx -> Integer.toString(durability(ctx.player().getMainHandStack())));
+
+        registry.register("offhand.item", ctx -> ctx.player().getOffHandStack().getName().getString());
+        registry.register("offhand.id", ctx -> ctx.player().getOffHandStack().getItem().toString());
+        registry.register("offhand.count", ctx -> Integer.toString(ctx.player().getOffHandStack().getCount()));
+        registry.register("offhand.damage", ctx -> Integer.toString(ctx.player().getOffHandStack().getDamage()));
+        registry.register("offhand.max_damage", ctx -> Integer.toString(ctx.player().getOffHandStack().getMaxDamage()));
+        registry.register("offhand.durability", ctx -> Integer.toString(durability(ctx.player().getOffHandStack())));
+
+        registry.register("client.screen", ctx -> ctx.client().currentScreen == null ? "none" : ctx.client().currentScreen.getClass().getSimpleName());
+        registry.register("client.screen.width", ctx -> ctx.client().getWindow() == null ? "0" : Integer.toString(Math.max(0, ctx.client().getWindow().getScaledWidth())));
+        registry.register("client.screen.height", ctx -> ctx.client().getWindow() == null ? "0" : Integer.toString(Math.max(0, ctx.client().getWindow().getScaledHeight())));
+        registry.register("client.fps", ctx -> {
+            Integer fps = resolveCurrentFps(ctx.client());
+            return fps == null ? "0" : Integer.toString(Math.max(0, fps));
+        });
+        registry.register("client.server.singleplayer", ctx -> {
+            try {
+                return Boolean.toString(ctx.client().isInSingleplayer());
+            } catch (Exception ignored) {
+                return "false";
+            }
+        });
+        registry.register("client.server.address", ctx -> readCurrentServerField(ctx.client(), "address"));
+        registry.register("client.server.name", ctx -> readCurrentServerField(ctx.client(), "name"));
+
+        registerAliases(registry, MacroPlaceholders::resolveWorldTimeTicks, "world.time", "world.time.ticks");
+        registerAliases(registry, MacroPlaceholders::resolveWorldDay, "world.day", "world.time.day");
+        registry.register("world.time.day_ticks", MacroPlaceholders::resolveWorldDayTicks);
+        registry.register("world.time.clock", MacroPlaceholders::resolveWorldClock);
+        registry.register("world.is_day", ctx -> Boolean.toString(resolveWorldIsDay(ctx)));
+        registry.register("world.is_night", ctx -> Boolean.toString(!resolveWorldIsDay(ctx)));
+
+        return registry;
+    }
+
+    private static void registerAliases(PlaceholderRegistry registry, PlaceholderRegistry.Resolver resolver, String... tokens) {
+        for (String token : tokens) {
+            registry.register(token, resolver);
+        }
+    }
+
+    private static int durability(ItemStack stack) {
+        int max = stack.getMaxDamage();
+        if (max <= 0) {
+            return 0;
+        }
+        return max - stack.getDamage();
+    }
+
+    private static String resolvePlayerGameMode(PlayerEntity player) {
+        try {
+            if (player.isSpectator()) {
+                return "spectator";
+            }
+            var abilities = player.getAbilities();
+            if (abilities != null && abilities.creativeMode) {
+                return "creative";
+            }
+        } catch (Exception ignored) {
+            // Defensive fallback for mapping/runtime differences.
+        }
+        return "survival";
+    }
+
+    private static String resolveCurrentBiomeId(PlayerEntity player) {
+        if (player.getEntityWorld() == null) {
+            return "";
+        }
+        RegistryEntry<Biome> entry = player.getEntityWorld().getBiome(player.getBlockPos());
+        if (entry == null) {
+            return "";
+        }
+        RegistryKey<Biome> key = entry.getKey().orElse(null);
+        if (key == null || key.getValue() == null) {
+            return "";
+        }
+        return key.getValue().toString();
+    }
+
+    private static String resolveCurrentDimensionId(PlayerEntity player) {
+        if (player.getEntityWorld() == null) {
+            return "";
+        }
+        RegistryKey<?> key = player.getEntityWorld().getRegistryKey();
+        if (key == null || key.getValue() == null) {
+            return "";
+        }
+        return key.getValue().toString();
+    }
+
+    private static String readCurrentServerField(MinecraftClient client, String fieldName) {
+        Object entry = invokeNoArg(client, "getCurrentServerEntry");
+        if (entry == null) {
+            return "";
+        }
+        return Objects.toString(readField(entry, fieldName), "");
+    }
+
+    private static long worldTimeOrZero(PlaceholderRegistry.Context ctx) {
+        if (ctx.player().getEntityWorld() == null) {
+            return 0L;
+        }
+        return ctx.player().getEntityWorld().getTimeOfDay();
+    }
+
+    private static String resolveWorldTimeTicks(PlaceholderRegistry.Context ctx) {
+        return Long.toString(worldTimeOrZero(ctx));
+    }
+
+    private static String resolveWorldDay(PlaceholderRegistry.Context ctx) {
+        return Long.toString(Math.floorDiv(worldTimeOrZero(ctx), 24000L));
+    }
+
+    private static String resolveWorldDayTicks(PlaceholderRegistry.Context ctx) {
+        return Long.toString(Math.floorMod(worldTimeOrZero(ctx), 24000L));
+    }
+
+    private static String resolveWorldClock(PlaceholderRegistry.Context ctx) {
+        long dayTicks = Math.floorMod(worldTimeOrZero(ctx), 24000L);
+        int hour = (int) ((dayTicks / 1000L + 6L) % 24L);
+        int minute = (int) Math.floor(((dayTicks % 1000L) / 1000.0) * 60.0);
+        return String.format(Locale.ROOT, "%02d:%02d", hour, minute);
+    }
+
+    private static boolean resolveWorldIsDay(PlaceholderRegistry.Context ctx) {
+        long dayTicks = Math.floorMod(worldTimeOrZero(ctx), 24000L);
+        return dayTicks < 12300L || dayTicks > 23850L;
     }
 
     private static String formatDouble(double d) {

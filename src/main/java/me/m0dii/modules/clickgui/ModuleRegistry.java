@@ -7,6 +7,7 @@ import me.m0dii.modules.commandhistory.CommandHistoryModule;
 import me.m0dii.modules.entityradar.EntityRadarModule;
 import me.m0dii.modules.freecam.FreecamModule;
 import me.m0dii.modules.fullbright.FullbrightModule;
+import me.m0dii.modules.heldlight.HeldLightModule;
 import me.m0dii.modules.instantbreak.InstantBreakModule;
 import me.m0dii.modules.inventorymove.InventoryMoveModule;
 import me.m0dii.modules.macros.gui.MacroKeybindOverlayModule;
@@ -15,7 +16,9 @@ import me.m0dii.modules.macros.hud.MacroHudOverlayModule;
 import me.m0dii.modules.messagehistory.MessageHistoryModule;
 import me.m0dii.modules.nbthud.NBTInfoHudOverlayModule;
 import me.m0dii.modules.nbttooltip.NBTTooltipModule;
+import me.m0dii.modules.nbttooltip.ShulkerTooltipModule;
 import me.m0dii.modules.overlays.*;
+import me.m0dii.modules.pickup.ItemPickupNotifierModule;
 import me.m0dii.modules.uiutilities.UiUtilitiesModule;
 import me.m0dii.modules.watson.WatsonCoreProtectModule;
 import me.m0dii.modules.waypoints.WaypointModule;
@@ -56,6 +59,7 @@ public class ModuleRegistry {
         safeAdd(overlays, SlimeChunkOverlayModule.INSTANCE);
         safeAdd(overlays, LightLevelOverlayModule.INSTANCE);
         safeAdd(overlays, ChunkBorderOverlayModule.INSTANCE);
+        safeAdd(overlays, BiomeBorderOverlayModule.INSTANCE);
         safeAdd(overlays, StructureBoundingBoxOverlay.INSTANCE);
         safeAdd(overlays, CommandBlockOverlayModule.INSTANCE);
         categories.add(overlays);
@@ -65,6 +69,7 @@ public class ModuleRegistry {
         safeAdd(hud, PendingMacrosOverlayModule.INSTANCE);
         safeAdd(hud, MacroHudOverlayModule.INSTANCE);
         safeAdd(hud, NBTInfoHudOverlayModule.INSTANCE);
+        safeAdd(hud, ItemPickupNotifierModule.INSTANCE);
         safeAdd(hud, EntityRadarModule.INSTANCE);
         safeAdd(hud, ClickGuiModule.INSTANCE);
         categories.add(hud);
@@ -77,7 +82,9 @@ public class ModuleRegistry {
         safeAdd(utilities, XrayModule.INSTANCE);
         safeAdd(utilities, InstantBreakModule.INSTANCE);
         safeAdd(utilities, NBTTooltipModule.INSTANCE);
+        safeAdd(utilities, ShulkerTooltipModule.INSTANCE);
         safeAdd(utilities, FullbrightModule.INSTANCE);
+        safeAdd(utilities, HeldLightModule.INSTANCE);
         safeAdd(utilities, WatsonCoreProtectModule.INSTANCE);
         categories.add(utilities);
 

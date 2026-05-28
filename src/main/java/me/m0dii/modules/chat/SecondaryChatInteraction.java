@@ -1,7 +1,6 @@
 package me.m0dii.modules.chat;
 
 import me.m0dii.modules.hudcanvas.HudCanvasDataHandler;
-import me.m0dii.utils.ModConfig;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenMouseEvents;
@@ -49,7 +48,8 @@ public final class SecondaryChatInteraction {
     }
 
     private static void handleMouseClick(Screen screen, Click click) {
-        if (!ModConfig.secondaryChatEnabled || !ModConfig.secondaryChatShowOverlay) {
+        SecondaryChatSettings.Data settings = SecondaryChatSettings.get();
+        if (!settings.enabled || !settings.showOverlay) {
             return;
         }
 
@@ -103,7 +103,7 @@ public final class SecondaryChatInteraction {
         int h = Math.max(30, canvas.height);
 
         if (!dragging && !resizing) {
-            if (ModConfig.resetTransparencyWhenHovered && isInside(mouseX, mouseY, x, y, w, h)) {
+            if (SecondaryChatSettings.get().resetTransparencyWhenHovered && isInside(mouseX, mouseY, x, y, w, h)) {
                 SecondaryChatManager.setLastAlphaReset(System.currentTimeMillis());
             }
             return;
@@ -144,7 +144,8 @@ public final class SecondaryChatInteraction {
     }
 
     private static void handleMouseScroll(Screen screen, double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
-        if (!ModConfig.secondaryChatEnabled || !ModConfig.secondaryChatShowOverlay) {
+        SecondaryChatSettings.Data settings = SecondaryChatSettings.get();
+        if (!settings.enabled || !settings.showOverlay) {
             return;
         }
 

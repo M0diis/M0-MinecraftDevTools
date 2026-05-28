@@ -38,12 +38,6 @@ public class ModConfig extends MidnightConfig {
 
     public static final String CATEGORY_OVERLAY = "Overlay";
 
-    @MidnightConfig.Entry(name = "Overlay XZ Radius", category = CATEGORY_OVERLAY, isSlider = true, min = 1, max = 64)
-    public static int overlayXZradius = 16;
-
-    @MidnightConfig.Entry(name = "Overlay Y Radius", category = CATEGORY_OVERLAY, isSlider = true, min = 1, max = 64)
-    public static int overlayYradius = 4;
-
     @MidnightConfig.Entry(name = "Entity Radar Radius", category = CATEGORY_OVERLAY, isSlider = true, min = 16, max = 256)
     public static int entityRadarRadius = 64;
 
@@ -91,22 +85,24 @@ public class ModConfig extends MidnightConfig {
     @MidnightConfig.Entry(name = "Show Macro Keybind Overlay", category = CATEGORY_HUD_OVERLAY)
     public static boolean showMacroKeybindOverlay = true;
 
+    public static final String CATEGORY_BLOCK_ATTRIBUTES = "Block Attributes";
+
+    @MidnightConfig.Entry(name = "Show Collision Mesh", category = CATEGORY_BLOCK_ATTRIBUTES)
+    public static boolean blockAttributesShowCollisionMesh = false;
+
+    @MidnightConfig.Entry(name = "Show Light Blocks", category = CATEGORY_BLOCK_ATTRIBUTES)
+    public static boolean blockAttributesShowLightBlocks = false;
+
+    @MidnightConfig.Entry(name = "Prevent Interactions", category = CATEGORY_BLOCK_ATTRIBUTES)
+    public static boolean blockAttributesPreventInteractions = false;
+
+    @MidnightConfig.Entry(name = "Solid Fluid Hitboxes", category = CATEGORY_BLOCK_ATTRIBUTES)
+    public static boolean blockAttributesSolidFluidHitboxes = false;
+
+    @MidnightConfig.Entry(name = "Show Barrier Blocks", category = CATEGORY_BLOCK_ATTRIBUTES)
+    public static boolean blockAttributesShowBarrierBlocks = false;
+
     // --- Macro GUI specific settings ---
-    @MidnightConfig.Entry(name = "Macro GUI Width", category = CATEGORY_HUD_OVERLAY)
-    public static int macroGuiWidth = 220;
-
-    @MidnightConfig.Entry(name = "Macro GUI Height", category = CATEGORY_HUD_OVERLAY)
-    public static int macroGuiHeight = 160;
-
-    @MidnightConfig.Entry(name = "Macro GUI Text Scale", category = CATEGORY_HUD_OVERLAY)
-    public static double macroGuiTextScale = 1.0;
-
-    @MidnightConfig.Entry(name = "Macro GUI Line Height", category = CATEGORY_HUD_OVERLAY)
-    public static int macroGuiLineHeight = 10;
-
-    @MidnightConfig.Entry(name = "Macro GUI Padding", category = CATEGORY_HUD_OVERLAY)
-    public static int macroGuiPadding = 6;
-
     @MidnightConfig.Entry(name = "Macro Overlay Anchor", category = CATEGORY_HUD_OVERLAY)
     public static OverlayAnchor macroOverlayAnchor = OverlayAnchor.TOP_RIGHT;
 

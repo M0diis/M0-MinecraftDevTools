@@ -2,9 +2,9 @@ package me.m0dii.modules.nbthud;
 
 import lombok.Getter;
 import me.m0dii.modules.Module;
+import me.m0dii.utils.KeybindCatalog;
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 import net.minecraft.client.util.InputUtil;
-import org.lwjgl.glfw.GLFW;
 
 public class NBTInfoHudOverlayModule extends Module {
 
@@ -21,9 +21,9 @@ public class NBTInfoHudOverlayModule extends Module {
     public void register() {
         HudRenderCallback.EVENT.register(renderer::onHudRender);
 
-        registerPressedKeybind("key.m0-dev-tools.toggle_block_inspector",
+        registerPressedKeybind(KeybindCatalog.BLOCK_INSPECTOR_TOGGLE.translationKey(),
                 InputUtil.Type.KEYSYM,
-                GLFW.GLFW_KEY_F10,
+                KeybindCatalog.BLOCK_INSPECTOR_TOGGLE.defaultKey(),
                 client -> toggleEnabled());
     }
 

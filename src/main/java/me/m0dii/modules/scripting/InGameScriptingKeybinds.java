@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import me.m0dii.M0DevTools;
 import me.m0dii.modules.scripting.gui.ScriptEditorScreen;
+import me.m0dii.utils.KeybindCatalog;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.minecraft.client.MinecraftClient;
@@ -20,8 +21,8 @@ import java.util.Map;
 
 public class InGameScriptingKeybinds {
     private static final KeyBinding OPEN_SCRIPT_EDITOR = KeyBindingHelper.registerKeyBinding(new KeyBinding(
-            "key.m0-dev-tools.openscripteditor",
-            GLFW.GLFW_KEY_COMMA,
+            KeybindCatalog.OPEN_SCRIPT_EDITOR.translationKey(),
+            KeybindCatalog.OPEN_SCRIPT_EDITOR.defaultKey(),
             KeyBinding.Category.create(Identifier.of("m0-dev-tools", "scripting"))
     ));
     private static final Path KEYBINDS_FILE = Paths.get("config/m0-dev-tools/script_keybinds.json");

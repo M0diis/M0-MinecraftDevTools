@@ -1,8 +1,8 @@
 package me.m0dii.modules.commandhistory;
 
 import me.m0dii.modules.Module;
+import me.m0dii.utils.KeybindCatalog;
 import net.minecraft.client.util.InputUtil;
-import org.lwjgl.glfw.GLFW;
 
 public class CommandHistoryModule extends Module {
 
@@ -14,9 +14,9 @@ public class CommandHistoryModule extends Module {
 
     @Override
     public void register() {
-        registerPressedKeybind("key.m0-dev-tools.command_history",
+        registerPressedKeybind(KeybindCatalog.COMMAND_HISTORY.translationKey(),
                 InputUtil.Type.KEYSYM,
-                GLFW.GLFW_KEY_H,
+                KeybindCatalog.COMMAND_HISTORY.defaultKey(),
                 client -> client.setScreen(CommandHistoryScreen.create(client.currentScreen)));
     }
 }

@@ -1,5 +1,6 @@
 package me.m0dii.modules.overlays;
 
+import me.m0dii.utils.KeybindCatalog;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
@@ -7,14 +8,14 @@ import net.minecraft.client.util.InputUtil;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 import org.jetbrains.annotations.Nullable;
-import org.lwjgl.glfw.GLFW;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public class LightLevelOverlayModule extends BlockTextOverlayModule {
 
-    private static final int XZ_RADIUS = 16;
-    private static final int Y_RADIUS = 4;
+    private int XZ_RADIUS = 16;
+    private int Y_RADIUS = 4;
 
     private static final List<Block> excludedBlocks = List.of(
             Blocks.SHORT_GRASS,
@@ -37,9 +38,9 @@ public class LightLevelOverlayModule extends BlockTextOverlayModule {
     public void register() {
         super.register();
 
-        registerPressedKeybind("key.m0-dev-tools.toggle_light_overlay",
+        registerPressedKeybind(KeybindCatalog.LIGHT_OVERLAY_TOGGLE.translationKey(),
                 InputUtil.Type.KEYSYM,
-                GLFW.GLFW_KEY_F9,
+                KeybindCatalog.LIGHT_OVERLAY_TOGGLE.defaultKey(),
                 client -> toggleEnabled());
     }
 
@@ -64,6 +65,34 @@ public class LightLevelOverlayModule extends BlockTextOverlayModule {
 
         int color = (light < 8) ? 0xFF0000 : 0x00FF00;
         return new TextRenderInfo(Integer.toString(light), color);
+    }
+
+    @Override
+    public List<String> getSettingsDisplay() {
+        List<String> settings = new ArrayList<>();
+        settings.add("Toggle: " + (isEnabled() ? "ON" : "OFF"));
+        settings.add("XZ radius : " + XZ_RADIUS);
+        settings.add("Y radius : " + Y_RADIUS);
+        settings.add("X+");
+        settings.add("X-");
+        settings.add("Y+");
+        settings.add("Y-");
+
+        return settings;
+    }
+
+    @Override
+    public void onSettingSelected(int settingIndex) {
+        switch (settingIndex) {
+            case 0 -> toggleEnabled();
+            case 3 -> XZ_RADIUS++;
+            case 4 -> XZ_RADIUS = Math.max(1, XZ_RADIUS - 1);
+            case 5 -> Y_RADIUS++;
+            case 6 -> Y_RADIUS = Math.max(1, Y_RADIUS - 1);
+            default -> {
+                // Nothing
+            }
+        }
     }
 
     @Override

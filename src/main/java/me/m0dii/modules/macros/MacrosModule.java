@@ -11,6 +11,7 @@ import me.m0dii.modules.macros.gui.MacroWorkbenchV2Screen;
 import me.m0dii.modules.macros.gui.PendingMacrosOverlayModule;
 import me.m0dii.modules.macros.hud.MacroHudDataHandler;
 import me.m0dii.modules.macros.hud.MacroHudOverlayModule;
+import me.m0dii.utils.KeybindCatalog;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
@@ -37,33 +38,27 @@ public class MacrosModule extends Module {
                         -> registerMacroCommands(dispatcher));
 
         CommandMacros.register();
+        ParsePlaceholderClientCommand.register();
         MacroHudDataHandler.load();
 
         registerPressedKeybind(
-                "key.m0-dev-tools.open_macro_gui",
+                KeybindCatalog.OPEN_MACRO_GUI.translationKey(),
                 InputUtil.Type.KEYSYM,
-                GLFW.GLFW_KEY_M, // Default: M key
+                KeybindCatalog.OPEN_MACRO_GUI.defaultKey(),
                 client -> client.setScreen(MacroConfigScreen.create(client.currentScreen))
         );
 
         registerPressedKeybind(
-                "key.m0-dev-tools.open_macro_panel_editor",
+                KeybindCatalog.OPEN_MACRO_HUD_EDITOR.translationKey(),
                 InputUtil.Type.KEYSYM,
-                GLFW.GLFW_KEY_J,
+                KeybindCatalog.OPEN_MACRO_HUD_EDITOR.defaultKey(),
                 client -> client.setScreen(MacroWorkbenchV2Screen.create(client.currentScreen, MacroWorkbenchV2Screen.Tab.CANVAS))
         );
 
         registerPressedKeybind(
-                "key.m0-dev-tools.open_macro_hud_editor",
+                KeybindCatalog.OPEN_MACRO_KEYBOARD_LAYOUT.translationKey(),
                 InputUtil.Type.KEYSYM,
-                GLFW.GLFW_KEY_K,
-                client -> client.setScreen(MacroWorkbenchV2Screen.create(client.currentScreen, MacroWorkbenchV2Screen.Tab.CANVAS))
-        );
-
-        registerPressedKeybind(
-                "key.m0-dev-tools.open_macro_keyboard_layout",
-                InputUtil.Type.KEYSYM,
-                GLFW.GLFW_KEY_U,
+                KeybindCatalog.OPEN_MACRO_KEYBOARD_LAYOUT.defaultKey(),
                 client -> client.setScreen(MacroWorkbenchV2Screen.create(client.currentScreen, MacroWorkbenchV2Screen.Tab.KEYBOARD))
         );
 

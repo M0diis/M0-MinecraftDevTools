@@ -1,8 +1,8 @@
 package me.m0dii.modules.waypoints;
 
 import me.m0dii.modules.Module;
+import me.m0dii.utils.KeybindCatalog;
 import net.minecraft.client.util.InputUtil;
-import org.lwjgl.glfw.GLFW;
 
 public class WaypointModule extends Module {
     public static final WaypointModule INSTANCE = new WaypointModule();
@@ -18,23 +18,23 @@ public class WaypointModule extends Module {
         WaypointRenderer.register();
 
         registerPressedKeybind(
-                "key.m0-dev-tools.add_waypoint",
+                KeybindCatalog.WAYPOINT_ADD.translationKey(),
                 InputUtil.Type.KEYSYM,
-                GLFW.GLFW_KEY_KP_ADD, // Numpad +
+                KeybindCatalog.WAYPOINT_ADD.defaultKey(),
                 (minecraftClient -> WaypointHandler.addWaypoint())
         );
 
         registerPressedKeybind(
-                "key.m0-dev-tools.list_waypoints",
+                KeybindCatalog.WAYPOINT_LIST.translationKey(),
                 InputUtil.Type.KEYSYM,
-                GLFW.GLFW_KEY_KP_MULTIPLY, // Numpad *
+                KeybindCatalog.WAYPOINT_LIST.defaultKey(),
                 (minecraftClient -> WaypointHandler.listWaypoints())
         );
 
         registerPressedKeybind(
-                "key.m0-dev-tools.open_waypoint_gui",
+                KeybindCatalog.WAYPOINT_GUI.translationKey(),
                 InputUtil.Type.KEYSYM,
-                GLFW.GLFW_KEY_KP_DIVIDE, // Numpad /
+                KeybindCatalog.WAYPOINT_GUI.defaultKey(),
                 (minecraftClient -> {
                     if (minecraftClient.currentScreen == null) {
                         minecraftClient.setScreen(WaypointScreen.create(null));
@@ -43,9 +43,9 @@ public class WaypointModule extends Module {
         );
 
         registerPressedKeybind(
-                "key.m0-dev-tools.toggle_waypoint_render",
+                KeybindCatalog.WAYPOINT_RENDER_TOGGLE.translationKey(),
                 InputUtil.Type.KEYSYM,
-                GLFW.GLFW_KEY_KP_SUBTRACT, // Numpad -
+                KeybindCatalog.WAYPOINT_RENDER_TOGGLE.defaultKey(),
                 (minecraftClient -> {
                     WaypointRenderer.setEnabled(!WaypointRenderer.isEnabled());
                     if (minecraftClient.player != null) {

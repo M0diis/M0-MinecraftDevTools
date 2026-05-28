@@ -5,28 +5,36 @@ import me.m0dii.modules.chat.SecondaryChatModule;
 import me.m0dii.modules.clickgui.ClickGuiModule;
 import me.m0dii.modules.clickgui.ModuleRegistry;
 import me.m0dii.modules.commandhistory.CommandHistoryModule;
+import me.m0dii.modules.debugdraw.DebugDrawManager;
+import me.m0dii.modules.debugdraw.DrawClientCommand;
 import me.m0dii.modules.entityradar.EntityRadarModule;
 import me.m0dii.modules.freecam.FreecamModule;
 import me.m0dii.modules.fullbright.FullbrightModule;
+import me.m0dii.modules.getdata.GetDataClientCommand;
+import me.m0dii.modules.getdata.GetDataSyncClient;
+import me.m0dii.modules.heldlight.HeldLightModule;
 import me.m0dii.modules.instantbreak.InstantBreakModule;
 import me.m0dii.modules.inventorymove.InventoryMoveModule;
 import me.m0dii.modules.macros.MacrosModule;
 import me.m0dii.modules.messagehistory.MessageHistoryModule;
 import me.m0dii.modules.nbthud.NBTInfoHudOverlayModule;
 import me.m0dii.modules.nbttooltip.NBTTooltipModule;
+import me.m0dii.modules.nbttooltip.ShulkerTooltipModule;
 import me.m0dii.modules.overlays.*;
+import me.m0dii.modules.pickup.ItemPickupNotifierModule;
 import me.m0dii.modules.quicktp.QuickTeleportModule;
 import me.m0dii.modules.scripting.ClientCommandRunScript;
 import me.m0dii.modules.scripting.InGameScriptingKeybinds;
 import me.m0dii.modules.watson.WatsonCoreProtectModule;
 import me.m0dii.modules.waypoints.WaypointModule;
+import me.m0dii.modules.xray.XrayModule;
 import me.m0dii.modules.zoom.ZoomModule;
+import me.m0dii.utils.KeybindCatalog;
 import me.m0dii.utils.KeybindManager;
 import me.m0dii.utils.ModConfig;
 import me.m0dii.utils.TickHandler;
 import net.fabricmc.api.ClientModInitializer;
 import net.minecraft.client.util.InputUtil;
-import org.lwjgl.glfw.GLFW;
 
 import java.io.File;
 
@@ -39,11 +47,12 @@ public class M0DevToolsClient implements ClientModInitializer {
         MidnightConfig.init(MOD_ID, ModConfig.class);
 
         // Modules
-        // XrayModule.INSTANCE.register(); // Not ready yet
+        XrayModule.INSTANCE.register();
         LightLevelOverlayModule.INSTANCE.register();
         RedstonePowerOverlayModule.INSTANCE.register();
         RedstoneBlockUpdateViewModule.INSTANCE.register();
         SlimeChunkOverlayModule.INSTANCE.register();
+        BiomeBorderOverlayModule.INSTANCE.register();
         EntityRadarModule.INSTANCE.register();
         CommandHistoryModule.INSTANCE.register();
         MessageHistoryModule.INSTANCE.register();
@@ -58,10 +67,14 @@ public class M0DevToolsClient implements ClientModInitializer {
         ZoomModule.INSTANCE.register();
         InstantBreakModule.INSTANCE.register();
         NBTTooltipModule.INSTANCE.register();
+        ShulkerTooltipModule.INSTANCE.register();
+        ItemPickupNotifierModule.INSTANCE.register();
         FullbrightModule.INSTANCE.register();
+        HeldLightModule.INSTANCE.register();
         InventoryMoveModule.INSTANCE.register();
         ClickGuiModule.INSTANCE.register();
         CommandBlockOverlayModule.INSTANCE.register();
+        BlockAttributeOverlayRenderer.register();
         WatsonCoreProtectModule.INSTANCE.register();
         me.m0dii.modules.actionrunner.ActionRunnerClientInit.register();
         me.m0dii.modules.actionrunner.ActionRunnerClientTick.register();
@@ -69,12 +82,16 @@ public class M0DevToolsClient implements ClientModInitializer {
         // Populate ModuleRegistry categories after modules have had a chance to create their singletons
         ModuleRegistry.initializeCategories();
 
-        KeybindManager.registerPressedKeybind("key.m0-dev-tools.open_modules_screen",
-                InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_O,
+        KeybindManager.registerPressedKeybind(KeybindCatalog.OPEN_MODULES_SCREEN.translationKey(),
+                InputUtil.Type.KEYSYM, KeybindCatalog.OPEN_MODULES_SCREEN.defaultKey(),
                 client -> ClickGuiModule.INSTANCE.getRenderer().toggle());
 
         ClientCommandRunScript.register();
+        GetDataClientCommand.register();
+        GetDataSyncClient.registerReceivers();
+        DrawClientCommand.register();
         InGameScriptingKeybinds.register();
+        DebugDrawManager.registerRenderer();
 
         if (!SETTINGS_FOLDER.exists()) {
             SETTINGS_FOLDER.mkdir();

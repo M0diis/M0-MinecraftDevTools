@@ -1,6 +1,7 @@
 package me.m0dii.modules.entityradar;
 
 import me.m0dii.modules.Module;
+import me.m0dii.utils.KeybindCatalog;
 import me.m0dii.utils.ModConfig;
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 import net.minecraft.client.util.InputUtil;
@@ -9,7 +10,6 @@ import net.minecraft.entity.mob.Monster;
 import net.minecraft.entity.passive.AnimalEntity;
 import net.minecraft.entity.passive.PassiveEntity;
 import net.minecraft.util.math.Box;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -21,6 +21,8 @@ public class EntityRadarModule extends Module {
     private final EntityHighlightRenderer worldRenderer = new EntityHighlightRenderer();
     private final EntityRadarHudOverlay hudRenderer = new EntityRadarHudOverlay();
 
+    private int RADIUS = 64;
+
     private EntityRadarModule() {
         super("entity_radar", "Entity Radar", false);
     }
@@ -31,9 +33,9 @@ public class EntityRadarModule extends Module {
 
         worldRenderer.register();
 
-        registerPressedKeybind("key.m0-dev-tools.open_entity_radar_screen",
+        registerPressedKeybind(KeybindCatalog.ENTITY_RADAR_SCREEN.translationKey(),
                 InputUtil.Type.KEYSYM,
-                GLFW.GLFW_KEY_L,
+                KeybindCatalog.ENTITY_RADAR_SCREEN.defaultKey(),
                 client -> client.setScreen(EntityRadarScreen.create(client.currentScreen)));
     }
 
@@ -44,6 +46,10 @@ public class EntityRadarModule extends Module {
         settings.add("World Renderer: " + (worldRenderer.isEnabled() ? "ON" : "OFF"));
         settings.add("Tracers: " + (worldRenderer.isTracersEnabled() ? "ON" : "OFF"));
         settings.add("HUD Renderer: " + (hudRenderer.isEnabled() ? "ON" : "OFF"));
+        settings.add("Radius: " + (RADIUS));
+        settings.add("Radius (+)");
+        settings.add("Radius (-)");
+
         return settings;
     }
 
@@ -53,6 +59,8 @@ public class EntityRadarModule extends Module {
             case 0 -> worldRenderer.setEnabled(!worldRenderer.isEnabled());
             case 1 -> worldRenderer.setTracersEnabled(!worldRenderer.isTracersEnabled());
             case 2 -> hudRenderer.setEnabled(!hudRenderer.isEnabled());
+            case 4 -> RADIUS++;
+            case 5 -> RADIUS = Math.max(1, RADIUS - 1);
             default -> {
                 // Do nothing
             }

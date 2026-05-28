@@ -1,6 +1,7 @@
 package me.m0dii.modules.overlays;
 
 import me.m0dii.modules.BlockTargetTextModule;
+import me.m0dii.utils.KeybindCatalog;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.block.entity.CommandBlockBlockEntity;
@@ -11,7 +12,6 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.CommandBlockExecutor;
 import org.jetbrains.annotations.NotNull;
-import org.lwjgl.glfw.GLFW;
 
 public class CommandBlockOverlayModule extends BlockTargetTextModule {
 
@@ -26,9 +26,9 @@ public class CommandBlockOverlayModule extends BlockTargetTextModule {
         super.register();
 
         registerPressedKeybind(
-                "key.m0-dev-tools.command_block_overlay",
+                KeybindCatalog.COMMAND_BLOCK_OVERLAY_TOGGLE.translationKey(),
                 InputUtil.Type.KEYSYM,
-                GLFW.GLFW_KEY_X,
+                KeybindCatalog.COMMAND_BLOCK_OVERLAY_TOGGLE.defaultKey(),
                 client -> toggleEnabled()
         );
     }

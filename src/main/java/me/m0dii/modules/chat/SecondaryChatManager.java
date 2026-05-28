@@ -2,7 +2,6 @@ package me.m0dii.modules.chat;
 
 import lombok.Getter;
 import lombok.Setter;
-import me.m0dii.utils.ModConfig;
 import net.minecraft.text.Text;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -39,7 +38,7 @@ public final class SecondaryChatManager {
         if (text == null) {
             return;
         }
-        int max = Math.max(1, ModConfig.secondaryChatMaxLines);
+        int max = Math.max(1, SecondaryChatSettings.get().maxLines);
         // Deduplication: don't add if last message is identical
         if (!buffer.isEmpty() && buffer.getLast().equals(text)) {
             return;
@@ -53,14 +52,15 @@ public final class SecondaryChatManager {
     }
 
     public static boolean matchesFilter(@Nullable Text text) {
-        if (!ModConfig.secondaryChatEnabled || text == null) {
+        SecondaryChatSettings.Data settings = SecondaryChatSettings.get();
+        if (!settings.enabled || text == null) {
             return false;
         }
 
         String s = text.getString();
 
         // Check regex list first (higher priority)
-        List<String> regexList = ModConfig.secondaryChatRegexList;
+        List<String> regexList = settings.regexList;
         if (regexList != null && !regexList.isEmpty()) {
             for (String regex : regexList) {
                 Pattern p = getCompiled(regex);

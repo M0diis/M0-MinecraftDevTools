@@ -1,6 +1,5 @@
 package me.m0dii.modules.chat;
 
-import me.m0dii.utils.ModConfig;
 import net.fabricmc.fabric.api.client.message.v1.ClientSendMessageEvents;
 import org.jetbrains.annotations.NotNull;
 
@@ -16,17 +15,18 @@ public final class SecondaryChatInputRouter {
 
     public static void register() {
         ClientSendMessageEvents.ALLOW_CHAT.register(message -> {
-            if (!ModConfig.secondaryChatEnabled) {
+            SecondaryChatSettings.Data settings = SecondaryChatSettings.get();
+            if (!settings.enabled) {
                 return true;
             }
-            if (!ModConfig.secondaryChatRouteOutgoing) {
+            if (!settings.routeOutgoing) {
                 return true;
             }
             if (message == null) {
                 return true;
             }
 
-            String regex = ModConfig.secondaryChatOutgoingRegex;
+            String regex = settings.outgoingRegex;
             if (regex == null || regex.isBlank()) {
                 return true;
             }

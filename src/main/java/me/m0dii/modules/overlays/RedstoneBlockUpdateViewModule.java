@@ -2,6 +2,7 @@ package me.m0dii.modules.overlays;
 
 import com.google.common.collect.Lists;
 import me.m0dii.modules.BlockTargetTextModule;
+import me.m0dii.utils.KeybindCatalog;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.RedstoneWireBlock;
 import net.minecraft.client.render.Camera;
@@ -10,7 +11,6 @@ import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 import org.jetbrains.annotations.NotNull;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.List;
 
@@ -27,9 +27,9 @@ public class RedstoneBlockUpdateViewModule extends BlockTargetTextModule {
         super.register();
 
         registerPressedKeybind(
-                "key.m0-dev-tools.toggle_redstone_bud",
+                KeybindCatalog.REDSTONE_BUD_TOGGLE.translationKey(),
                 InputUtil.Type.KEYSYM,
-                GLFW.GLFW_KEY_B,
+                KeybindCatalog.REDSTONE_BUD_TOGGLE.defaultKey(),
                 client -> toggleEnabled()
         );
     }

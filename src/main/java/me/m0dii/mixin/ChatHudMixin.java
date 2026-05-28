@@ -2,6 +2,7 @@ package me.m0dii.mixin;
 
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import me.m0dii.modules.chat.SecondaryChatManager;
+import me.m0dii.modules.chat.SecondaryChatSettings;
 import me.m0dii.modules.messagehistory.MessageHistoryManager;
 import me.m0dii.modules.watson.CoreProtectTracker;
 import me.m0dii.utils.ModConfig;
@@ -42,11 +43,12 @@ public class ChatHudMixin {
     @Unique
     private void handleMessage(Text message, CallbackInfo ci) {
         try {
-            if (ModConfig.secondaryChatEnabled && message != null) {
+            SecondaryChatSettings.Data settings = SecondaryChatSettings.get();
+            if (settings.enabled && message != null) {
                 if (SecondaryChatManager.matchesFilter(message)) {
                     SecondaryChatManager.push(message);
 
-                    if (ModConfig.secondaryChatInterceptMode == ModConfig.ChatInterceptMode.MOVE) {
+                    if (settings.interceptMode == SecondaryChatSettings.InterceptMode.MOVE) {
                         ci.cancel();
                     }
                 }

@@ -52,6 +52,10 @@ public class EntityHighlightRenderer implements Toggleable {
             double cameraX = context.gameRenderer().getCamera().getCameraPos().x;
             double cameraY = context.gameRenderer().getCamera().getCameraPos().y;
             double cameraZ = context.gameRenderer().getCamera().getCameraPos().z;
+            var viewDir = context.gameRenderer().getCamera().getHorizontalPlane();
+            double traceStartX = viewDir.x() * 0.35;
+            double traceStartY = 0.0;
+            double traceStartZ = viewDir.z() * 0.35;
 
             for (Entity entity : entities) {
                 if (entity == client.player) {
@@ -82,10 +86,10 @@ public class EntityHighlightRenderer implements Toggleable {
 
                 if (tracersEnabled) {
                     double centerX = entity.getX() - cameraX;
-                    double centerY = entity.getY() + (entity.getHeight() * 0.5) - cameraY;
+                    double centerY = entity.getEyeY() - cameraY;
                     double centerZ = entity.getZ() - cameraZ;
-                    DrawUtil.drawLineSafe(lineBuffer, 0.0, 0.0, 0.0, centerX, centerY, centerZ, 1.0f, 0.8f, 0.2f, 0.9f);
-                    DrawUtil.drawLineSafe(occludedLineBuffer, 0.0, 0.0, 0.0, centerX, centerY, centerZ, 1.0f, 0.8f, 0.2f, 0.45f);
+                    DrawUtil.drawLineSafe(lineBuffer, traceStartX, traceStartY, traceStartZ, centerX, centerY, centerZ, 1.0f, 0.8f, 0.2f, 0.9f, 1.25f);
+                    DrawUtil.drawLineSafe(occludedLineBuffer, traceStartX, traceStartY, traceStartZ, centerX, centerY, centerZ, 1.0f, 0.8f, 0.2f, 0.5f, 1.25f);
                 }
             }
 

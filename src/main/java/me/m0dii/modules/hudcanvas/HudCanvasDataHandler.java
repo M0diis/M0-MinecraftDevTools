@@ -17,6 +17,8 @@ public final class HudCanvasDataHandler {
 
     public static final String ELEMENT_NBT_INSPECTOR = "nbt_inspector";
     public static final String ELEMENT_SECONDARY_CHAT = "secondary_chat";
+    public static final String ELEMENT_MACRO_KEYBINDS = "macro_keybinds";
+    public static final String ELEMENT_PICKUP_NOTIFIER = "pickup_notifier";
 
     private static final Path CONFIG_FILE = FabricLoader.getInstance().getConfigDir().resolve("m0-dev-tools-hud-canvas.json");
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
@@ -28,6 +30,30 @@ public final class HudCanvasDataHandler {
     }
 
     public static final class HudCanvasElement {
+        public enum Anchor {
+            TOP_LEFT,
+            TOP_CENTER,
+            TOP_RIGHT,
+            MIDDLE_LEFT,
+            MIDDLE_CENTER,
+            MIDDLE_RIGHT,
+            BOTTOM_LEFT,
+            BOTTOM_CENTER,
+            BOTTOM_RIGHT
+        }
+
+        public enum HorizontalAlign {
+            LEFT,
+            CENTER,
+            RIGHT
+        }
+
+        public enum VerticalAlign {
+            TOP,
+            CENTER,
+            BOTTOM
+        }
+
         public int x = 8;
         public int y = 8;
         public int width = 240;
@@ -41,6 +67,11 @@ public final class HudCanvasDataHandler {
         public boolean drawBackground = true;
         public boolean drawBorder = false;
         public boolean visible = true;
+        // Position offsets are interpreted relative to this anchor.
+        public Anchor anchor = Anchor.TOP_LEFT;
+        // Text alignment inside the panel bounds.
+        public HorizontalAlign horizontalAlign = HorizontalAlign.LEFT;
+        public VerticalAlign verticalAlign = VerticalAlign.TOP;
     }
 
     public static final class HudCanvasConfig {
@@ -128,6 +159,9 @@ public final class HudCanvasDataHandler {
         e.drawBackground = raw.drawBackground;
         e.drawBorder = raw.drawBorder;
         e.visible = raw.visible;
+        e.anchor = raw.anchor == null ? HudCanvasElement.Anchor.TOP_LEFT : raw.anchor;
+        e.horizontalAlign = raw.horizontalAlign == null ? HudCanvasElement.HorizontalAlign.LEFT : raw.horizontalAlign;
+        e.verticalAlign = raw.verticalAlign == null ? HudCanvasElement.VerticalAlign.TOP : raw.verticalAlign;
         return e;
     }
 }
