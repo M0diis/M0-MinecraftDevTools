@@ -3,9 +3,14 @@ package me.m0dii.modules.macros.hud;
 import me.m0dii.modules.macros.CommandMacros;
 import me.m0dii.modules.macros.MacroDataHandler;
 import me.m0dii.modules.macros.MacroPlaceholders;
+import me.m0dii.modules.scripting.HudButtonScriptExecutor;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.ChatScreen;
+import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.client.gui.screen.ingame.GenericContainerScreen;
+import net.minecraft.client.gui.screen.ingame.HandledScreen;
+import net.minecraft.client.gui.screen.ingame.InventoryScreen;
 import net.minecraft.client.util.InputUtil;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
@@ -43,7 +48,7 @@ public final class MacroHudRuntime {
                 continue;
             }
 
-            if (element.visibilityMode == MacroHudDataHandler.VisibilityMode.CHAT_ONLY && !isInteractiveContext()) {
+            if (!matchesVisibility(element, client.currentScreen)) {
                 continue;
             }
 
@@ -88,7 +93,7 @@ public final class MacroHudRuntime {
             if (!element.visible || element.type != MacroHudDataHandler.ElementType.BUTTON) {
                 continue;
             }
-            if (element.visibilityMode == MacroHudDataHandler.VisibilityMode.CHAT_ONLY && !isInteractiveContext()) {
+            if (!matchesVisibility(element, client.currentScreen)) {
                 continue;
             }
             int x = resolveX(element, screenW);
@@ -99,7 +104,11 @@ public final class MacroHudRuntime {
 
             String actionName = (element.label == null || element.label.isBlank()) ? "HUD Action" : element.label;
             if (element.buttonAction != null && !element.buttonAction.isBlank()) {
-                CommandMacros.runInlineAction(actionName, element.buttonAction);
+                if (element.buttonExecutionMode == MacroHudDataHandler.ButtonExecutionMode.SCRIPT) {
+                    HudButtonScriptExecutor.runScript(actionName, element.buttonAction);
+                } else {
+                    CommandMacros.runInlineAction(actionName, element.buttonAction);
+                }
                 return true;
             }
 
@@ -121,6 +130,31 @@ public final class MacroHudRuntime {
     public static boolean isInteractiveContext() {
         MinecraftClient client = MinecraftClient.getInstance();
         return client.currentScreen instanceof ChatScreen;
+    }
+
+    private static boolean matchesVisibility(MacroHudDataHandler.HudElement element, Screen screen) {
+        MacroHudDataHandler.VisibilityMode mode = element.visibilityMode;
+        return switch (mode == null ? MacroHudDataHandler.VisibilityMode.ALWAYS : mode) {
+            case ALWAYS -> true;
+            case CHAT -> screen instanceof ChatScreen;
+            case INVENTORY -> screen instanceof InventoryScreen;
+            case CONTAINER -> screen instanceof HandledScreen<?> handled && !(handled instanceof InventoryScreen);
+            case CHEST -> screen instanceof GenericContainerScreen;
+            case SCREEN -> matchesScreenTypeFilter(screen, element.visibilityScreenType);
+        };
+    }
+
+    private static boolean matchesScreenTypeFilter(Screen screen, String filter) {
+        if (screen == null) {
+            return false;
+        }
+        String needle = filter == null ? "" : filter.trim().toLowerCase(Locale.ROOT);
+        if (needle.isEmpty()) {
+            return true;
+        }
+        String simple = screen.getClass().getSimpleName().toLowerCase(Locale.ROOT);
+        String fqcn = screen.getClass().getName().toLowerCase(Locale.ROOT);
+        return simple.contains(needle) || fqcn.contains(needle);
     }
 
     private static void renderTextElement(DrawContext context, MacroHudDataHandler.HudElement element, int x, int y) {

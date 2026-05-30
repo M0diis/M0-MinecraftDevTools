@@ -1,0 +1,71 @@
+package me.m0dii.modules.scripting;
+
+import me.m0dii.M0DevTools;
+import net.minecraft.client.MinecraftClient;
+import net.minecraft.text.Text;
+
+import java.util.HashMap;
+import java.util.Map;
+
+public final class HudButtonScriptExecutor {
+    private static final GroovyScriptManager GROOVY = new GroovyScriptManager();
+    private static final KotlinScriptManager KOTLIN = new KotlinScriptManager();
+
+    private HudButtonScriptExecutor() {
+    }
+
+    public static boolean runScript(String actionName, String scriptAction) {
+        String raw = scriptAction == null ? "" : scriptAction.trim();
+        if (raw.isEmpty()) {
+            return false;
+        }
+
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (client.player == null) {
+            return false;
+        }
+
+        String script = raw;
+        ScriptManager engine = GROOVY;
+
+        if (raw.regionMatches(true, 0, "kotlin:", 0, 7) || raw.regionMatches(true, 0, "kts:", 0, 4)) {
+            script = raw.substring(raw.indexOf(':') + 1).trim();
+            engine = KOTLIN;
+        } else if (raw.regionMatches(true, 0, "groovy:", 0, 7)) {
+            script = raw.substring(raw.indexOf(':') + 1).trim();
+            engine = GROOVY;
+        }
+
+        if ((script.endsWith(".groovy") || script.endsWith(".kts")) && !script.contains("\n") && !script.contains("\r")) {
+            try {
+                script = ScriptStorage.readScript(script);
+            } catch (Exception e) {
+                client.player.sendMessage(Text.literal("Script button '" + actionName + "' failed to load script file."), true);
+                M0DevTools.LOGGER.error("Failed to load script for HUD button '{}': {}", actionName, e.getMessage());
+                return false;
+            }
+        }
+
+        if (script.isBlank()) {
+            return false;
+        }
+
+        Map<String, Object> context = new HashMap<>();
+        context.put("client", client);
+        context.put("player", client.player);
+        context.put("source", client.player);
+        context.put("world", client.world);
+        context.put("options", client.options);
+        context.put("server", client.getServer());
+
+        try {
+            engine.runScript(script, context);
+            return true;
+        } catch (Exception e) {
+            client.player.sendMessage(Text.literal("Script button '" + actionName + "' failed: " + e.getMessage()), true);
+            M0DevTools.LOGGER.error("Error executing HUD script button '{}':", actionName, e);
+            return false;
+        }
+    }
+}
+

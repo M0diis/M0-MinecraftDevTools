@@ -37,7 +37,6 @@ public final class HeldLightConfigDataHandler {
 
     public static synchronized Config get() {
         ensureLoaded();
-        config = sanitize(config);
         return config;
     }
 

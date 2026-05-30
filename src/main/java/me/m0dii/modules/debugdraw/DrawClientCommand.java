@@ -52,7 +52,7 @@ public final class DrawClientCommand {
         send(context, "/draw cylinder <x> <y> <z> <radius> <height> [color] [seconds] [segments]");
         send(context, "/draw sphere <x> <y> <z> <radius> [color] [seconds] [segments]");
         send(context, "/draw boxlook [color] [seconds]");
-        send(context, "/draw select <on|off|toggle|left|right|add|status|save|load> [color] [seconds]");
+        send(context, "/draw select <on|off|toggle|shape|left|right|add|status|save|load> [color] [seconds]");
         send(context, "/draw list | /draw remove <id> | /draw clear");
         send(context, "/draw save | /draw load | /draw ui");
         return 1;
@@ -278,16 +278,32 @@ public final class DrawClientCommand {
                 send(context, ok ? "Set pos2 from crosshair block." : "No block under crosshair.");
                 yield ok ? 1 : 0;
             }
+            case "shape" -> {
+                if (t.length < 3) {
+                    send(context, "Current selection shape: " + DebugDrawManager.getSelectionShape().name().toLowerCase(Locale.ROOT));
+                    send(context, "Usage: /draw select shape <box|circle|cylinder|sphere>");
+                    yield 1;
+                }
+                DebugDrawManager.SelectionShape shape = parseSelectionShape(t[2]);
+                if (shape == null) {
+                    send(context, "Unknown selection shape: " + t[2]);
+                    yield 0;
+                }
+                DebugDrawManager.setSelectionShape(shape);
+                send(context, "Selection shape set to " + shape.name().toLowerCase(Locale.ROOT) + ".");
+                yield 1;
+            }
             case "add" -> {
                 try {
                     int color = t.length >= 3 ? parseColorToken(t[2]) : DEFAULT_COLOR;
                     double seconds = t.length >= 4 ? parseSeconds(t[3]) : DEFAULT_SECONDS;
-                    int id = DebugDrawManager.addSelectionBox(color, seconds);
+                    int id = DebugDrawManager.addSelectionShape(color, seconds);
                     if (id < 0) {
-                        send(context, "Set both pos1/pos2 first.");
+                        send(context, "Set both selection points first (left click + right click).");
                         yield 0;
                     }
-                    send(context, "Added selection box #" + id + " color=" + DebugDrawManager.formatColor(color));
+                    send(context, "Added selection " + DebugDrawManager.getSelectionShape().name().toLowerCase(Locale.ROOT)
+                            + " #" + id + " color=" + DebugDrawManager.formatColor(color));
                     yield 1;
                 } catch (Exception e) {
                     send(context, "Invalid select add args: " + e.getMessage());
@@ -466,6 +482,10 @@ public final class DrawClientCommand {
 
         if ("select".equals(sub)) {
             builder.suggest("select toggle");
+            builder.suggest("select shape box");
+            builder.suggest("select shape circle");
+            builder.suggest("select shape cylinder");
+            builder.suggest("select shape sphere");
             builder.suggest("select left");
             builder.suggest("select right");
             builder.suggest("select add #00FFFF 20");
@@ -475,6 +495,16 @@ public final class DrawClientCommand {
         }
 
         return builder.buildFuture();
+    }
+
+    private static DebugDrawManager.SelectionShape parseSelectionShape(String token) {
+        return switch (token.toLowerCase(Locale.ROOT)) {
+            case "box", "cuboid" -> DebugDrawManager.SelectionShape.BOX;
+            case "circle", "disk" -> DebugDrawManager.SelectionShape.CIRCLE;
+            case "cylinder" -> DebugDrawManager.SelectionShape.CYLINDER;
+            case "sphere" -> DebugDrawManager.SelectionShape.SPHERE;
+            default -> null;
+        };
     }
 }
 

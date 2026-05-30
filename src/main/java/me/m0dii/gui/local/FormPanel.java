@@ -16,6 +16,10 @@ public final class FormPanel {
 		this.height = height;
 	}
 
+	public FormPanel(UiRect bounds) {
+		this(bounds.x(), bounds.y(), bounds.width(), bounds.height());
+	}
+
 	public void render(DrawContext context) {
 		UiForms.drawPanel(context, x, y, width, height);
 	}

@@ -10,6 +10,7 @@ import net.minecraft.client.render.RenderLayers;
 import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.client.render.VertexConsumerProvider;
 import net.minecraft.util.hit.BlockHitResult;
+import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.BlockPos;
 
 import java.nio.file.Files;
@@ -24,9 +25,17 @@ public final class DebugDrawManager {
     private static final Path SELECTION_SAVE_PATH = M0DevToolsClient.SETTINGS_FOLDER.toPath().resolve("debugdraw-selection.json");
     private static final AtomicInteger NEXT_ID = new AtomicInteger(1);
     private static final List<DrawShape> SHAPES = new ArrayList<>();
+    public enum SelectionShape {
+        BOX,
+        CIRCLE,
+        CYLINDER,
+        SPHERE
+    }
+
     private static boolean selectionEnabled = false;
     private static BlockPos selectionPos1;
     private static BlockPos selectionPos2;
+    private static SelectionShape selectionShape = SelectionShape.BOX;
     private static boolean loadedFromDisk = false;
 
     public record ShapeDescriptor(int id,
@@ -59,9 +68,6 @@ public final class DebugDrawManager {
 
             long now = System.currentTimeMillis();
             List<DrawShape> active = snapshotActive(now);
-            if (active.isEmpty()) {
-                return;
-            }
 
             VertexConsumerProvider consumers = context.consumers();
             if (consumers == null) {
@@ -75,22 +81,24 @@ public final class DebugDrawManager {
             double cameraY = context.gameRenderer().getCamera().getCameraPos().y;
             double cameraZ = context.gameRenderer().getCamera().getCameraPos().z;
 
-            for (DrawShape shape : active) {
-                if (shape instanceof LineShape line) {
-                    drawLine(visible, line, cameraX, cameraY, cameraZ, 1.0f);
-                    drawLine(through, line, cameraX, cameraY, cameraZ, 0.45f);
-                } else if (shape instanceof BoxShape box) {
-                    drawBox(visible, box, cameraX, cameraY, cameraZ, 1.0f);
-                    drawBox(through, box, cameraX, cameraY, cameraZ, 0.45f);
-                } else if (shape instanceof CircleShape circle) {
-                    drawCircle(visible, circle, cameraX, cameraY, cameraZ, 1.0f);
-                    drawCircle(through, circle, cameraX, cameraY, cameraZ, 0.45f);
-                } else if (shape instanceof CylinderShape cylinder) {
-                    drawCylinder(visible, cylinder, cameraX, cameraY, cameraZ, 1.0f);
-                    drawCylinder(through, cylinder, cameraX, cameraY, cameraZ, 0.45f);
-                } else if (shape instanceof SphereShape sphere) {
-                    drawSphere(visible, sphere, cameraX, cameraY, cameraZ, 1.0f);
-                    drawSphere(through, sphere, cameraX, cameraY, cameraZ, 0.45f);
+            if (!active.isEmpty()) {
+                for (DrawShape shape : active) {
+                    if (shape instanceof LineShape line) {
+                        drawLine(visible, line, cameraX, cameraY, cameraZ, 1.0f);
+                        drawLine(through, line, cameraX, cameraY, cameraZ, 0.45f);
+                    } else if (shape instanceof BoxShape box) {
+                        drawBox(visible, box, cameraX, cameraY, cameraZ, 1.0f);
+                        drawBox(through, box, cameraX, cameraY, cameraZ, 0.45f);
+                    } else if (shape instanceof CircleShape circle) {
+                        drawCircle(visible, circle, cameraX, cameraY, cameraZ, 1.0f);
+                        drawCircle(through, circle, cameraX, cameraY, cameraZ, 0.45f);
+                    } else if (shape instanceof CylinderShape cylinder) {
+                        drawCylinder(visible, cylinder, cameraX, cameraY, cameraZ, 1.0f);
+                        drawCylinder(through, cylinder, cameraX, cameraY, cameraZ, 0.45f);
+                    } else if (shape instanceof SphereShape sphere) {
+                        drawSphere(visible, sphere, cameraX, cameraY, cameraZ, 1.0f);
+                        drawSphere(through, sphere, cameraX, cameraY, cameraZ, 0.45f);
+                    }
                 }
             }
 
@@ -117,9 +125,29 @@ public final class DebugDrawManager {
         return selectionEnabled;
     }
 
+    public static synchronized SelectionShape getSelectionShape() {
+        return selectionShape;
+    }
+
+    public static synchronized void setSelectionShape(SelectionShape shape) {
+        selectionShape = shape == null ? SelectionShape.BOX : shape;
+    }
+
     public static synchronized boolean pickSelectionPos(boolean rightClick) {
         MinecraftClient client = MinecraftClient.getInstance();
-        if (client == null || client.world == null || !(client.crosshairTarget instanceof BlockHitResult hit)) {
+        if (client == null || client.world == null || client.player == null) {
+            return false;
+        }
+        BlockHitResult hit = null;
+        if (client.crosshairTarget instanceof BlockHitResult blockHit) {
+            hit = blockHit;
+        } else {
+            HitResult trace = client.player.raycast(20.0, 1.0f, false);
+            if (trace instanceof BlockHitResult blockHit) {
+                hit = blockHit;
+            }
+        }
+        if (hit == null) {
             return false;
         }
         if (rightClick) {
@@ -130,27 +158,47 @@ public final class DebugDrawManager {
         return true;
     }
 
-    public static synchronized int addSelectionBox(int rgb, double seconds) {
+    public static synchronized int addSelectionShape(int rgb, double seconds) {
         if (selectionPos1 == null || selectionPos2 == null) {
             return -1;
         }
-        return addBox(
-                selectionPos1.getX(), selectionPos1.getY(), selectionPos1.getZ(),
-                selectionPos2.getX() + 1.0, selectionPos2.getY() + 1.0, selectionPos2.getZ() + 1.0,
-                rgb,
-                seconds
-        );
+        return switch (selectionShape) {
+            case CIRCLE -> {
+                double radius = selectionRadius(selectionPos1, selectionPos2, false);
+                yield addCircle(selectionPos1.getX() + 0.5, selectionPos1.getY() + 0.05, selectionPos1.getZ() + 0.5,
+                        radius, rgb, seconds, 36);
+            }
+            case CYLINDER -> {
+                double radius = selectionRadius(selectionPos1, selectionPos2, false);
+                double baseY = Math.min(selectionPos1.getY(), selectionPos2.getY());
+                double height = Math.max(1.0, Math.abs(selectionPos1.getY() - selectionPos2.getY()) + 1.0);
+                yield addCylinder(selectionPos1.getX() + 0.5, baseY, selectionPos1.getZ() + 0.5,
+                        radius, height, rgb, seconds, 36);
+            }
+            case SPHERE -> {
+                double radius = selectionRadius(selectionPos1, selectionPos2, true);
+                yield addSphere(selectionPos1.getX() + 0.5, selectionPos1.getY() + 0.5, selectionPos1.getZ() + 0.5,
+                        radius, rgb, seconds, 32);
+            }
+            case BOX -> addBox(
+                    selectionPos1.getX(), selectionPos1.getY(), selectionPos1.getZ(),
+                    selectionPos2.getX() + 1.0, selectionPos2.getY() + 1.0, selectionPos2.getZ() + 1.0,
+                    rgb,
+                    seconds
+            );
+        };
     }
 
     public static synchronized String selectionStatus() {
         String left = selectionPos1 == null ? "-" : selectionPos1.getX() + " " + selectionPos1.getY() + " " + selectionPos1.getZ();
         String right = selectionPos2 == null ? "-" : selectionPos2.getX() + " " + selectionPos2.getY() + " " + selectionPos2.getZ();
-        return "enabled=" + selectionEnabled + " pos1=" + left + " pos2=" + right;
+        return "enabled=" + selectionEnabled + " shape=" + selectionShape.name().toLowerCase() + " pos1=" + left + " pos2=" + right;
     }
 
     public static synchronized boolean saveSelection() {
         JsonObject json = new JsonObject();
         json.addProperty("enabled", selectionEnabled);
+        json.addProperty("shape", selectionShape.name());
         if (selectionPos1 != null) {
             json.addProperty("x1", selectionPos1.getX());
             json.addProperty("y1", selectionPos1.getY());
@@ -180,6 +228,13 @@ public final class DebugDrawManager {
                 return false;
             }
             selectionEnabled = json.has("enabled") && json.get("enabled").getAsBoolean();
+            if (json.has("shape")) {
+                try {
+                    selectionShape = SelectionShape.valueOf(json.get("shape").getAsString().toUpperCase());
+                } catch (Exception ignored) {
+                    selectionShape = SelectionShape.BOX;
+                }
+            }
             selectionPos1 = readPos(json, "x1", "y1", "z1");
             selectionPos2 = readPos(json, "x2", "y2", "z2");
             return true;
@@ -499,24 +554,81 @@ public final class DebugDrawManager {
                                                double cameraX,
                                                double cameraY,
                                                double cameraZ) {
-        if (!selectionEnabled || selectionPos1 == null || selectionPos2 == null) {
+        if (!selectionEnabled || selectionPos1 == null) {
             return;
         }
-        double minX = Math.min(selectionPos1.getX(), selectionPos2.getX());
-        double minY = Math.min(selectionPos1.getY(), selectionPos2.getY());
-        double minZ = Math.min(selectionPos1.getZ(), selectionPos2.getZ());
-        double maxX = Math.max(selectionPos1.getX(), selectionPos2.getX()) + 1.0;
-        double maxY = Math.max(selectionPos1.getY(), selectionPos2.getY()) + 1.0;
-        double maxZ = Math.max(selectionPos1.getZ(), selectionPos2.getZ()) + 1.0;
+        if (selectionPos2 == null) {
+            double x = selectionPos1.getX();
+            double y = selectionPos1.getY();
+            double z = selectionPos1.getZ();
+            DrawUtil.drawOutlinedBoxSafe(visible,
+                    x - cameraX, y - cameraY, z - cameraZ,
+                    x + 1.0 - cameraX, y + 1.0 - cameraY, z + 1.0 - cameraZ,
+                    0.2f, 1.0f, 0.2f, 0.95f, 2.0f);
+            DrawUtil.drawOutlinedBoxSafe(through,
+                    x - cameraX, y - cameraY, z - cameraZ,
+                    x + 1.0 - cameraX, y + 1.0 - cameraY, z + 1.0 - cameraZ,
+                    0.2f, 1.0f, 0.2f, 0.35f, 2.0f);
+            return;
+        }
 
-        DrawUtil.drawOutlinedBoxSafe(visible,
-                minX - cameraX, minY - cameraY, minZ - cameraZ,
-                maxX - cameraX, maxY - cameraY, maxZ - cameraZ,
-                0.2f, 1.0f, 0.2f, 0.95f, 2.0f);
-        DrawUtil.drawOutlinedBoxSafe(through,
-                minX - cameraX, minY - cameraY, minZ - cameraZ,
-                maxX - cameraX, maxY - cameraY, maxZ - cameraZ,
-                0.2f, 1.0f, 0.2f, 0.35f, 2.0f);
+        switch (selectionShape) {
+            case CIRCLE -> {
+                double radius = selectionRadius(selectionPos1, selectionPos2, false);
+                CircleShape circle = new CircleShape(-1, Long.MAX_VALUE, 0x33FFAA,
+                        selectionPos1.getX() + 0.5, selectionPos1.getY() + 0.05, selectionPos1.getZ() + 0.5,
+                        radius, 36);
+                drawCircle(visible, circle, cameraX, cameraY, cameraZ, 0.95f);
+                drawCircle(through, circle, cameraX, cameraY, cameraZ, 0.35f);
+            }
+            case CYLINDER -> {
+                double radius = selectionRadius(selectionPos1, selectionPos2, false);
+                double baseY = Math.min(selectionPos1.getY(), selectionPos2.getY());
+                double height = Math.max(1.0, Math.abs(selectionPos1.getY() - selectionPos2.getY()) + 1.0);
+                CylinderShape cylinder = new CylinderShape(-1, Long.MAX_VALUE, 0x33FFAA,
+                        selectionPos1.getX() + 0.5, baseY, selectionPos1.getZ() + 0.5,
+                        radius, height, 36);
+                drawCylinder(visible, cylinder, cameraX, cameraY, cameraZ, 0.95f);
+                drawCylinder(through, cylinder, cameraX, cameraY, cameraZ, 0.35f);
+            }
+            case SPHERE -> {
+                double radius = selectionRadius(selectionPos1, selectionPos2, true);
+                SphereShape sphere = new SphereShape(-1, Long.MAX_VALUE, 0x33FFAA,
+                        selectionPos1.getX() + 0.5, selectionPos1.getY() + 0.5, selectionPos1.getZ() + 0.5,
+                        radius, 32);
+                drawSphere(visible, sphere, cameraX, cameraY, cameraZ, 0.95f);
+                drawSphere(through, sphere, cameraX, cameraY, cameraZ, 0.35f);
+            }
+            case BOX -> {
+                double minX = Math.min(selectionPos1.getX(), selectionPos2.getX());
+                double minY = Math.min(selectionPos1.getY(), selectionPos2.getY());
+                double minZ = Math.min(selectionPos1.getZ(), selectionPos2.getZ());
+                double maxX = Math.max(selectionPos1.getX(), selectionPos2.getX()) + 1.0;
+                double maxY = Math.max(selectionPos1.getY(), selectionPos2.getY()) + 1.0;
+                double maxZ = Math.max(selectionPos1.getZ(), selectionPos2.getZ()) + 1.0;
+                DrawUtil.drawOutlinedBoxSafe(visible,
+                        minX - cameraX, minY - cameraY, minZ - cameraZ,
+                        maxX - cameraX, maxY - cameraY, maxZ - cameraZ,
+                        0.2f, 1.0f, 0.2f, 0.95f, 2.0f);
+                DrawUtil.drawOutlinedBoxSafe(through,
+                        minX - cameraX, minY - cameraY, minZ - cameraZ,
+                        maxX - cameraX, maxY - cameraY, maxZ - cameraZ,
+                        0.2f, 1.0f, 0.2f, 0.35f, 2.0f);
+            }
+        }
+    }
+
+    private static double selectionRadius(BlockPos center, BlockPos edge, boolean includeY) {
+        double cx = center.getX() + 0.5;
+        double cy = center.getY() + 0.5;
+        double cz = center.getZ() + 0.5;
+        double ex = edge.getX() + 0.5;
+        double ey = edge.getY() + 0.5;
+        double ez = edge.getZ() + 0.5;
+        double dx = ex - cx;
+        double dz = ez - cz;
+        double dy = includeY ? (ey - cy) : 0.0;
+        return Math.max(0.5, Math.sqrt(dx * dx + dy * dy + dz * dz));
     }
 
     private static BlockPos readPos(JsonObject json, String x, String y, String z) {

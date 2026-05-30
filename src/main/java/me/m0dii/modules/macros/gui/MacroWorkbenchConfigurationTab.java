@@ -1,0 +1,691 @@
+package me.m0dii.modules.macros.gui;
+
+import me.m0dii.modules.chat.SecondaryChatModule;
+import me.m0dii.modules.chat.SecondaryChatSettings;
+import me.m0dii.modules.freecam.FreecamModule;
+import me.m0dii.modules.fullbright.FullbrightModule;
+import me.m0dii.modules.heldlight.HeldLightModule;
+import me.m0dii.modules.instantbreak.InstantBreakModule;
+import me.m0dii.modules.inventorymove.InventoryMoveModule;
+import me.m0dii.modules.nbthud.NBTInfoHudOverlayModule;
+import me.m0dii.modules.nbttooltip.NBTTooltipModule;
+import me.m0dii.modules.nbttooltip.ShulkerTooltipModule;
+import me.m0dii.modules.overlays.*;
+import me.m0dii.modules.pickup.ItemPickupNotifierModule;
+import me.m0dii.modules.pickup.PickupFeedSettings;
+import me.m0dii.modules.waypoints.WaypointModule;
+import me.m0dii.utils.ModConfig;
+import net.minecraft.client.gui.DrawContext;
+import net.minecraft.client.gui.widget.ButtonWidget;
+import net.minecraft.client.gui.widget.ClickableWidget;
+import net.minecraft.client.gui.widget.TextFieldWidget;
+import net.minecraft.text.Text;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.function.BooleanSupplier;
+
+final class MacroWorkbenchConfigurationTab {
+    private static final int TOP_BAR_H = 54;
+    private static final int ROW_H = 20;
+    private static final int ROW_GAP = 24;
+    private static final int CONTENT_START_Y = TOP_BAR_H + 34;
+
+    enum Category {
+        HUD("HUD"),
+        OVERLAYS("Overlays"),
+        MODULES("Modules"),
+        SECONDARY_CHAT("Secondary Chat"),
+        PICKUP_FEED("Pickup Feed"),
+        BLOCK_ATTRIBUTES("Block Attributes");
+
+        private final String label;
+
+        Category(String label) {
+            this.label = label;
+        }
+    }
+
+    private final MacroWorkbenchV2Screen owner;
+    private final List<ClickableWidget> configWidgets;
+    private final BooleanSupplier shiftDown;
+    private final BooleanSupplier controlDown;
+
+    private Category category = Category.HUD;
+
+    private ButtonWidget hudCategoryButton;
+    private ButtonWidget overlaysCategoryButton;
+    private ButtonWidget modulesCategoryButton;
+    private ButtonWidget secondaryChatCategoryButton;
+    private ButtonWidget pickupFeedCategoryButton;
+    private ButtonWidget blockAttributesCategoryButton;
+
+    private ButtonWidget macroOverlayToggleButton;
+    private ButtonWidget nbtHudToggleButton;
+
+    private ButtonWidget secondaryEnabledToggleButton;
+    private ButtonWidget secondaryOverlayToggleButton;
+    private ButtonWidget secondaryInterceptModeButton;
+    private ButtonWidget secondaryRegexAddButton;
+    private ButtonWidget secondaryRegexApplyButton;
+    private ButtonWidget secondaryRegexRemoveButton;
+    private ButtonWidget secondaryRegexClearButton;
+    private ButtonWidget secondaryOutgoingApplyButton;
+
+    private ButtonWidget pickupEnabledButton;
+    private ButtonWidget pickupDurationButton;
+    private ButtonWidget pickupLinesButton;
+    private ButtonWidget pickupIconScaleButton;
+    private ButtonWidget pickupDirectionButton;
+
+    private ButtonWidget freecamToggleButton;
+    private ButtonWidget fullbrightToggleButton;
+    private ButtonWidget heldLightToggleButton;
+    private ButtonWidget inventoryMoveToggleButton;
+    private ButtonWidget instantBreakToggleButton;
+    private ButtonWidget waypointsToggleButton;
+    private ButtonWidget nbtTooltipToggleButton;
+    private ButtonWidget shulkerTooltipToggleButton;
+
+    private ButtonWidget biomeBorderToggleButton;
+    private ButtonWidget chunkBorderToggleButton;
+    private ButtonWidget slimeChunksToggleButton;
+    private ButtonWidget structureBoundsToggleButton;
+    private ButtonWidget commandBlockOverlayToggleButton;
+    private ButtonWidget lightOverlayToggleButton;
+
+    private ButtonWidget collisionMeshToggleButton;
+    private ButtonWidget lightBlocksToggleButton;
+    private ButtonWidget preventInteractionsToggleButton;
+    private ButtonWidget solidFluidHitboxesToggleButton;
+    private ButtonWidget barrierBlocksToggleButton;
+
+    private TextFieldWidget secondaryRegexInputField;
+    private TextFieldWidget secondaryOutgoingRegexField;
+
+    private int selectedRegexIndex = -1;
+    private int regexScroll = 0;
+
+    MacroWorkbenchConfigurationTab(MacroWorkbenchV2Screen owner,
+                                   List<ClickableWidget> configWidgets,
+                                   BooleanSupplier shiftDown,
+                                   BooleanSupplier controlDown) {
+        this.owner = owner;
+        this.configWidgets = configWidgets;
+        this.shiftDown = shiftDown;
+        this.controlDown = controlDown;
+    }
+
+    void initWidgets() {
+        int listX = 12;
+        int listY = TOP_BAR_H + 18;
+        int categoryW = Math.max(130, (this.owner.width / 2) - 28);
+        int rightX = (this.owner.width / 2) + 12;
+        int settingW = Math.max(180, this.owner.width - rightX - 12);
+
+        this.hudCategoryButton = button(Category.HUD.label, b -> setCategory(Category.HUD), listX, listY, categoryW, ROW_H);
+        this.overlaysCategoryButton = button(Category.OVERLAYS.label, b -> setCategory(Category.OVERLAYS), listX, listY + ROW_GAP, categoryW, ROW_H);
+        this.modulesCategoryButton = button(Category.MODULES.label, b -> setCategory(Category.MODULES), listX, listY + ROW_GAP * 2, categoryW, ROW_H);
+        this.secondaryChatCategoryButton = button(Category.SECONDARY_CHAT.label, b -> setCategory(Category.SECONDARY_CHAT), listX, listY + ROW_GAP * 3, categoryW, ROW_H);
+        this.pickupFeedCategoryButton = button(Category.PICKUP_FEED.label, b -> setCategory(Category.PICKUP_FEED), listX, listY + ROW_GAP * 4, categoryW, ROW_H);
+        this.blockAttributesCategoryButton = button(Category.BLOCK_ATTRIBUTES.label, b -> setCategory(Category.BLOCK_ATTRIBUTES), listX, listY + ROW_GAP * 5, categoryW, ROW_H);
+
+        this.macroOverlayToggleButton = button("Macro Keybind HUD", b -> {
+            ModConfig.updateAndSave(() -> ModConfig.showMacroKeybindOverlay = !ModConfig.showMacroKeybindOverlay);
+            syncControls();
+        }, rightX, rowY(0), settingW, ROW_H);
+
+        this.nbtHudToggleButton = button("NBT Inspector HUD", b -> {
+            NBTInfoHudOverlayModule.INSTANCE.setEnabled(!NBTInfoHudOverlayModule.INSTANCE.isEnabled());
+            syncControls();
+        }, rightX, rowY(1), settingW, ROW_H);
+
+        this.secondaryEnabledToggleButton = button("Secondary Chat", b -> {
+            SecondaryChatModule.INSTANCE.setEnabled(!SecondaryChatModule.INSTANCE.isEnabled());
+            syncControls();
+        }, rightX, rowY(0), settingW, ROW_H);
+
+        this.secondaryOverlayToggleButton = button("Secondary Chat Overlay", b -> {
+            SecondaryChatSettings.updateAndSave(() -> SecondaryChatSettings.get().showOverlay = !SecondaryChatSettings.get().showOverlay);
+            syncControls();
+        }, rightX, rowY(1), settingW, ROW_H);
+
+        this.secondaryInterceptModeButton = button("Intercept Mode", b -> {
+            SecondaryChatSettings.updateAndSave(() -> SecondaryChatSettings.get().interceptMode =
+                    SecondaryChatSettings.get().interceptMode == SecondaryChatSettings.InterceptMode.COPY
+                            ? SecondaryChatSettings.InterceptMode.MOVE
+                            : SecondaryChatSettings.InterceptMode.COPY);
+            syncControls();
+        }, rightX, rowY(2), settingW, ROW_H);
+
+        this.secondaryRegexInputField = new TextFieldWidget(this.owner.workbenchTextRenderer(), rightX, rowY(3), settingW - 114, ROW_H, Text.literal("Regex"));
+        this.secondaryRegexInputField.setMaxLength(180);
+
+        this.secondaryRegexAddButton = button("Add", b -> {
+            String regex = safeField(this.secondaryRegexInputField);
+            if (!regex.isEmpty()) {
+                SecondaryChatSettings.updateAndSave(() -> SecondaryChatSettings.get().regexList.add(regex));
+                this.secondaryRegexInputField.setText("");
+                this.selectedRegexIndex = SecondaryChatSettings.get().regexList.size() - 1;
+                ensureRegexSelectionInBounds();
+                syncControls();
+            }
+        }, rightX + settingW - 110, rowY(3), 110, ROW_H);
+
+        this.secondaryRegexApplyButton = button("Apply Selected", b -> {
+            String regex = safeField(this.secondaryRegexInputField);
+            if (regex.isEmpty()) {
+                return;
+            }
+            SecondaryChatSettings.updateAndSave(() -> {
+                List<String> list = SecondaryChatSettings.get().regexList;
+                if (list != null && this.selectedRegexIndex >= 0 && this.selectedRegexIndex < list.size()) {
+                    list.set(this.selectedRegexIndex, regex);
+                }
+            });
+            syncControls();
+        }, rightX, rowY(9), 140, ROW_H);
+
+        this.secondaryRegexRemoveButton = button("Remove Selected", b -> {
+            SecondaryChatSettings.updateAndSave(() -> {
+                List<String> list = SecondaryChatSettings.get().regexList;
+                if (list != null && this.selectedRegexIndex >= 0 && this.selectedRegexIndex < list.size()) {
+                    list.remove(this.selectedRegexIndex);
+                }
+            });
+            if (this.selectedRegexIndex > 0) {
+                this.selectedRegexIndex--;
+            }
+            ensureRegexSelectionInBounds();
+            syncControls();
+        }, rightX + 144, rowY(9), 140, ROW_H);
+
+        this.secondaryRegexClearButton = button("Clear All", b -> {
+            SecondaryChatSettings.updateAndSave(() -> SecondaryChatSettings.get().regexList = new ArrayList<>());
+            this.selectedRegexIndex = -1;
+            this.regexScroll = 0;
+            syncControls();
+        }, rightX + 288, rowY(9), 100, ROW_H);
+
+        this.secondaryOutgoingRegexField = new TextFieldWidget(this.owner.workbenchTextRenderer(), rightX, rowY(10), settingW - 110, ROW_H, Text.literal("Outgoing regex"));
+        this.secondaryOutgoingRegexField.setMaxLength(180);
+
+        this.secondaryOutgoingApplyButton = button("Apply", b -> {
+            String outgoing = safeField(this.secondaryOutgoingRegexField);
+            SecondaryChatSettings.updateAndSave(() -> SecondaryChatSettings.get().outgoingRegex = outgoing);
+            syncControls();
+        }, rightX + settingW - 106, rowY(10), 106, ROW_H);
+
+        this.pickupEnabledButton = button("Pickup Notifier", b -> {
+            ItemPickupNotifierModule.INSTANCE.setEnabled(!ItemPickupNotifierModule.INSTANCE.isEnabled());
+            syncControls();
+        }, rightX, rowY(0), settingW, ROW_H);
+
+        this.pickupDurationButton = button("Pickup Feed Duration", b -> {
+            adjustPickupDuration(1);
+            syncControls();
+        }, rightX, rowY(1), settingW, ROW_H);
+
+        this.pickupLinesButton = button("Pickup Feed Max Lines", b -> {
+            adjustPickupLines(1);
+            syncControls();
+        }, rightX, rowY(2), settingW, ROW_H);
+
+        this.pickupIconScaleButton = button("Pickup Feed Icon Scale", b -> {
+            adjustPickupIconScale(1);
+            syncControls();
+        }, rightX, rowY(3), settingW, ROW_H);
+
+        this.pickupDirectionButton = button("Pickup Feed Direction", b -> {
+            cyclePickupDirection(true);
+            syncControls();
+        }, rightX, rowY(4), settingW, ROW_H);
+
+        this.freecamToggleButton = button("Freecam", b -> {
+            FreecamModule.INSTANCE.setEnabled(!FreecamModule.INSTANCE.isEnabled());
+            syncControls();
+        }, rightX, rowY(0), settingW, ROW_H);
+
+        this.fullbrightToggleButton = button("Fullbright", b -> {
+            FullbrightModule.INSTANCE.setEnabled(!FullbrightModule.INSTANCE.isEnabled());
+            syncControls();
+        }, rightX, rowY(1), settingW, ROW_H);
+
+        this.heldLightToggleButton = button("Held Light", b -> {
+            HeldLightModule.INSTANCE.setEnabled(!HeldLightModule.INSTANCE.isEnabled());
+            syncControls();
+        }, rightX, rowY(2), settingW, ROW_H);
+
+        this.inventoryMoveToggleButton = button("Inventory Move", b -> {
+            InventoryMoveModule.INSTANCE.setEnabled(!InventoryMoveModule.INSTANCE.isEnabled());
+            syncControls();
+        }, rightX, rowY(3), settingW, ROW_H);
+
+        this.instantBreakToggleButton = button("Instant Break", b -> {
+            InstantBreakModule.INSTANCE.setEnabled(!InstantBreakModule.INSTANCE.isEnabled());
+            syncControls();
+        }, rightX, rowY(4), settingW, ROW_H);
+
+        this.waypointsToggleButton = button("Waypoints", b -> {
+            WaypointModule.INSTANCE.setEnabled(!WaypointModule.INSTANCE.isEnabled());
+            syncControls();
+        }, rightX, rowY(5), settingW, ROW_H);
+
+        this.nbtTooltipToggleButton = button("NBT Tooltip", b -> {
+            NBTTooltipModule.INSTANCE.setEnabled(!NBTTooltipModule.INSTANCE.isEnabled());
+            syncControls();
+        }, rightX, rowY(6), settingW, ROW_H);
+
+        this.shulkerTooltipToggleButton = button("Shulker Preview Tooltip", b -> {
+            ShulkerTooltipModule.INSTANCE.setEnabled(!ShulkerTooltipModule.INSTANCE.isEnabled());
+            syncControls();
+        }, rightX, rowY(7), settingW, ROW_H);
+
+        this.biomeBorderToggleButton = button("Biome Border Overlay", b -> {
+            BiomeBorderOverlayModule.INSTANCE.setEnabled(!BiomeBorderOverlayModule.INSTANCE.isEnabled());
+            syncControls();
+        }, rightX, rowY(0), settingW, ROW_H);
+
+        this.chunkBorderToggleButton = button("Chunk Border Overlay", b -> {
+            ChunkBorderOverlayModule.INSTANCE.setEnabled(!ChunkBorderOverlayModule.INSTANCE.isEnabled());
+            syncControls();
+        }, rightX, rowY(1), settingW, ROW_H);
+
+        this.slimeChunksToggleButton = button("Slime Chunk Overlay", b -> {
+            SlimeChunkOverlayModule.INSTANCE.setEnabled(!SlimeChunkOverlayModule.INSTANCE.isEnabled());
+            syncControls();
+        }, rightX, rowY(2), settingW, ROW_H);
+
+        this.structureBoundsToggleButton = button("Structure Bounding Boxes", b -> {
+            StructureBoundingBoxOverlay.INSTANCE.setEnabled(!StructureBoundingBoxOverlay.INSTANCE.isEnabled());
+            syncControls();
+        }, rightX, rowY(3), settingW, ROW_H);
+
+        this.commandBlockOverlayToggleButton = button("Command Block Overlay", b -> {
+            CommandBlockOverlayModule.INSTANCE.setEnabled(!CommandBlockOverlayModule.INSTANCE.isEnabled());
+            syncControls();
+        }, rightX, rowY(4), settingW, ROW_H);
+
+        this.lightOverlayToggleButton = button("Light Level Overlay", b -> {
+            LightLevelOverlayModule.INSTANCE.setEnabled(!LightLevelOverlayModule.INSTANCE.isEnabled());
+            syncControls();
+        }, rightX, rowY(5), settingW, ROW_H);
+
+        this.collisionMeshToggleButton = button("Show Collision Mesh", b -> {
+            ModConfig.updateAndSave(() -> ModConfig.blockAttributesShowCollisionMesh = !ModConfig.blockAttributesShowCollisionMesh);
+            syncControls();
+        }, rightX, rowY(0), settingW, ROW_H);
+
+        this.lightBlocksToggleButton = button("Show Light Blocks", b -> {
+            ModConfig.updateAndSave(() -> ModConfig.blockAttributesShowLightBlocks = !ModConfig.blockAttributesShowLightBlocks);
+            syncControls();
+        }, rightX, rowY(1), settingW, ROW_H);
+
+        this.preventInteractionsToggleButton = button("Prevent Interactions", b -> {
+            ModConfig.updateAndSave(() -> ModConfig.blockAttributesPreventInteractions = !ModConfig.blockAttributesPreventInteractions);
+            syncControls();
+        }, rightX, rowY(2), settingW, ROW_H);
+
+        this.solidFluidHitboxesToggleButton = button("Solid Fluid Hitboxes", b -> {
+            ModConfig.updateAndSave(() -> ModConfig.blockAttributesSolidFluidHitboxes = !ModConfig.blockAttributesSolidFluidHitboxes);
+            syncControls();
+        }, rightX, rowY(3), settingW, ROW_H);
+
+        this.barrierBlocksToggleButton = button("Show Barrier Blocks", b -> {
+            ModConfig.updateAndSave(() -> ModConfig.blockAttributesShowBarrierBlocks = !ModConfig.blockAttributesShowBarrierBlocks);
+            syncControls();
+        }, rightX, rowY(4), settingW, ROW_H);
+
+        register(
+                this.hudCategoryButton, this.overlaysCategoryButton, this.modulesCategoryButton,
+                this.secondaryChatCategoryButton, this.pickupFeedCategoryButton, this.blockAttributesCategoryButton,
+                this.macroOverlayToggleButton, this.nbtHudToggleButton,
+                this.secondaryEnabledToggleButton, this.secondaryOverlayToggleButton, this.secondaryInterceptModeButton,
+                this.secondaryRegexAddButton, this.secondaryRegexApplyButton, this.secondaryRegexRemoveButton,
+                this.secondaryRegexClearButton, this.secondaryOutgoingApplyButton,
+                this.pickupEnabledButton, this.pickupDurationButton, this.pickupLinesButton,
+                this.pickupIconScaleButton, this.pickupDirectionButton,
+                this.freecamToggleButton, this.fullbrightToggleButton, this.heldLightToggleButton,
+                this.inventoryMoveToggleButton, this.instantBreakToggleButton, this.waypointsToggleButton,
+                this.nbtTooltipToggleButton, this.shulkerTooltipToggleButton,
+                this.biomeBorderToggleButton, this.chunkBorderToggleButton, this.slimeChunksToggleButton,
+                this.structureBoundsToggleButton, this.commandBlockOverlayToggleButton, this.lightOverlayToggleButton,
+                this.collisionMeshToggleButton, this.lightBlocksToggleButton, this.preventInteractionsToggleButton,
+                this.solidFluidHitboxesToggleButton, this.barrierBlocksToggleButton,
+                this.secondaryRegexInputField, this.secondaryOutgoingRegexField
+        );
+
+        syncControls();
+    }
+
+    void syncControls() {
+        if (this.hudCategoryButton == null) {
+            return;
+        }
+
+        this.hudCategoryButton.setMessage(Text.literal((this.category == Category.HUD ? "> " : "") + Category.HUD.label));
+        this.overlaysCategoryButton.setMessage(Text.literal((this.category == Category.OVERLAYS ? "> " : "") + Category.OVERLAYS.label));
+        this.modulesCategoryButton.setMessage(Text.literal((this.category == Category.MODULES ? "> " : "") + Category.MODULES.label));
+        this.secondaryChatCategoryButton.setMessage(Text.literal((this.category == Category.SECONDARY_CHAT ? "> " : "") + Category.SECONDARY_CHAT.label));
+        this.pickupFeedCategoryButton.setMessage(Text.literal((this.category == Category.PICKUP_FEED ? "> " : "") + Category.PICKUP_FEED.label));
+        this.blockAttributesCategoryButton.setMessage(Text.literal((this.category == Category.BLOCK_ATTRIBUTES ? "> " : "") + Category.BLOCK_ATTRIBUTES.label));
+
+        SecondaryChatSettings.Data secondary = SecondaryChatSettings.get();
+        ensureRegexSelectionInBounds();
+
+        this.macroOverlayToggleButton.setMessage(Text.literal("Macro Keybind HUD: " + (ModConfig.showMacroKeybindOverlay ? "ON" : "OFF")));
+        this.nbtHudToggleButton.setMessage(Text.literal("NBT Inspector HUD: " + (NBTInfoHudOverlayModule.INSTANCE.isEnabled() ? "ON" : "OFF")));
+
+        this.secondaryEnabledToggleButton.setMessage(Text.literal("Secondary Chat: " + (SecondaryChatModule.INSTANCE.isEnabled() ? "ON" : "OFF")));
+        this.secondaryOverlayToggleButton.setMessage(Text.literal("Secondary Overlay: " + (secondary.showOverlay ? "ON" : "OFF")));
+        this.secondaryInterceptModeButton.setMessage(Text.literal("Intercept Mode: " + (secondary.interceptMode == null ? "COPY" : secondary.interceptMode.name())));
+
+        this.pickupEnabledButton.setMessage(Text.literal("Pickup Notifier: " + (ItemPickupNotifierModule.INSTANCE.isEnabled() ? "ON" : "OFF")));
+        this.pickupDurationButton.setMessage(Text.literal("Pickup Duration: " + PickupFeedSettings.get().durationMs + "ms"));
+        this.pickupLinesButton.setMessage(Text.literal("Pickup Max Lines: " + PickupFeedSettings.get().maxLines));
+        this.pickupIconScaleButton.setMessage(Text.literal("Pickup Icon Scale: " + String.format(Locale.ROOT, "%.2f", PickupFeedSettings.get().iconScale)));
+        this.pickupDirectionButton.setMessage(Text.literal("Pickup Direction: " + PickupFeedSettings.get().direction.name()));
+
+        this.freecamToggleButton.setMessage(Text.literal("Freecam: " + (FreecamModule.INSTANCE.isEnabled() ? "ON" : "OFF")));
+        this.fullbrightToggleButton.setMessage(Text.literal("Fullbright: " + (FullbrightModule.INSTANCE.isEnabled() ? "ON" : "OFF")));
+        this.heldLightToggleButton.setMessage(Text.literal("Held Light: " + (HeldLightModule.INSTANCE.isEnabled() ? "ON" : "OFF")));
+        this.inventoryMoveToggleButton.setMessage(Text.literal("Inventory Move: " + (InventoryMoveModule.INSTANCE.isEnabled() ? "ON" : "OFF")));
+        this.instantBreakToggleButton.setMessage(Text.literal("Instant Break: " + (InstantBreakModule.INSTANCE.isEnabled() ? "ON" : "OFF")));
+        this.waypointsToggleButton.setMessage(Text.literal("Waypoints: " + (WaypointModule.INSTANCE.isEnabled() ? "ON" : "OFF")));
+        this.nbtTooltipToggleButton.setMessage(Text.literal("NBT Tooltip: " + (NBTTooltipModule.INSTANCE.isEnabled() ? "ON" : "OFF")));
+        this.shulkerTooltipToggleButton.setMessage(Text.literal("Shulker Preview Tooltip: " + (ShulkerTooltipModule.INSTANCE.isEnabled() ? "ON" : "OFF")));
+
+        this.biomeBorderToggleButton.setMessage(Text.literal("Biome Border Overlay: " + (BiomeBorderOverlayModule.INSTANCE.isEnabled() ? "ON" : "OFF")));
+        this.chunkBorderToggleButton.setMessage(Text.literal("Chunk Border Overlay: " + (ChunkBorderOverlayModule.INSTANCE.isEnabled() ? "ON" : "OFF")));
+        this.slimeChunksToggleButton.setMessage(Text.literal("Slime Chunk Overlay: " + (SlimeChunkOverlayModule.INSTANCE.isEnabled() ? "ON" : "OFF")));
+        this.structureBoundsToggleButton.setMessage(Text.literal("Structure Bounding Boxes: " + (StructureBoundingBoxOverlay.INSTANCE.isEnabled() ? "ON" : "OFF")));
+        this.commandBlockOverlayToggleButton.setMessage(Text.literal("Command Block Overlay: " + (CommandBlockOverlayModule.INSTANCE.isEnabled() ? "ON" : "OFF")));
+        this.lightOverlayToggleButton.setMessage(Text.literal("Light Level Overlay: " + (LightLevelOverlayModule.INSTANCE.isEnabled() ? "ON" : "OFF")));
+
+        this.collisionMeshToggleButton.setMessage(Text.literal("Show Collision Mesh: " + (ModConfig.blockAttributesShowCollisionMesh ? "ON" : "OFF")));
+        this.lightBlocksToggleButton.setMessage(Text.literal("Show Light Blocks: " + (ModConfig.blockAttributesShowLightBlocks ? "ON" : "OFF")));
+        this.preventInteractionsToggleButton.setMessage(Text.literal("Prevent Interactions: " + (ModConfig.blockAttributesPreventInteractions ? "ON" : "OFF")));
+        this.solidFluidHitboxesToggleButton.setMessage(Text.literal("Solid Fluid Hitboxes: " + (ModConfig.blockAttributesSolidFluidHitboxes ? "ON" : "OFF")));
+        this.barrierBlocksToggleButton.setMessage(Text.literal("Show Barrier Blocks: " + (ModConfig.blockAttributesShowBarrierBlocks ? "ON" : "OFF")));
+
+        if (!this.secondaryOutgoingRegexField.isFocused()) {
+            this.secondaryOutgoingRegexField.setText(secondary.outgoingRegex == null ? "" : secondary.outgoingRegex);
+        }
+
+        boolean hud = this.category == Category.HUD;
+        setVisible(this.macroOverlayToggleButton, hud);
+        setVisible(this.nbtHudToggleButton, hud);
+
+        boolean secondaryCategory = this.category == Category.SECONDARY_CHAT;
+        setVisible(this.secondaryEnabledToggleButton, secondaryCategory);
+        setVisible(this.secondaryOverlayToggleButton, secondaryCategory);
+        setVisible(this.secondaryInterceptModeButton, secondaryCategory);
+        setVisible(this.secondaryRegexInputField, secondaryCategory);
+        setVisible(this.secondaryRegexAddButton, secondaryCategory);
+        setVisible(this.secondaryRegexApplyButton, secondaryCategory);
+        setVisible(this.secondaryRegexRemoveButton, secondaryCategory);
+        setVisible(this.secondaryRegexClearButton, secondaryCategory);
+        setVisible(this.secondaryOutgoingRegexField, secondaryCategory);
+        setVisible(this.secondaryOutgoingApplyButton, secondaryCategory);
+
+        boolean pickupCategory = this.category == Category.PICKUP_FEED;
+        setVisible(this.pickupEnabledButton, pickupCategory);
+        setVisible(this.pickupDurationButton, pickupCategory);
+        setVisible(this.pickupLinesButton, pickupCategory);
+        setVisible(this.pickupIconScaleButton, pickupCategory);
+        setVisible(this.pickupDirectionButton, pickupCategory);
+
+        boolean overlays = this.category == Category.OVERLAYS;
+        setVisible(this.biomeBorderToggleButton, overlays);
+        setVisible(this.chunkBorderToggleButton, overlays);
+        setVisible(this.slimeChunksToggleButton, overlays);
+        setVisible(this.structureBoundsToggleButton, overlays);
+        setVisible(this.commandBlockOverlayToggleButton, overlays);
+        setVisible(this.lightOverlayToggleButton, overlays);
+
+        boolean modules = this.category == Category.MODULES;
+        setVisible(this.freecamToggleButton, modules);
+        setVisible(this.fullbrightToggleButton, modules);
+        setVisible(this.heldLightToggleButton, modules);
+        setVisible(this.inventoryMoveToggleButton, modules);
+        setVisible(this.instantBreakToggleButton, modules);
+        setVisible(this.waypointsToggleButton, modules);
+        setVisible(this.nbtTooltipToggleButton, modules);
+        setVisible(this.shulkerTooltipToggleButton, modules);
+
+        boolean blockAttributes = this.category == Category.BLOCK_ATTRIBUTES;
+        setVisible(this.collisionMeshToggleButton, blockAttributes);
+        setVisible(this.lightBlocksToggleButton, blockAttributes);
+        setVisible(this.preventInteractionsToggleButton, blockAttributes);
+        setVisible(this.solidFluidHitboxesToggleButton, blockAttributes);
+        setVisible(this.barrierBlocksToggleButton, blockAttributes);
+    }
+
+    void render(DrawContext context) {
+        syncControls();
+        int splitX = this.owner.width / 2;
+        context.fill(splitX - 1, TOP_BAR_H + 4, splitX, this.owner.height - 8, 0x50FFFFFF);
+        context.drawTextWithShadow(this.owner.workbenchTextRenderer(), "Categories", 12, TOP_BAR_H + 6, 0xFFFFFFFF);
+        context.drawTextWithShadow(this.owner.workbenchTextRenderer(), "Configuration", splitX + 12, TOP_BAR_H + 6, 0xFFFFFFFF);
+
+        if (this.category == Category.SECONDARY_CHAT) {
+            renderSecondaryRegexList(context);
+            context.drawTextWithShadow(this.owner.workbenchTextRenderer(),
+                    "Tip: select a regex row, edit in field, then Apply Selected.", splitX + 12, rowY(11), 0xFFA8CFCF);
+            return;
+        }
+
+        String description = switch (this.category) {
+            case HUD -> "HUD toggles and overlays rendered in screen space.";
+            case OVERLAYS -> "World overlays (chunks, structures, light, command blocks).";
+            case MODULES -> "General gameplay modules and tooltip behaviors.";
+            case PICKUP_FEED -> "Pick-up feed module toggle and behavior settings.";
+            case BLOCK_ATTRIBUTES -> "Block interaction and hitbox behavior overrides.";
+            default -> "";
+        };
+        context.drawTextWithShadow(this.owner.workbenchTextRenderer(), description, splitX + 12, rowY(8), 0xFFA8CFCF);
+    }
+
+    boolean handleMouseClick(double mouseX, double mouseY, int button) {
+        if (this.category == Category.PICKUP_FEED && (button == 0 || button == 1)) {
+            int direction = button == 0 ? 1 : -1;
+            if (contains(mouseX, mouseY, this.pickupDurationButton)) {
+                adjustPickupDuration(direction);
+                syncControls();
+                return true;
+            }
+            if (contains(mouseX, mouseY, this.pickupLinesButton)) {
+                adjustPickupLines(direction);
+                syncControls();
+                return true;
+            }
+            if (contains(mouseX, mouseY, this.pickupIconScaleButton)) {
+                adjustPickupIconScale(direction);
+                syncControls();
+                return true;
+            }
+            if (contains(mouseX, mouseY, this.pickupDirectionButton)) {
+                cyclePickupDirection(direction > 0);
+                syncControls();
+                return true;
+            }
+            return false;
+        }
+
+        if (button != 0 || this.category != Category.SECONDARY_CHAT) {
+            return false;
+        }
+        int[] rect = regexListRect();
+        int x = rect[0];
+        int y = rect[1];
+        int w = rect[2];
+        int h = rect[3];
+        if (!contains(mouseX, mouseY, x, y, w, h)) {
+            return false;
+        }
+
+        List<String> regexes = SecondaryChatSettings.get().regexList;
+        int rowHeight = 12;
+        int visibleRows = Math.max(1, h / rowHeight);
+        int clicked = (int) ((mouseY - y) / rowHeight);
+        int index = this.regexScroll + clicked;
+        if (index >= 0 && index < regexes.size()) {
+            this.selectedRegexIndex = index;
+            this.secondaryRegexInputField.setText(regexes.get(index));
+            this.secondaryRegexInputField.setCursorToEnd(false);
+            return true;
+        }
+        return false;
+    }
+
+    boolean handleMouseScroll(double mouseX, double mouseY, double verticalAmount) {
+        if (this.category != Category.SECONDARY_CHAT) {
+            return false;
+        }
+        int[] rect = regexListRect();
+        if (!contains(mouseX, mouseY, rect[0], rect[1], rect[2], rect[3])) {
+            return false;
+        }
+        int delta = verticalAmount > 0 ? -1 : 1;
+        int max = Math.max(0, SecondaryChatSettings.get().regexList.size() - Math.max(1, rect[3] / 12));
+        this.regexScroll = Math.clamp(this.regexScroll + delta, 0, max);
+        return true;
+    }
+
+    private void renderSecondaryRegexList(DrawContext context) {
+        int[] rect = regexListRect();
+        int x = rect[0];
+        int y = rect[1];
+        int w = rect[2];
+        int h = rect[3];
+        int rowHeight = 12;
+
+        context.fill(x, y, x + w, y + h, 0xAA111111);
+        context.fill(x, y, x + w, y + 1, 0x60FFFFFF);
+
+        List<String> regexes = SecondaryChatSettings.get().regexList;
+        int visibleRows = Math.max(1, h / rowHeight);
+        int max = Math.max(0, regexes.size() - visibleRows);
+        this.regexScroll = Math.clamp(this.regexScroll, 0, max);
+
+        for (int i = 0; i < visibleRows; i++) {
+            int idx = this.regexScroll + i;
+            if (idx >= regexes.size()) {
+                break;
+            }
+            int yy = y + i * rowHeight;
+            if (idx == this.selectedRegexIndex) {
+                context.fill(x + 1, yy, x + w - 1, yy + rowHeight, 0x604A7CC7);
+            }
+            String line = regexes.get(idx);
+            String text = (idx + 1) + ". " + line;
+            if (this.owner.workbenchTextRenderer().getWidth(text) > w - 6) {
+                while (text.length() > 8 && this.owner.workbenchTextRenderer().getWidth(text + "...") > w - 6) {
+                    text = text.substring(0, text.length() - 1);
+                }
+                text += "...";
+            }
+            context.drawTextWithShadow(this.owner.workbenchTextRenderer(), text, x + 3, yy + 2, 0xFFE0E0E0);
+        }
+
+        if (regexes.isEmpty()) {
+            context.drawTextWithShadow(this.owner.workbenchTextRenderer(), "(none)", x + 3, y + 3, 0xFF909090);
+        }
+    }
+
+    private int[] regexListRect() {
+        int rightX = (this.owner.width / 2) + 12;
+        int settingW = Math.max(180, this.owner.width - rightX - 12);
+        return new int[]{rightX, rowY(4), settingW, 58};
+    }
+
+    private void ensureRegexSelectionInBounds() {
+        List<String> regexes = SecondaryChatSettings.get().regexList;
+        if (regexes == null || regexes.isEmpty()) {
+            this.selectedRegexIndex = -1;
+            return;
+        }
+        this.selectedRegexIndex = Math.clamp(this.selectedRegexIndex, 0, regexes.size() - 1);
+    }
+
+    private void setCategory(Category category) {
+        this.category = category == null ? Category.HUD : category;
+        syncControls();
+    }
+
+    private static String safeField(TextFieldWidget field) {
+        if (field == null || field.getText() == null) {
+            return "";
+        }
+        return field.getText().trim();
+    }
+
+    private int rowY(int index) {
+        return CONTENT_START_Y + (index * ROW_GAP);
+    }
+
+    private ButtonWidget button(String label, ButtonWidget.PressAction action, int x, int y, int width, int height) {
+        return ButtonWidget.builder(Text.literal(label), action)
+                .dimensions(x, y, width, height)
+                .build();
+    }
+
+    private void register(ClickableWidget... widgets) {
+        for (ClickableWidget widget : widgets) {
+            this.configWidgets.add(widget);
+            this.owner.addDrawableChild(widget);
+        }
+    }
+
+    private static void setVisible(ClickableWidget widget, boolean visible) {
+        widget.visible = visible;
+        widget.active = visible;
+    }
+
+    private static boolean contains(double mx, double my, int x, int y, int w, int h) {
+        return mx >= x && mx <= x + w && my >= y && my <= y + h;
+    }
+
+    private static boolean contains(double mx, double my, ClickableWidget widget) {
+        return widget != null
+                && widget.visible
+                && contains(mx, my, widget.getX(), widget.getY(), widget.getWidth(), widget.getHeight());
+    }
+
+    private void adjustPickupDuration(int direction) {
+        PickupFeedSettings.updateAndSave(() -> {
+            int step = this.shiftDown.getAsBoolean() ? 250 : 500;
+            PickupFeedSettings.get().durationMs += direction * step;
+        });
+    }
+
+    private void adjustPickupLines(int direction) {
+        PickupFeedSettings.updateAndSave(() -> {
+            int step = this.shiftDown.getAsBoolean() ? 1 : 2;
+            PickupFeedSettings.get().maxLines += direction * step;
+        });
+    }
+
+    private void adjustPickupIconScale(int direction) {
+        PickupFeedSettings.updateAndSave(() -> {
+            float step = this.shiftDown.getAsBoolean() ? 0.05f : 0.1f;
+            PickupFeedSettings.get().iconScale += direction * step;
+        });
+    }
+
+    private void cyclePickupDirection(boolean forward) {
+        PickupFeedSettings.updateAndSave(() -> {
+            PickupFeedSettings.Direction current = PickupFeedSettings.get().direction;
+            if (forward) {
+                PickupFeedSettings.get().direction = current == PickupFeedSettings.Direction.UP
+                        ? PickupFeedSettings.Direction.DOWN
+                        : PickupFeedSettings.Direction.UP;
+            } else {
+                PickupFeedSettings.get().direction = current == PickupFeedSettings.Direction.DOWN
+                        ? PickupFeedSettings.Direction.UP
+                        : PickupFeedSettings.Direction.DOWN;
+            }
+        });
+    }
+}

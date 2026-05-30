@@ -18,6 +18,10 @@ public final class ListPanel {
         this.height = height;
     }
 
+    public ListPanel(UiRect bounds) {
+        this(bounds.x(), bounds.y(), bounds.width(), bounds.height());
+    }
+
     public void render(DrawContext context, TextRenderer textRenderer, List<String> rows, int selectedIndex, int startIndex, int rowHeight) {
         UiForms.drawPanel(context, x, y, width, height);
         if (rows == null || rows.isEmpty()) {

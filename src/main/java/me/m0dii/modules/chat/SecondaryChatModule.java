@@ -23,9 +23,12 @@ public class SecondaryChatModule extends Module {
         registerPressedKeybind(KeybindCatalog.SECONDARY_CHAT_TOGGLE.translationKey(),
                 InputUtil.Type.KEYSYM,
                 KeybindCatalog.SECONDARY_CHAT_TOGGLE.defaultKey(),
-                client -> {
-                    SecondaryChatSettings.updateAndSave(() -> SecondaryChatSettings.get().enabled = !SecondaryChatSettings.get().enabled);
-                    setEnabled(SecondaryChatSettings.get().enabled);
-                });
+                client -> toggleEnabled());
+    }
+
+    @Override
+    public void setEnabled(boolean enabled) {
+        super.setEnabled(enabled);
+        SecondaryChatSettings.updateAndSave(() -> SecondaryChatSettings.get().enabled = this.enabled);
     }
 }

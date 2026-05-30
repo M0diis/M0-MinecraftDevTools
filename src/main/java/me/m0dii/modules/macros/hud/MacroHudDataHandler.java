@@ -35,7 +35,16 @@ public final class MacroHudDataHandler {
 
     public enum VisibilityMode {
         ALWAYS,
-        CHAT_ONLY
+        CHAT,
+        INVENTORY,
+        CONTAINER,
+        CHEST,
+        SCREEN
+    }
+
+    public enum ButtonExecutionMode {
+        COMMAND,
+        SCRIPT
     }
 
     public enum HorizontalAlign {
@@ -72,6 +81,7 @@ public final class MacroHudDataHandler {
         public String macroId = "";
         // Optional direct action for button elements (e.g. "/say hi", "msg:hello", "cmd:/spawn").
         public String buttonAction = "";
+        public ButtonExecutionMode buttonExecutionMode = ButtonExecutionMode.COMMAND;
         // Position offsets relative to the selected anchor.
         public int x = 20;
         public int y = 60;
@@ -88,6 +98,7 @@ public final class MacroHudDataHandler {
         public HorizontalAlign horizontalAlign = HorizontalAlign.CENTER;
         public VerticalAlign verticalAlign = VerticalAlign.CENTER;
         public VisibilityMode visibilityMode = VisibilityMode.ALWAYS;
+        public String visibilityScreenType = "";
         public boolean visible = true;
 
         // Shared data source/config for advanced widget types.
@@ -416,6 +427,7 @@ public final class MacroHudDataHandler {
             e.text = safe(raw.text, "Text");
             e.macroId = raw.macroId == null ? "" : raw.macroId.trim();
             e.buttonAction = raw.buttonAction == null ? "" : raw.buttonAction.trim();
+            e.buttonExecutionMode = raw.buttonExecutionMode == null ? ButtonExecutionMode.COMMAND : raw.buttonExecutionMode;
             e.x = Math.clamp(raw.x, -10000, 10000);
             e.y = Math.clamp(raw.y, -10000, 10000);
             e.anchor = raw.anchor == null ? Anchor.TOP_LEFT : raw.anchor;
@@ -430,7 +442,13 @@ public final class MacroHudDataHandler {
             e.drawBorder = raw.drawBorder;
             e.horizontalAlign = raw.horizontalAlign == null ? HorizontalAlign.CENTER : raw.horizontalAlign;
             e.verticalAlign = raw.verticalAlign == null ? VerticalAlign.CENTER : raw.verticalAlign;
-            e.visibilityMode = raw.visibilityMode == null ? VisibilityMode.ALWAYS : raw.visibilityMode;
+            if (raw.visibilityMode == null || raw.visibilityMode == VisibilityMode.CHAT) {
+                // Older configs used CHAT_ONLY semantics; keep that behavior.
+                e.visibilityMode = raw.visibilityMode == null ? VisibilityMode.ALWAYS : VisibilityMode.CHAT;
+            } else {
+                e.visibilityMode = raw.visibilityMode;
+            }
+            e.visibilityScreenType = raw.visibilityScreenType == null ? "" : raw.visibilityScreenType.trim();
             e.visible = raw.visible;
             e.sourceToken = raw.sourceToken == null ? "" : raw.sourceToken.trim();
             e.sourceTokenMax = raw.sourceTokenMax == null ? "" : raw.sourceTokenMax.trim();
@@ -526,6 +544,7 @@ public final class MacroHudDataHandler {
         cloned.text = e.text;
         cloned.macroId = e.macroId;
         cloned.buttonAction = e.buttonAction;
+        cloned.buttonExecutionMode = e.buttonExecutionMode;
         cloned.x = e.x;
         cloned.y = e.y;
         cloned.anchor = e.anchor;
@@ -541,6 +560,7 @@ public final class MacroHudDataHandler {
         cloned.horizontalAlign = e.horizontalAlign;
         cloned.verticalAlign = e.verticalAlign;
         cloned.visibilityMode = e.visibilityMode;
+        cloned.visibilityScreenType = e.visibilityScreenType;
         cloned.visible = e.visible;
         cloned.sourceToken = e.sourceToken;
         cloned.sourceTokenMax = e.sourceTokenMax;

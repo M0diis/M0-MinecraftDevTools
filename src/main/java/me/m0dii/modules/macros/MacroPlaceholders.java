@@ -2,11 +2,16 @@ package me.m0dii.modules.macros;
 
 import me.m0dii.utils.CpsTracker;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.gui.screen.ingame.HandledScreen;
 import net.minecraft.entity.Entity;
+import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.entity.player.PlayerInventory;
+import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.registry.RegistryKey;
 import net.minecraft.registry.entry.RegistryEntry;
+import net.minecraft.screen.slot.Slot;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.EntityHitResult;
@@ -108,6 +113,16 @@ public final class MacroPlaceholders {
             return exact;
         }
 
+        String armor = resolveArmorToken(token, p);
+        if (armor != null) {
+            return armor;
+        }
+
+        String itemCount = resolveItemCountToken(token, client, p);
+        if (itemCount != null) {
+            return itemCount;
+        }
+
         String keyState = resolveKeyStateToken(token, client);
         if (keyState != null) {
             return keyState;
@@ -160,6 +175,101 @@ public final class MacroPlaceholders {
         }
 
         return null;
+    }
+
+    private static String resolveItemCountToken(String token, MinecraftClient client, PlayerEntity player) {
+        final String inventoryPrefix = "inventory.count:";
+        final String containerPrefix = "container.count:";
+
+        if (token.startsWith(inventoryPrefix)) {
+            Item item = parseItemTokenArg(token.substring(inventoryPrefix.length()));
+            if (item == null) {
+                return "0";
+            }
+            return Integer.toString(countItemInInventory(player.getInventory(), item));
+        }
+
+        if (token.startsWith(containerPrefix)) {
+            Item item = parseItemTokenArg(token.substring(containerPrefix.length()));
+            if (item == null) {
+                return "0";
+            }
+            if (!(client.currentScreen instanceof HandledScreen<?> handledScreen)) {
+                return "0";
+            }
+            int total = 0;
+            PlayerInventory playerInventory = player.getInventory();
+            for (Slot slot : handledScreen.getScreenHandler().slots) {
+                if (slot == null || !slot.hasStack() || slot.inventory == playerInventory) {
+                    continue;
+                }
+                ItemStack stack = slot.getStack();
+                if (!stack.isEmpty() && stack.isOf(item)) {
+                    total += stack.getCount();
+                }
+            }
+            return Integer.toString(total);
+        }
+
+        return null;
+    }
+
+    private static int countItemInInventory(PlayerInventory inventory, Item item) {
+        int total = 0;
+        for (int i = 0; i < inventory.size(); i++) {
+            ItemStack stack = inventory.getStack(i);
+            if (!stack.isEmpty() && stack.isOf(item)) {
+                total += stack.getCount();
+            }
+        }
+        return total;
+    }
+
+    private static Item parseItemTokenArg(String raw) {
+        String trimmed = raw == null ? "" : raw.trim().toLowerCase(Locale.ROOT);
+        if (trimmed.isEmpty()) {
+            return null;
+        }
+
+        Identifier id = trimmed.indexOf(':') >= 0
+                ? Identifier.tryParse(trimmed)
+                : Identifier.tryParse("minecraft:" + trimmed);
+        if (id == null || !net.minecraft.registry.Registries.ITEM.containsId(id)) {
+            return null;
+        }
+        return net.minecraft.registry.Registries.ITEM.get(id);
+    }
+
+    private static String resolveArmorToken(String token, PlayerEntity player) {
+        if (!token.startsWith("armor.")) {
+            return null;
+        }
+
+        String[] parts = token.split("\\.");
+        if (parts.length != 3) {
+            return null;
+        }
+
+        ItemStack stack = switch (parts[1]) {
+            case "boots" -> player.getEquippedStack(EquipmentSlot.FEET);
+            case "leggings" -> player.getEquippedStack(EquipmentSlot.LEGS);
+            case "chestplate" -> player.getEquippedStack(EquipmentSlot.CHEST);
+            case "helmet" -> player.getEquippedStack(EquipmentSlot.HEAD);
+            default -> null;
+        };
+        if (stack == null) {
+            return null;
+        }
+
+        return switch (parts[2]) {
+            case "item" -> stack.getName().getString();
+            case "id" -> stack.getItem().toString();
+            case "count" -> Integer.toString(stack.getCount());
+            case "damage" -> Integer.toString(stack.getDamage());
+            case "max_damage" -> Integer.toString(stack.getMaxDamage());
+            case "durability" -> Integer.toString(durability(stack));
+            default -> null;
+        };
     }
 
     private static String tryResolveTransformedToken(String token,
@@ -513,7 +623,7 @@ public final class MacroPlaceholders {
                         extras.add(meters + "m");
                     }
                     if (withDirectionFinal) {
-                        extras.add(directionFromToShort(p.getX(), p.getZ(), entity.getX(), entity.getZ(), withDirectionArrowFinal));
+                        extras.add(directionFromToShort(p.getX(), p.getZ(), entity.getX(), entity.getZ(), p.getYaw(), withDirectionArrowFinal));
                     }
                     return name + " (" + String.join(" ", extras) + ")";
                 })
@@ -668,7 +778,7 @@ public final class MacroPlaceholders {
                             extras.add(meters + "m");
                         }
                         if (withDirectionFinal) {
-                            extras.add(directionFromToShort(p.getX(), p.getZ(), other.getX(), other.getZ(), withDirectionArrowFinal));
+                            extras.add(directionFromToShort(p.getX(), p.getZ(), other.getX(), other.getZ(), p.getYaw(), withDirectionArrowFinal));
                         }
                         return name + " (" + String.join(" ", extras) + ")";
                     })
@@ -786,6 +896,11 @@ public final class MacroPlaceholders {
             "{hand.damage} {hand.max_damage} {hand.durability}",
             "{offhand.item} {offhand.id} {offhand.count}",
             "{offhand.damage} {offhand.max_damage} {offhand.durability}",
+            "{armor.helmet.item} {armor.helmet.durability}",
+            "{armor.chestplate.item} {armor.chestplate.durability}",
+            "{armor.leggings.item} {armor.leggings.durability}",
+            "{armor.boots.item} {armor.boots.durability}",
+            "{inventory.count:diamond} {container.count:diamond}",
             "{dim} => current dimension id",
             "{rand.int(1,10)} => random integer in range",
             "",
@@ -843,6 +958,11 @@ public final class MacroPlaceholders {
                 "look.entity.name", "look.entity.uuid", "look.entity.id", "look.entity.type", "look.dir.x", "look.dir.y", "look.dir.z",
                 "hand.item", "hand.id", "hand.count", "hand.damage", "hand.max_damage", "hand.durability",
                 "offhand.item", "offhand.id", "offhand.count", "offhand.damage", "offhand.max_damage", "offhand.durability",
+                "armor.helmet.item", "armor.helmet.id", "armor.helmet.count", "armor.helmet.damage", "armor.helmet.max_damage", "armor.helmet.durability",
+                "armor.chestplate.item", "armor.chestplate.id", "armor.chestplate.count", "armor.chestplate.damage", "armor.chestplate.max_damage", "armor.chestplate.durability",
+                "armor.leggings.item", "armor.leggings.id", "armor.leggings.count", "armor.leggings.damage", "armor.leggings.max_damage", "armor.leggings.durability",
+                "armor.boots.item", "armor.boots.id", "armor.boots.count", "armor.boots.damage", "armor.boots.max_damage", "armor.boots.durability",
+                "inventory.count:<item>", "container.count:<item>",
                 "client.fps", "client.screen", "client.screen.width", "client.screen.height", "client.server.singleplayer", "client.server.name", "client.server.address",
                 "world.time", "world.time.ticks", "world.time.day", "world.day", "world.time.day_ticks", "world.time.clock", "world.is_day", "world.is_night",
                 "sel.self", "sel.nearest", "sel.random", "sel.all", "sel.entities", "players.count", "players.count.other", "players.nearby.count"
@@ -1086,14 +1206,35 @@ public final class MacroPlaceholders {
         return base + " " + compassArrow(idx);
     }
 
-    private static String directionFromToShort(double fromX, double fromZ, double toX, double toZ, boolean withArrow) {
+    private static String directionFromToShort(double fromX, double fromZ, double toX, double toZ, float playerYaw, boolean withArrow) {
         double dx = toX - fromX;
         double dz = toZ - fromZ;
         if (Math.abs(dx) < 0.0001 && Math.abs(dz) < 0.0001) {
             return "HERE";
         }
-        float yaw = (float) Math.toDegrees(Math.atan2(-dx, dz));
-        return withArrow ? yawToCompassWithArrow(yaw, true) : yawToCompass(yaw, true);
+        float targetYaw = (float) Math.toDegrees(Math.atan2(-dx, dz));
+        if (!withArrow) {
+            return yawToCompass(targetYaw, true);
+        }
+        return yawToCompass(targetYaw, true) + " " + relativeLookArrow(playerYaw, targetYaw);
+    }
+
+    private static String relativeLookArrow(float playerYaw, float targetYaw) {
+        float delta = normalizeYaw(targetYaw - playerYaw);
+        int idx = Math.floorMod(Math.round(delta / 45.0f), 8);
+        String[] arrows = {"↑", "↗", "→", "↘", "↓", "↙", "←", "↖"};
+        return arrows[idx];
+    }
+
+    private static float normalizeYaw(float yaw) {
+        float wrapped = yaw % 360.0f;
+        if (wrapped >= 180.0f) {
+            wrapped -= 360.0f;
+        }
+        if (wrapped < -180.0f) {
+            wrapped += 360.0f;
+        }
+        return wrapped;
     }
 
     private static String compassArrow(int idx) {

@@ -20,7 +20,7 @@ public class MacroKeybindOverlayModule extends Module {
     public static final MacroKeybindOverlayModule INSTANCE = new MacroKeybindOverlayModule();
 
     private MacroKeybindOverlayModule() {
-        super("macro_keybind_overlay", "Macro Keybind Overlay", true);
+        super("macro_keybind_overlay", "Macro Keybind HUD", true);
     }
 
     @Override

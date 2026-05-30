@@ -46,7 +46,7 @@ public final class MacroConfigScreen {
 
         SubCategoryBuilder overlaySettings = eb.startSubCategory(Text.literal("Overlay Settings"))
                 .setExpanded(false);
-        overlaySettings.add(eb.startBooleanToggle(Text.literal("Show macro keybind overlay"), overlayVisible[0])
+        overlaySettings.add(eb.startBooleanToggle(Text.literal("Show macro keybind HUD"), overlayVisible[0])
                 .setTooltip(Text.literal("Shows or hides the macro keybind list on the HUD"))
                 .setSaveConsumer(val -> overlayVisible[0] = val)
                 .build());
