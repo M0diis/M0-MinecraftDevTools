@@ -1,6 +1,7 @@
 package me.m0dii.modules.scripting;
 
 import me.m0dii.M0DevTools;
+import me.m0dii.modules.macros.hud.MacroHudDataHandler;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.text.Text;
 
@@ -14,7 +15,7 @@ public final class HudButtonScriptExecutor {
     private HudButtonScriptExecutor() {
     }
 
-    public static boolean runScript(String actionName, String scriptAction) {
+    public static boolean runScript(String actionName, String scriptAction, MacroHudDataHandler.ButtonExecutionMode mode) {
         String raw = scriptAction == null ? "" : scriptAction.trim();
         if (raw.isEmpty()) {
             return false;
@@ -26,7 +27,7 @@ public final class HudButtonScriptExecutor {
         }
 
         String script = raw;
-        ScriptManager engine = GROOVY;
+        ScriptManager engine = mode == MacroHudDataHandler.ButtonExecutionMode.KOTLIN_SCRIPT ? KOTLIN : GROOVY;
 
         if (raw.regionMatches(true, 0, "kotlin:", 0, 7) || raw.regionMatches(true, 0, "kts:", 0, 4)) {
             script = raw.substring(raw.indexOf(':') + 1).trim();
@@ -59,7 +60,8 @@ public final class HudButtonScriptExecutor {
         context.put("server", client.getServer());
 
         try {
-            engine.runScript(script, context);
+            Object result = engine.runScript(script, context);
+            client.player.sendMessage(Text.literal(String.valueOf(result)), false);
             return true;
         } catch (Exception e) {
             client.player.sendMessage(Text.literal("Script button '" + actionName + "' failed: " + e.getMessage()), true);

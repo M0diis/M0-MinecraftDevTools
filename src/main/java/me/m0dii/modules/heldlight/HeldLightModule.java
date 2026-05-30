@@ -20,15 +20,13 @@ import java.util.Set;
 public class HeldLightModule extends Module {
     public static final HeldLightModule INSTANCE = new HeldLightModule();
     private static ChunkPos lastLightChunkPos;
+    private static BlockPos lastRefreshBlockPos;
     private static int lastChunkRadius;
     private static boolean lastHadLightSource;
     private static boolean cachedLightActive;
     private static int cachedBrightness;
     private static double cachedFalloffDistance;
     private static double cachedFalloffDistanceSq;
-    private static double cachedPlayerX;
-    private static double cachedPlayerY;
-    private static double cachedPlayerZ;
 
     private static int cachedWhitelistHash;
     private static Set<String> cachedItemWhitelist = Set.of();
@@ -47,6 +45,7 @@ public class HeldLightModule extends Module {
     private void onEndTick(MinecraftClient client) {
         if (client == null || client.player == null || client.world == null || client.worldRenderer == null) {
             lastLightChunkPos = null;
+            lastRefreshBlockPos = null;
             lastChunkRadius = 0;
             lastHadLightSource = false;
             cachedLightActive = false;
@@ -65,9 +64,6 @@ public class HeldLightModule extends Module {
             cachedBrightness = cfg.brightness;
             cachedFalloffDistance = cfg.falloffDistance;
             cachedFalloffDistanceSq = cfg.falloffDistance * cfg.falloffDistance;
-            cachedPlayerX = client.player.getX();
-            cachedPlayerY = client.player.getY() + client.player.getStandingEyeHeight();
-            cachedPlayerZ = client.player.getZ();
         } else {
             cachedLightActive = false;
         }
@@ -77,14 +73,21 @@ public class HeldLightModule extends Module {
                 scheduleChunkRange(client.worldRenderer, lastLightChunkPos, Math.max(1, lastChunkRadius), client.world.getBottomY(), client.world.getTopYInclusive() + 1);
             }
             lastLightChunkPos = null;
+            lastRefreshBlockPos = null;
             lastChunkRadius = 0;
             lastHadLightSource = false;
             return;
         }
 
         int chunkRadius = Math.max(1, (int) Math.ceil(cfg.falloffDistance / 16.0) + 1);
-        ChunkPos currentChunk = new ChunkPos(client.player.getBlockPos());
-        if (!lastHadLightSource || lastLightChunkPos == null || !lastLightChunkPos.equals(currentChunk) || lastChunkRadius != chunkRadius) {
+        BlockPos currentBlockPos = client.player.getBlockPos();
+        ChunkPos currentChunk = new ChunkPos(currentBlockPos);
+        boolean movedEnough = lastRefreshBlockPos == null
+                || Math.abs(currentBlockPos.getX() - lastRefreshBlockPos.getX()) >= 2
+                || Math.abs(currentBlockPos.getY() - lastRefreshBlockPos.getY()) >= 2
+                || Math.abs(currentBlockPos.getZ() - lastRefreshBlockPos.getZ()) >= 2;
+
+        if (!lastHadLightSource || lastLightChunkPos == null || !lastLightChunkPos.equals(currentChunk) || lastChunkRadius != chunkRadius || movedEnough) {
             int minY = client.world.getBottomY();
             int maxY = client.world.getTopYInclusive() + 1;
             if (lastHadLightSource && lastLightChunkPos != null) {
@@ -92,6 +95,7 @@ public class HeldLightModule extends Module {
             }
             scheduleChunkRange(client.worldRenderer, currentChunk, chunkRadius, minY, maxY);
             lastLightChunkPos = currentChunk;
+            lastRefreshBlockPos = currentBlockPos;
             lastChunkRadius = chunkRadius;
             lastHadLightSource = true;
         }
@@ -133,9 +137,13 @@ public class HeldLightModule extends Module {
             return 0;
         }
 
-        double dx = pos.getX() + 0.5 - cachedPlayerX;
-        double dy = pos.getY() + 0.5 - cachedPlayerY;
-        double dz = pos.getZ() + 0.5 - cachedPlayerZ;
+        double playerX = client.player.getX();
+        double playerY = client.player.getY() + client.player.getStandingEyeHeight();
+        double playerZ = client.player.getZ();
+
+        double dx = pos.getX() + 0.5 - playerX;
+        double dy = pos.getY() + 0.5 - playerY;
+        double dz = pos.getZ() + 0.5 - playerZ;
         double distanceSq = dx * dx + dy * dy + dz * dz;
         if (distanceSq > cachedFalloffDistanceSq) {
             return 0;

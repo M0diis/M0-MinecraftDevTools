@@ -32,6 +32,7 @@
     "WorldRendererHeldLightMixin",
     "WorldRendererMixin",
     "macros.ChatScreenMacroHudMixin",
+    "macros.HandledScreenMacroHudMixin",
     "uiutilities.BookEditScreenMixin",
     "uiutilities.BookScreenMixin",
     "uiutilities.ClientCommonNetworkHandlerMixin",

@@ -75,7 +75,7 @@ public final class MacroHudRuntime {
         }
 
         MinecraftClient client = MinecraftClient.getInstance();
-        if (client.player == null || !(client.currentScreen instanceof ChatScreen)) {
+        if (client.player == null || client.currentScreen == null) {
             return false;
         }
 
@@ -104,10 +104,9 @@ public final class MacroHudRuntime {
 
             String actionName = (element.label == null || element.label.isBlank()) ? "HUD Action" : element.label;
             if (element.buttonAction != null && !element.buttonAction.isBlank()) {
-                if (element.buttonExecutionMode == MacroHudDataHandler.ButtonExecutionMode.SCRIPT) {
-                    HudButtonScriptExecutor.runScript(actionName, element.buttonAction);
-                } else {
-                    CommandMacros.runInlineAction(actionName, element.buttonAction);
+                switch (element.buttonExecutionMode) {
+                    case COMMAND -> CommandMacros.runInlineAction(actionName, element.buttonAction);
+                    case GROOVY_SCRIPT, KOTLIN_SCRIPT -> HudButtonScriptExecutor.runScript(actionName, element.buttonAction, element.buttonExecutionMode);
                 }
                 return true;
             }
@@ -160,7 +159,7 @@ public final class MacroHudRuntime {
     private static void renderTextElement(DrawContext context, MacroHudDataHandler.HudElement element, int x, int y) {
         List<String> lines = splitLines(expanded(element.text));
         if (element.drawBackground) {
-            context.fill(x, y, x + element.width, y + element.height, element.backgroundColor);
+            context.fill(x, y, x + element.width, y + element.height, effectiveBackgroundColor(element.backgroundColor));
         }
         if (element.drawBorder) {
             drawBorder(context, x, y, element.width, element.height, element.borderColor);
@@ -189,6 +188,7 @@ public final class MacroHudRuntime {
 
         if (element.drawBackground) {
             int bg = interactiveMode ? brighten(element.backgroundColor, 0x10101010) : element.backgroundColor;
+            bg = effectiveBackgroundColor(bg);
             context.fill(x1, y1, x2, y2, bg);
         }
 
@@ -235,7 +235,7 @@ public final class MacroHudRuntime {
 
     private static void renderIconElement(DrawContext context, MacroHudDataHandler.HudElement element, int x, int y) {
         if (element.drawBackground) {
-            context.fill(x, y, x + element.width, y + element.height, element.backgroundColor);
+            context.fill(x, y, x + element.width, y + element.height, effectiveBackgroundColor(element.backgroundColor));
         }
         if (element.drawBorder) {
             drawBorder(context, x, y, element.width, element.height, element.borderColor);
@@ -290,7 +290,7 @@ public final class MacroHudRuntime {
 
     private static void renderBarElement(DrawContext context, MacroHudDataHandler.HudElement element, int x, int y) {
         if (element.drawBackground) {
-            context.fill(x, y, x + element.width, y + element.height, element.backgroundColor);
+            context.fill(x, y, x + element.width, y + element.height, effectiveBackgroundColor(element.backgroundColor));
         }
         if (element.drawBorder) {
             drawBorder(context, x, y, element.width, element.height, element.borderColor);
@@ -351,7 +351,7 @@ public final class MacroHudRuntime {
 
     private static void renderValueElement(DrawContext context, MacroHudDataHandler.HudElement element, int x, int y) {
         if (element.drawBackground) {
-            context.fill(x, y, x + element.width, y + element.height, element.backgroundColor);
+            context.fill(x, y, x + element.width, y + element.height, effectiveBackgroundColor(element.backgroundColor));
         }
         if (element.drawBorder) {
             drawBorder(context, x, y, element.width, element.height, element.borderColor);
@@ -382,7 +382,7 @@ public final class MacroHudRuntime {
 
     private static void renderListElement(DrawContext context, MacroHudDataHandler.HudElement element, int x, int y) {
         if (element.drawBackground) {
-            context.fill(x, y, x + element.width, y + element.height, element.backgroundColor);
+            context.fill(x, y, x + element.width, y + element.height, effectiveBackgroundColor(element.backgroundColor));
         }
         if (element.drawBorder) {
             drawBorder(context, x, y, element.width, element.height, element.borderColor);
@@ -532,6 +532,18 @@ public final class MacroHudRuntime {
         int g = Math.round(g1 + (g2 - g1) * tt);
         int b = Math.round(b1 + (b2 - b1) * tt);
         return (a << 24) | (r << 16) | (g << 8) | b;
+    }
+
+    private static int effectiveBackgroundColor(int color) {
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (client.currentScreen instanceof HandledScreen<?> handled && !(handled instanceof InventoryScreen)) {
+            // Reduce alpha and lift brightness so HUD remains readable above container dim overlays.
+            int alpha = (color >>> 24) & 0xFF;
+            int targetAlpha = Math.max(0x66, Math.min(0xA0, alpha));
+            int brightened = brighten(color, 0x14141414);
+            return (targetAlpha << 24) | (brightened & 0x00FFFFFF);
+        }
+        return color;
     }
 
     private static ItemStack resolveIconStack(MacroHudDataHandler.HudElement element) {

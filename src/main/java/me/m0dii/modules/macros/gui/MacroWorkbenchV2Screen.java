@@ -16,6 +16,7 @@ import me.m0dii.modules.messagehistory.MessageHistoryManager;
 import me.m0dii.modules.nbthud.NBTInfoHudOverlayModule;
 import me.m0dii.modules.pickup.ItemPickupNotifierModule;
 import me.m0dii.modules.pickup.PickupFeedSettings;
+import me.m0dii.modules.scripting.ScriptStorage;
 import me.m0dii.utils.ModConfig;
 import net.minecraft.client.gui.Click;
 import net.minecraft.client.gui.DrawContext;
@@ -171,11 +172,15 @@ public class MacroWorkbenchV2Screen extends Screen {
     private boolean advancedActionFocused = false;
     private boolean advancedBgColorFocused = false;
     private boolean advancedBorderColorFocused = false;
+    private boolean advancedVisibilityScreenTypeFocused = false;
     private String advancedText = "";
     private String advancedAction = "";
+    private String advancedVisibilityScreenType = "";
     private String advancedBgColor = "";
     private String advancedBorderColor = "";
     private int advancedCursor = 0;
+    private int advancedTextScrollLine = 0;
+    private boolean advancedTextManualScroll = false;
     private int advancedActionCursor = 0;
     private int advancedActionSuggestionIndex = -1;
     private int advancedActionSuggestionScroll = 0;
@@ -183,8 +188,10 @@ public class MacroWorkbenchV2Screen extends Screen {
     private int advancedActionSelectionAnchor = -1;
     private int advancedBgCursor = 0;
     private int advancedBorderCursor = 0;
+    private int advancedVisibilityScreenTypeCursor = 0;
     private int advancedBgSelectionAnchor = -1;
     private int advancedBorderSelectionAnchor = -1;
+    private int advancedVisibilityScreenTypeSelectionAnchor = -1;
     private ModalDragSelectionField activeDragSelectionField = ModalDragSelectionField.NONE;
     private int snapGuideX = Integer.MIN_VALUE;
     private int snapGuideY = Integer.MIN_VALUE;
@@ -414,7 +421,7 @@ public class MacroWorkbenchV2Screen extends Screen {
         this.macroField = new TextFieldWidget(this.textRenderer, 292, this.height - 38, 120, 18, Text.literal("Macro Id"));
         this.macroField.setMaxLength(120);
         this.actionField = new TextFieldWidget(this.textRenderer, 416, this.height - 38, 180, 18, Text.literal("Action"));
-        this.actionField.setMaxLength(220);
+        this.actionField.setMaxLength(32767);
 
         this.backgroundToggle = ButtonWidget.builder(Text.literal("BG: OFF"), b -> {
             if (selected != null) {
@@ -721,7 +728,7 @@ public class MacroWorkbenchV2Screen extends Screen {
             context.drawTextWithShadow(this.textRenderer, "Macro Id (optional)", 292, y - 10, 0xFFAAAAAA);
             String actionLabel = "Action (optional)";
             if (selected != null && selected.type == MacroHudDataHandler.ElementType.BUTTON
-                    && selected.buttonExecutionMode == MacroHudDataHandler.ButtonExecutionMode.SCRIPT) {
+                    && selected.buttonExecutionMode != MacroHudDataHandler.ButtonExecutionMode.COMMAND) {
                 actionLabel = "Script (inline or file name)";
             }
             context.drawTextWithShadow(this.textRenderer, actionLabel, 416, y - 10, 0xFFAAAAAA);
@@ -1085,6 +1092,19 @@ public class MacroWorkbenchV2Screen extends Screen {
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
         if (advancedOpen) {
+            if (selected != null && !isSecondaryChatProxy(selected) && !isNbtInspectorProxy(selected)
+                    && !isMacroKeybindProxy(selected) && !isPickupNotifierProxy(selected)
+                    && !isCustomWidgetType(selected)) {
+                StandardAdvancedLayout layout = standardAdvancedLayout(modalX(), modalY());
+                if (layout.textArea().contains(mouseX, mouseY)) {
+                    int delta = verticalAmount > 0 ? -1 : 1;
+                    int maxVisible = Math.max(1, (layout.textArea().height() - 8) / 9);
+                    int maxScroll = Math.max(0, splitLinesRaw(advancedText).size() - maxVisible);
+                    advancedTextScrollLine = Math.clamp(advancedTextScrollLine + delta, 0, maxScroll);
+                    advancedTextManualScroll = true;
+                    return true;
+                }
+            }
             if (selected != null && isCustomWidgetType(selected)) {
                 int boxX = modalX();
                 int boxY = modalY();
@@ -1178,6 +1198,8 @@ public class MacroWorkbenchV2Screen extends Screen {
                 insertAtAdvancedBgCursor(new String(Character.toChars(codepoint)));
             } else if (advancedBorderColorFocused && codepoint >= 32 && codepoint != 127) {
                 insertAtAdvancedBorderCursor(new String(Character.toChars(codepoint)));
+            } else if (advancedVisibilityScreenTypeFocused && codepoint >= 32 && codepoint != 127) {
+                insertAtAdvancedVisibilityScreenTypeCursor(new String(Character.toChars(codepoint)));
             }
             return true;
         }
@@ -1243,6 +1265,8 @@ public class MacroWorkbenchV2Screen extends Screen {
                 handleAdvancedBgKey(keyCode);
             } else if (advancedBorderColorFocused) {
                 handleAdvancedBorderKey(keyCode);
+            } else if (advancedVisibilityScreenTypeFocused) {
+                handleAdvancedVisibilityScreenTypeKey(keyCode);
             } else if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
                 closeAdvancedModal();
             }
@@ -1270,9 +1294,6 @@ public class MacroWorkbenchV2Screen extends Screen {
                     if (!selectedElementIds.add(e.id)) {
                         selectedElementIds.remove(e.id);
                     }
-                    if (selectedElementIds.isEmpty()) {
-                        selectedElementIds.add(e.id);
-                    }
                     dragging = false;
                     resizing = false;
                     syncCanvasFields();
@@ -1284,7 +1305,8 @@ public class MacroWorkbenchV2Screen extends Screen {
                     selectedElementIds.clear();
                     selectedElementIds.add(e.id);
                 }
-                if (isResizeHandleHit(ex, ey, e, mouseX, mouseY)) {
+
+                if (canResize(e, mouseX, mouseY)) {
                     this.resizing = true;
                     this.dragging = false;
                     this.resizeStartMouseX = (int) mouseX;
@@ -1311,8 +1333,8 @@ public class MacroWorkbenchV2Screen extends Screen {
 
         this.selected = null;
         selectedElementIds.clear();
-        this.dragging = false;
         this.resizing = false;
+        this.dragging = false;
         syncCanvasFields();
         return false;
     }
@@ -1351,25 +1373,8 @@ public class MacroWorkbenchV2Screen extends Screen {
         }
 
         boolean forward = click.button() != 1;
-
         int boxX = modalX();
         int boxY = modalY();
-        int textX = boxX + 12;
-        int textY = boxY + 34;
-        int textW = MODAL_W - 24;
-        int textH = 108;
-        int actionX = boxX + 12;
-        int actionY = boxY + 148;
-        int actionW = MODAL_W - 24;
-        int actionH = 18;
-        int bgFieldX = boxX + 238;
-        int bgFieldY = boxY + 218;
-        int bgFieldW = 88;
-        int bgFieldH = 18;
-        int borderFieldX = boxX + 356;
-        int borderFieldY = boxY + 218;
-        int borderFieldW = 88;
-        int borderFieldH = 18;
 
         if (containsBox(click.x(), click.y(), boxX, boxY, MODAL_W, 20)) {
             advancedModalDragging = true;
@@ -1378,268 +1383,7 @@ public class MacroWorkbenchV2Screen extends Screen {
             return true;
         }
 
-        if (isSecondaryChatProxy(selected)) {
-            SecondaryAdvancedLayout layout = secondaryAdvancedLayout(boxX, boxY);
-            if (containsBox(click.x(), click.y(), layout.guiOpen())) {
-                advancedSecondaryShowWhileGuiOpen = !advancedSecondaryShowWhileGuiOpen;
-                return true;
-            }
-            if (containsBox(click.x(), click.y(), layout.fadeToggle())) {
-                advancedSecondaryFadeEnabled = !advancedSecondaryFadeEnabled;
-                return true;
-            }
-            if (containsBox(click.x(), click.y(), layout.hoverReset())) {
-                advancedSecondaryResetTransparencyOnHover = !advancedSecondaryResetTransparencyOnHover;
-                return true;
-            }
-            if (containsBox(click.x(), click.y(), layout.noTransparency())) {
-                advancedSecondaryNoTransparencyWhenChatOpen = !advancedSecondaryNoTransparencyWhenChatOpen;
-                return true;
-            }
-            if (containsBox(click.x(), click.y(), layout.mode())) {
-                advancedSecondaryInterceptMode = advancedSecondaryInterceptMode == SecondaryChatSettings.InterceptMode.COPY
-                        ? SecondaryChatSettings.InterceptMode.MOVE
-                        : SecondaryChatSettings.InterceptMode.COPY;
-                return true;
-            }
-            if (containsBox(click.x(), click.y(), layout.scaleMinus())) {
-                advancedSecondaryScale = Math.max(0.1, advancedSecondaryScale - stepDouble(0.05));
-                return true;
-            }
-            if (containsBox(click.x(), click.y(), layout.scalePlus())) {
-                advancedSecondaryScale = Math.min(3.0, advancedSecondaryScale + stepDouble(0.05));
-                return true;
-            }
-            if (containsBox(click.x(), click.y(), layout.lineMinus())) {
-                advancedSecondaryLineHeight = Math.max(1, advancedSecondaryLineHeight - stepInt(1));
-                return true;
-            }
-            if (containsBox(click.x(), click.y(), layout.linePlus())) {
-                advancedSecondaryLineHeight = Math.min(30, advancedSecondaryLineHeight + stepInt(1));
-                return true;
-            }
-            if (containsBox(click.x(), click.y(), layout.fadeMinus())) {
-                advancedSecondaryFadeDurationMs = Math.max(1000, advancedSecondaryFadeDurationMs - stepInt(1000));
-                return true;
-            }
-            if (containsBox(click.x(), click.y(), layout.fadePlus())) {
-                advancedSecondaryFadeDurationMs = Math.min(120000, advancedSecondaryFadeDurationMs + stepInt(1000));
-                return true;
-            }
-            if (containsBox(click.x(), click.y(), layout.alphaMinus())) {
-                advancedSecondaryMinAlpha = Math.max(0, advancedSecondaryMinAlpha - stepInt(5));
-                return true;
-            }
-            if (containsBox(click.x(), click.y(), layout.alphaPlus())) {
-                advancedSecondaryMinAlpha = Math.min(255, advancedSecondaryMinAlpha + stepInt(5));
-                return true;
-            }
-            if (containsBox(click.x(), click.y(), layout.linesMinus())) {
-                advancedSecondaryMaxLines = Math.max(10, advancedSecondaryMaxLines - stepInt(10));
-                return true;
-            }
-            if (containsBox(click.x(), click.y(), layout.linesPlus())) {
-                advancedSecondaryMaxLines = Math.min(500, advancedSecondaryMaxLines + stepInt(10));
-                return true;
-            }
-            if (containsBox(click.x(), click.y(), layout.bgMinus())) {
-                selected.backgroundColor = cycleStyleColor(selected.backgroundColor, false);
-                advancedBgColor = formatColor(selected.backgroundColor);
-                advancedBgCursor = advancedBgColor.length();
-                return true;
-            }
-            if (containsBox(click.x(), click.y(), layout.bgPlus())) {
-                selected.backgroundColor = cycleStyleColor(selected.backgroundColor, true);
-                advancedBgColor = formatColor(selected.backgroundColor);
-                advancedBgCursor = advancedBgColor.length();
-                return true;
-            }
-            if (containsBox(click.x(), click.y(), layout.apply())) {
-                applyAdvancedAndClose();
-                return true;
-            }
-            if (containsBox(click.x(), click.y(), layout.cancel())) {
-                closeAdvancedModal();
-                return true;
-            }
-
-            advancedBgColorFocused = containsBox(click.x(), click.y(), layout.bgHex());
-            if (advancedBgColorFocused) {
-                advancedTextFocused = false;
-                advancedActionFocused = false;
-                advancedBorderColorFocused = false;
-                advancedBgSelectionAnchor = -1;
-                int localX = (int) (click.x() - (layout.bgHex().x() + 4));
-                advancedBgCursor = cursorIndexFromPoint(advancedBgColor, localX, 0, 9);
-                return true;
-            }
-
-            advancedBorderColorFocused = containsBox(click.x(), click.y(), layout.txHex());
-            if (advancedBorderColorFocused) {
-                advancedTextFocused = false;
-                advancedActionFocused = false;
-                advancedBgColorFocused = false;
-                advancedBorderSelectionAnchor = -1;
-                int localX = (int) (click.x() - (layout.txHex().x() + 4));
-                advancedBorderCursor = cursorIndexFromPoint(advancedBorderColor, localX, 0, 9);
-                return true;
-            }
-
-            advancedActionFocused = containsBox(click.x(), click.y(), layout.outgoingInput());
-            if (advancedActionFocused) {
-                advancedTextFocused = false;
-                advancedBgColorFocused = false;
-                advancedBorderColorFocused = false;
-                advancedActionSelectionAnchor = -1;
-                int localX = (int) (click.x() - (layout.outgoingInput().x() + 4));
-                advancedActionCursor = cursorIndexFromPoint(advancedAction, localX, 0, 9);
-                beginModalSelectionDrag(ModalDragSelectionField.ADVANCED_ACTION);
-                return true;
-            }
-
-            advancedTextFocused = containsBox(click.x(), click.y(), layout.regexInput());
-            if (advancedTextFocused) {
-                advancedActionFocused = false;
-                advancedBgColorFocused = false;
-                advancedBorderColorFocused = false;
-                advancedSelectionAnchor = -1;
-                advancedCursor = cursorIndexFromPoint(advancedText, (int) (click.x() - (layout.regexInput().x() + 4)), (int) (click.y() - (layout.regexInput().y() + 4)), 9);
-                beginModalSelectionDrag(ModalDragSelectionField.ADVANCED_TEXT);
-            }
-            return true;
-        }
-
-        if (isNbtInspectorProxy(selected) || isMacroKeybindProxy(selected) || isPickupNotifierProxy(selected)) {
-            ProxyAdvancedLayout layout = proxyAdvancedLayout(boxX, boxY, isPickupNotifierProxy(selected));
-            if (containsBox(click.x(), click.y(), layout.scaleMinus())) {
-                selected.fontScale = Math.clamp((float) (selected.fontScale - stepDouble(0.1)), 0.5f, 4.0f);
-                return true;
-            }
-            if (containsBox(click.x(), click.y(), layout.scalePlus())) {
-                selected.fontScale = Math.clamp((float) (selected.fontScale + stepDouble(0.1)), 0.5f, 4.0f);
-                return true;
-            }
-            if (containsBox(click.x(), click.y(), layout.lineMinus())) {
-                selected.lineHeight = Math.clamp(selected.lineHeight - stepInt(1), 6, 24);
-                return true;
-            }
-            if (containsBox(click.x(), click.y(), layout.linePlus())) {
-                selected.lineHeight = Math.clamp(selected.lineHeight + stepInt(1), 6, 24);
-                return true;
-            }
-            if (containsBox(click.x(), click.y(), layout.toggleBg())) {
-                selected.drawBackground = !selected.drawBackground;
-                return true;
-            }
-            if (containsBox(click.x(), click.y(), layout.toggleBorder())) {
-                selected.drawBorder = !selected.drawBorder;
-                return true;
-            }
-            if (containsBox(click.x(), click.y(), layout.toggleVisible())) {
-                selected.visible = !selected.visible;
-                return true;
-            }
-            if (containsBox(click.x(), click.y(), layout.colorBgMinus())) {
-                selected.backgroundColor = cycleStyleColor(selected.backgroundColor, false);
-                advancedBgColor = formatColor(selected.backgroundColor);
-                advancedBgCursor = advancedBgColor.length();
-                return true;
-            }
-            if (containsBox(click.x(), click.y(), layout.colorBgPlus())) {
-                selected.backgroundColor = cycleStyleColor(selected.backgroundColor, true);
-                advancedBgColor = formatColor(selected.backgroundColor);
-                advancedBgCursor = advancedBgColor.length();
-                return true;
-            }
-            if (containsBox(click.x(), click.y(), layout.colorTxMinus())) {
-                selected.textColor = cycleStyleColor(selected.textColor, false);
-                advancedBorderColor = formatColor(selected.textColor);
-                advancedBorderCursor = advancedBorderColor.length();
-                return true;
-            }
-            if (containsBox(click.x(), click.y(), layout.colorTxPlus())) {
-                selected.textColor = cycleStyleColor(selected.textColor, true);
-                advancedBorderColor = formatColor(selected.textColor);
-                advancedBorderCursor = advancedBorderColor.length();
-                return true;
-            }
-            if (containsBox(click.x(), click.y(), layout.alignH())) {
-                selected.horizontalAlign = cycleHorizontalAlign(selected.horizontalAlign, forward);
-                return true;
-            }
-            if (containsBox(click.x(), click.y(), layout.alignV())) {
-                selected.verticalAlign = cycleVerticalAlign(selected.verticalAlign, forward);
-                return true;
-            }
-            if (containsBox(click.x(), click.y(), layout.anchor())) {
-                int oldScreenX = resolveElementX(selected);
-                int oldScreenY = resolveElementY(selected);
-                selected.anchor = cycleAnchor(selected.anchor, forward);
-                setElementScreenPosition(selected, oldScreenX, oldScreenY);
-                clampElementToCanvas(selected);
-                return true;
-            }
-            if (isPickupNotifierProxy(selected)) {
-                int stepDirection = forward ? 1 : -1;
-                if (containsBox(click.x(), click.y(), layout.pickupDuration())) {
-                    PickupFeedSettings.updateAndSave(() -> {
-                        int step = isShiftDown() ? 250 : 500;
-                        PickupFeedSettings.get().durationMs += stepDirection * step;
-                    });
-                    return true;
-                }
-                if (containsBox(click.x(), click.y(), layout.pickupLines())) {
-                    PickupFeedSettings.updateAndSave(() -> {
-                        int step = isShiftDown() ? 1 : 2;
-                        PickupFeedSettings.get().maxLines += stepDirection * step;
-                    });
-                    return true;
-                }
-                if (containsBox(click.x(), click.y(), layout.pickupIcon())) {
-                    PickupFeedSettings.updateAndSave(() -> {
-                        float step = isShiftDown() ? 0.05f : 0.1f;
-                        PickupFeedSettings.get().iconScale += stepDirection * step;
-                    });
-                    return true;
-                }
-                if (containsBox(click.x(), click.y(), layout.pickupDirection())) {
-                    PickupFeedSettings.updateAndSave(() -> {
-                        PickupFeedSettings.Direction current = PickupFeedSettings.get().direction;
-                        PickupFeedSettings.get().direction = forward
-                                ? (current == PickupFeedSettings.Direction.UP ? PickupFeedSettings.Direction.DOWN : PickupFeedSettings.Direction.UP)
-                                : (current == PickupFeedSettings.Direction.DOWN ? PickupFeedSettings.Direction.UP : PickupFeedSettings.Direction.DOWN);
-                    });
-                    return true;
-                }
-            }
-            if (containsBox(click.x(), click.y(), layout.bgInput())) {
-                advancedBgColorFocused = true;
-                advancedBorderColorFocused = false;
-                advancedTextFocused = false;
-                advancedActionFocused = false;
-                advancedBgSelectionAnchor = -1;
-                advancedBgCursor = cursorIndexFromPoint(advancedBgColor, (int) (click.x() - (layout.bgInput().x() + 4)), 0, 9);
-                beginModalSelectionDrag(ModalDragSelectionField.ADVANCED_BG);
-                return true;
-            }
-            if (containsBox(click.x(), click.y(), layout.txInput())) {
-                advancedBgColorFocused = false;
-                advancedBorderColorFocused = true;
-                advancedTextFocused = false;
-                advancedActionFocused = false;
-                advancedBorderSelectionAnchor = -1;
-                advancedBorderCursor = cursorIndexFromPoint(advancedBorderColor, (int) (click.x() - (layout.txInput().x() + 4)), 0, 9);
-                beginModalSelectionDrag(ModalDragSelectionField.ADVANCED_BORDER);
-                return true;
-            }
-            if (containsBox(click.x(), click.y(), layout.apply())) {
-                applyAdvancedAndClose();
-                return true;
-            }
-            if (containsBox(click.x(), click.y(), layout.cancel())) {
-                closeAdvancedModal();
-                return true;
-            }
+        if (selected == null) {
             return true;
         }
 
@@ -1647,167 +1391,429 @@ public class MacroWorkbenchV2Screen extends Screen {
             return onCustomWidgetAdvancedClick(click, boxX, boxY);
         }
 
-        if (containsBox(click.x(), click.y(), boxX + 12, boxY + 172, 56, 18)) {
-            if (selected != null) {
-                selected.drawBackground = !selected.drawBackground;
-                ensureVisibleBackground(selected);
-                syncStyleButtons();
+        if (isSecondaryChatProxy(selected)) {
+            return onSecondaryAdvancedMouseClick(click, forward, boxX, boxY);
+        }
+        if (isNbtInspectorProxy(selected) || isMacroKeybindProxy(selected) || isPickupNotifierProxy(selected)) {
+            return onProxyAdvancedMouseClick(click, forward, boxX, boxY);
+        }
+
+        StandardAdvancedLayout layout = standardAdvancedLayout(boxX, boxY);
+
+        if (containsBox(click.x(), click.y(), layout.bgToggle())) {
+            selected.drawBackground = !selected.drawBackground;
+            ensureVisibleBackground(selected);
+            syncStyleButtons();
+            return true;
+        }
+        if (containsBox(click.x(), click.y(), layout.borderToggle())) {
+            selected.drawBorder = !selected.drawBorder;
+            syncStyleButtons();
+            return true;
+        }
+        if (containsBox(click.x(), click.y(), layout.hAlign())) {
+            selected.horizontalAlign = cycleHorizontalAlign(selected.horizontalAlign, forward);
+            return true;
+        }
+        if (containsBox(click.x(), click.y(), layout.vAlign())) {
+            selected.verticalAlign = cycleVerticalAlign(selected.verticalAlign, forward);
+            return true;
+        }
+        if (containsBox(click.x(), click.y(), layout.anchor())) {
+            int oldScreenX = resolveElementX(selected);
+            int oldScreenY = resolveElementY(selected);
+            selected.anchor = cycleAnchor(selected.anchor, forward);
+            setElementScreenPosition(selected, oldScreenX, oldScreenY);
+            clampElementToCanvas(selected);
+            return true;
+        }
+        if (containsBox(click.x(), click.y(), layout.visibility())) {
+            selected.visibilityMode = cycleVisibilityMode(selected.visibilityMode, forward);
+            return true;
+        }
+        if (containsBox(click.x(), click.y(), layout.execution())) {
+            if (selected.type == MacroHudDataHandler.ElementType.BUTTON) {
+                selected.buttonExecutionMode = cycleButtonExecutionMode(selected.buttonExecutionMode, forward);
             }
             return true;
         }
-        if (containsBox(click.x(), click.y(), boxX + 72, boxY + 172, 66, 18)) {
-            if (selected != null) {
-                selected.drawBorder = !selected.drawBorder;
-                syncStyleButtons();
-            }
+        if (containsBox(click.x(), click.y(), layout.lineMinus())) {
+            selected.lineHeight = Math.clamp(selected.lineHeight - stepInt(1), 6, 24);
             return true;
         }
-        if (containsBox(click.x(), click.y(), boxX + 142, boxY + 172, 92, 18)) {
-            if (selected != null) {
-                selected.horizontalAlign = cycleHorizontalAlign(selected.horizontalAlign, forward);
-            }
+        if (containsBox(click.x(), click.y(), layout.linePlus())) {
+            selected.lineHeight = Math.clamp(selected.lineHeight + stepInt(1), 6, 24);
             return true;
         }
-        if (containsBox(click.x(), click.y(), boxX + 238, boxY + 172, 92, 18)) {
-            if (selected != null) {
-                selected.verticalAlign = cycleVerticalAlign(selected.verticalAlign, forward);
-            }
+        if (containsBox(click.x(), click.y(), layout.fontMinus())) {
+            selected.fontScale = Math.clamp((float) (selected.fontScale - stepDouble(0.1)), 0.5f, 4.0f);
             return true;
         }
-        if (containsBox(click.x(), click.y(), boxX + 334, boxY + 172, 122, 18)) {
-            if (selected != null) {
-                int oldScreenX = resolveElementX(selected);
-                int oldScreenY = resolveElementY(selected);
-                selected.anchor = cycleAnchor(selected.anchor, forward);
-                setElementScreenPosition(selected, oldScreenX, oldScreenY);
-                clampElementToCanvas(selected);
-            }
+        if (containsBox(click.x(), click.y(), layout.fontPlus())) {
+            selected.fontScale = Math.clamp((float) (selected.fontScale + stepDouble(0.1)), 0.5f, 4.0f);
             return true;
         }
-        if (containsBox(click.x(), click.y(), boxX + 196, boxY + 196, 80, 18)) {
-            if (selected != null) {
-                if (!forward && selected.type == MacroHudDataHandler.ElementType.BUTTON) {
-                    selected.buttonExecutionMode = cycleButtonExecutionMode(selected.buttonExecutionMode, true);
-                } else {
-                    selected.visibilityMode = cycleVisibilityMode(selected.visibilityMode, forward);
-                }
-            }
+        if (containsBox(click.x(), click.y(), layout.bgMinus())) {
+            selected.backgroundColor = cycleStyleColor(selected.backgroundColor, false);
+            ensureVisibleBackground(selected);
+            advancedBgColor = formatColor(selected.backgroundColor);
+            advancedBgCursor = advancedBgColor.length();
             return true;
         }
-        if (containsBox(click.x(), click.y(), boxX + 12, boxY + 196, 40, 18)) {
-            if (selected != null) {
-                selected.lineHeight = Math.clamp(selected.lineHeight - stepInt(1), 6, 24);
-            }
+        if (containsBox(click.x(), click.y(), layout.bgPlus())) {
+            selected.backgroundColor = cycleStyleColor(selected.backgroundColor, true);
+            ensureVisibleBackground(selected);
+            advancedBgColor = formatColor(selected.backgroundColor);
+            advancedBgCursor = advancedBgColor.length();
             return true;
         }
-        if (containsBox(click.x(), click.y(), boxX + 56, boxY + 196, 40, 18)) {
-            if (selected != null) {
-                selected.lineHeight = Math.clamp(selected.lineHeight + stepInt(1), 6, 24);
-            }
+        if (containsBox(click.x(), click.y(), layout.borderMinus())) {
+            selected.borderColor = cycleStyleColor(selected.borderColor, false);
+            advancedBorderColor = formatColor(selected.borderColor);
+            advancedBorderCursor = advancedBorderColor.length();
             return true;
         }
-        if (containsBox(click.x(), click.y(), boxX + 104, boxY + 196, 40, 18)) {
-            if (selected != null) {
-                selected.fontScale = Math.clamp((float) (selected.fontScale - stepDouble(0.1)), 0.5f, 4.0f);
-            }
+        if (containsBox(click.x(), click.y(), layout.borderPlus())) {
+            selected.borderColor = cycleStyleColor(selected.borderColor, true);
+            advancedBorderColor = formatColor(selected.borderColor);
+            advancedBorderCursor = advancedBorderColor.length();
             return true;
         }
-        if (containsBox(click.x(), click.y(), boxX + 148, boxY + 196, 40, 18)) {
-            if (selected != null) {
-                selected.fontScale = Math.clamp((float) (selected.fontScale + stepDouble(0.1)), 0.5f, 4.0f);
-            }
-            return true;
-        }
-        if (containsBox(click.x(), click.y(), boxX + 280, boxY + 196, 40, 18)) {
-            if (selected != null) {
-                selected.backgroundColor = cycleStyleColor(selected.backgroundColor, false);
-                ensureVisibleBackground(selected);
-                advancedBgColor = formatColor(selected.backgroundColor);
-                advancedBgCursor = advancedBgColor.length();
-            }
-            return true;
-        }
-        if (containsBox(click.x(), click.y(), boxX + 324, boxY + 196, 40, 18)) {
-            if (selected != null) {
-                selected.backgroundColor = cycleStyleColor(selected.backgroundColor, true);
-                ensureVisibleBackground(selected);
-                advancedBgColor = formatColor(selected.backgroundColor);
-                advancedBgCursor = advancedBgColor.length();
-            }
-            return true;
-        }
-        if (containsBox(click.x(), click.y(), boxX + 368, boxY + 196, 40, 18)) {
-            if (selected != null) {
-                selected.borderColor = cycleStyleColor(selected.borderColor, false);
-                advancedBorderColor = formatColor(selected.borderColor);
-                advancedBorderCursor = advancedBorderColor.length();
-            }
-            return true;
-        }
-        if (containsBox(click.x(), click.y(), boxX + 412, boxY + 196, 40, 18)) {
-            if (selected != null) {
-                selected.borderColor = cycleStyleColor(selected.borderColor, true);
-                advancedBorderColor = formatColor(selected.borderColor);
-                advancedBorderCursor = advancedBorderColor.length();
-            }
-            return true;
-        }
-        if (containsBox(click.x(), click.y(), boxX + MODAL_W - 134, boxY + MODAL_H - 24, 60, 18)) {
+        if (containsBox(click.x(), click.y(), layout.apply())) {
             applyAdvancedAndClose();
             return true;
         }
-        if (containsBox(click.x(), click.y(), boxX + MODAL_W - 70, boxY + MODAL_H - 24, 58, 18)) {
+        if (containsBox(click.x(), click.y(), layout.cancel())) {
             closeAdvancedModal();
             return true;
         }
 
-        advancedBgColorFocused = containsBox(click.x(), click.y(), bgFieldX, bgFieldY, bgFieldW, bgFieldH);
+        advancedBgColorFocused = containsBox(click.x(), click.y(), layout.bgHex());
         if (advancedBgColorFocused) {
             advancedTextFocused = false;
             advancedActionFocused = false;
             advancedBorderColorFocused = false;
+            advancedVisibilityScreenTypeFocused = false;
             advancedBgSelectionAnchor = -1;
-            int localX = (int) (click.x() - (bgFieldX + 4));
+            int localX = (int) (click.x() - (layout.bgHex().x() + 4));
             advancedBgCursor = cursorIndexFromPoint(advancedBgColor, localX, 0, 9);
             beginModalSelectionDrag(ModalDragSelectionField.ADVANCED_BG);
             return true;
         }
 
-        advancedBorderColorFocused = containsBox(click.x(), click.y(), borderFieldX, borderFieldY, borderFieldW, borderFieldH);
+        advancedBorderColorFocused = containsBox(click.x(), click.y(), layout.borderHex());
         if (advancedBorderColorFocused) {
             advancedTextFocused = false;
             advancedActionFocused = false;
             advancedBgColorFocused = false;
+            advancedVisibilityScreenTypeFocused = false;
             advancedBorderSelectionAnchor = -1;
-            int localX = (int) (click.x() - (borderFieldX + 4));
+            int localX = (int) (click.x() - (layout.borderHex().x() + 4));
             advancedBorderCursor = cursorIndexFromPoint(advancedBorderColor, localX, 0, 9);
             beginModalSelectionDrag(ModalDragSelectionField.ADVANCED_BORDER);
             return true;
         }
 
-        advancedActionFocused = containsBox(click.x(), click.y(), actionX, actionY, actionW, actionH);
+        advancedVisibilityScreenTypeFocused = selected.visibilityMode == MacroHudDataHandler.VisibilityMode.SCREEN
+                && containsBox(click.x(), click.y(), layout.visibilityType());
+        if (advancedVisibilityScreenTypeFocused) {
+            advancedTextFocused = false;
+            advancedActionFocused = false;
+            advancedBgColorFocused = false;
+            advancedBorderColorFocused = false;
+            advancedVisibilityScreenTypeSelectionAnchor = -1;
+            int localX = (int) (click.x() - (layout.visibilityType().x() + 4));
+            advancedVisibilityScreenTypeCursor = cursorIndexFromPoint(advancedVisibilityScreenType, localX, 0, 9);
+            return true;
+        }
+
+        advancedActionFocused = containsBox(click.x(), click.y(), layout.actionField());
         if (advancedActionFocused) {
             advancedTextFocused = false;
             advancedBgColorFocused = false;
             advancedBorderColorFocused = false;
+            advancedVisibilityScreenTypeFocused = false;
             advancedActionSelectionAnchor = -1;
-            int localX = (int) (click.x() - (actionX + 4));
+            int localX = (int) (click.x() - (layout.actionField().x() + 4));
             advancedActionCursor = cursorIndexFromPoint(advancedAction, localX, 0, 9);
             beginModalSelectionDrag(ModalDragSelectionField.ADVANCED_ACTION);
             return true;
         }
 
-        advancedTextFocused = containsBox(click.x(), click.y(), textX, textY, textW, textH);
+        advancedTextFocused = containsBox(click.x(), click.y(), layout.textArea());
+        if (advancedTextFocused) {
+            advancedActionFocused = false;
+            advancedBgColorFocused = false;
+            advancedBorderColorFocused = false;
+            advancedVisibilityScreenTypeFocused = false;
+            advancedSelectionAnchor = -1;
+            advancedCursor = cursorIndexFromPoint(
+                    advancedText,
+                    (int) (click.x() - (layout.textArea().x() + 4)),
+                    (int) (click.y() - (layout.textArea().y() + 4)) + (advancedTextScrollLine * 9),
+                    9
+            );
+            beginModalSelectionDrag(ModalDragSelectionField.ADVANCED_TEXT);
+        }
+        return true;
+    }
+
+    private boolean onSecondaryAdvancedMouseClick(Click click, boolean forward, int boxX, int boxY) {
+        SecondaryAdvancedLayout layout = secondaryAdvancedLayout(boxX, boxY);
+        if (containsBox(click.x(), click.y(), layout.guiOpen())) {
+            advancedSecondaryShowWhileGuiOpen = !advancedSecondaryShowWhileGuiOpen;
+            return true;
+        }
+        if (containsBox(click.x(), click.y(), layout.fadeToggle())) {
+            advancedSecondaryFadeEnabled = !advancedSecondaryFadeEnabled;
+            return true;
+        }
+        if (containsBox(click.x(), click.y(), layout.hoverReset())) {
+            advancedSecondaryResetTransparencyOnHover = !advancedSecondaryResetTransparencyOnHover;
+            return true;
+        }
+        if (containsBox(click.x(), click.y(), layout.noTransparency())) {
+            advancedSecondaryNoTransparencyWhenChatOpen = !advancedSecondaryNoTransparencyWhenChatOpen;
+            return true;
+        }
+        if (containsBox(click.x(), click.y(), layout.mode())) {
+            advancedSecondaryInterceptMode = advancedSecondaryInterceptMode == SecondaryChatSettings.InterceptMode.COPY
+                    ? SecondaryChatSettings.InterceptMode.MOVE
+                    : SecondaryChatSettings.InterceptMode.COPY;
+            return true;
+        }
+        if (containsBox(click.x(), click.y(), layout.scaleMinus())) {
+            advancedSecondaryScale = Math.max(0.1, advancedSecondaryScale - stepDouble(0.05));
+            return true;
+        }
+        if (containsBox(click.x(), click.y(), layout.scalePlus())) {
+            advancedSecondaryScale = Math.min(3.0, advancedSecondaryScale + stepDouble(0.05));
+            return true;
+        }
+        if (containsBox(click.x(), click.y(), layout.lineMinus())) {
+            advancedSecondaryLineHeight = Math.max(1, advancedSecondaryLineHeight - stepInt(1));
+            return true;
+        }
+        if (containsBox(click.x(), click.y(), layout.linePlus())) {
+            advancedSecondaryLineHeight = Math.min(30, advancedSecondaryLineHeight + stepInt(1));
+            return true;
+        }
+        if (containsBox(click.x(), click.y(), layout.fadeMinus())) {
+            advancedSecondaryFadeDurationMs = Math.max(1000, advancedSecondaryFadeDurationMs - stepInt(1000));
+            return true;
+        }
+        if (containsBox(click.x(), click.y(), layout.fadePlus())) {
+            advancedSecondaryFadeDurationMs = Math.min(120000, advancedSecondaryFadeDurationMs + stepInt(1000));
+            return true;
+        }
+        if (containsBox(click.x(), click.y(), layout.alphaMinus())) {
+            advancedSecondaryMinAlpha = Math.max(0, advancedSecondaryMinAlpha - stepInt(5));
+            return true;
+        }
+        if (containsBox(click.x(), click.y(), layout.alphaPlus())) {
+            advancedSecondaryMinAlpha = Math.min(255, advancedSecondaryMinAlpha + stepInt(5));
+            return true;
+        }
+        if (containsBox(click.x(), click.y(), layout.linesMinus())) {
+            advancedSecondaryMaxLines = Math.max(10, advancedSecondaryMaxLines - stepInt(10));
+            return true;
+        }
+        if (containsBox(click.x(), click.y(), layout.linesPlus())) {
+            advancedSecondaryMaxLines = Math.min(500, advancedSecondaryMaxLines + stepInt(10));
+            return true;
+        }
+        if (containsBox(click.x(), click.y(), layout.bgMinus())) {
+            selected.backgroundColor = cycleStyleColor(selected.backgroundColor, false);
+            advancedBgColor = formatColor(selected.backgroundColor);
+            advancedBgCursor = advancedBgColor.length();
+            return true;
+        }
+        if (containsBox(click.x(), click.y(), layout.bgPlus())) {
+            selected.backgroundColor = cycleStyleColor(selected.backgroundColor, true);
+            advancedBgColor = formatColor(selected.backgroundColor);
+            advancedBgCursor = advancedBgColor.length();
+            return true;
+        }
+        if (containsBox(click.x(), click.y(), layout.apply())) {
+            applyAdvancedAndClose();
+            return true;
+        }
+        if (containsBox(click.x(), click.y(), layout.cancel())) {
+            closeAdvancedModal();
+            return true;
+        }
+
+        advancedBgColorFocused = containsBox(click.x(), click.y(), layout.bgHex());
+        if (advancedBgColorFocused) {
+            advancedTextFocused = false;
+            advancedActionFocused = false;
+            advancedBorderColorFocused = false;
+            advancedBgSelectionAnchor = -1;
+            advancedBgCursor = cursorIndexFromPoint(advancedBgColor, (int) (click.x() - (layout.bgHex().x() + 4)), 0, 9);
+            beginModalSelectionDrag(ModalDragSelectionField.ADVANCED_BG);
+            return true;
+        }
+
+        advancedBorderColorFocused = containsBox(click.x(), click.y(), layout.txHex());
+        if (advancedBorderColorFocused) {
+            advancedTextFocused = false;
+            advancedActionFocused = false;
+            advancedBgColorFocused = false;
+            advancedBorderSelectionAnchor = -1;
+            advancedBorderCursor = cursorIndexFromPoint(advancedBorderColor, (int) (click.x() - (layout.txHex().x() + 4)), 0, 9);
+            beginModalSelectionDrag(ModalDragSelectionField.ADVANCED_BORDER);
+            return true;
+        }
+
+        advancedActionFocused = containsBox(click.x(), click.y(), layout.outgoingInput());
+        if (advancedActionFocused) {
+            advancedTextFocused = false;
+            advancedBgColorFocused = false;
+            advancedBorderColorFocused = false;
+            advancedActionSelectionAnchor = -1;
+            advancedActionCursor = cursorIndexFromPoint(advancedAction, (int) (click.x() - (layout.outgoingInput().x() + 4)), 0, 9);
+            beginModalSelectionDrag(ModalDragSelectionField.ADVANCED_ACTION);
+            return true;
+        }
+
+        advancedTextFocused = containsBox(click.x(), click.y(), layout.regexInput());
         if (advancedTextFocused) {
             advancedActionFocused = false;
             advancedBgColorFocused = false;
             advancedBorderColorFocused = false;
             advancedSelectionAnchor = -1;
-            advancedCursor = cursorIndexFromPoint(advancedText, (int) (click.x() - (textX + 4)), (int) (click.y() - (textY + 4)), 9);
+            advancedCursor = cursorIndexFromPoint(advancedText, (int) (click.x() - (layout.regexInput().x() + 4)), (int) (click.y() - (layout.regexInput().y() + 4)), 9);
             beginModalSelectionDrag(ModalDragSelectionField.ADVANCED_TEXT);
         }
         return true;
     }
+
+    private boolean onProxyAdvancedMouseClick(Click click, boolean forward, int boxX, int boxY) {
+        ProxyAdvancedLayout layout = proxyAdvancedLayout(boxX, boxY, isPickupNotifierProxy(selected));
+        if (containsBox(click.x(), click.y(), layout.scaleMinus())) {
+            selected.fontScale = Math.clamp((float) (selected.fontScale - stepDouble(0.1)), 0.5f, 4.0f);
+            return true;
+        }
+        if (containsBox(click.x(), click.y(), layout.scalePlus())) {
+            selected.fontScale = Math.clamp((float) (selected.fontScale + stepDouble(0.1)), 0.5f, 4.0f);
+            return true;
+        }
+        if (containsBox(click.x(), click.y(), layout.lineMinus())) {
+            selected.lineHeight = Math.clamp(selected.lineHeight - stepInt(1), 6, 24);
+            return true;
+        }
+        if (containsBox(click.x(), click.y(), layout.linePlus())) {
+            selected.lineHeight = Math.clamp(selected.lineHeight + stepInt(1), 6, 24);
+            return true;
+        }
+        if (containsBox(click.x(), click.y(), layout.toggleBg())) {
+            selected.drawBackground = !selected.drawBackground;
+            return true;
+        }
+        if (containsBox(click.x(), click.y(), layout.toggleBorder())) {
+            selected.drawBorder = !selected.drawBorder;
+            return true;
+        }
+        if (containsBox(click.x(), click.y(), layout.toggleVisible())) {
+            selected.visible = !selected.visible;
+            return true;
+        }
+        if (containsBox(click.x(), click.y(), layout.colorBgMinus())) {
+            selected.backgroundColor = cycleStyleColor(selected.backgroundColor, false);
+            advancedBgColor = formatColor(selected.backgroundColor);
+            advancedBgCursor = advancedBgColor.length();
+            return true;
+        }
+        if (containsBox(click.x(), click.y(), layout.colorBgPlus())) {
+            selected.backgroundColor = cycleStyleColor(selected.backgroundColor, true);
+            advancedBgColor = formatColor(selected.backgroundColor);
+            advancedBgCursor = advancedBgColor.length();
+            return true;
+        }
+        if (containsBox(click.x(), click.y(), layout.colorTxMinus())) {
+            selected.textColor = cycleStyleColor(selected.textColor, false);
+            advancedBorderColor = formatColor(selected.textColor);
+            advancedBorderCursor = advancedBorderColor.length();
+            return true;
+        }
+        if (containsBox(click.x(), click.y(), layout.colorTxPlus())) {
+            selected.textColor = cycleStyleColor(selected.textColor, true);
+            advancedBorderColor = formatColor(selected.textColor);
+            advancedBorderCursor = advancedBorderColor.length();
+            return true;
+        }
+        if (containsBox(click.x(), click.y(), layout.alignH())) {
+            selected.horizontalAlign = cycleHorizontalAlign(selected.horizontalAlign, forward);
+            return true;
+        }
+        if (containsBox(click.x(), click.y(), layout.alignV())) {
+            selected.verticalAlign = cycleVerticalAlign(selected.verticalAlign, forward);
+            return true;
+        }
+        if (containsBox(click.x(), click.y(), layout.anchor())) {
+            int oldScreenX = resolveElementX(selected);
+            int oldScreenY = resolveElementY(selected);
+            selected.anchor = cycleAnchor(selected.anchor, forward);
+            setElementScreenPosition(selected, oldScreenX, oldScreenY);
+            clampElementToCanvas(selected);
+            return true;
+        }
+        if (isPickupNotifierProxy(selected)) {
+            int direction = forward ? 1 : -1;
+            if (containsBox(click.x(), click.y(), layout.pickupDuration())) {
+                PickupFeedSettings.updateAndSave(() -> PickupFeedSettings.get().durationMs += direction * (isShiftDown() ? 250 : 500));
+                return true;
+            }
+            if (containsBox(click.x(), click.y(), layout.pickupLines())) {
+                PickupFeedSettings.updateAndSave(() -> PickupFeedSettings.get().maxLines += direction * (isShiftDown() ? 1 : 2));
+                return true;
+            }
+            if (containsBox(click.x(), click.y(), layout.pickupIcon())) {
+                PickupFeedSettings.updateAndSave(() -> PickupFeedSettings.get().iconScale += direction * (isShiftDown() ? 0.05f : 0.1f));
+                return true;
+            }
+            if (containsBox(click.x(), click.y(), layout.pickupDirection())) {
+                PickupFeedSettings.updateAndSave(() -> {
+                    PickupFeedSettings.Direction current = PickupFeedSettings.get().direction;
+                    PickupFeedSettings.get().direction = (current == PickupFeedSettings.Direction.UP)
+                            ? PickupFeedSettings.Direction.DOWN
+                            : PickupFeedSettings.Direction.UP;
+                });
+                return true;
+            }
+        }
+        if (containsBox(click.x(), click.y(), layout.bgInput())) {
+            advancedBgColorFocused = true;
+            advancedBorderColorFocused = false;
+            advancedTextFocused = false;
+            advancedActionFocused = false;
+            advancedBgSelectionAnchor = -1;
+            advancedBgCursor = cursorIndexFromPoint(advancedBgColor, (int) (click.x() - (layout.bgInput().x() + 4)), 0, 9);
+            beginModalSelectionDrag(ModalDragSelectionField.ADVANCED_BG);
+            return true;
+        }
+        if (containsBox(click.x(), click.y(), layout.txInput())) {
+            advancedBgColorFocused = false;
+            advancedBorderColorFocused = true;
+            advancedTextFocused = false;
+            advancedActionFocused = false;
+            advancedBorderSelectionAnchor = -1;
+            advancedBorderCursor = cursorIndexFromPoint(advancedBorderColor, (int) (click.x() - (layout.txInput().x() + 4)), 0, 9);
+            beginModalSelectionDrag(ModalDragSelectionField.ADVANCED_BORDER);
+            return true;
+        }
+        if (containsBox(click.x(), click.y(), layout.apply())) {
+            applyAdvancedAndClose();
+            return true;
+        }
+        if (containsBox(click.x(), click.y(), layout.cancel())) {
+            closeAdvancedModal();
+            return true;
+        }
+        return true;
+    }
+
+
 
     private void updateDragging(int mouseX, int mouseY) {
         if ((!dragging && !resizing) || selected == null || this.client == null) {
@@ -2413,7 +2419,13 @@ public class MacroWorkbenchV2Screen extends Screen {
         if (selected.type == MacroHudDataHandler.ElementType.BUTTON) {
             selected.label = merged;
             selected.macroId = macroField.getText() == null ? "" : macroField.getText().trim();
-            selected.buttonAction = actionField.getText() == null ? "" : actionField.getText().trim();
+            String compactAction = actionField.getText() == null ? "" : actionField.getText();
+            String currentAction = selected.buttonAction == null ? "" : selected.buttonAction;
+            boolean multilineAction = currentAction.indexOf('\n') >= 0 || currentAction.indexOf('\r') >= 0;
+            // Do not clobber multiline script bodies from the single-line quick action field.
+            if (!multilineAction || actionField.isFocused()) {
+                selected.buttonAction = compactAction;
+            }
         } else if (selected.type == MacroHudDataHandler.ElementType.TEXT) {
             selected.text = merged;
         } else {
@@ -2557,15 +2569,22 @@ public class MacroWorkbenchV2Screen extends Screen {
         applyQuickEdit();
         this.advancedOpen = true;
         this.advancedTextFocused = true;
+        this.advancedTextScrollLine = 0;
+        this.advancedTextManualScroll = false;
         this.advancedActionFocused = false;
         this.advancedBgColorFocused = false;
         this.advancedBorderColorFocused = false;
-        this.advancedText = selected.type == MacroHudDataHandler.ElementType.TEXT ? safe(selected.text) : safe(selected.label);
-        this.advancedAction = selected.type == MacroHudDataHandler.ElementType.BUTTON ? safe(selected.buttonAction) : safe(selected.sourceToken);
+        this.advancedVisibilityScreenTypeFocused = false;
+        this.advancedText = selected.type == MacroHudDataHandler.ElementType.BUTTON
+                ? safe(selected.buttonAction)
+                : (selected.type == MacroHudDataHandler.ElementType.TEXT ? safe(selected.text) : safe(selected.label));
+        this.advancedAction = selected.type == MacroHudDataHandler.ElementType.BUTTON ? safe(selected.label) : safe(selected.sourceToken);
+        this.advancedVisibilityScreenType = safe(selected.visibilityScreenType);
         this.advancedBgColor = formatColor(selected.backgroundColor);
         this.advancedBorderColor = formatColor(selected.borderColor);
         this.advancedCursor = this.advancedText.length();
         this.advancedActionCursor = this.advancedAction.length();
+        this.advancedVisibilityScreenTypeCursor = this.advancedVisibilityScreenType.length();
         this.advancedActionSuggestionIndex = -1;
         this.advancedActionSuggestionScroll = 0;
         this.activeDragSelectionField = ModalDragSelectionField.NONE;
@@ -2573,6 +2592,7 @@ public class MacroWorkbenchV2Screen extends Screen {
         this.advancedActionSelectionAnchor = -1;
         this.advancedBgSelectionAnchor = -1;
         this.advancedBorderSelectionAnchor = -1;
+        this.advancedVisibilityScreenTypeSelectionAnchor = -1;
         this.advancedBgCursor = this.advancedBgColor.length();
         this.advancedBorderCursor = this.advancedBorderColor.length();
         this.advancedActionSuggestionIndex = -1;
@@ -2626,22 +2646,9 @@ public class MacroWorkbenchV2Screen extends Screen {
     private void renderAdvancedModal(DrawContext context, int mouseX, int mouseY) {
         int boxX = modalX();
         int boxY = modalY();
-        int textX = boxX + 12;
-        int textY = boxY + 34;
-        int textW = MODAL_W - 24;
-        int textH = 108;
-        int actionX = boxX + 12;
-        int actionY = boxY + 148;
-        int actionW = MODAL_W - 24;
-        int actionH = 18;
-        int bgFieldX = boxX + 238;
-        int bgFieldY = boxY + 218;
-        int bgFieldW = 88;
-        int bgFieldH = 18;
-        int borderFieldX = boxX + 356;
-        int borderFieldY = boxY + 218;
-        int borderFieldW = 88;
-        int borderFieldH = 18;
+        StandardAdvancedLayout layout = standardAdvancedLayout(boxX, boxY);
+        UiRect textArea = layout.textArea();
+        UiRect actionField = layout.actionField();
 
         context.fill(0, 0, this.width, this.height, 0x88000000);
         GuiSystem.drawPanel(context, boxX, boxY, MODAL_W, MODAL_H);
@@ -2660,90 +2667,208 @@ public class MacroWorkbenchV2Screen extends Screen {
         }
 
         context.drawTextWithShadow(this.textRenderer, "Edit", boxX + 12, boxY + 12, 0xFFFFFFFF);
-        context.drawTextWithShadow(this.textRenderer, "Multi-line editor (Enter for new line)", boxX + 12, boxY + 22, 0xFFB0B0B0);
 
-        context.fill(textX, textY, textX + textW, textY + textH, advancedTextFocused ? 0xFF0F0F0F : 0xFF141414);
-        context.fill(textX, textY, textX + textW, textY + 1, 0x60FFFFFF);
-        drawMultilineSelection(context, textX + 4, textY + 4, textY + textH - 12, advancedText, advancedSelectionAnchor, advancedCursor, 9);
+        context.fill(textArea.x(), textArea.y(), textArea.right(), textArea.bottom(), advancedTextFocused ? 0xFF0F0F0F : 0xFF141414);
+        context.fill(textArea.x(), textArea.y(), textArea.right(), textArea.y() + 1, 0x60FFFFFF);
 
         List<String> lines = splitLinesRaw(advancedText);
-        int y = textY + 4;
-        for (String line : lines) {
-            if (y > textY + textH - 12) {
+        int maxVisible = Math.max(1, (textArea.height() - 8) / 9);
+        int maxScroll = Math.max(0, lines.size() - maxVisible);
+        advancedTextScrollLine = Math.clamp(advancedTextScrollLine, 0, maxScroll);
+        if (advancedTextFocused && !advancedTextManualScroll) {
+            int cursorLine = cursorLineIndex(advancedText, advancedCursor);
+            if (cursorLine < advancedTextScrollLine) {
+                advancedTextScrollLine = cursorLine;
+            } else if (cursorLine >= advancedTextScrollLine + maxVisible) {
+                advancedTextScrollLine = cursorLine - maxVisible + 1;
+            }
+        }
+
+        drawMultilineSelectionWithScroll(
+                context,
+                textArea.x() + 4,
+                textArea.y() + 4,
+                textArea.bottom() - 12,
+                advancedText,
+                advancedSelectionAnchor,
+                advancedCursor,
+                9,
+                advancedTextScrollLine
+        );
+
+        int y = textArea.y() + 4;
+        for (int i = advancedTextScrollLine; i < lines.size(); i++) {
+            if (y > textArea.bottom() - 12) {
                 break;
             }
-            context.drawTextWithShadow(this.textRenderer, line, textX + 4, y, 0xFFEAEAEA);
+            String line = lines.get(i);
+            context.drawTextWithShadow(this.textRenderer, line, textArea.x() + 4, y, 0xFFEAEAEA);
             y += 9;
         }
 
         if (advancedTextFocused && (System.currentTimeMillis() / 500L) % 2L == 0L) {
-            int[] cursor = cursorPixel(textX + 4, textY + 4, advancedText, advancedCursor);
-            context.fill(cursor[0], cursor[1], cursor[0] + 1, cursor[1] + 9, 0xFFFFFFFF);
+            int[] cursor = cursorPixelWithScroll(textArea.x() + 4, textArea.y() + 4, advancedText, advancedCursor, advancedTextScrollLine);
+            if (cursor[1] >= textArea.y() + 4 && cursor[1] <= textArea.bottom() - 12) {
+                context.fill(cursor[0], cursor[1], cursor[0] + 1, cursor[1] + 9, 0xFFFFFFFF);
+            }
         }
 
-        String actionTitle = "Button Action (cmd:/ msg:/ copy:/ etc)";
         if (selected != null && selected.type == MacroHudDataHandler.ElementType.BUTTON) {
-            actionTitle = selected.buttonExecutionMode == MacroHudDataHandler.ButtonExecutionMode.SCRIPT
-                    ? "Button Script (prefix with kotlin: for KTS)"
-                    : "Button Action (cmd:/ msg:/ copy:/ etc)";
+            context.drawTextWithShadow(this.textRenderer, "Command / Script (multi-line)", textArea.x(), textArea.y() - 10, 0xFFB8B8B8);
+            context.drawTextWithShadow(this.textRenderer, "Label (single-line)", actionField.x(), actionField.y() - 10, 0xFFB8B8B8);
+        } else {
+            context.drawTextWithShadow(this.textRenderer, "Button Action (cmd:/ msg:/ copy:/ etc)", actionField.x(), actionField.y() - 10, 0xFFB8B8B8);
         }
-        context.drawTextWithShadow(this.textRenderer, actionTitle, actionX, actionY - 10, 0xFFB8B8B8);
         int actionBg = advancedActionFocused ? 0xFF0F0F0F : 0xFF161616;
-        context.fill(actionX, actionY, actionX + actionW, actionY + actionH, actionBg);
-        context.fill(actionX, actionY, actionX + actionW, actionY + 1, 0x60FFFFFF);
-        drawSingleLineSelection(context, actionX + 4, actionY + 5, advancedAction, advancedActionSelectionAnchor, advancedActionCursor);
-        context.drawTextWithShadow(this.textRenderer, advancedAction, actionX + 4, actionY + 5, 0xFFEAEAEA);
+        context.fill(actionField.x(), actionField.y(), actionField.right(), actionField.bottom(), actionBg);
+        context.fill(actionField.x(), actionField.y(), actionField.right(), actionField.y() + 1, 0x60FFFFFF);
+        drawSingleLineSelection(context, actionField.x() + 4, actionField.y() + 5, advancedAction, advancedActionSelectionAnchor, advancedActionCursor);
+        context.drawTextWithShadow(this.textRenderer, advancedAction, actionField.x() + 4, actionField.y() + 5, 0xFFEAEAEA);
         if (advancedActionFocused && (System.currentTimeMillis() / 500L) % 2L == 0L) {
-            int ax = actionX + 4 + this.textRenderer.getWidth(advancedAction.substring(0, Math.clamp(advancedActionCursor, 0, advancedAction.length())));
-            context.fill(ax, actionY + 4, ax + 1, actionY + 13, 0xFFFFFFFF);
+            int ax = actionField.x() + 4 + this.textRenderer.getWidth(advancedAction.substring(0, Math.clamp(advancedActionCursor, 0, advancedAction.length())));
+            context.fill(ax, actionField.y() + 4, ax + 1, actionField.y() + 13, 0xFFFFFFFF);
         }
+        drawModalButton(context, layout.bgToggle().x(), layout.bgToggle().y(), layout.bgToggle().width(), layout.bgToggle().height(), "BG: " + ((selected != null && selected.drawBackground) ? "ON" : "OFF"), layout.bgToggle().contains(mouseX, mouseY));
+        drawModalButton(context, layout.borderToggle().x(), layout.borderToggle().y(), layout.borderToggle().width(), layout.borderToggle().height(), "Border: " + ((selected != null && selected.drawBorder) ? "ON" : "OFF"), layout.borderToggle().contains(mouseX, mouseY));
+        drawModalButton(context, layout.hAlign().x(), layout.hAlign().y(), layout.hAlign().width(), layout.hAlign().height(), "H: " + (selected != null ? selected.horizontalAlign.name() : "-"), layout.hAlign().contains(mouseX, mouseY));
+        drawModalButton(context, layout.vAlign().x(), layout.vAlign().y(), layout.vAlign().width(), layout.vAlign().height(), "V: " + (selected != null ? selected.verticalAlign.name() : "-"), layout.vAlign().contains(mouseX, mouseY));
+        drawModalButton(context, layout.anchor().x(), layout.anchor().y(), layout.anchor().width(), layout.anchor().height(), "Anchor: " + (selected != null ? shortAnchor(selected.anchor) : "-"), layout.anchor().contains(mouseX, mouseY));
 
-        drawModalButton(context, boxX + 12, boxY + 172, 56, 18, "BG: " + ((selected != null && selected.drawBackground) ? "ON" : "OFF"), containsBox(mouseX, mouseY, boxX + 12, boxY + 172, 56, 18));
-        drawModalButton(context, boxX + 72, boxY + 172, 66, 18, "Border: " + ((selected != null && selected.drawBorder) ? "ON" : "OFF"), containsBox(mouseX, mouseY, boxX + 72, boxY + 172, 66, 18));
-        drawModalButton(context, boxX + 142, boxY + 172, 92, 18, "H: " + (selected != null ? selected.horizontalAlign.name() : "-"), containsBox(mouseX, mouseY, boxX + 142, boxY + 172, 92, 18));
-        drawModalButton(context, boxX + 238, boxY + 172, 92, 18, "V: " + (selected != null ? selected.verticalAlign.name() : "-"), containsBox(mouseX, mouseY, boxX + 238, boxY + 172, 92, 18));
-        drawModalButton(context, boxX + 334, boxY + 172, 122, 18, "Anchor: " + (selected != null ? shortAnchor(selected.anchor) : "-"), containsBox(mouseX, mouseY, boxX + 334, boxY + 172, 122, 18));
-
-        drawModalButton(context, boxX + 12, boxY + 196, 40, 18, "LH-", containsBox(mouseX, mouseY, boxX + 12, boxY + 196, 40, 18));
-        drawModalButton(context, boxX + 56, boxY + 196, 40, 18, "LH+", containsBox(mouseX, mouseY, boxX + 56, boxY + 196, 40, 18));
-        drawModalButton(context, boxX + 104, boxY + 196, 40, 18, "FS-", containsBox(mouseX, mouseY, boxX + 104, boxY + 196, 40, 18));
-        drawModalButton(context, boxX + 148, boxY + 196, 40, 18, "FS+", containsBox(mouseX, mouseY, boxX + 148, boxY + 196, 40, 18));
-        drawModalButton(context, boxX + 196, boxY + 196, 80, 18, "Vis: " + (selected != null ? shortVisibility(selected.visibilityMode) : "-"), containsBox(mouseX, mouseY, boxX + 196, boxY + 196, 80, 18));
-        drawModalButton(context, boxX + 280, boxY + 196, 40, 18, "BG-", containsBox(mouseX, mouseY, boxX + 280, boxY + 196, 40, 18));
-        drawModalButton(context, boxX + 324, boxY + 196, 40, 18, "BG+", containsBox(mouseX, mouseY, boxX + 324, boxY + 196, 40, 18));
-        drawModalButton(context, boxX + 368, boxY + 196, 40, 18, "BR-", containsBox(mouseX, mouseY, boxX + 368, boxY + 196, 40, 18));
-        drawModalButton(context, boxX + 412, boxY + 196, 40, 18, "BR+", containsBox(mouseX, mouseY, boxX + 412, boxY + 196, 40, 18));
-        context.drawTextWithShadow(this.textRenderer, "Line: " + (selected != null ? selected.lineHeight : 9), boxX + 12, boxY + 220, 0xFFEAEAEA);
-        context.drawTextWithShadow(this.textRenderer, "Scale: " + (selected != null ? String.format("%.1f", selected.fontScale) : "1.0"), boxX + 88, boxY + 220, 0xFFEAEAEA);
+        drawModalButton(context, layout.lineMinus().x(), layout.lineMinus().y(), layout.lineMinus().width(), layout.lineMinus().height(), "LH-", layout.lineMinus().contains(mouseX, mouseY));
+        drawModalButton(context, layout.linePlus().x(), layout.linePlus().y(), layout.linePlus().width(), layout.linePlus().height(), "LH+", layout.linePlus().contains(mouseX, mouseY));
+        drawModalButton(context, layout.fontMinus().x(), layout.fontMinus().y(), layout.fontMinus().width(), layout.fontMinus().height(), "FS-", layout.fontMinus().contains(mouseX, mouseY));
+        drawModalButton(context, layout.fontPlus().x(), layout.fontPlus().y(), layout.fontPlus().width(), layout.fontPlus().height(), "FS+", layout.fontPlus().contains(mouseX, mouseY));
+        drawModalButton(context, layout.visibility().x(), layout.visibility().y(), layout.visibility().width(), layout.visibility().height(), "Visibility: " + (selected != null ? shortVisibility(selected.visibilityMode) : "-"), layout.visibility().contains(mouseX, mouseY));
         if (selected != null && selected.type == MacroHudDataHandler.ElementType.BUTTON) {
-            context.drawTextWithShadow(this.textRenderer, "Exec: " + shortExecutionMode(selected.buttonExecutionMode) + " (RMB Vis)", boxX + 196, boxY + 220, 0xFFEAEAEA);
+            drawModalButton(context, layout.execution().x(), layout.execution().y(), layout.execution().width(), layout.execution().height(),
+                    "Execution: " + shortExecutionMode(selected.buttonExecutionMode),
+                    layout.execution().contains(mouseX, mouseY));
         }
-        context.drawTextWithShadow(this.textRenderer, "BG", boxX + 212, boxY + 224, 0xFFEAEAEA);
-        context.drawTextWithShadow(this.textRenderer, "BR", boxX + 332, boxY + 224, 0xFFEAEAEA);
+        drawModalButton(context, layout.bgMinus().x(), layout.bgMinus().y(), layout.bgMinus().width(), layout.bgMinus().height(), "BG-", layout.bgMinus().contains(mouseX, mouseY));
+        drawModalButton(context, layout.bgPlus().x(), layout.bgPlus().y(), layout.bgPlus().width(), layout.bgPlus().height(), "BG+", layout.bgPlus().contains(mouseX, mouseY));
+        drawModalButton(context, layout.borderMinus().x(), layout.borderMinus().y(), layout.borderMinus().width(), layout.borderMinus().height(), "BR-", layout.borderMinus().contains(mouseX, mouseY));
+        drawModalButton(context, layout.borderPlus().x(), layout.borderPlus().y(), layout.borderPlus().width(), layout.borderPlus().height(), "BR+", layout.borderPlus().contains(mouseX, mouseY));
+        context.drawTextWithShadow(this.textRenderer, "Line: " + (selected != null ? selected.lineHeight : 9), layout.lineMinus().x(), layout.bgMinus().y(), 0xFFEAEAEA);
+        context.drawTextWithShadow(this.textRenderer, "Scale: " + (selected != null ? String.format("%.1f", selected.fontScale) : "1.0"), layout.fontMinus().x(), layout.bgMinus().y(), 0xFFEAEAEA);
+        context.drawTextWithShadow(this.textRenderer, "BG", layout.bgHex().x() - 26, layout.bgHex().y() + 4, 0xFFEAEAEA);
+        context.drawTextWithShadow(this.textRenderer, "BR", layout.borderHex().x() - 26, layout.borderHex().y() + 4, 0xFFEAEAEA);
 
         int bgInputBg = advancedBgColorFocused ? 0xFF0F0F0F : 0xFF161616;
-        context.fill(bgFieldX, bgFieldY, bgFieldX + bgFieldW, bgFieldY + bgFieldH, bgInputBg);
-        context.fill(bgFieldX, bgFieldY, bgFieldX + bgFieldW, bgFieldY + 1, 0x60FFFFFF);
-        drawSingleLineSelection(context, bgFieldX + 4, bgFieldY + 5, advancedBgColor, advancedBgSelectionAnchor, advancedBgCursor);
-        context.drawTextWithShadow(this.textRenderer, advancedBgColor, bgFieldX + 4, bgFieldY + 5, 0xFFEAEAEA);
+        context.fill(layout.bgHex().x(), layout.bgHex().y(), layout.bgHex().right(), layout.bgHex().bottom(), bgInputBg);
+        context.fill(layout.bgHex().x(), layout.bgHex().y(), layout.bgHex().right(), layout.bgHex().y() + 1, 0x60FFFFFF);
+        drawSingleLineSelection(context, layout.bgHex().x() + 4, layout.bgHex().y() + 5, advancedBgColor, advancedBgSelectionAnchor, advancedBgCursor);
+        context.drawTextWithShadow(this.textRenderer, advancedBgColor, layout.bgHex().x() + 4, layout.bgHex().y() + 5, 0xFFEAEAEA);
 
         int borderInputBg = advancedBorderColorFocused ? 0xFF0F0F0F : 0xFF161616;
-        context.fill(borderFieldX, borderFieldY, borderFieldX + borderFieldW, borderFieldY + borderFieldH, borderInputBg);
-        context.fill(borderFieldX, borderFieldY, borderFieldX + borderFieldW, borderFieldY + 1, 0x60FFFFFF);
-        drawSingleLineSelection(context, borderFieldX + 4, borderFieldY + 5, advancedBorderColor, advancedBorderSelectionAnchor, advancedBorderCursor);
-        context.drawTextWithShadow(this.textRenderer, advancedBorderColor, borderFieldX + 4, borderFieldY + 5, 0xFFEAEAEA);
+        context.fill(layout.borderHex().x(), layout.borderHex().y(), layout.borderHex().right(), layout.borderHex().bottom(), borderInputBg);
+        context.fill(layout.borderHex().x(), layout.borderHex().y(), layout.borderHex().right(), layout.borderHex().y() + 1, 0x60FFFFFF);
+        drawSingleLineSelection(context, layout.borderHex().x() + 4, layout.borderHex().y() + 5, advancedBorderColor, advancedBorderSelectionAnchor, advancedBorderCursor);
+        context.drawTextWithShadow(this.textRenderer, advancedBorderColor, layout.borderHex().x() + 4, layout.borderHex().y() + 5, 0xFFEAEAEA);
+
+        if (selected != null && selected.visibilityMode == MacroHudDataHandler.VisibilityMode.SCREEN) {
+            int visTypeX = layout.visibilityType().x();
+            int visTypeY = layout.visibilityType().y();
+            int visTypeW = layout.visibilityType().width();
+            context.drawTextWithShadow(this.textRenderer, "Visibility Screen Type", visTypeX, visTypeY - 10, 0xFFB8B8B8);
+            int visTypeBg = advancedVisibilityScreenTypeFocused ? 0xFF0F0F0F : 0xFF161616;
+            context.fill(visTypeX, visTypeY, visTypeX + visTypeW, visTypeY + 18, visTypeBg);
+            context.fill(visTypeX, visTypeY, visTypeX + visTypeW, visTypeY + 1, 0x60FFFFFF);
+            drawSingleLineSelection(context, visTypeX + 4, visTypeY + 5, advancedVisibilityScreenType,
+                    advancedVisibilityScreenTypeSelectionAnchor, advancedVisibilityScreenTypeCursor);
+            context.drawTextWithShadow(this.textRenderer, advancedVisibilityScreenType, visTypeX + 4, visTypeY + 5, 0xFFEAEAEA);
+            if (advancedVisibilityScreenTypeFocused && (System.currentTimeMillis() / 500L) % 2L == 0L) {
+                int cx = visTypeX + 4 + this.textRenderer.getWidth(advancedVisibilityScreenType.substring(0,
+                        Math.clamp(advancedVisibilityScreenTypeCursor, 0, advancedVisibilityScreenType.length())));
+                context.fill(cx, visTypeY + 4, cx + 1, visTypeY + 13, 0xFFFFFFFF);
+            }
+        }
 
         if (advancedBgColorFocused && (System.currentTimeMillis() / 500L) % 2L == 0L) {
-            int cx = bgFieldX + 4 + this.textRenderer.getWidth(advancedBgColor.substring(0, Math.clamp(advancedBgCursor, 0, advancedBgColor.length())));
-            context.fill(cx, bgFieldY + 4, cx + 1, bgFieldY + 13, 0xFFFFFFFF);
+            int cx = layout.bgHex().x() + 4 + this.textRenderer.getWidth(advancedBgColor.substring(0, Math.clamp(advancedBgCursor, 0, advancedBgColor.length())));
+            context.fill(cx, layout.bgHex().y() + 4, cx + 1, layout.bgHex().y() + 13, 0xFFFFFFFF);
         }
         if (advancedBorderColorFocused && (System.currentTimeMillis() / 500L) % 2L == 0L) {
-            int cx = borderFieldX + 4 + this.textRenderer.getWidth(advancedBorderColor.substring(0, Math.clamp(advancedBorderCursor, 0, advancedBorderColor.length())));
-            context.fill(cx, borderFieldY + 4, cx + 1, borderFieldY + 13, 0xFFFFFFFF);
+            int cx = layout.borderHex().x() + 4 + this.textRenderer.getWidth(advancedBorderColor.substring(0, Math.clamp(advancedBorderCursor, 0, advancedBorderColor.length())));
+            context.fill(cx, layout.borderHex().y() + 4, cx + 1, layout.borderHex().y() + 13, 0xFFFFFFFF);
         }
 
-        drawModalButton(context, boxX + MODAL_W - 134, boxY + MODAL_H - 24, 60, 18, "Apply", containsBox(mouseX, mouseY, boxX + MODAL_W - 134, boxY + MODAL_H - 24, 60, 18));
-        drawModalButton(context, boxX + MODAL_W - 70, boxY + MODAL_H - 24, 58, 18, "Cancel", containsBox(mouseX, mouseY, boxX + MODAL_W - 70, boxY + MODAL_H - 24, 58, 18));
+        drawModalButton(context, layout.apply().x(), layout.apply().y(), layout.apply().width(), layout.apply().height(), "Apply", layout.apply().contains(mouseX, mouseY));
+        drawModalButton(context, layout.cancel().x(), layout.cancel().y(), layout.cancel().width(), layout.cancel().height(), "Cancel", layout.cancel().contains(mouseX, mouseY));
+    }
+
+    private StandardAdvancedLayout standardAdvancedLayout(int boxX, int boxY) {
+        UiRect content = FormPanels.panel(boxX + 12, boxY + 34, MODAL_W - 24, MODAL_H - 60);
+        List<UiRect> col = FormPanels.column(content, 8, UiFlexLayout.Align.STRETCH, List.of(
+                UiFlexLayout.Item.fixed(100),
+                UiFlexLayout.Item.fixed(18),
+                UiFlexLayout.Item.fixed(18),
+                UiFlexLayout.Item.fixed(18),
+                UiFlexLayout.Item.fixed(18),
+                UiFlexLayout.Item.fixed(18),
+                UiFlexLayout.Item.fixed(18)
+        ));
+
+        UiRect textArea = col.get(0);
+        UiRect actionField = col.get(1);
+
+        List<UiRect> row3 = FormPanels.row(col.get(2), 4, UiFlexLayout.Align.STRETCH, List.of(
+                UiFlexLayout.Item.fixed(58), UiFlexLayout.Item.fixed(68),
+                UiFlexLayout.Item.fixed(90), UiFlexLayout.Item.fixed(90),
+                UiFlexLayout.Item.flex(90, 1)
+        ));
+
+        List<UiRect> row4 = FormPanels.row(col.get(3), 4, UiFlexLayout.Align.STRETCH, List.of(
+                UiFlexLayout.Item.fixed(40), UiFlexLayout.Item.fixed(40),
+                UiFlexLayout.Item.fixed(40), UiFlexLayout.Item.fixed(40),
+                UiFlexLayout.Item.fixed(122), UiFlexLayout.Item.flex(120, 1)
+        ));
+
+        List<UiRect> row5 = FormPanels.row(col.get(4), 4, UiFlexLayout.Align.STRETCH, List.of(
+                UiFlexLayout.Item.fixed(40), UiFlexLayout.Item.fixed(40),
+                UiFlexLayout.Item.fixed(40), UiFlexLayout.Item.fixed(40),
+                UiFlexLayout.Item.fixed(84), UiFlexLayout.Item.fixed(84),
+                UiFlexLayout.Item.flex(120, 1)
+        ));
+
+        List<UiRect> row6 = FormPanels.row(col.get(5), 4, UiFlexLayout.Align.STRETCH, List.of(
+                UiFlexLayout.Item.fixed(212),
+                UiFlexLayout.Item.fixed(88),
+                UiFlexLayout.Item.fixed(88),
+                UiFlexLayout.Item.flex(120, 1)
+        ));
+
+        UiRect apply = FormPanels.panel(boxX + MODAL_W - 134, boxY + MODAL_H - 24, 60, 18);
+        UiRect cancel = FormPanels.panel(boxX + MODAL_W - 70, boxY + MODAL_H - 24, 58, 18);
+
+        return new StandardAdvancedLayout(
+                textArea,
+                actionField,
+                row3.get(0), row3.get(1), row3.get(2), row3.get(3), row3.get(4),
+                row4.get(0), row4.get(1), row4.get(2), row4.get(3), row4.get(4), row4.get(5),
+                row5.get(0), row5.get(1), row5.get(2), row5.get(3), row6.get(1), row6.get(2), row6.get(0),
+                apply, cancel
+        );
+    }
+
+    private int[] cursorPixelWithScroll(int baseX, int baseY, String text, int cursorIndex, int scrollLine) {
+        int cursor = Math.clamp(cursorIndex, 0, text.length());
+        int line = cursorLineIndex(text, cursor);
+        int lineStart = lineStart(text, cursor);
+        String before = text.substring(lineStart, cursor);
+        int x = baseX + this.textRenderer.getWidth(before);
+        int y = baseY + Math.max(0, line - Math.max(0, scrollLine)) * 9;
+        return new int[]{x, y};
+    }
+
+    private static int cursorLineIndex(String text, int cursorIndex) {
+        int cursor = Math.clamp(cursorIndex, 0, text.length());
+        int line = 0;
+        for (int i = 0; i < cursor; i++) {
+            if (text.charAt(i) == '\n') {
+                line++;
+            }
+        }
+        return line;
     }
 
     private void renderSecondaryChatAdvancedModal(DrawContext context, int mouseX, int mouseY, int boxX, int boxY) {
@@ -3114,6 +3239,32 @@ public class MacroWorkbenchV2Screen extends Screen {
     ) {
     }
 
+    private record StandardAdvancedLayout(
+            UiRect textArea,
+            UiRect actionField,
+            UiRect bgToggle,
+            UiRect borderToggle,
+            UiRect hAlign,
+            UiRect vAlign,
+            UiRect anchor,
+            UiRect lineMinus,
+            UiRect linePlus,
+            UiRect fontMinus,
+            UiRect fontPlus,
+            UiRect visibility,
+            UiRect execution,
+            UiRect bgMinus,
+            UiRect bgPlus,
+            UiRect borderMinus,
+            UiRect borderPlus,
+            UiRect bgHex,
+            UiRect borderHex,
+            UiRect visibilityType,
+            UiRect apply,
+            UiRect cancel
+    ) {
+    }
+
     private void renderCustomWidgetAdvancedModal(DrawContext context, int mouseX, int mouseY, int boxX, int boxY) {
         if (selected == null) {
             return;
@@ -3166,12 +3317,13 @@ public class MacroWorkbenchV2Screen extends Screen {
                 if (selectedSuggestion) {
                     context.fill(dropX, yy, dropX + dropW, yy + rowH, 0x503777AA);
                 }
-                context.drawTextWithShadow(this.textRenderer, token, dropX + 3, yy + 1, 0xFF8FC8FF);
+                int color = isSuggestionHeader(token) ? 0xFFB8D8FF : 0xFF8FC8FF;
+                context.drawTextWithShadow(this.textRenderer, token, dropX + 3, yy + 1, color);
             }
             if (suggestions.size() > maxVisible) {
                 context.drawTextWithShadow(this.textRenderer,
-                        "scroll " + (advancedActionSuggestionScroll + 1) + "/" + (maxScroll + 1),
-                        dropX + 3, dropY + maxVisible * rowH - 9, 0xFF909090);
+                            "scroll " + (advancedActionSuggestionScroll + 1) + "/" + (maxScroll + 1),
+                        dropX + 3, dropY + maxVisible * rowH + 2, 0xFF909090);
             }
         }
 
@@ -3363,9 +3515,11 @@ public class MacroWorkbenchV2Screen extends Screen {
                 int yy = dropY + i * rowH;
                 if (containsBox(click.x(), click.y(), dropX, yy, dropW, rowH)) {
                     int idx = advancedActionSuggestionScroll + i;
-                    advancedAction = suggestions.get(idx);
-                    advancedActionCursor = advancedAction.length();
-                    advancedActionSuggestionIndex = idx;
+                    if (idx >= 0 && idx < suggestions.size() && !isSuggestionHeader(suggestions.get(idx))) {
+                        advancedAction = suggestionValue(suggestions.get(idx));
+                        advancedActionCursor = advancedAction.length();
+                        advancedActionSuggestionIndex = idx;
+                    }
                     return true;
                 }
             }
@@ -3786,18 +3940,98 @@ public class MacroWorkbenchV2Screen extends Screen {
 
     private List<String> sourceTokenSuggestions(String prefix) {
         String p = safe(prefix).toLowerCase(Locale.ROOT);
-        List<String> starts = new ArrayList<>();
-        List<String> contains = new ArrayList<>();
-        for (String token : SOURCE_TOKEN_SUGGESTIONS) {
-            String lower = token.toLowerCase(Locale.ROOT);
-            if (p.isBlank() || lower.startsWith(p)) {
-                starts.add(token);
-            } else if (lower.contains(p)) {
-                contains.add(token);
+        LinkedHashMap<String, List<String>> grouped = new LinkedHashMap<>();
+        grouped.put("Player", new ArrayList<>());
+        grouped.put("Inventory", new ArrayList<>());
+        grouped.put("Armor", new ArrayList<>());
+        grouped.put("Container", new ArrayList<>());
+        grouped.put("World", new ArrayList<>());
+        grouped.put("Target", new ArrayList<>());
+        grouped.put("Macro", new ArrayList<>());
+        grouped.put("Script", new ArrayList<>());
+        grouped.put("Variables", new ArrayList<>());
+        grouped.put("Commands", new ArrayList<>());
+
+        for (String token : MacroPlaceholders.getKnownPlaceholderTokens()) {
+            String category = categorizeSuggestion(token);
+            grouped.computeIfAbsent(category, ignored -> new ArrayList<>()).add(token);
+        }
+
+        grouped.get("Commands").addAll(List.of(
+                "cmd:/",
+                "msg:",
+                "say:",
+                "copy:",
+                "bar:",
+                "if:{left}=={right}::cmd:/say yes:else:cmd:/say no"
+        ));
+
+        grouped.get("Variables").addAll(List.of(
+                "{player.name}",
+                "{player.uuid}",
+                "{pos.x} {pos.y} {pos.z}",
+                "{client.fps}",
+                "{world.time.clock}"
+        ));
+
+        grouped.get("Script").addAll(List.of(
+                "groovy:player.sendMessage(net.minecraft.text.Text.literal('Hi from Groovy'), false)",
+                "kotlin:player.sendMessage(net.minecraft.text.Text.literal(\"Hi from Kotlin\"), false)",
+                "example.groovy",
+                "example.kts"
+        ));
+        grouped.get("Script").addAll(ScriptStorage.listScripts());
+
+        List<String> out = new ArrayList<>();
+        for (Map.Entry<String, List<String>> entry : grouped.entrySet()) {
+            List<String> values = entry.getValue().stream()
+                    .filter(value -> value != null && !value.isBlank())
+                    .distinct()
+                    .sorted(String.CASE_INSENSITIVE_ORDER)
+                    .toList();
+            List<String> filtered = new ArrayList<>();
+            for (String value : values) {
+                String lower = value.toLowerCase(Locale.ROOT);
+                if (p.isBlank() || lower.startsWith(p) || lower.contains(p)) {
+                    filtered.add(value);
+                }
+            }
+            if (filtered.isEmpty()) {
+                continue;
+            }
+            out.add("[" + entry.getKey() + "]");
+            for (String value : filtered) {
+                out.add(entry.getKey() + " :: " + value);
             }
         }
-        starts.addAll(contains);
-        return starts;
+        return out;
+    }
+
+    private static String categorizeSuggestion(String token) {
+        String t = safe(token).toLowerCase(Locale.ROOT);
+        if (t.startsWith("inventory.") || t.startsWith("hand.") || t.startsWith("offhand.")) return "Inventory";
+        if (t.startsWith("armor.")) return "Armor";
+        if (t.startsWith("container.")) return "Container";
+        if (t.startsWith("world.") || t.startsWith("dim") || t.startsWith("pos.")) return "World";
+        if (t.startsWith("look.") || t.startsWith("sel.") || t.startsWith("entities.")) return "Target";
+        if (t.startsWith("players.") || t.startsWith("player.") || t.equals("hp") || t.equals("food") || t.equals("xp") || t.equals("level")) return "Player";
+        if (t.startsWith("key.") || t.startsWith("cps.")) return "Macro";
+        return "Variables";
+    }
+
+    private static boolean isSuggestionHeader(String suggestion) {
+        return suggestion != null && suggestion.startsWith("[") && suggestion.endsWith("]");
+    }
+
+    private static String suggestionValue(String suggestion) {
+        if (suggestion == null) {
+            return "";
+        }
+        int idx = suggestion.indexOf(" :: ");
+        if (idx < 0) {
+            return suggestion;
+        }
+        return suggestion.substring(idx + 4);
     }
 
     private List<String> advancedActionSuggestions() {
@@ -3988,8 +4222,9 @@ public class MacroWorkbenchV2Screen extends Screen {
                     selected.suffix = advancedBorderColor == null ? "" : advancedBorderColor;
                 }
             } else if (selected.type == MacroHudDataHandler.ElementType.BUTTON) {
-                selected.label = advancedText;
-                selected.buttonAction = advancedAction;
+                selected.buttonAction = advancedText;
+                selected.label = advancedAction;
+                selected.visibilityScreenType = safe(advancedVisibilityScreenType);
             } else {
                 selected.text = advancedText;
             }
@@ -4005,6 +4240,9 @@ public class MacroWorkbenchV2Screen extends Screen {
         this.advancedActionFocused = false;
         this.advancedBgColorFocused = false;
         this.advancedBorderColorFocused = false;
+        this.advancedVisibilityScreenTypeFocused = false;
+        this.advancedTextScrollLine = 0;
+        this.advancedTextManualScroll = false;
         this.activeDragSelectionField = ModalDragSelectionField.NONE;
     }
 
@@ -4352,6 +4590,7 @@ public class MacroWorkbenchV2Screen extends Screen {
         if (isCtrlDown() && keyCode == GLFW.GLFW_KEY_A) {
             advancedSelectionAnchor = 0;
             advancedCursor = advancedText.length();
+            advancedTextManualScroll = false;
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_BACKSPACE) {
@@ -4361,6 +4600,7 @@ public class MacroWorkbenchV2Screen extends Screen {
                 advancedText = advancedText.substring(0, start) + advancedText.substring(end);
                 advancedCursor = start;
                 advancedSelectionAnchor = -1;
+                advancedTextManualScroll = false;
                 return true;
             }
             if (advancedCursor > 0) {
@@ -4368,6 +4608,7 @@ public class MacroWorkbenchV2Screen extends Screen {
                 advancedCursor--;
             }
             advancedSelectionAnchor = -1;
+            advancedTextManualScroll = false;
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_DELETE) {
@@ -4377,48 +4618,56 @@ public class MacroWorkbenchV2Screen extends Screen {
                 advancedText = advancedText.substring(0, start) + advancedText.substring(end);
                 advancedCursor = start;
                 advancedSelectionAnchor = -1;
+                advancedTextManualScroll = false;
                 return true;
             }
             if (advancedCursor < advancedText.length()) {
                 advancedText = advancedText.substring(0, advancedCursor) + advancedText.substring(advancedCursor + 1);
             }
             advancedSelectionAnchor = -1;
+            advancedTextManualScroll = false;
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_LEFT) {
             int old = advancedCursor;
             advancedCursor = Math.max(0, advancedCursor - 1);
             advancedSelectionAnchor = updateSelectionAnchor(advancedSelectionAnchor, old, advancedCursor, isShiftDown());
+            advancedTextManualScroll = false;
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_RIGHT) {
             int old = advancedCursor;
             advancedCursor = Math.min(advancedText.length(), advancedCursor + 1);
             advancedSelectionAnchor = updateSelectionAnchor(advancedSelectionAnchor, old, advancedCursor, isShiftDown());
+            advancedTextManualScroll = false;
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_HOME) {
             int old = advancedCursor;
             advancedCursor = lineStart(advancedText, advancedCursor);
             advancedSelectionAnchor = updateSelectionAnchor(advancedSelectionAnchor, old, advancedCursor, isShiftDown());
+            advancedTextManualScroll = false;
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_END) {
             int old = advancedCursor;
             advancedCursor = lineEnd(advancedText, advancedCursor);
             advancedSelectionAnchor = updateSelectionAnchor(advancedSelectionAnchor, old, advancedCursor, isShiftDown());
+            advancedTextManualScroll = false;
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_UP) {
             int old = advancedCursor;
             advancedCursor = moveCursorVertical(advancedText, advancedCursor, -1);
             advancedSelectionAnchor = updateSelectionAnchor(advancedSelectionAnchor, old, advancedCursor, isShiftDown());
+            advancedTextManualScroll = false;
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_DOWN) {
             int old = advancedCursor;
             advancedCursor = moveCursorVertical(advancedText, advancedCursor, 1);
             advancedSelectionAnchor = updateSelectionAnchor(advancedSelectionAnchor, old, advancedCursor, isShiftDown());
+            advancedTextManualScroll = false;
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_ENTER || keyCode == GLFW.GLFW_KEY_KP_ENTER) {
@@ -4450,6 +4699,7 @@ public class MacroWorkbenchV2Screen extends Screen {
                 advancedCursor = 0;
             }
             advancedSelectionAnchor = -1;
+            advancedTextManualScroll = false;
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
@@ -4472,18 +4722,12 @@ public class MacroWorkbenchV2Screen extends Screen {
                 int start = advancedActionSuggestionIndex < 0
                         ? suggestions.indexOf(advancedAction)
                         : advancedActionSuggestionIndex;
-                if (start < 0) {
-                    start = dir < 0 ? suggestions.size() : -1;
-                }
-                int next = start + dir;
+                int next = nextSelectableSuggestionIndex(suggestions, start, dir);
                 if (next < 0) {
-                    next = suggestions.size() - 1;
-                }
-                if (next >= suggestions.size()) {
-                    next = 0;
+                    return true;
                 }
                 advancedActionSuggestionIndex = next;
-                advancedAction = suggestions.get(next);
+                advancedAction = suggestionValue(suggestions.get(next));
                 advancedActionCursor = advancedAction.length();
                 ensureSuggestionVisible(suggestions.size(), next, modalY() + 94);
                 return true;
@@ -4555,18 +4799,12 @@ public class MacroWorkbenchV2Screen extends Screen {
                 int start = advancedActionSuggestionIndex < 0
                         ? suggestions.indexOf(advancedAction)
                         : advancedActionSuggestionIndex;
-                if (start < 0) {
-                    start = isShiftDown() ? suggestions.size() : -1;
-                }
-                int next = start + dir;
+                int next = nextSelectableSuggestionIndex(suggestions, start, dir);
                 if (next < 0) {
-                    next = suggestions.size() - 1;
-                }
-                if (next >= suggestions.size()) {
-                    next = 0;
+                    return true;
                 }
                 advancedActionSuggestionIndex = next;
-                advancedAction = suggestions.get(next);
+                advancedAction = suggestionValue(suggestions.get(next));
                 advancedActionCursor = advancedAction.length();
                 advancedActionSelectionAnchor = -1;
                 ensureSuggestionVisible(suggestions.size(), next, modalY() + 94);
@@ -4608,12 +4846,128 @@ public class MacroWorkbenchV2Screen extends Screen {
         return false;
     }
 
+    private static int nextSelectableSuggestionIndex(List<String> suggestions, int start, int direction) {
+        if (suggestions == null || suggestions.isEmpty()) {
+            return -1;
+        }
+        int dir = direction < 0 ? -1 : 1;
+        int index = start;
+        for (int i = 0; i < suggestions.size(); i++) {
+            index += dir;
+            if (index < 0) {
+                index = suggestions.size() - 1;
+            }
+            if (index >= suggestions.size()) {
+                index = 0;
+            }
+            if (!isSuggestionHeader(suggestions.get(index))) {
+                return index;
+            }
+        }
+        return -1;
+    }
+
     private boolean handleAdvancedBgKey(int keyCode) {
         return handleAdvancedColorKey(keyCode, true);
     }
 
     private boolean handleAdvancedBorderKey(int keyCode) {
         return handleAdvancedColorKey(keyCode, false);
+    }
+
+    private boolean handleAdvancedVisibilityScreenTypeKey(int keyCode) {
+        String value = advancedVisibilityScreenType;
+        int cursor = advancedVisibilityScreenTypeCursor;
+        int selectionAnchor = advancedVisibilityScreenTypeSelectionAnchor;
+
+        if (isCtrlDown() && keyCode == GLFW.GLFW_KEY_A) {
+            advancedVisibilityScreenTypeSelectionAnchor = 0;
+            advancedVisibilityScreenTypeCursor = value.length();
+            return true;
+        }
+        if (keyCode == GLFW.GLFW_KEY_BACKSPACE) {
+            if (hasSelection(selectionAnchor, cursor)) {
+                int start = selectionStart(selectionAnchor, cursor);
+                int end = selectionEnd(selectionAnchor, cursor);
+                advancedVisibilityScreenType = value.substring(0, start) + value.substring(end);
+                advancedVisibilityScreenTypeCursor = start;
+            } else if (cursor > 0) {
+                advancedVisibilityScreenType = value.substring(0, cursor - 1) + value.substring(cursor);
+                advancedVisibilityScreenTypeCursor = cursor - 1;
+            }
+            advancedVisibilityScreenTypeSelectionAnchor = -1;
+            return true;
+        }
+        if (keyCode == GLFW.GLFW_KEY_DELETE) {
+            if (hasSelection(selectionAnchor, cursor)) {
+                int start = selectionStart(selectionAnchor, cursor);
+                int end = selectionEnd(selectionAnchor, cursor);
+                advancedVisibilityScreenType = value.substring(0, start) + value.substring(end);
+                advancedVisibilityScreenTypeCursor = start;
+            } else if (cursor < value.length()) {
+                advancedVisibilityScreenType = value.substring(0, cursor) + value.substring(cursor + 1);
+            }
+            advancedVisibilityScreenTypeSelectionAnchor = -1;
+            return true;
+        }
+        if (keyCode == GLFW.GLFW_KEY_LEFT) {
+            int old = cursor;
+            int next = Math.max(0, cursor - 1);
+            advancedVisibilityScreenTypeCursor = next;
+            advancedVisibilityScreenTypeSelectionAnchor = updateSelectionAnchor(selectionAnchor, old, next, isShiftDown());
+            return true;
+        }
+        if (keyCode == GLFW.GLFW_KEY_RIGHT) {
+            int old = cursor;
+            int next = Math.min(value.length(), cursor + 1);
+            advancedVisibilityScreenTypeCursor = next;
+            advancedVisibilityScreenTypeSelectionAnchor = updateSelectionAnchor(selectionAnchor, old, next, isShiftDown());
+            return true;
+        }
+        if (keyCode == GLFW.GLFW_KEY_HOME) {
+            int old = cursor;
+            advancedVisibilityScreenTypeCursor = 0;
+            advancedVisibilityScreenTypeSelectionAnchor = updateSelectionAnchor(selectionAnchor, old, 0, isShiftDown());
+            return true;
+        }
+        if (keyCode == GLFW.GLFW_KEY_END) {
+            int old = cursor;
+            int next = value.length();
+            advancedVisibilityScreenTypeCursor = next;
+            advancedVisibilityScreenTypeSelectionAnchor = updateSelectionAnchor(selectionAnchor, old, next, isShiftDown());
+            return true;
+        }
+        if (isCtrlDown() && keyCode == GLFW.GLFW_KEY_V && this.client != null) {
+            insertAtAdvancedVisibilityScreenTypeCursor(this.client.keyboard.getClipboard());
+            return true;
+        }
+        if (isCtrlDown() && keyCode == GLFW.GLFW_KEY_C && this.client != null) {
+            this.client.keyboard.setClipboard(hasSelection(selectionAnchor, cursor)
+                    ? selectedText(value, selectionAnchor, cursor)
+                    : value);
+            return true;
+        }
+        if (isCtrlDown() && keyCode == GLFW.GLFW_KEY_X && this.client != null) {
+            this.client.keyboard.setClipboard(hasSelection(selectionAnchor, cursor)
+                    ? selectedText(value, selectionAnchor, cursor)
+                    : value);
+            if (hasSelection(selectionAnchor, cursor)) {
+                int start = selectionStart(selectionAnchor, cursor);
+                int end = selectionEnd(selectionAnchor, cursor);
+                advancedVisibilityScreenType = value.substring(0, start) + value.substring(end);
+                advancedVisibilityScreenTypeCursor = start;
+            } else {
+                advancedVisibilityScreenType = "";
+                advancedVisibilityScreenTypeCursor = 0;
+            }
+            advancedVisibilityScreenTypeSelectionAnchor = -1;
+            return true;
+        }
+        if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
+            closeAdvancedModal();
+            return true;
+        }
+        return false;
     }
 
     private boolean handleAdvancedColorKey(int keyCode, boolean background) {
@@ -4743,7 +5097,8 @@ public class MacroWorkbenchV2Screen extends Screen {
     }
 
     private void insertAtCursor(String s) {
-        if (s == null || s.isEmpty()) {
+        String normalizedInput = normalizeMultilineInput(s);
+        if (normalizedInput.isEmpty()) {
             return;
         }
         if (hasSelection(advancedSelectionAnchor, advancedCursor)) {
@@ -4752,14 +5107,16 @@ public class MacroWorkbenchV2Screen extends Screen {
             this.advancedText = advancedText.substring(0, start) + advancedText.substring(end);
             this.advancedCursor = start;
         }
-        this.advancedText = advancedText.substring(0, advancedCursor) + s + advancedText.substring(advancedCursor);
-        this.advancedCursor += s.length();
+        this.advancedText = advancedText.substring(0, advancedCursor) + normalizedInput + advancedText.substring(advancedCursor);
+        this.advancedCursor += normalizedInput.length();
         this.advancedSelectionAnchor = -1;
         this.advancedActionSuggestionScroll = 0;
+        this.advancedTextManualScroll = false;
     }
 
     private void insertAtAdvancedActionCursor(String s) {
-        if (s == null || s.isEmpty()) {
+        String normalizedInput = normalizeSingleLineInput(s);
+        if (normalizedInput.isEmpty()) {
             return;
         }
         if (hasSelection(advancedActionSelectionAnchor, advancedActionCursor)) {
@@ -4768,8 +5125,8 @@ public class MacroWorkbenchV2Screen extends Screen {
             this.advancedAction = advancedAction.substring(0, start) + advancedAction.substring(end);
             this.advancedActionCursor = start;
         }
-        this.advancedAction = advancedAction.substring(0, advancedActionCursor) + s + advancedAction.substring(advancedActionCursor);
-        this.advancedActionCursor += s.length();
+        this.advancedAction = advancedAction.substring(0, advancedActionCursor) + normalizedInput + advancedAction.substring(advancedActionCursor);
+        this.advancedActionCursor += normalizedInput.length();
         this.advancedActionSelectionAnchor = -1;
         this.advancedActionSuggestionIndex = -1;
         this.advancedActionSuggestionScroll = 0;
@@ -4803,6 +5160,24 @@ public class MacroWorkbenchV2Screen extends Screen {
         this.advancedBorderColor = advancedBorderColor.substring(0, advancedBorderCursor) + s + advancedBorderColor.substring(advancedBorderCursor);
         this.advancedBorderCursor += s.length();
         this.advancedBorderSelectionAnchor = -1;
+    }
+
+    private void insertAtAdvancedVisibilityScreenTypeCursor(String s) {
+        String normalizedInput = normalizeSingleLineInput(s);
+        if (normalizedInput.isEmpty()) {
+            return;
+        }
+        if (hasSelection(advancedVisibilityScreenTypeSelectionAnchor, advancedVisibilityScreenTypeCursor)) {
+            int start = selectionStart(advancedVisibilityScreenTypeSelectionAnchor, advancedVisibilityScreenTypeCursor);
+            int end = selectionEnd(advancedVisibilityScreenTypeSelectionAnchor, advancedVisibilityScreenTypeCursor);
+            this.advancedVisibilityScreenType = advancedVisibilityScreenType.substring(0, start) + advancedVisibilityScreenType.substring(end);
+            this.advancedVisibilityScreenTypeCursor = start;
+        }
+        this.advancedVisibilityScreenType = advancedVisibilityScreenType.substring(0, advancedVisibilityScreenTypeCursor)
+                + normalizedInput
+                + advancedVisibilityScreenType.substring(advancedVisibilityScreenTypeCursor);
+        this.advancedVisibilityScreenTypeCursor += normalizedInput.length();
+        this.advancedVisibilityScreenTypeSelectionAnchor = -1;
     }
 
     private void applyAdvancedColorFieldsToSelection() {
@@ -5681,6 +6056,12 @@ public class MacroWorkbenchV2Screen extends Screen {
         return containsBox(mouseX, mouseY, hx, hy, handleSize, handleSize);
     }
 
+    private boolean canResize(MacroHudDataHandler.HudElement e, double mouseX, double mouseY) {
+        int ex = resolveElementX(e);
+        int ey = resolveElementY(e);
+        return isResizeHandleHit(ex, ey, e, mouseX, mouseY);
+    }
+
 
     private int resolveElementX(MacroHudDataHandler.HudElement e) {
         return switch (e.anchor) {
@@ -5858,6 +6239,40 @@ public class MacroWorkbenchV2Screen extends Screen {
         }
     }
 
+    private void drawMultilineSelectionWithScroll(DrawContext context, int textX, int textY, int maxY,
+                                                  String text, int anchor, int cursor, int lineHeight, int scrollLines) {
+        if (!hasSelection(anchor, cursor)) {
+            return;
+        }
+        String safeText = text == null ? "" : text;
+        int[] range = clampedSelectionRange(safeText, anchor, cursor);
+        int start = range[0];
+        int end = range[1];
+        List<String> lines = splitLinesRaw(safeText);
+        int y = textY;
+        int index = 0;
+        int firstLine = Math.max(0, scrollLines);
+        for (int lineIdx = 0; lineIdx < lines.size(); lineIdx++) {
+            String line = lines.get(lineIdx);
+            int lineStart = index;
+            int lineEnd = lineStart + line.length();
+            if (lineIdx >= firstLine) {
+                if (y > maxY) {
+                    break;
+                }
+                int selStart = Math.max(start, lineStart);
+                int selEnd = Math.min(end, lineEnd);
+                if (selEnd > selStart) {
+                    int sx = textX + this.textRenderer.getWidth(line.substring(0, selStart - lineStart));
+                    int ex = textX + this.textRenderer.getWidth(line.substring(0, selEnd - lineStart));
+                    context.fill(sx, y, ex, y + 9, 0x704A7CC7);
+                }
+                y += lineHeight;
+            }
+            index = lineEnd + 1;
+        }
+    }
+
     private static boolean containsBox(double x, double y, int boxX, int boxY, int boxW, int boxH) {
         return GuiSystem.contains(x, y, boxX, boxY, boxW, boxH);
     }
@@ -5870,7 +6285,7 @@ public class MacroWorkbenchV2Screen extends Screen {
         if (raw == null || raw.isEmpty()) {
             return "";
         }
-        String normalized = raw.replace("\\n", "\n");
+        String normalized = normalizeMultilineInput(raw);
         int idx = normalized.indexOf('\n');
         return idx < 0 ? normalized : normalized.substring(0, idx);
     }
@@ -5879,13 +6294,31 @@ public class MacroWorkbenchV2Screen extends Screen {
         if (raw == null || raw.isEmpty()) {
             return List.of("");
         }
-        String normalized = raw.replace("\\n", "\n");
+        String normalized = normalizeMultilineInput(raw);
         String[] parts = normalized.split("\\n", -1);
         List<String> out = new ArrayList<>(parts.length);
         for (String p : parts) {
             out.add(p == null ? "" : p);
         }
         return out;
+    }
+
+    private static String normalizeMultilineInput(String raw) {
+        if (raw == null || raw.isEmpty()) {
+            return "";
+        }
+        return raw
+                .replace("\\n", "\n")
+                .replace("\r\n", "\n")
+                .replace('\r', '\n');
+    }
+
+    private static String normalizeSingleLineInput(String raw) {
+        String normalized = normalizeMultilineInput(raw);
+        if (normalized.isEmpty()) {
+            return "";
+        }
+        return normalized.replace('\n', ' ');
     }
 
     private static List<String> splitLines(String raw) {
@@ -6749,7 +7182,11 @@ public class MacroWorkbenchV2Screen extends Screen {
     }
 
     private static String shortExecutionMode(MacroHudDataHandler.ButtonExecutionMode mode) {
-        return mode == MacroHudDataHandler.ButtonExecutionMode.SCRIPT ? "SCRIPT" : "CMD";
+        return switch (mode == null ? MacroHudDataHandler.ButtonExecutionMode.COMMAND : mode) {
+            case COMMAND -> "Command";
+            case GROOVY_SCRIPT -> "Groovy Script";
+            case KOTLIN_SCRIPT -> "Kotlin Script";
+        };
     }
 
     private static MacroHudDataHandler.VisibilityMode cycleVisibilityMode(MacroHudDataHandler.VisibilityMode mode, boolean forward) {

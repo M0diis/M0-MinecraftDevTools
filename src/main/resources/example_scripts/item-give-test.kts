@@ -1,26 +1,27 @@
-import net.minecraft.item.Items
-import net.minecraft.item.ItemStack
-import net.minecraft.registry.Registries
+import net.minecraft.enchantment.Enchantment
 import net.minecraft.enchantment.Enchantments
+import net.minecraft.item.ItemStack
+import net.minecraft.item.Items
+import net.minecraft.registry.RegistryKey
+import net.minecraft.registry.RegistryKeys
 
-// Helper to get RegistryEntry from RegistryKey
-fun getEntry(key: net.minecraft.registry.RegistryKey<net.minecraft.enchantment.Enchantment>) =
-    Registries.enchantment.getEntry(key).get()
+fun ench(key: RegistryKey<Enchantment>) =
+    player.getEntityWorld().getRegistryManager()
+        .getOrThrow(RegistryKeys.ENCHANTMENT)
+        .getEntry(key.value)
+        .orElseThrow()
 
-// Give a diamond sword with Sharpness V and Unbreaking III
 val sword = ItemStack(Items.DIAMOND_SWORD)
-sword.addEnchantment(getEntry(Enchantments.SHARPNESS), 5)
-sword.addEnchantment(getEntry(Enchantments.UNBREAKING), 3)
+sword.addEnchantment(ench(Enchantments.SHARPNESS), 5)
+sword.addEnchantment(ench(Enchantments.UNBREAKING), 3)
 player.giveItemStack(sword)
 
-// Give a stack of enchanted golden apples
 val apples = ItemStack(Items.ENCHANTED_GOLDEN_APPLE, 16)
 player.giveItemStack(apples)
 
-// Give a bow with Power V and Infinity
 val bow = ItemStack(Items.BOW)
-bow.addEnchantment(getEntry(Enchantments.POWER), 5)
-bow.addEnchantment(getEntry(Enchantments.INFINITY), 1)
+bow.addEnchantment(ench(Enchantments.POWER), 5)
+bow.addEnchantment(ench(Enchantments.INFINITY), 1)
 player.giveItemStack(bow)
 
 "Gave you a sword, apples, and a bow with enchants!"

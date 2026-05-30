@@ -44,7 +44,8 @@ public final class MacroHudDataHandler {
 
     public enum ButtonExecutionMode {
         COMMAND,
-        SCRIPT
+        GROOVY_SCRIPT,
+        KOTLIN_SCRIPT
     }
 
     public enum HorizontalAlign {
@@ -428,6 +429,14 @@ public final class MacroHudDataHandler {
             e.macroId = raw.macroId == null ? "" : raw.macroId.trim();
             e.buttonAction = raw.buttonAction == null ? "" : raw.buttonAction.trim();
             e.buttonExecutionMode = raw.buttonExecutionMode == null ? ButtonExecutionMode.COMMAND : raw.buttonExecutionMode;
+            if (e.buttonExecutionMode == ButtonExecutionMode.COMMAND && e.type == ElementType.BUTTON) {
+                String actionLower = e.buttonAction.toLowerCase(Locale.ROOT);
+                if (actionLower.startsWith("kotlin:") || actionLower.startsWith("kts:")) {
+                    e.buttonExecutionMode = ButtonExecutionMode.KOTLIN_SCRIPT;
+                } else if (actionLower.startsWith("groovy:")) {
+                    e.buttonExecutionMode = ButtonExecutionMode.GROOVY_SCRIPT;
+                }
+            }
             e.x = Math.clamp(raw.x, -10000, 10000);
             e.y = Math.clamp(raw.y, -10000, 10000);
             e.anchor = raw.anchor == null ? Anchor.TOP_LEFT : raw.anchor;

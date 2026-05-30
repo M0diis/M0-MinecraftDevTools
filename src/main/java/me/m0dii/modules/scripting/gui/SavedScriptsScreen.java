@@ -271,7 +271,7 @@ public class SavedScriptsScreen extends Screen {
 
     @Override
     public void render(net.minecraft.client.gui.DrawContext context, int mouseX, int mouseY, float delta) {
-        this.renderBackground(context, mouseX, mouseY, delta);
+        context.fill(0, 0, this.width, this.height, 0xCC101010);
         super.render(context, mouseX, mouseY, delta);
         int listX = 40;
         int listY = 40;

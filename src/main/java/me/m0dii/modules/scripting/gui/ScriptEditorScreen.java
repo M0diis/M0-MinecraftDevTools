@@ -16,9 +16,11 @@ import net.minecraft.text.Text;
 import org.jetbrains.annotations.NotNull;
 
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Locale;
 
 public class ScriptEditorScreen extends BaseOwoScreen<GridLayout> {
 
@@ -49,9 +51,11 @@ public class ScriptEditorScreen extends BaseOwoScreen<GridLayout> {
         rootComponent.child(fileNameBox, 0, 0);
 
         scriptBox = UIComponents.textArea(Sizing.fill(100), Sizing.fill(30));
+        configureLargeTextLimit(scriptBox, 1_000_000);
         rootComponent.child(scriptBox, 1, 0);
 
         outputBox = UIComponents.textArea(Sizing.fill(100), Sizing.fixed(60));
+        configureLargeTextLimit(outputBox, 200_000);
         rootComponent.child(outputBox, 3, 0);
 
         rootComponent.child(UIComponents.button(Text.literal("Run"), button -> runScript())
@@ -69,18 +73,17 @@ public class ScriptEditorScreen extends BaseOwoScreen<GridLayout> {
 
     private void runScript() {
         try {
-            // ddetermine script manager by extension
-            if (fileNameBox.getText().trim().endsWith(GROOVY_EXT)) {
-                GroovyScriptManager manager = new GroovyScriptManager();
-                Object result = manager.runScript(scriptBox.getText());
-                outputBox.setText(String.valueOf(result));
-            }
+            String script = normalizeNewlines(scriptBox.getText());
+            String fileName = fileNameBox.getText() == null ? "" : fileNameBox.getText().trim().toLowerCase(Locale.ROOT);
 
-            if (fileNameBox.getText().trim().endsWith(KOTLIN_EXT)) {
-                KotlinScriptManager manager = new KotlinScriptManager();
-                Object result = manager.runScript(scriptBox.getText());
-                outputBox.setText(String.valueOf(result));
+            Object result;
+            if (fileName.endsWith(GROOVY_EXT)) {
+                result = new GroovyScriptManager().runScript(script);
+            } else {
+                // Default to Kotlin when extension is missing; users often paste .kts snippets first.
+                result = new KotlinScriptManager().runScript(script);
             }
+            outputBox.setText(String.valueOf(result));
         } catch (Exception e) {
             outputBox.setText("Error: " + e.getMessage());
         }
@@ -96,9 +99,9 @@ public class ScriptEditorScreen extends BaseOwoScreen<GridLayout> {
                 outputBox.setText("Enter file name!");
                 return;
             }
-            String fileName = (name.endsWith(GROOVY_EXT) || name.endsWith(KOTLIN_EXT)) ? name : name + GROOVY_EXT;
+            String fileName = (name.endsWith(GROOVY_EXT) || name.endsWith(KOTLIN_EXT)) ? name : name + KOTLIN_EXT;
             Path file = SCRIPTS_DIR.resolve(fileName);
-            Files.writeString(file, scriptBox.getText());
+            Files.writeString(file, normalizeNewlines(scriptBox.getText()));
             outputBox.setText("Saved to " + file.getFileName());
         } catch (IOException e) {
             outputBox.setText("Save error: " + e.getMessage());
@@ -113,19 +116,42 @@ public class ScriptEditorScreen extends BaseOwoScreen<GridLayout> {
                 return;
             }
 
-            String fileName = (name.endsWith(GROOVY_EXT) || name.endsWith(KOTLIN_EXT)) ? name : name + GROOVY_EXT;
+            String fileName = (name.endsWith(GROOVY_EXT) || name.endsWith(KOTLIN_EXT)) ? name : name + KOTLIN_EXT;
             Path file = SCRIPTS_DIR.resolve(fileName);
 
             if (!Files.exists(file)) {
                 outputBox.setText("File not found!");
                 return;
             }
-            String content = Files.readString(file);
+            String content = normalizeNewlines(Files.readString(file));
             scriptBox.setText(content);
             fileNameBox.setText(fileName);
             outputBox.setText("Loaded " + file.getFileName());
         } catch (IOException e) {
             outputBox.setText("Load error: " + e.getMessage());
+        }
+    }
+
+    private static String normalizeNewlines(String raw) {
+        if (raw == null || raw.isEmpty()) {
+            return "";
+        }
+        return raw.replace("\r\n", "\n").replace('\r', '\n');
+    }
+
+    private static void configureLargeTextLimit(TextAreaComponent area, int limit) {
+        if (area == null) {
+            return;
+        }
+        // Owo API names differ by version; try common setters reflectively.
+        for (String methodName : new String[]{"setMaxLength", "maxLength", "textLimit", "setTextLimit"}) {
+            try {
+                Method method = area.getClass().getMethod(methodName, int.class);
+                method.invoke(area, limit);
+                return;
+            } catch (Exception ignored) {
+                // Try next known method name.
+            }
         }
     }
 
