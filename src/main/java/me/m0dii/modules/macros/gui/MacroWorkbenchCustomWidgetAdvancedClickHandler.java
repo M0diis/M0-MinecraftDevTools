@@ -66,7 +66,7 @@ public final class MacroWorkbenchCustomWidgetAdvancedClickHandler {
         int dropY = suggestionsArea.y();
         int dropW = suggestionsArea.width();
         int rowH = 10;
-        int maxVisible = Math.max(1, Math.min(suggestions.size(), Math.max(1, suggestionsArea.height() / rowH)));
+        int maxVisible = Math.clamp(Math.max(1, suggestionsArea.height() / rowH), 1, suggestions.size());
         int maxScroll = Math.max(0, suggestions.size() - maxVisible);
         int scroll = Math.clamp(ops.getAdvancedActionSuggestionScroll(), 0, maxScroll);
         ops.setAdvancedActionSuggestionScroll(scroll);

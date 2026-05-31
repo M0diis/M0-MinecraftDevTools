@@ -116,7 +116,7 @@ public class ItemPickupNotifierModule extends Module {
         int innerH = Math.max(1, panelH - (pad * 2));
         int logicalInnerW = Math.max(1, (int) Math.floor(innerW / scale));
         int logicalInnerH = Math.max(1, (int) Math.floor(innerH / scale));
-        int maxLines = Math.max(1, Math.min(settings.maxLines, logicalInnerH / lineH));
+        int maxLines = Math.clamp(settings.maxLines, 1, Math.max(1, logicalInnerH / lineH));
 
         List<PickupPopup> newestFirst = new ArrayList<>(popups);
         java.util.Collections.reverse(newestFirst);
@@ -139,7 +139,7 @@ public class ItemPickupNotifierModule extends Module {
         for (PickupPopup popup : drawList) {
             long age = now - popup.createdAtMs;
             int lifetimeMs = settings.durationMs;
-            int fadeMs = Math.min((int) POPUP_FADE_MS, Math.max(250, lifetimeMs / 2));
+            int fadeMs = Math.clamp(lifetimeMs / 2, 250, (int) POPUP_FADE_MS);
             float alphaFactor = age >= (lifetimeMs - fadeMs)
                     ? Math.clamp((lifetimeMs - age) / (float) fadeMs, 0.0f, 1.0f)
                     : 1.0f;
@@ -150,7 +150,7 @@ public class ItemPickupNotifierModule extends Module {
             ctx.fill(baseX, y - 1, baseX + logicalInnerW, rowY2, bgColor);
 
             ItemStack icon = popup.stack.copy();
-            icon.setCount(Math.min(99, Math.max(1, popup.amount)));
+            icon.setCount(Math.clamp(popup.amount, 1, 99));
             int iconDrawY = y + Math.max(0, (lineH - iconPx) / 2);
             if (Math.abs(settings.iconScale - 1.0f) < 0.01f) {
                 ctx.drawItem(icon, baseX + 1, iconDrawY);

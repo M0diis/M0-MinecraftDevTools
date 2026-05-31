@@ -7,7 +7,7 @@ import com.mojang.brigadier.context.CommandContext;
 import me.m0dii.modules.Module;
 import me.m0dii.modules.macros.gui.MacroConfigScreen;
 import me.m0dii.modules.macros.gui.MacroKeybindOverlayModule;
-import me.m0dii.modules.macros.gui.MacroWorkbenchV2Screen;
+import me.m0dii.modules.macros.gui.MacroWorkbenchScreen;
 import me.m0dii.modules.macros.gui.PendingMacrosOverlayModule;
 import me.m0dii.modules.macros.hud.MacroHudDataHandler;
 import me.m0dii.modules.macros.hud.MacroHudOverlayModule;
@@ -52,14 +52,14 @@ public class MacrosModule extends Module {
                 KeybindCatalog.OPEN_MACRO_HUD_EDITOR.translationKey(),
                 InputUtil.Type.KEYSYM,
                 KeybindCatalog.OPEN_MACRO_HUD_EDITOR.defaultKey(),
-                client -> client.setScreen(MacroWorkbenchV2Screen.create(client.currentScreen, MacroWorkbenchV2Screen.Tab.CANVAS))
+                client -> client.setScreen(MacroWorkbenchScreen.create(client.currentScreen, MacroWorkbenchScreen.Tab.CANVAS))
         );
 
         registerPressedKeybind(
                 KeybindCatalog.OPEN_MACRO_KEYBOARD_LAYOUT.translationKey(),
                 InputUtil.Type.KEYSYM,
                 KeybindCatalog.OPEN_MACRO_KEYBOARD_LAYOUT.defaultKey(),
-                client -> client.setScreen(MacroWorkbenchV2Screen.create(client.currentScreen, MacroWorkbenchV2Screen.Tab.KEYBOARD))
+                client -> client.setScreen(MacroWorkbenchScreen.create(client.currentScreen, MacroWorkbenchScreen.Tab.KEYBOARD))
         );
 
         MacroKeybindOverlayModule.INSTANCE.register();

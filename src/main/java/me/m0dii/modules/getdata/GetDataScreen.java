@@ -205,7 +205,7 @@ public class GetDataScreen extends Screen {
             int suggestionW = 208;
             int suggestionX = this.boxX + this.boxW - suggestionW - 4;
             int suggestionY = this.boxY + 6;
-            int suggestionH = Math.max(42, Math.min(96, this.boxH - 12));
+            int suggestionH = Math.clamp(this.boxH - 12, 42, 96);
             ListPanel listPanel = new ListPanel(suggestionX, suggestionY, suggestionW, suggestionH);
             listPanel.render(context, this.textRenderer, suggestionRows, -1, 0, 10);
         }
@@ -230,7 +230,7 @@ public class GetDataScreen extends Screen {
         int errorLine = lineFromIndex(this.parseErrorIndex);
         String[] lines = this.editorText.split("\\n", -1);
         clampScrollLine(lines.length);
-        int startLine = Math.min(this.scrollLine, Math.max(0, lines.length - 1));
+        int startLine = Math.clamp(this.scrollLine, 0, Math.max(0, lines.length - 1));
         int i = indexAtLineStart(startLine);
         for (int lineIndex = startLine; lineIndex < lines.length; lineIndex++) {
             String line = lines[lineIndex];
@@ -270,7 +270,7 @@ public class GetDataScreen extends Screen {
         int maxY = this.boxY + this.boxH - 12;
         String[] lines = this.editorText.split("\\n", -1);
         clampScrollLine(lines.length);
-        int startLine = Math.min(this.scrollLine, Math.max(0, lines.length - 1));
+        int startLine = Math.clamp(this.scrollLine, 0, Math.max(0, lines.length - 1));
         int i = indexAtLineStart(startLine);
         for (int lineIndex = startLine; lineIndex < lines.length; lineIndex++) {
             String line = lines[lineIndex];
@@ -792,7 +792,7 @@ public class GetDataScreen extends Screen {
     }
 
     private int lineStart(int pos) {
-        int p = Math.max(0, Math.min(this.editorText.length(), pos));
+        int p = Math.clamp(pos, 0, this.editorText.length());
         while (p > 0 && this.editorText.charAt(p - 1) != '\n') {
             p--;
         }
@@ -800,7 +800,7 @@ public class GetDataScreen extends Screen {
     }
 
     private int lineEnd(int pos) {
-        int p = Math.max(0, Math.min(this.editorText.length(), pos));
+        int p = Math.clamp(pos, 0, this.editorText.length());
         while (p < this.editorText.length() && this.editorText.charAt(p) != '\n') {
             p++;
         }

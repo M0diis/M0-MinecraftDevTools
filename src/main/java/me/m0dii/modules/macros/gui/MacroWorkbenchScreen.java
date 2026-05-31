@@ -48,7 +48,7 @@ import org.lwjgl.glfw.GLFW;
 import java.util.*;
 import java.util.function.IntConsumer;
 
-public class MacroWorkbenchV2Screen extends Screen {
+public class MacroWorkbenchScreen extends Screen {
 
     public enum Tab {
         CANVAS,
@@ -120,6 +120,8 @@ public class MacroWorkbenchV2Screen extends Screen {
     private final List<MacroHudDataHandler.HudElement> elementClipboard = new ArrayList<>();
     private int clipboardWidth = -1;
     private int clipboardHeight = -1;
+    private final MacroWorkbenchCustomWidgetAdvancedClickHandler.Ops customWidgetAdvancedClickOpsBridge =
+            new MacroWorkbenchCustomWidgetAdvancedClickOpsBridge(this);
 
     private TextFieldWidget quickField;
     private TextFieldWidget macroField;
@@ -269,14 +271,14 @@ public class MacroWorkbenchV2Screen extends Screen {
         MODULE_DISABLED
     }
 
-    public MacroWorkbenchV2Screen(Screen parent, Tab initialTab) {
+    public MacroWorkbenchScreen(Screen parent, Tab initialTab) {
         super(Text.literal("Macro Workbench"));
         this.parent = parent;
         this.tab = initialTab == null ? Tab.CANVAS : initialTab;
     }
 
     public static Screen create(Screen parent, Tab tab) {
-        return new MacroWorkbenchV2Screen(parent, tab);
+        return new MacroWorkbenchScreen(parent, tab);
     }
 
     @Override
@@ -505,7 +507,7 @@ public class MacroWorkbenchV2Screen extends Screen {
         this.kbNameField = new TextFieldWidget(this.textRenderer, panelX + 10, this.height - 94, panelInnerW, 18, Text.literal("Macro Name"));
         this.kbCommandsField = new TextFieldWidget(this.textRenderer, panelX + 10, this.height - 72, panelInnerW, 18, Text.literal("Commands (; separated)"));
 
-        int delayW = Math.min(120, Math.max(72, panelInnerW / 3));
+        int delayW = Math.clamp(panelInnerW / 3, 72, 120);
         int row1RightW = panelInnerW - delayW - 4;
         int editW = Math.max(70, row1RightW / 2 - 2);
         int kbSaveW = Math.max(70, row1RightW - editW - 4);
@@ -1140,7 +1142,7 @@ public class MacroWorkbenchV2Screen extends Screen {
                 List<String> suggestions = advancedActionSuggestions();
                 if (!suggestions.isEmpty()) {
                     int rowH = 10;
-                    int maxVisible = Math.max(1, Math.min(suggestions.size(), Math.max(1, suggestionsArea.height() / rowH)));
+                    int maxVisible = Math.clamp(Math.max(1, suggestionsArea.height() / rowH), 1, suggestions.size());
                     int dropY = suggestionsArea.y();
                     int dropH = maxVisible * rowH;
                     if (containsBox(mouseX, mouseY, suggestionsArea.x(), dropY, suggestionsArea.width(), dropH)) {
@@ -1160,19 +1162,19 @@ public class MacroWorkbenchV2Screen extends Screen {
 
         if (this.tab == Tab.COMMAND_HISTORY) {
             int maxScroll = Math.max(0, cmdHistoryItems.size() - getHistoryVisibleLines());
-            cmdHistoryScroll = Math.clamp((int) (cmdHistoryScroll + (verticalAmount > 0 ? -1 : 1)), 0, maxScroll);
+            cmdHistoryScroll = Math.clamp(cmdHistoryScroll + (verticalAmount > 0 ? -1 : 1), 0, maxScroll);
             return true;
         }
 
         if (this.tab == Tab.ENTITY_RADAR) {
             int maxScroll = Math.max(0, entityRadarItems.size() - getHistoryVisibleLines());
-            entityRadarScroll = Math.clamp((int) (entityRadarScroll + (verticalAmount > 0 ? -1 : 1)), 0, maxScroll);
+            entityRadarScroll = Math.clamp(entityRadarScroll + (verticalAmount > 0 ? -1 : 1), 0, maxScroll);
             return true;
         }
 
         if (this.tab == Tab.MESSAGE_HISTORY) {
             int maxScroll = Math.max(0, msgHistoryItems.size() - getHistoryVisibleLines());
-            msgHistoryScroll = Math.clamp((int) (msgHistoryScroll + (verticalAmount > 0 ? -1 : 1)), 0, maxScroll);
+            msgHistoryScroll = Math.clamp(msgHistoryScroll + (verticalAmount > 0 ? -1 : 1), 0, maxScroll);
             return true;
         }
 
@@ -1398,6 +1400,7 @@ public class MacroWorkbenchV2Screen extends Screen {
         }
 
         boolean forward = click.button() != 1;
+        MacroWorkbenchAdvancedClickSupport.Ops clickOps = advancedClickSupportOps();
         int boxX = modalX();
         int boxY = modalY();
 
@@ -1495,54 +1498,42 @@ public class MacroWorkbenchV2Screen extends Screen {
             selected.fontScale = Math.clamp((float) (selected.fontScale + stepDouble(0.1)), 0.5f, 4.0f);
             return true;
         }
-        if (containsBox(click.x(), click.y(), layout.bgMinus())) {
-            if (forward) {
-                selected.backgroundColor = cycleStyleColor(selected.backgroundColor, false);
-                ensureVisibleBackground(selected);
-                advancedBgColor = ColorUtils.formatColor(selected.backgroundColor);
-                advancedBgCursor = advancedBgColor.length();
-            } else {
-                adjustBackgroundAlpha(selected, -stepInt(8));
-            }
+        if (MacroWorkbenchAdvancedClickSupport.handleBackgroundColorButtons(
+                click,
+                forward,
+                layout.bgMinus(),
+                layout.bgPlus(),
+                layout.alphaMinus(),
+                layout.alphaPlus(),
+                selected,
+                clickOps,
+                () -> {
+                    ensureVisibleBackground(selected);
+                    advancedBgColor = ColorUtils.formatColor(selected.backgroundColor);
+                    advancedBgCursor = advancedBgColor.length();
+                })) {
             return true;
         }
-        if (containsBox(click.x(), click.y(), layout.bgPlus())) {
-            if (forward) {
-                selected.backgroundColor = cycleStyleColor(selected.backgroundColor, true);
-                ensureVisibleBackground(selected);
-                advancedBgColor = ColorUtils.formatColor(selected.backgroundColor);
-                advancedBgCursor = advancedBgColor.length();
-            } else {
-                adjustBackgroundAlpha(selected, stepInt(8));
-            }
+        if (MacroWorkbenchAdvancedClickSupport.handleColorCycleButtons(
+                click,
+                layout.borderMinus(),
+                layout.borderPlus(),
+                selected.borderColor,
+                clickOps,
+                color -> {
+                    selected.borderColor = color;
+                    advancedBorderColor = ColorUtils.formatColor(selected.borderColor);
+                    advancedBorderCursor = advancedBorderColor.length();
+                })) {
             return true;
         }
-        if (containsBox(click.x(), click.y(), layout.alphaMinus())) {
-            adjustBackgroundAlpha(selected, -stepInt(8));
-            return true;
-        }
-        if (containsBox(click.x(), click.y(), layout.alphaPlus())) {
-            adjustBackgroundAlpha(selected, stepInt(8));
-            return true;
-        }
-        if (containsBox(click.x(), click.y(), layout.borderMinus())) {
-            selected.borderColor = cycleStyleColor(selected.borderColor, false);
-            advancedBorderColor = ColorUtils.formatColor(selected.borderColor);
-            advancedBorderCursor = advancedBorderColor.length();
-            return true;
-        }
-        if (containsBox(click.x(), click.y(), layout.borderPlus())) {
-            selected.borderColor = cycleStyleColor(selected.borderColor, true);
-            advancedBorderColor = ColorUtils.formatColor(selected.borderColor);
-            advancedBorderCursor = advancedBorderColor.length();
-            return true;
-        }
-        if (containsBox(click.x(), click.y(), layout.apply())) {
-            applyAdvancedAndClose();
-            return true;
-        }
-        if (containsBox(click.x(), click.y(), layout.cancel())) {
-            closeAdvancedModal();
+        if (MacroWorkbenchAdvancedClickSupport.handleApplyCancel(
+                click,
+                layout.apply(),
+                layout.cancel(),
+                clickOps,
+                this::applyAdvancedAndClose,
+                this::closeAdvancedModal)) {
             return true;
         }
 
@@ -1626,6 +1617,7 @@ public class MacroWorkbenchV2Screen extends Screen {
 
     private boolean onSecondaryAdvancedMouseClick(Click click, boolean forward, int boxX, int boxY) {
         SecondaryAdvancedLayout layout = secondaryAdvancedLayout(boxX, boxY);
+        MacroWorkbenchAdvancedClickSupport.Ops clickOps = advancedClickSupportOps();
         if (containsBox(click.x(), click.y(), layout.guiOpen())) {
             advancedSecondaryShowWhileGuiOpen = !advancedSecondaryShowWhileGuiOpen;
             return true;
@@ -1688,40 +1680,28 @@ public class MacroWorkbenchV2Screen extends Screen {
             advancedSecondaryMaxLines = Math.min(500, advancedSecondaryMaxLines + stepInt(10));
             return true;
         }
-        if (containsBox(click.x(), click.y(), layout.bgMinus())) {
-            if (forward) {
-                selected.backgroundColor = cycleStyleColor(selected.backgroundColor, false);
-                advancedBgColor = ColorUtils.formatColor(selected.backgroundColor);
-                advancedBgCursor = advancedBgColor.length();
-            } else {
-                adjustBackgroundAlpha(selected, -stepInt(8));
-            }
+        if (MacroWorkbenchAdvancedClickSupport.handleBackgroundColorButtons(
+                click,
+                forward,
+                layout.bgMinus(),
+                layout.bgPlus(),
+                layout.bgAlphaMinus(),
+                layout.bgAlphaPlus(),
+                selected,
+                clickOps,
+                () -> {
+                    advancedBgColor = ColorUtils.formatColor(selected.backgroundColor);
+                    advancedBgCursor = advancedBgColor.length();
+                })) {
             return true;
         }
-        if (containsBox(click.x(), click.y(), layout.bgPlus())) {
-            if (forward) {
-                selected.backgroundColor = cycleStyleColor(selected.backgroundColor, true);
-                advancedBgColor = ColorUtils.formatColor(selected.backgroundColor);
-                advancedBgCursor = advancedBgColor.length();
-            } else {
-                adjustBackgroundAlpha(selected, stepInt(8));
-            }
-            return true;
-        }
-        if (containsBox(click.x(), click.y(), layout.bgAlphaMinus())) {
-            adjustBackgroundAlpha(selected, -stepInt(8));
-            return true;
-        }
-        if (containsBox(click.x(), click.y(), layout.bgAlphaPlus())) {
-            adjustBackgroundAlpha(selected, stepInt(8));
-            return true;
-        }
-        if (containsBox(click.x(), click.y(), layout.apply())) {
-            applyAdvancedAndClose();
-            return true;
-        }
-        if (containsBox(click.x(), click.y(), layout.cancel())) {
-            closeAdvancedModal();
+        if (MacroWorkbenchAdvancedClickSupport.handleApplyCancel(
+                click,
+                layout.apply(),
+                layout.cancel(),
+                clickOps,
+                this::applyAdvancedAndClose,
+                this::closeAdvancedModal)) {
             return true;
         }
 
@@ -1780,6 +1760,7 @@ public class MacroWorkbenchV2Screen extends Screen {
 
     private boolean onProxyAdvancedMouseClick(Click click, boolean forward, int boxX, int boxY) {
         ProxyAdvancedLayout layout = proxyAdvancedLayout(boxX, boxY, isPickupNotifierProxy(selected));
+        MacroWorkbenchAdvancedClickSupport.Ops clickOps = advancedClickSupportOps();
         if (containsBox(click.x(), click.y(), layout.scaleMinus())) {
             selected.fontScale = Math.clamp((float) (selected.fontScale - stepDouble(0.1)), 0.5f, 4.0f);
             return true;
@@ -1814,44 +1795,32 @@ public class MacroWorkbenchV2Screen extends Screen {
             selected.visible = !selected.visible;
             return true;
         }
-        if (containsBox(click.x(), click.y(), layout.colorBgMinus())) {
-            if (forward) {
-                selected.backgroundColor = cycleStyleColor(selected.backgroundColor, false);
-                advancedBgColor = ColorUtils.formatColor(selected.backgroundColor);
-                advancedBgCursor = advancedBgColor.length();
-            } else {
-                adjustBackgroundAlpha(selected, -stepInt(8));
-            }
+        if (MacroWorkbenchAdvancedClickSupport.handleBackgroundColorButtons(
+                click,
+                forward,
+                layout.colorBgMinus(),
+                layout.colorBgPlus(),
+                layout.colorAlphaMinus(),
+                layout.colorAlphaPlus(),
+                selected,
+                clickOps,
+                () -> {
+                    advancedBgColor = ColorUtils.formatColor(selected.backgroundColor);
+                    advancedBgCursor = advancedBgColor.length();
+                })) {
             return true;
         }
-        if (containsBox(click.x(), click.y(), layout.colorBgPlus())) {
-            if (forward) {
-                selected.backgroundColor = cycleStyleColor(selected.backgroundColor, true);
-                advancedBgColor = ColorUtils.formatColor(selected.backgroundColor);
-                advancedBgCursor = advancedBgColor.length();
-            } else {
-                adjustBackgroundAlpha(selected, stepInt(8));
-            }
-            return true;
-        }
-        if (containsBox(click.x(), click.y(), layout.colorTxMinus())) {
-            selected.textColor = cycleStyleColor(selected.textColor, false);
-            advancedBorderColor = ColorUtils.formatColor(selected.textColor);
-            advancedBorderCursor = advancedBorderColor.length();
-            return true;
-        }
-        if (containsBox(click.x(), click.y(), layout.colorTxPlus())) {
-            selected.textColor = cycleStyleColor(selected.textColor, true);
-            advancedBorderColor = ColorUtils.formatColor(selected.textColor);
-            advancedBorderCursor = advancedBorderColor.length();
-            return true;
-        }
-        if (containsBox(click.x(), click.y(), layout.colorAlphaMinus())) {
-            adjustBackgroundAlpha(selected, -stepInt(8));
-            return true;
-        }
-        if (containsBox(click.x(), click.y(), layout.colorAlphaPlus())) {
-            adjustBackgroundAlpha(selected, stepInt(8));
+        if (MacroWorkbenchAdvancedClickSupport.handleColorCycleButtons(
+                click,
+                layout.colorTxMinus(),
+                layout.colorTxPlus(),
+                selected.textColor,
+                clickOps,
+                color -> {
+                    selected.textColor = color;
+                    advancedBorderColor = ColorUtils.formatColor(selected.textColor);
+                    advancedBorderCursor = advancedBorderColor.length();
+                })) {
             return true;
         }
         if (containsBox(click.x(), click.y(), layout.alignH())) {
@@ -1922,12 +1891,13 @@ public class MacroWorkbenchV2Screen extends Screen {
             beginModalSelectionDrag(ModalDragSelectionField.ADVANCED_BORDER);
             return true;
         }
-        if (containsBox(click.x(), click.y(), layout.apply())) {
-            applyAdvancedAndClose();
-            return true;
-        }
-        if (containsBox(click.x(), click.y(), layout.cancel())) {
-            closeAdvancedModal();
+        if (MacroWorkbenchAdvancedClickSupport.handleApplyCancel(
+                click,
+                layout.apply(),
+                layout.cancel(),
+                clickOps,
+                this::applyAdvancedAndClose,
+                this::closeAdvancedModal)) {
             return true;
         }
         return true;
@@ -2996,7 +2966,7 @@ public class MacroWorkbenchV2Screen extends Screen {
         CustomWidgetAdvancedLayout layout = customWidgetAdvancedLayout(boxX, boxY);
         List<String> suggestions = advancedActionSuggestions();
         int rowH = 10;
-        int maxVisible = Math.max(1, Math.min(suggestions.size(), Math.max(1, layout.suggestionArea().height() / rowH)));
+        int maxVisible = Math.clamp(Math.max(1, layout.suggestionArea().height() / rowH), 1, Math.max(1, suggestions.size()));
         int maxScroll = Math.max(0, suggestions.size() - maxVisible);
         advancedActionSuggestionScroll = Math.clamp(advancedActionSuggestionScroll, 0, maxScroll);
         MacroWorkbenchCustomWidgetAdvancedModalRenderer.render(
@@ -3090,7 +3060,7 @@ public class MacroWorkbenchV2Screen extends Screen {
     }
 
     private boolean handleAdvancedSuggestionClick(Click click, UiRect suggestionsArea, List<String> suggestions) {
-        return MacroWorkbenchCustomWidgetAdvancedClickHandler.handleSuggestionClick(click, suggestionsArea, suggestions, customWidgetAdvancedClickOps());
+        return MacroWorkbenchCustomWidgetAdvancedClickHandler.handleSuggestionClick(click, suggestionsArea, suggestions, customWidgetAdvancedClickOpsBridge);
     }
 
     private boolean handleCustomWidgetGeneralRowClick(Click click, List<UiRect> generalRow1, List<UiRect> generalRow2, boolean forward) {
@@ -3103,7 +3073,7 @@ public class MacroWorkbenchV2Screen extends Screen {
                 BAR_VALUE_SOURCE_PRESETS,
                 LIST_SOURCE_PRESETS,
                 STATE_SOURCE_PRESETS,
-                customWidgetAdvancedClickOps()
+                customWidgetAdvancedClickOpsBridge
         );
     }
 
@@ -3113,127 +3083,128 @@ public class MacroWorkbenchV2Screen extends Screen {
                 baseRow,
                 forward,
                 selected,
-                customWidgetAdvancedClickOps()
+                customWidgetAdvancedClickOpsBridge
         );
     }
 
-    private MacroWorkbenchCustomWidgetAdvancedClickHandler.Ops customWidgetAdvancedClickOps() {
-        return new MacroWorkbenchCustomWidgetAdvancedClickHandler.Ops() {
+    private MacroWorkbenchAdvancedClickSupport.Ops advancedClickSupportOps() {
+        return new MacroWorkbenchAdvancedClickSupport.Ops() {
             @Override
             public boolean contains(Click click, UiRect rect) {
                 return containsBox(click.x(), click.y(), rect);
             }
 
             @Override
-            public boolean contains(double x, double y, int boxX, int boxY, int boxW, int boxH) {
-                return containsBox(x, y, boxX, boxY, boxW, boxH);
-            }
-
-            @Override
             public int stepInt(int base) {
-                return MacroWorkbenchV2Screen.this.stepInt(base);
-            }
-
-            @Override
-            public double stepDouble(double base) {
-                return MacroWorkbenchV2Screen.this.stepDouble(base);
+                return MacroWorkbenchScreen.this.stepInt(base);
             }
 
             @Override
             public int cycleStyleColor(int current, boolean forward) {
-                return MacroWorkbenchV2Screen.cycleStyleColor(current, forward);
+                return MacroWorkbenchScreen.cycleStyleColor(current, forward);
             }
 
             @Override
             public void adjustBackgroundAlpha(MacroHudDataHandler.HudElement element, int delta) {
-                MacroWorkbenchV2Screen.adjustBackgroundAlpha(element, delta);
-            }
-
-            @Override
-            public String cyclePreset(String current, String[] presets, boolean forward) {
-                return MacroWorkbenchV2Screen.cyclePreset(current, presets, forward);
-            }
-
-            @Override
-            public String[] iconIdSuggestionsForKind(String kind) {
-                return MacroWorkbenchV2Screen.iconIdSuggestionsForKind(kind);
-            }
-
-            @Override
-            public MacroHudDataHandler.HorizontalAlign cycleHorizontalAlign(MacroHudDataHandler.HorizontalAlign current, boolean forward) {
-                return MacroWorkbenchV2Screen.cycleHorizontalAlign(current, forward);
-            }
-
-            @Override
-            public MacroHudDataHandler.VerticalAlign cycleVerticalAlign(MacroHudDataHandler.VerticalAlign current, boolean forward) {
-                return MacroWorkbenchV2Screen.cycleVerticalAlign(current, forward);
-            }
-
-            @Override
-            public MacroHudDataHandler.Anchor cycleAnchor(MacroHudDataHandler.Anchor current, boolean forward) {
-                return MacroWorkbenchV2Screen.cycleAnchor(current, forward);
-            }
-
-            @Override
-            public void cycleBorderSetting(MacroHudDataHandler.HudElement element, boolean forward) {
-                MacroWorkbenchV2Screen.cycleBorderSetting(element, forward);
-            }
-
-            @Override
-            public void ensureVisibleBackground(MacroHudDataHandler.HudElement element) {
-                MacroWorkbenchV2Screen.ensureVisibleBackground(element);
-            }
-
-            @Override
-            public int resolveElementX(MacroHudDataHandler.HudElement element) {
-                return MacroWorkbenchV2Screen.this.resolveElementX(element);
-            }
-
-            @Override
-            public int resolveElementY(MacroHudDataHandler.HudElement element) {
-                return MacroWorkbenchV2Screen.this.resolveElementY(element);
-            }
-
-            @Override
-            public void setElementScreenPosition(MacroHudDataHandler.HudElement element, int screenX, int screenY) {
-                MacroWorkbenchV2Screen.this.setElementScreenPosition(element, screenX, screenY);
-            }
-
-            @Override
-            public void clampElementToCanvas(MacroHudDataHandler.HudElement element) {
-                MacroWorkbenchV2Screen.this.clampElementToCanvas(element);
-            }
-
-            @Override
-            public String getAdvancedAction() {
-                return advancedAction;
-            }
-
-            @Override
-            public void setAdvancedAction(String value) {
-                advancedAction = value;
-            }
-
-            @Override
-            public void setAdvancedActionCursor(int value) {
-                advancedActionCursor = value;
-            }
-
-            @Override
-            public int getAdvancedActionSuggestionScroll() {
-                return advancedActionSuggestionScroll;
-            }
-
-            @Override
-            public void setAdvancedActionSuggestionScroll(int value) {
-                advancedActionSuggestionScroll = value;
-            }
-
-            @Override
-            public void setAdvancedActionSuggestionIndex(int value) {
-                advancedActionSuggestionIndex = value;
+                MacroWorkbenchScreen.adjustBackgroundAlpha(element, delta);
             }
         };
+    }
+
+    boolean cwContains(Click click, UiRect rect) {
+        return containsBox(click.x(), click.y(), rect);
+    }
+
+    boolean cwContains(double x, double y, int boxX, int boxY, int boxW, int boxH) {
+        return containsBox(x, y, boxX, boxY, boxW, boxH);
+    }
+
+    int cwStepInt(int base) {
+        return this.stepInt(base);
+    }
+
+    double cwStepDouble(double base) {
+        return this.stepDouble(base);
+    }
+
+    int cwCycleStyleColor(int current, boolean forward) {
+        return cycleStyleColor(current, forward);
+    }
+
+    void cwAdjustBackgroundAlpha(MacroHudDataHandler.HudElement element, int delta) {
+        adjustBackgroundAlpha(element, delta);
+    }
+
+    String cwCyclePreset(String current, String[] presets, boolean forward) {
+        return cyclePreset(current, presets, forward);
+    }
+
+    String[] cwIconIdSuggestionsForKind(String kind) {
+        return iconIdSuggestionsForKind(kind);
+    }
+
+    MacroHudDataHandler.HorizontalAlign cwCycleHorizontalAlign(MacroHudDataHandler.HorizontalAlign current, boolean forward) {
+        return cycleHorizontalAlign(current, forward);
+    }
+
+    MacroHudDataHandler.VerticalAlign cwCycleVerticalAlign(MacroHudDataHandler.VerticalAlign current, boolean forward) {
+        return cycleVerticalAlign(current, forward);
+    }
+
+    MacroHudDataHandler.Anchor cwCycleAnchor(MacroHudDataHandler.Anchor current, boolean forward) {
+        return cycleAnchor(current, forward);
+    }
+
+    void cwCycleBorderSetting(MacroHudDataHandler.HudElement element, boolean forward) {
+        cycleBorderSetting(element, forward);
+    }
+
+    void cwEnsureVisibleBackground(MacroHudDataHandler.HudElement element) {
+        ensureVisibleBackground(element);
+    }
+
+    int cwResolveElementX(MacroHudDataHandler.HudElement element) {
+        return resolveElementX(element);
+    }
+
+    int cwResolveElementY(MacroHudDataHandler.HudElement element) {
+        return resolveElementY(element);
+    }
+
+    void cwSetElementScreenPosition(MacroHudDataHandler.HudElement element, int screenX, int screenY) {
+        setElementScreenPosition(element, screenX, screenY);
+    }
+
+    void cwClampElementToCanvas(MacroHudDataHandler.HudElement element) {
+        clampElementToCanvas(element);
+    }
+
+    String cwGetAdvancedAction() {
+        return advancedAction;
+    }
+
+    void cwSetAdvancedAction(String value) {
+        advancedAction = value;
+    }
+
+    void cwSetAdvancedActionCursor(int value) {
+        advancedActionCursor = value;
+    }
+
+    int cwGetAdvancedActionSuggestionScroll() {
+        return advancedActionSuggestionScroll;
+    }
+
+    void cwSetAdvancedActionSuggestionScroll(int value) {
+        advancedActionSuggestionScroll = value;
+    }
+
+    void cwSetAdvancedActionSuggestionIndex(int value) {
+        advancedActionSuggestionIndex = value;
+    }
+
+    void cwOpenColorPicker(java.util.function.IntConsumer onPick, String title, int x, int y) {
+        openColorPicker(onPick, title, x, y);
     }
 
     private boolean focusAdvancedLabelInput(Click click, UiRect labelInput) {
@@ -3287,27 +3258,27 @@ public class MacroWorkbenchV2Screen extends Screen {
 
                     @Override
                     public int stepInt(int base) {
-                        return MacroWorkbenchV2Screen.this.stepInt(base);
+                        return MacroWorkbenchScreen.this.stepInt(base);
                     }
 
                     @Override
                     public double stepDouble(double base) {
-                        return MacroWorkbenchV2Screen.this.stepDouble(base);
+                        return MacroWorkbenchScreen.this.stepDouble(base);
                     }
 
                     @Override
                     public String cyclePreset(String current, String[] presets, boolean valueForward) {
-                        return MacroWorkbenchV2Screen.cyclePreset(current, presets, valueForward);
+                        return MacroWorkbenchScreen.cyclePreset(current, presets, valueForward);
                     }
 
                     @Override
                     public int cycleStyleColor(int current, boolean valueForward) {
-                        return MacroWorkbenchV2Screen.cycleStyleColor(current, valueForward);
+                        return MacroWorkbenchScreen.cycleStyleColor(current, valueForward);
                     }
 
                     @Override
                     public String[] iconIdSuggestionsForKind(String kind) {
-                        return MacroWorkbenchV2Screen.this.iconIdSuggestionsForKind(kind);
+                        return MacroWorkbenchScreen.this.iconIdSuggestionsForKind(kind);
                     }
 
                     @Override
@@ -3332,7 +3303,7 @@ public class MacroWorkbenchV2Screen extends Screen {
 
                     @Override
                     public void openColorPicker(java.util.function.IntConsumer onPick, String title, int x, int y) {
-                        MacroWorkbenchV2Screen.this.openColorPicker(onPick, title, x, y);
+                        MacroWorkbenchScreen.this.openColorPicker(onPick, title, x, y);
                     }
                 }
         );
@@ -4746,7 +4717,7 @@ public class MacroWorkbenchV2Screen extends Screen {
     }
 
     private int keyboardPanelWidth() {
-        return Math.min(320, Math.max(220, this.width - 16));
+        return Math.clamp(this.width - 16, 220, 320);
     }
 
     private int keyboardPanelX() {
@@ -5535,7 +5506,7 @@ public class MacroWorkbenchV2Screen extends Screen {
     private void ensureSuggestionVisible(int totalSuggestions, int selectedIndex, int dropY) {
         int rowH = 10;
         int bottomLimit = modalY() + 208;
-        int visible = Math.max(1, Math.min(totalSuggestions, Math.max(1, (bottomLimit - dropY) / rowH)));
+        int visible = Math.clamp(Math.max(1, (bottomLimit - dropY) / rowH), 1, Math.max(1, totalSuggestions));
         if (selectedIndex < advancedActionSuggestionScroll) {
             advancedActionSuggestionScroll = selectedIndex;
             return;

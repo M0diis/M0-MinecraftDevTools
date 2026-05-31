@@ -47,7 +47,7 @@ final class MacroWorkbenchConfigurationTab {
         }
     }
 
-    private final MacroWorkbenchV2Screen owner;
+    private final MacroWorkbenchScreen owner;
     private final List<ClickableWidget> configWidgets;
     private final BooleanSupplier shiftDown;
     private final BooleanSupplier controlDown;
@@ -107,7 +107,7 @@ final class MacroWorkbenchConfigurationTab {
     private int selectedRegexIndex = -1;
     private int regexScroll = 0;
 
-    MacroWorkbenchConfigurationTab(MacroWorkbenchV2Screen owner,
+    MacroWorkbenchConfigurationTab(MacroWorkbenchScreen owner,
                                    List<ClickableWidget> configWidgets,
                                    BooleanSupplier shiftDown,
                                    BooleanSupplier controlDown) {

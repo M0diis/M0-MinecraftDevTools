@@ -86,7 +86,7 @@ public final class XrayConfigScreen extends Screen {
         int usableContentWidth = Math.max(260, this.width - (this.listLeft * 2) - paneGap);
         int preferredListWidth = Math.max(180, this.width / 2 - 18);
         int maxListWidth = Math.max(140, usableContentWidth - minPaneWidth);
-        this.listWidth = Math.max(140, Math.min(preferredListWidth, maxListWidth));
+        this.listWidth = Math.clamp(preferredListWidth, 140, maxListWidth);
 
         int paneX = this.listLeft + this.listWidth + paneGap;
         int paneW = Math.max(minPaneWidth, this.width - paneX - this.listLeft);

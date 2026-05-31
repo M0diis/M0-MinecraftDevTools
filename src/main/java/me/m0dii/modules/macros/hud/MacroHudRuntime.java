@@ -581,7 +581,7 @@ public final class MacroHudRuntime {
         MinecraftClient client = MinecraftClient.getInstance();
         if (client.currentScreen instanceof HandledScreen<?> handled && !(handled instanceof InventoryScreen)) {
             // Reduce alpha and lift brightness so HUD remains readable above container dim overlays.
-            int targetAlpha = Math.max(0x66, Math.min(0xA0, alpha));
+            int targetAlpha = Math.clamp(alpha, 0x66, 0xA0);
             int brightened = brighten(withAlpha, 0x14141414);
             return (targetAlpha << 24) | (brightened & 0x00FFFFFF);
         }
