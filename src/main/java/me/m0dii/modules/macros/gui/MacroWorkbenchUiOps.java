@@ -90,6 +90,95 @@ public final class MacroWorkbenchUiOps {
         return presets[index];
     }
 
+    public static MacroHudDataHandler.Anchor cycleAnchor(MacroHudDataHandler.Anchor current, boolean forward) {
+        MacroHudDataHandler.Anchor[] order = {
+                MacroHudDataHandler.Anchor.TOP_LEFT,
+                MacroHudDataHandler.Anchor.TOP_CENTER,
+                MacroHudDataHandler.Anchor.TOP_RIGHT,
+                MacroHudDataHandler.Anchor.MIDDLE_RIGHT,
+                MacroHudDataHandler.Anchor.MIDDLE_CENTER,
+                MacroHudDataHandler.Anchor.MIDDLE_LEFT,
+                MacroHudDataHandler.Anchor.BOTTOM_RIGHT,
+                MacroHudDataHandler.Anchor.BOTTOM_CENTER,
+                MacroHudDataHandler.Anchor.BOTTOM_LEFT,
+        };
+        MacroHudDataHandler.Anchor base = current == MacroHudDataHandler.Anchor.CENTER ? MacroHudDataHandler.Anchor.MIDDLE_CENTER : current;
+        int idx = 0;
+        for (int i = 0; i < order.length; i++) {
+            if (order[i] == base) {
+                idx = i;
+                break;
+            }
+        }
+        int next = forward ? idx + 1 : idx - 1;
+        if (next < 0) {
+            next = order.length - 1;
+        }
+        if (next >= order.length) {
+            next = 0;
+        }
+        return order[next];
+    }
+
+    public static MacroHudDataHandler.VisibilityMode cycleVisibilityMode(MacroHudDataHandler.VisibilityMode mode, boolean forward) {
+        MacroHudDataHandler.VisibilityMode[] values = MacroHudDataHandler.VisibilityMode.values();
+        int index = 0;
+        for (int i = 0; i < values.length; i++) {
+            if (values[i] == mode) {
+                index = i;
+                break;
+            }
+        }
+        index += forward ? 1 : -1;
+        if (index < 0) {
+            index = values.length - 1;
+        }
+        if (index >= values.length) {
+            index = 0;
+        }
+        return values[index];
+    }
+
+    public static MacroHudDataHandler.ButtonExecutionMode cycleButtonExecutionMode(MacroHudDataHandler.ButtonExecutionMode mode, boolean forward) {
+        MacroHudDataHandler.ButtonExecutionMode[] values = MacroHudDataHandler.ButtonExecutionMode.values();
+        int index = 0;
+        for (int i = 0; i < values.length; i++) {
+            if (values[i] == mode) {
+                index = i;
+                break;
+            }
+        }
+        index += forward ? 1 : -1;
+        if (index < 0) {
+            index = values.length - 1;
+        }
+        if (index >= values.length) {
+            index = 0;
+        }
+        return values[index];
+    }
+
+    public static void ensureVisibleBackground(MacroHudDataHandler.HudElement element) {
+        if (element == null || !element.drawBackground) {
+            return;
+        }
+        if ((element.backgroundColor >>> 24) == 0) {
+            element.backgroundColor = 0xAA101010;
+        }
+        if (element.backgroundAlpha <= 0) {
+            element.backgroundAlpha = (element.backgroundColor >>> 24) & 0xFF;
+            if (element.backgroundAlpha <= 0) {
+                element.backgroundAlpha = 0xAA;
+            }
+        }
+        if (element.height < 14) {
+            element.height = 14;
+        }
+        if ((element.borderColor >>> 24) == 0) {
+            element.borderColor = 0xFFFFFFFF;
+        }
+    }
+
     public static int cycleStyleColor(int current, boolean forward, int[] palette) {
         if (palette == null || palette.length == 0) {
             return current;

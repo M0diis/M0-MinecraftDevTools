@@ -46,4 +46,30 @@ public final class ColorUtils {
     public static String formatColor(int argb) {
         return String.format("#%08X", argb);
     }
+
+    public static Integer parseArgb(String raw) {
+        if (raw == null) {
+            return null;
+        }
+        String s = raw.trim();
+        if (s.isEmpty()) {
+            return null;
+        }
+        if (s.startsWith("#")) {
+            s = s.substring(1);
+        }
+        if (s.startsWith("0x") || s.startsWith("0X")) {
+            s = s.substring(2);
+        }
+        try {
+            if (s.length() == 6) {
+                return 0xFF000000 | Integer.parseInt(s, 16);
+            }
+            if (s.length() == 8) {
+                return (int) Long.parseLong(s, 16);
+            }
+        } catch (Exception ignored) {
+        }
+        return null;
+    }
 }
