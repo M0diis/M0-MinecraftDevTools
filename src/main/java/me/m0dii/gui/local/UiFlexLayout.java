@@ -16,27 +16,35 @@ public final class UiFlexLayout {
         STRETCH
     }
 
-    public record Item(int basis, int cross, int grow) {
+    public record Item(int basis, int cross, int grow, int maxBasis) {
         public Item {
-            if (basis < 0 || cross < -1 || grow < 0) {
+            if (basis < 0 || cross < -1 || grow < 0 || maxBasis < -1) {
                 throw new IllegalArgumentException("Invalid flex item values");
+            }
+            if (maxBasis >= 0 && maxBasis < basis) {
+                throw new IllegalArgumentException("maxBasis must be >= basis or -1");
             }
         }
 
         public static Item fixed(int basis) {
-            return new Item(basis, -1, 0);
+            return new Item(basis, -1, 0, basis);
         }
 
         public static Item fixed(int basis, int cross) {
-            return new Item(basis, cross, 0);
+            return new Item(basis, cross, 0, basis);
         }
 
         public static Item flex(int minBasis, int grow) {
-            return new Item(minBasis, -1, grow);
+            return new Item(minBasis, -1, grow, -1);
         }
 
+
         public static Item flex(int minBasis, int cross, int grow) {
-            return new Item(minBasis, cross, grow);
+            return new Item(minBasis, cross, grow, -1);
+        }
+
+        public static Item flex(int minBasis, int cross, int grow, int maxBasis) {
+            return new Item(minBasis, cross, grow, maxBasis);
         }
     }
 
@@ -88,6 +96,14 @@ public final class UiFlexLayout {
                 }
             }
             int itemMain = Math.max(0, item.basis() + growShare);
+            if (item.maxBasis() >= 0) {
+                itemMain = Math.min(itemMain, item.maxBasis());
+            }
+            // Keep each item inside the layout bounds even when basis totals exceed available space.
+            int remainingMain = direction == Direction.ROW
+                    ? Math.max(0, bounds.right() - cursor)
+                    : Math.max(0, bounds.bottom() - cursor);
+            itemMain = Math.min(itemMain, remainingMain);
             int desiredCross = item.cross() < 0 ? crossSize : Math.min(crossSize, item.cross());
 
             int crossPos;

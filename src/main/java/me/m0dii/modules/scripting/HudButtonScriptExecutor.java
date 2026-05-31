@@ -7,15 +7,22 @@ import net.minecraft.text.Text;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public final class HudButtonScriptExecutor {
     private static final GroovyScriptManager GROOVY = new GroovyScriptManager();
     private static final KotlinScriptManager KOTLIN = new KotlinScriptManager();
+    private static final ExecutorService SCRIPT_EXECUTOR = Executors.newCachedThreadPool(r -> {
+        Thread t = new Thread(r, "m0dev-hud-script");
+        t.setDaemon(true);
+        return t;
+    });
 
     private HudButtonScriptExecutor() {
     }
 
-    public static boolean runScript(String actionName, String scriptAction, MacroHudDataHandler.ButtonExecutionMode mode) {
+    public static boolean runScript(String actionName, String scriptAction, MacroHudDataHandler.ButtonExecutionMode mode, boolean async) {
         String raw = scriptAction == null ? "" : scriptAction.trim();
         if (raw.isEmpty()) {
             return false;
@@ -58,6 +65,29 @@ public final class HudButtonScriptExecutor {
         context.put("world", client.world);
         context.put("options", client.options);
         context.put("server", client.getServer());
+
+        if (async) {
+            String finalScript = script;
+            ScriptManager finalEngine = engine;
+            SCRIPT_EXECUTOR.execute(() -> {
+                try {
+                    Object result = finalEngine.runScript(finalScript, context);
+                    client.execute(() -> {
+                        if (client.player != null) {
+                            client.player.sendMessage(Text.literal(String.valueOf(result)), false);
+                        }
+                    });
+                } catch (Exception e) {
+                    client.execute(() -> {
+                        if (client.player != null) {
+                            client.player.sendMessage(Text.literal("Script button '" + actionName + "' failed: " + e.getMessage()), true);
+                        }
+                    });
+                    M0DevTools.LOGGER.error("Error executing HUD script button '{}':", actionName, e);
+                }
+            });
+            return true;
+        }
 
         try {
             Object result = engine.runScript(script, context);

@@ -1,5 +1,6 @@
 package me.m0dii.modules.macros.gui;
 
+import io.wispforest.owo.ui.component.ButtonComponent;
 import me.m0dii.gui.GuiSystem;
 import me.m0dii.gui.local.FormPanels;
 import me.m0dii.gui.local.UiFlexLayout;
@@ -11,6 +12,10 @@ import me.m0dii.modules.hudcanvas.HudCanvasDataHandler;
 import me.m0dii.modules.macros.CommandMacros;
 import me.m0dii.modules.macros.MacroDataHandler;
 import me.m0dii.modules.macros.MacroPlaceholders;
+import me.m0dii.modules.macros.gui.MacroWorkbenchAdvancedLayouts.CustomWidgetAdvancedLayout;
+import me.m0dii.modules.macros.gui.MacroWorkbenchAdvancedLayouts.ProxyAdvancedLayout;
+import me.m0dii.modules.macros.gui.MacroWorkbenchAdvancedLayouts.SecondaryAdvancedLayout;
+import me.m0dii.modules.macros.gui.MacroWorkbenchAdvancedLayouts.StandardAdvancedLayout;
 import me.m0dii.modules.macros.hud.MacroHudDataHandler;
 import me.m0dii.modules.messagehistory.MessageHistoryManager;
 import me.m0dii.modules.nbthud.NBTInfoHudOverlayModule;
@@ -42,6 +47,7 @@ import org.lwjgl.glfw.GLFW;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.*;
+import java.util.function.IntConsumer;
 import java.util.regex.Pattern;
 
 public class MacroWorkbenchV2Screen extends Screen {
@@ -59,8 +65,8 @@ public class MacroWorkbenchV2Screen extends Screen {
     private static final int TOP_BAR_H = 54;
     private static final int BOTTOM_BAR_H = 44;
     private static final int CANVAS_CONTENT_TOP = 0;
-    private static final int MODAL_W = 500;
-    private static final int MODAL_H = 320;
+    private static final int MODAL_W = 620;
+    private static final int MODAL_H = 420;
     private static final String EXTERNAL_NBT_INSPECTOR_ID = "__ext_nbt_inspector";
     private static final String EXTERNAL_SECONDARY_CHAT_ID = "__ext_secondary_chat";
     private static final String EXTERNAL_MACRO_KEYBINDS_ID = "__ext_macro_keybinds";
@@ -192,13 +198,30 @@ public class MacroWorkbenchV2Screen extends Screen {
     private int advancedBgSelectionAnchor = -1;
     private int advancedBorderSelectionAnchor = -1;
     private int advancedVisibilityScreenTypeSelectionAnchor = -1;
+    private boolean colorPickerOpen = false;
+    private IntConsumer colorPickerApply;
+    private String colorPickerTitle = "Pick Color";
+    private int colorPickerX = 0;
+    private int colorPickerY = 0;
+    private boolean colorPickerDragging = false;
+    private int colorPickerDragOffsetX = 0;
+    private int colorPickerDragOffsetY = 0;
     private ModalDragSelectionField activeDragSelectionField = ModalDragSelectionField.NONE;
+    private int modalDragStartMouseX = Integer.MIN_VALUE;
+    private int modalDragStartMouseY = Integer.MIN_VALUE;
+    private boolean modalDragSelectionStarted = false;
     private int snapGuideX = Integer.MIN_VALUE;
     private int snapGuideY = Integer.MIN_VALUE;
 
     private static List<String> ALL_ITEM_IDS;
     private static List<String> ALL_BLOCK_IDS;
     private static List<String> ALL_ENTITY_IDS;
+    private static final int[] COLOR_PICKER_PRESETS = {
+            0xFFFFFFFF, 0xFF000000, 0xFFFF5555, 0xFF55FF55,
+            0xFF5555FF, 0xFFFFFF55, 0xFFFF55FF, 0xFF55FFFF,
+            0xFFB0B0B0, 0xFF808080, 0xFF4B2E1A, 0xFF996633,
+            0xFF2C3E50, 0xFF16A085, 0xFF8E44AD, 0xFFFF8800
+    };
 
     private int placeholderScroll = 0;
     private boolean gridEnabled = GRID_ENABLED_PREF;
@@ -316,7 +339,7 @@ public class MacroWorkbenchV2Screen extends Screen {
         for (int i = 0; i < tabs.size(); i++) {
             Tab tabDef = tabs.get(i);
             String tabLabel = tabWidth < 36 ? tinyLabels.get(i) : (tabWidth < 72 ? compactLabels.get(i) : labels.get(i));
-            ButtonWidget tabButton = ButtonWidget.builder(Text.literal(tabLabel), b -> setTab(tabDef))
+            ButtonWidget tabButton = ButtonComponent.builder(Text.literal(tabLabel), b -> setTab(tabDef))
                     .dimensions(tabX, tabY, tabWidth, 20)
                     .build();
             this.topBarWidgets.add(tabButton);
@@ -331,7 +354,7 @@ public class MacroWorkbenchV2Screen extends Screen {
         int canvasControlY = 30;
         int canvasControlH = 20;
         UiRect canvasControlRow = FormPanels.panel(8, canvasControlY, Math.max(320, this.width - 16), canvasControlH);
-        List<UiRect> canvasControlSlots = FormPanels.row(canvasControlRow, 4, UiFlexLayout.Align.START, List.of(
+        List<UiRect> canvasControlSlots = FormPanels.row(canvasControlRow, 4, UiFlexLayout.Align.START, 
                 UiFlexLayout.Item.flex(90, 1), // Add Element
                 UiFlexLayout.Item.flex(70, 1),  // Grid
                 UiFlexLayout.Item.flex(26, 1),  // R-
@@ -345,7 +368,7 @@ public class MacroWorkbenchV2Screen extends Screen {
                 UiFlexLayout.Item.flex(42, 1),  // New
                 UiFlexLayout.Item.flex(60, 1),  // Rename
                 UiFlexLayout.Item.flex(54, 1)   // Delete
-        ));
+        );
         ButtonWidget addElement = ButtonWidget.builder(Text.literal("Add Element"), b -> addElementModalOpen = true)
                 .dimensions(canvasControlSlots.get(0).x(), canvasControlSlots.get(0).y(), canvasControlSlots.get(0).width(), canvasControlSlots.get(0).height()).build();
 
@@ -433,7 +456,7 @@ public class MacroWorkbenchV2Screen extends Screen {
 
         this.borderToggle = ButtonWidget.builder(Text.literal("Border: OFF"), b -> {
             if (selected != null) {
-                selected.drawBorder = !selected.drawBorder;
+                cycleBorderSetting(selected, true);
                 syncStyleButtons();
             }
         }).dimensions(this.width - 238, this.height - 38, 78, 18).build();
@@ -673,6 +696,17 @@ public class MacroWorkbenchV2Screen extends Screen {
                 this.advancedModalDragging = false;
             }
         }
+        if (colorPickerOpen && colorPickerDragging && this.client != null) {
+            long window = this.client.getWindow().getHandle();
+            if (GLFW.glfwGetMouseButton(window, GLFW.GLFW_MOUSE_BUTTON_LEFT) == GLFW.GLFW_PRESS) {
+                int pickerW = 140;
+                int pickerH = 86;
+                this.colorPickerX = Math.clamp(mouseX - colorPickerDragOffsetX, 6, Math.max(6, this.width - pickerW - 6));
+                this.colorPickerY = Math.clamp(mouseY - colorPickerDragOffsetY, 26, Math.max(26, this.height - pickerH - 6));
+            } else {
+                this.colorPickerDragging = false;
+            }
+        }
 
         if (advancedOpen) {
             renderAdvancedModal(context, mouseX, mouseY);
@@ -684,6 +718,9 @@ public class MacroWorkbenchV2Screen extends Screen {
         }
         if (this.tab == Tab.CANVAS && addElementModalOpen && !advancedOpen && !kbCommandsModalOpen) {
             renderAddElementModal(context, mouseX, mouseY);
+        }
+        if (advancedOpen && colorPickerOpen) {
+            renderColorPickerPopup(context, mouseX, mouseY);
         }
     }
 
@@ -1039,6 +1076,12 @@ public class MacroWorkbenchV2Screen extends Screen {
 
     @Override
     public boolean mouseClicked(Click click, boolean doubled) {
+        if (click.button() == 0) {
+            this.activeDragSelectionField = ModalDragSelectionField.NONE;
+            this.modalDragStartMouseX = Integer.MIN_VALUE;
+            this.modalDragStartMouseY = Integer.MIN_VALUE;
+            this.modalDragSelectionStarted = false;
+        }
         if (kbCommandsModalOpen) {
             return onKeyboardCommandsModalClick(click);
         }
@@ -1106,19 +1149,15 @@ public class MacroWorkbenchV2Screen extends Screen {
                 }
             }
             if (selected != null && isCustomWidgetType(selected)) {
-                int boxX = modalX();
-                int boxY = modalY();
-                int sourceX = boxX + 12;
-                int sourceY = boxY + 72;
-                int sourceW = 198;
+                CustomWidgetAdvancedLayout layout = customWidgetAdvancedLayout(modalX(), modalY());
+                UiRect suggestionsArea = layout.suggestionArea();
                 List<String> suggestions = advancedActionSuggestions();
                 if (!suggestions.isEmpty()) {
                     int rowH = 10;
-                    int bottomLimit = boxY + 208;
-                    int maxVisible = Math.max(1, Math.min(suggestions.size(), Math.max(1, (bottomLimit - (sourceY + 22)) / rowH)));
-                    int dropY = sourceY + 22;
+                    int maxVisible = Math.max(1, Math.min(suggestions.size(), Math.max(1, suggestionsArea.height() / rowH)));
+                    int dropY = suggestionsArea.y();
                     int dropH = maxVisible * rowH;
-                    if (containsBox(mouseX, mouseY, sourceX, dropY, sourceW, dropH)) {
+                    if (containsBox(mouseX, mouseY, suggestionsArea.x(), dropY, suggestionsArea.width(), dropH)) {
                         int delta = verticalAmount > 0 ? -1 : 1;
                         int maxScroll = Math.max(0, suggestions.size() - maxVisible);
                         advancedActionSuggestionScroll = Math.clamp(advancedActionSuggestionScroll + delta, 0, maxScroll);
@@ -1376,6 +1415,10 @@ public class MacroWorkbenchV2Screen extends Screen {
         int boxX = modalX();
         int boxY = modalY();
 
+        if (colorPickerOpen && handleColorPickerClick(click)) {
+            return true;
+        }
+
         if (containsBox(click.x(), click.y(), boxX, boxY, MODAL_W, 20)) {
             advancedModalDragging = true;
             advancedModalDragOffsetX = (int) click.x() - boxX;
@@ -1406,8 +1449,15 @@ public class MacroWorkbenchV2Screen extends Screen {
             syncStyleButtons();
             return true;
         }
+        if (containsBox(click.x(), click.y(), layout.bgOpaque())) {
+            selected.drawBackground = true;
+            selected.backgroundOpaque = false;
+            adjustBackgroundAlpha(selected, 255 - Math.clamp(selected.backgroundAlpha, 0, 255));
+            syncStyleButtons();
+            return true;
+        }
         if (containsBox(click.x(), click.y(), layout.borderToggle())) {
-            selected.drawBorder = !selected.drawBorder;
+            cycleBorderSetting(selected, forward);
             syncStyleButtons();
             return true;
         }
@@ -1433,7 +1483,13 @@ public class MacroWorkbenchV2Screen extends Screen {
         }
         if (containsBox(click.x(), click.y(), layout.execution())) {
             if (selected.type == MacroHudDataHandler.ElementType.BUTTON) {
-                selected.buttonExecutionMode = cycleButtonExecutionMode(selected.buttonExecutionMode, forward);
+                selected.buttonExecutionMode = cycleButtonExecutionMode(selected.buttonExecutionMode, true);
+            }
+            return true;
+        }
+        if (containsBox(click.x(), click.y(), layout.asyncToggle())) {
+            if (selected.type == MacroHudDataHandler.ElementType.BUTTON) {
+                selected.runScriptsAsync = !selected.runScriptsAsync;
             }
             return true;
         }
@@ -1454,17 +1510,33 @@ public class MacroWorkbenchV2Screen extends Screen {
             return true;
         }
         if (containsBox(click.x(), click.y(), layout.bgMinus())) {
-            selected.backgroundColor = cycleStyleColor(selected.backgroundColor, false);
-            ensureVisibleBackground(selected);
-            advancedBgColor = formatColor(selected.backgroundColor);
-            advancedBgCursor = advancedBgColor.length();
+            if (forward) {
+                selected.backgroundColor = cycleStyleColor(selected.backgroundColor, false);
+                ensureVisibleBackground(selected);
+                advancedBgColor = formatColor(selected.backgroundColor);
+                advancedBgCursor = advancedBgColor.length();
+            } else {
+                adjustBackgroundAlpha(selected, -stepInt(8));
+            }
             return true;
         }
         if (containsBox(click.x(), click.y(), layout.bgPlus())) {
-            selected.backgroundColor = cycleStyleColor(selected.backgroundColor, true);
-            ensureVisibleBackground(selected);
-            advancedBgColor = formatColor(selected.backgroundColor);
-            advancedBgCursor = advancedBgColor.length();
+            if (forward) {
+                selected.backgroundColor = cycleStyleColor(selected.backgroundColor, true);
+                ensureVisibleBackground(selected);
+                advancedBgColor = formatColor(selected.backgroundColor);
+                advancedBgCursor = advancedBgColor.length();
+            } else {
+                adjustBackgroundAlpha(selected, stepInt(8));
+            }
+            return true;
+        }
+        if (containsBox(click.x(), click.y(), layout.alphaMinus())) {
+            adjustBackgroundAlpha(selected, -stepInt(8));
+            return true;
+        }
+        if (containsBox(click.x(), click.y(), layout.alphaPlus())) {
+            adjustBackgroundAlpha(selected, stepInt(8));
             return true;
         }
         if (containsBox(click.x(), click.y(), layout.borderMinus())) {
@@ -1490,6 +1562,10 @@ public class MacroWorkbenchV2Screen extends Screen {
 
         advancedBgColorFocused = containsBox(click.x(), click.y(), layout.bgHex());
         if (advancedBgColorFocused) {
+            if (!forward) {
+                openColorPicker(true, layout.bgHex().right() + 8, layout.bgHex().y() - 6);
+                return true;
+            }
             advancedTextFocused = false;
             advancedActionFocused = false;
             advancedBorderColorFocused = false;
@@ -1503,6 +1579,10 @@ public class MacroWorkbenchV2Screen extends Screen {
 
         advancedBorderColorFocused = containsBox(click.x(), click.y(), layout.borderHex());
         if (advancedBorderColorFocused) {
+            if (!forward) {
+                openColorPicker(false, layout.borderHex().right() + 8, layout.borderHex().y() - 6);
+                return true;
+            }
             advancedTextFocused = false;
             advancedActionFocused = false;
             advancedBgColorFocused = false;
@@ -1623,15 +1703,31 @@ public class MacroWorkbenchV2Screen extends Screen {
             return true;
         }
         if (containsBox(click.x(), click.y(), layout.bgMinus())) {
-            selected.backgroundColor = cycleStyleColor(selected.backgroundColor, false);
-            advancedBgColor = formatColor(selected.backgroundColor);
-            advancedBgCursor = advancedBgColor.length();
+            if (forward) {
+                selected.backgroundColor = cycleStyleColor(selected.backgroundColor, false);
+                advancedBgColor = formatColor(selected.backgroundColor);
+                advancedBgCursor = advancedBgColor.length();
+            } else {
+                adjustBackgroundAlpha(selected, -stepInt(8));
+            }
             return true;
         }
         if (containsBox(click.x(), click.y(), layout.bgPlus())) {
-            selected.backgroundColor = cycleStyleColor(selected.backgroundColor, true);
-            advancedBgColor = formatColor(selected.backgroundColor);
-            advancedBgCursor = advancedBgColor.length();
+            if (forward) {
+                selected.backgroundColor = cycleStyleColor(selected.backgroundColor, true);
+                advancedBgColor = formatColor(selected.backgroundColor);
+                advancedBgCursor = advancedBgColor.length();
+            } else {
+                adjustBackgroundAlpha(selected, stepInt(8));
+            }
+            return true;
+        }
+        if (containsBox(click.x(), click.y(), layout.bgAlphaMinus())) {
+            adjustBackgroundAlpha(selected, -stepInt(8));
+            return true;
+        }
+        if (containsBox(click.x(), click.y(), layout.bgAlphaPlus())) {
+            adjustBackgroundAlpha(selected, stepInt(8));
             return true;
         }
         if (containsBox(click.x(), click.y(), layout.apply())) {
@@ -1645,6 +1741,10 @@ public class MacroWorkbenchV2Screen extends Screen {
 
         advancedBgColorFocused = containsBox(click.x(), click.y(), layout.bgHex());
         if (advancedBgColorFocused) {
+            if (!forward) {
+                openColorPicker(true, layout.bgHex().right() + 8, layout.bgHex().y() - 6);
+                return true;
+            }
             advancedTextFocused = false;
             advancedActionFocused = false;
             advancedBorderColorFocused = false;
@@ -1656,6 +1756,10 @@ public class MacroWorkbenchV2Screen extends Screen {
 
         advancedBorderColorFocused = containsBox(click.x(), click.y(), layout.txHex());
         if (advancedBorderColorFocused) {
+            if (!forward) {
+                openColorPicker(false, layout.txHex().right() + 8, layout.txHex().y() - 6);
+                return true;
+            }
             advancedTextFocused = false;
             advancedActionFocused = false;
             advancedBgColorFocused = false;
@@ -1707,11 +1811,17 @@ public class MacroWorkbenchV2Screen extends Screen {
             return true;
         }
         if (containsBox(click.x(), click.y(), layout.toggleBg())) {
-            selected.drawBackground = !selected.drawBackground;
+            if (forward) {
+                selected.drawBackground = !selected.drawBackground;
+            } else {
+                selected.drawBackground = true;
+                selected.backgroundOpaque = false;
+                adjustBackgroundAlpha(selected, 255 - Math.clamp(selected.backgroundAlpha, 0, 255));
+            }
             return true;
         }
         if (containsBox(click.x(), click.y(), layout.toggleBorder())) {
-            selected.drawBorder = !selected.drawBorder;
+            cycleBorderSetting(selected, forward);
             return true;
         }
         if (containsBox(click.x(), click.y(), layout.toggleVisible())) {
@@ -1719,15 +1829,23 @@ public class MacroWorkbenchV2Screen extends Screen {
             return true;
         }
         if (containsBox(click.x(), click.y(), layout.colorBgMinus())) {
-            selected.backgroundColor = cycleStyleColor(selected.backgroundColor, false);
-            advancedBgColor = formatColor(selected.backgroundColor);
-            advancedBgCursor = advancedBgColor.length();
+            if (forward) {
+                selected.backgroundColor = cycleStyleColor(selected.backgroundColor, false);
+                advancedBgColor = formatColor(selected.backgroundColor);
+                advancedBgCursor = advancedBgColor.length();
+            } else {
+                adjustBackgroundAlpha(selected, -stepInt(8));
+            }
             return true;
         }
         if (containsBox(click.x(), click.y(), layout.colorBgPlus())) {
-            selected.backgroundColor = cycleStyleColor(selected.backgroundColor, true);
-            advancedBgColor = formatColor(selected.backgroundColor);
-            advancedBgCursor = advancedBgColor.length();
+            if (forward) {
+                selected.backgroundColor = cycleStyleColor(selected.backgroundColor, true);
+                advancedBgColor = formatColor(selected.backgroundColor);
+                advancedBgCursor = advancedBgColor.length();
+            } else {
+                adjustBackgroundAlpha(selected, stepInt(8));
+            }
             return true;
         }
         if (containsBox(click.x(), click.y(), layout.colorTxMinus())) {
@@ -1740,6 +1858,14 @@ public class MacroWorkbenchV2Screen extends Screen {
             selected.textColor = cycleStyleColor(selected.textColor, true);
             advancedBorderColor = formatColor(selected.textColor);
             advancedBorderCursor = advancedBorderColor.length();
+            return true;
+        }
+        if (containsBox(click.x(), click.y(), layout.colorAlphaMinus())) {
+            adjustBackgroundAlpha(selected, -stepInt(8));
+            return true;
+        }
+        if (containsBox(click.x(), click.y(), layout.colorAlphaPlus())) {
+            adjustBackgroundAlpha(selected, stepInt(8));
             return true;
         }
         if (containsBox(click.x(), click.y(), layout.alignH())) {
@@ -1783,6 +1909,10 @@ public class MacroWorkbenchV2Screen extends Screen {
             }
         }
         if (containsBox(click.x(), click.y(), layout.bgInput())) {
+            if (!forward) {
+                openColorPicker(true, layout.bgInput().right() + 8, layout.bgInput().y() - 6);
+                return true;
+            }
             advancedBgColorFocused = true;
             advancedBorderColorFocused = false;
             advancedTextFocused = false;
@@ -1793,6 +1923,10 @@ public class MacroWorkbenchV2Screen extends Screen {
             return true;
         }
         if (containsBox(click.x(), click.y(), layout.txInput())) {
+            if (!forward) {
+                openColorPicker(false, layout.txInput().right() + 8, layout.txInput().y() - 6);
+                return true;
+            }
             advancedBgColorFocused = false;
             advancedBorderColorFocused = true;
             advancedTextFocused = false;
@@ -1839,8 +1973,22 @@ public class MacroWorkbenchV2Screen extends Screen {
         }
 
         if (resizing) {
-            selected.width = Math.clamp(resizeStartWidth + (mouseX - resizeStartMouseX), 1, 2000);
-            selected.height = Math.clamp(resizeStartHeight + (mouseY - resizeStartMouseY), 1, 1200);
+            int nextWidth = Math.clamp(resizeStartWidth + (mouseX - resizeStartMouseX), 1, 2000);
+            int nextHeight = Math.clamp(resizeStartHeight + (mouseY - resizeStartMouseY), 1, 1200);
+            int baseX = resolveElementX(selected);
+            int baseY = resolveElementY(selected);
+            if (isShiftDown()) {
+                int[] snapped = snapResizeToNeighbors(selected, baseX, baseY, nextWidth, nextHeight);
+                nextWidth = snapped[0];
+                nextHeight = snapped[1];
+                snapGuideX = snapped[2];
+                snapGuideY = snapped[3];
+            } else {
+                snapGuideX = Integer.MIN_VALUE;
+                snapGuideY = Integer.MIN_VALUE;
+            }
+            selected.width = nextWidth;
+            selected.height = nextHeight;
 
             int clampedX = Math.clamp(resolveElementX(selected), 0, Math.max(0, this.width - selected.width));
             int clampedY = Math.clamp(resolveElementY(selected), CANVAS_CONTENT_TOP,
@@ -1934,98 +2082,40 @@ public class MacroWorkbenchV2Screen extends Screen {
     }
 
     private int[] snapElementToNeighbors(MacroHudDataHandler.HudElement moving, int screenX, int screenY, Set<String> excludedIds) {
-        if (moving == null) {
-            return new int[]{screenX, screenY};
-        }
-        final int threshold = 8;
-        int bestDx = threshold + 1;
-        int bestDy = threshold + 1;
-        int snappedX = screenX;
-        int snappedY = screenY;
+        int[] snapped = MacroWorkbenchSnapHelper.snapElementToNeighbors(
+                moving,
+                screenX,
+                screenY,
+                excludedIds,
+                this.working.elements,
+                this::resolveElementX,
+                this::resolveElementY,
+                this.width,
+                CANVAS_CONTENT_TOP,
+                this.height - BOTTOM_BAR_H
+        );
+        snapGuideX = snapped[2];
+        snapGuideY = snapped[3];
+        return new int[]{snapped[0], snapped[1]};
+    }
 
-        int movingLeft = screenX;
-        int movingRight = screenX + moving.width;
-        int movingCenterX = screenX + moving.width / 2;
-        int movingTop = screenY;
-        int movingBottom = screenY + moving.height;
-        int movingCenterY = screenY + moving.height / 2;
-
-        for (MacroHudDataHandler.HudElement other : this.working.elements) {
-            if (other == null || other.id.equals(moving.id) || excludedIds.contains(other.id)) {
-                continue;
-            }
-            int ox = resolveElementX(other);
-            int oy = resolveElementY(other);
-            int otherLeft = ox;
-            int otherRight = ox + other.width;
-            int otherCenterX = ox + other.width / 2;
-            int otherTop = oy;
-            int otherBottom = oy + other.height;
-            int otherCenterY = oy + other.height / 2;
-
-            int[] xCandidates = {
-                    otherLeft,
-                    otherRight,
-                    otherCenterX,
-                    otherLeft - moving.width,
-                    otherRight - moving.width,
-                    otherCenterX - moving.width / 2
-            };
-            int[] yCandidates = {
-                    otherTop,
-                    otherBottom,
-                    otherCenterY,
-                    otherTop - moving.height,
-                    otherBottom - moving.height,
-                    otherCenterY - moving.height / 2
-            };
-
-            for (int candidate : xCandidates) {
-                int dx = Math.abs(candidate - movingLeft);
-                if (dx < bestDx && dx <= threshold) {
-                    bestDx = dx;
-                    snappedX = candidate;
-                }
-                int dxRight = Math.abs(candidate - movingRight);
-                if (dxRight < bestDx && dxRight <= threshold) {
-                    bestDx = dxRight;
-                    snappedX = candidate - moving.width;
-                }
-                int dxCenter = Math.abs(candidate - movingCenterX);
-                if (dxCenter < bestDx && dxCenter <= threshold) {
-                    bestDx = dxCenter;
-                    snappedX = candidate - moving.width / 2;
-                }
-            }
-
-            for (int candidate : yCandidates) {
-                int dy = Math.abs(candidate - movingTop);
-                if (dy < bestDy && dy <= threshold) {
-                    bestDy = dy;
-                    snappedY = candidate;
-                }
-                int dyBottom = Math.abs(candidate - movingBottom);
-                if (dyBottom < bestDy && dyBottom <= threshold) {
-                    bestDy = dyBottom;
-                    snappedY = candidate - moving.height;
-                }
-                int dyCenter = Math.abs(candidate - movingCenterY);
-                if (dyCenter < bestDy && dyCenter <= threshold) {
-                    bestDy = dyCenter;
-                    snappedY = candidate - moving.height / 2;
-                }
-            }
-        }
-
-        snappedX = Math.clamp(snappedX, 0, Math.max(0, this.width - moving.width));
-        snappedY = Math.clamp(snappedY, CANVAS_CONTENT_TOP, Math.max(CANVAS_CONTENT_TOP, this.height - BOTTOM_BAR_H - moving.height));
-        snapGuideX = Math.abs(snappedX - screenX) > 0 ? snappedX : Integer.MIN_VALUE;
-        snapGuideY = Math.abs(snappedY - screenY) > 0 ? snappedY : Integer.MIN_VALUE;
-        return new int[]{snappedX, snappedY};
+    private int[] snapResizeToNeighbors(MacroHudDataHandler.HudElement resizingElement, int baseX, int baseY, int width, int height) {
+        return MacroWorkbenchSnapHelper.snapResizeToNeighbors(
+                resizingElement,
+                baseX,
+                baseY,
+                width,
+                height,
+                this.working.elements,
+                this::resolveElementX,
+                this::resolveElementY,
+                this.width,
+                this.height - BOTTOM_BAR_H
+        );
     }
 
     private void drawSnapGuides(DrawContext context) {
-        if (!dragging || !isShiftDown()) {
+        if (!(dragging && isShiftDown()) && !(resizing && isCtrlDown())) {
             return;
         }
         int canvasBottom = Math.max(CANVAS_CONTENT_TOP + 1, this.height - BOTTOM_BAR_H);
@@ -2096,10 +2186,10 @@ public class MacroWorkbenchV2Screen extends Screen {
         }
 
         if (element.drawBackground) {
-            context.fill(x1, y1, x2, y2, element.backgroundColor);
+            context.fill(x1, y1, x2, y2, canvasBackgroundColor(element));
         }
         if (element.drawBorder) {
-            GuiSystem.drawOutline(context, x1, y1, x2, y2, element.borderColor);
+            drawCanvasElementBorder(context, element, x1, y1, x2, y2);
         }
 
         float scale = Math.clamp(element.fontScale, 0.5f, 4.0f);
@@ -2134,10 +2224,10 @@ public class MacroWorkbenchV2Screen extends Screen {
 
     private void drawCanvasIconPreview(DrawContext context, MacroHudDataHandler.HudElement e, int x1, int y1, int x2, int y2) {
         if (e.drawBackground) {
-            context.fill(x1, y1, x2, y2, e.backgroundColor);
+            context.fill(x1, y1, x2, y2, canvasBackgroundColor(e));
         }
         if (e.drawBorder) {
-            GuiSystem.drawOutline(context, x1, y1, x2, y2, e.borderColor);
+            drawCanvasElementBorder(context, e, x1, y1, x2, y2);
         }
         if ("entity_model".equalsIgnoreCase(safe(e.iconKind))) {
             drawCanvasPlayerModelPreview(context, e, x1, y1, e.width, e.height);
@@ -2159,10 +2249,10 @@ public class MacroWorkbenchV2Screen extends Screen {
 
     private void drawCanvasBarPreview(DrawContext context, MacroHudDataHandler.HudElement e, int x1, int y1, int x2, int y2) {
         if (e.drawBackground) {
-            context.fill(x1, y1, x2, y2, e.backgroundColor);
+            context.fill(x1, y1, x2, y2, canvasBackgroundColor(e));
         }
         if (e.drawBorder) {
-            GuiSystem.drawOutline(context, x1, y1, x2, y2, e.borderColor);
+            drawCanvasElementBorder(context, e, x1, y1, x2, y2);
         }
         double min = e.minValue;
         double max = e.maxValue;
@@ -2190,21 +2280,21 @@ public class MacroWorkbenchV2Screen extends Screen {
 
     private void drawCanvasValuePreview(DrawContext context, MacroHudDataHandler.HudElement e, int x1, int y1, int x2, int y2) {
         if (e.drawBackground) {
-            context.fill(x1, y1, x2, y2, e.backgroundColor);
+            context.fill(x1, y1, x2, y2, canvasBackgroundColor(e));
         }
         if (e.drawBorder) {
-            GuiSystem.drawOutline(context, x1, y1, x2, y2, e.borderColor);
+            drawCanvasElementBorder(context, e, x1, y1, x2, y2);
         }
         Double valueToken = resolveCanvasNumericToken(e.sourceToken);
         double value = valueToken == null ? 0.0 : valueToken;
-        String prefix = safe(e.prefix);
+        String prefix = preserve(e.prefix);
         if (prefix.isBlank()) {
             String label = safe(e.label);
             if (!label.isBlank() && !"Value".equalsIgnoreCase(label)) {
                 prefix = label + ": ";
             }
         }
-        String text = prefix + formatCanvasValue(value) + safe(e.suffix);
+        String text = prefix + formatCanvasValue(value) + preserve(e.suffix);
         float scale = Math.max(0.5f, e.fontScale);
         int tw = Math.max(1, Math.round(styledLineWidth(text) * scale));
         int tx = alignedStartX(x1, e, tw, true);
@@ -2214,10 +2304,10 @@ public class MacroWorkbenchV2Screen extends Screen {
 
     private void drawCanvasListPreview(DrawContext context, MacroHudDataHandler.HudElement e, int x1, int y1, int x2, int y2) {
         if (e.drawBackground) {
-            context.fill(x1, y1, x2, y2, e.backgroundColor);
+            context.fill(x1, y1, x2, y2, canvasBackgroundColor(e));
         }
         if (e.drawBorder) {
-            GuiSystem.drawOutline(context, x1, y1, x2, y2, e.borderColor);
+            drawCanvasElementBorder(context, e, x1, y1, x2, y2);
         }
         String src = MacroPlaceholders.expandForCanvas(this.client, "{" + safe(e.sourceToken) + "}");
         List<String> lines = splitListSourceForCanvas(src);
@@ -2303,7 +2393,7 @@ public class MacroWorkbenchV2Screen extends Screen {
             }
         }
         if (e.drawBorder) {
-            GuiSystem.drawOutline(context, x1, y1, x2, y2, e.borderColor);
+            drawCanvasElementBorder(context, e, x1, y1, x2, y2);
         }
     }
 
@@ -2312,7 +2402,7 @@ public class MacroWorkbenchV2Screen extends Screen {
         int bg = on ? e.colorStart : e.colorEnd;
         context.fill(x1, y1, x2, y2, bg);
         if (e.drawBorder) {
-            GuiSystem.drawOutline(context, x1, y1, x2, y2, e.borderColor);
+            drawCanvasElementBorder(context, e, x1, y1, x2, y2);
         }
         String baseLabel = safe(e.label).isBlank() ? "State" : e.label;
         String label = e.stateShowValue ? (baseLabel + ": " + (on ? safe(e.stateOnText) : safe(e.stateOffText))) : baseLabel;
@@ -2448,8 +2538,8 @@ public class MacroWorkbenchV2Screen extends Screen {
 
         backgroundToggle.active = true;
         borderToggle.active = true;
-        backgroundToggle.setMessage(Text.literal(selected.drawBackground ? "BG: ON" : "BG: OFF"));
-        borderToggle.setMessage(Text.literal(selected.drawBorder ? "Border: ON" : "Border: OFF"));
+        backgroundToggle.setMessage(Text.literal(backgroundLabel(selected)));
+        borderToggle.setMessage(Text.literal(borderModeLabel(selected)));
     }
 
     private void syncGridButtons() {
@@ -2638,6 +2728,11 @@ public class MacroWorkbenchV2Screen extends Screen {
                 this.advancedBorderColor = selected.suffix == null ? "" : selected.suffix;
                 this.advancedBgCursor = this.advancedBgColor.length();
                 this.advancedBorderCursor = this.advancedBorderColor.length();
+            } else if (selected.type == MacroHudDataHandler.ElementType.STATE_BADGE) {
+                this.advancedBgColor = selected.stateTrueValues == null ? "" : selected.stateTrueValues;
+                this.advancedBorderColor = selected.stateFalseValues == null ? "" : selected.stateFalseValues;
+                this.advancedBgCursor = this.advancedBgColor.length();
+                this.advancedBorderCursor = this.advancedBorderColor.length();
             }
         }
         ensureVisibleBackground(selected);
@@ -2728,8 +2823,10 @@ public class MacroWorkbenchV2Screen extends Screen {
             int ax = actionField.x() + 4 + this.textRenderer.getWidth(advancedAction.substring(0, Math.clamp(advancedActionCursor, 0, advancedAction.length())));
             context.fill(ax, actionField.y() + 4, ax + 1, actionField.y() + 13, 0xFFFFFFFF);
         }
-        drawModalButton(context, layout.bgToggle().x(), layout.bgToggle().y(), layout.bgToggle().width(), layout.bgToggle().height(), "BG: " + ((selected != null && selected.drawBackground) ? "ON" : "OFF"), layout.bgToggle().contains(mouseX, mouseY));
-        drawModalButton(context, layout.borderToggle().x(), layout.borderToggle().y(), layout.borderToggle().width(), layout.borderToggle().height(), "Border: " + ((selected != null && selected.drawBorder) ? "ON" : "OFF"), layout.borderToggle().contains(mouseX, mouseY));
+        drawModalButton(context, layout.bgToggle().x(), layout.bgToggle().y(), layout.bgToggle().width(), layout.bgToggle().height(), backgroundLabel(selected), layout.bgToggle().contains(mouseX, mouseY));
+        drawModalButton(context, layout.bgOpaque().x(), layout.bgOpaque().y(), layout.bgOpaque().width(), layout.bgOpaque().height(),
+                "Opaque: " + (selected != null && selected.backgroundOpaque ? "ON" : "OFF"), layout.bgOpaque().contains(mouseX, mouseY));
+        drawModalButton(context, layout.borderToggle().x(), layout.borderToggle().y(), layout.borderToggle().width(), layout.borderToggle().height(), borderModeLabel(selected), layout.borderToggle().contains(mouseX, mouseY));
         drawModalButton(context, layout.hAlign().x(), layout.hAlign().y(), layout.hAlign().width(), layout.hAlign().height(), "H: " + (selected != null ? selected.horizontalAlign.name() : "-"), layout.hAlign().contains(mouseX, mouseY));
         drawModalButton(context, layout.vAlign().x(), layout.vAlign().y(), layout.vAlign().width(), layout.vAlign().height(), "V: " + (selected != null ? selected.verticalAlign.name() : "-"), layout.vAlign().contains(mouseX, mouseY));
         drawModalButton(context, layout.anchor().x(), layout.anchor().y(), layout.anchor().width(), layout.anchor().height(), "Anchor: " + (selected != null ? shortAnchor(selected.anchor) : "-"), layout.anchor().contains(mouseX, mouseY));
@@ -2741,17 +2838,25 @@ public class MacroWorkbenchV2Screen extends Screen {
         drawModalButton(context, layout.visibility().x(), layout.visibility().y(), layout.visibility().width(), layout.visibility().height(), "Visibility: " + (selected != null ? shortVisibility(selected.visibilityMode) : "-"), layout.visibility().contains(mouseX, mouseY));
         if (selected != null && selected.type == MacroHudDataHandler.ElementType.BUTTON) {
             drawModalButton(context, layout.execution().x(), layout.execution().y(), layout.execution().width(), layout.execution().height(),
-                    "Execution: " + shortExecutionMode(selected.buttonExecutionMode),
+                    "Exec: " + shortExecutionMode(selected.buttonExecutionMode),
                     layout.execution().contains(mouseX, mouseY));
+            drawModalButton(context, layout.asyncToggle().x(), layout.asyncToggle().y(), layout.asyncToggle().width(), layout.asyncToggle().height(),
+                    "Async: " + (selected.runScriptsAsync ? "ON" : "OFF"),
+                    layout.asyncToggle().contains(mouseX, mouseY));
         }
         drawModalButton(context, layout.bgMinus().x(), layout.bgMinus().y(), layout.bgMinus().width(), layout.bgMinus().height(), "BG-", layout.bgMinus().contains(mouseX, mouseY));
         drawModalButton(context, layout.bgPlus().x(), layout.bgPlus().y(), layout.bgPlus().width(), layout.bgPlus().height(), "BG+", layout.bgPlus().contains(mouseX, mouseY));
+        drawModalButton(context, layout.alphaMinus().x(), layout.alphaMinus().y(), layout.alphaMinus().width(), layout.alphaMinus().height(), "Opacity-", layout.alphaMinus().contains(mouseX, mouseY));
+        drawModalButton(context, layout.alphaPlus().x(), layout.alphaPlus().y(), layout.alphaPlus().width(), layout.alphaPlus().height(), "Opacity+", layout.alphaPlus().contains(mouseX, mouseY));
         drawModalButton(context, layout.borderMinus().x(), layout.borderMinus().y(), layout.borderMinus().width(), layout.borderMinus().height(), "BR-", layout.borderMinus().contains(mouseX, mouseY));
         drawModalButton(context, layout.borderPlus().x(), layout.borderPlus().y(), layout.borderPlus().width(), layout.borderPlus().height(), "BR+", layout.borderPlus().contains(mouseX, mouseY));
-        context.drawTextWithShadow(this.textRenderer, "Line: " + (selected != null ? selected.lineHeight : 9), layout.lineMinus().x(), layout.bgMinus().y(), 0xFFEAEAEA);
-        context.drawTextWithShadow(this.textRenderer, "Scale: " + (selected != null ? String.format("%.1f", selected.fontScale) : "1.0"), layout.fontMinus().x(), layout.bgMinus().y(), 0xFFEAEAEA);
+        int bgPct = selected == null ? 0 : Math.round((Math.clamp(selected.backgroundAlpha, 0, 255) / 255.0f) * 100.0f);
+        context.drawTextWithShadow(this.textRenderer,
+                "Line: " + (selected != null ? selected.lineHeight : 9) + "   Scale: " + (selected != null ? String.format("%.1f", selected.fontScale) : "1.0") + "   BG: " + bgPct + "%",
+                layout.bgHex().x(), layout.bgHex().y() - 10, 0xFFEAEAEA);
         context.drawTextWithShadow(this.textRenderer, "BG", layout.bgHex().x() - 26, layout.bgHex().y() + 4, 0xFFEAEAEA);
         context.drawTextWithShadow(this.textRenderer, "BR", layout.borderHex().x() - 26, layout.borderHex().y() + 4, 0xFFEAEAEA);
+        context.drawTextWithShadow(this.textRenderer, "Use Opacity +/- for transparency. Right-click BR hex to open picker.", layout.bgHex().x(), layout.bgHex().bottom() + 2, 0xFF9A9A9A);
 
         int bgInputBg = advancedBgColorFocused ? 0xFF0F0F0F : 0xFF161616;
         context.fill(layout.bgHex().x(), layout.bgHex().y(), layout.bgHex().right(), layout.bgHex().bottom(), bgInputBg);
@@ -2792,62 +2897,13 @@ public class MacroWorkbenchV2Screen extends Screen {
             context.fill(cx, layout.borderHex().y() + 4, cx + 1, layout.borderHex().y() + 13, 0xFFFFFFFF);
         }
 
+
         drawModalButton(context, layout.apply().x(), layout.apply().y(), layout.apply().width(), layout.apply().height(), "Apply", layout.apply().contains(mouseX, mouseY));
         drawModalButton(context, layout.cancel().x(), layout.cancel().y(), layout.cancel().width(), layout.cancel().height(), "Cancel", layout.cancel().contains(mouseX, mouseY));
     }
 
     private StandardAdvancedLayout standardAdvancedLayout(int boxX, int boxY) {
-        UiRect content = FormPanels.panel(boxX + 12, boxY + 34, MODAL_W - 24, MODAL_H - 60);
-        List<UiRect> col = FormPanels.column(content, 8, UiFlexLayout.Align.STRETCH, List.of(
-                UiFlexLayout.Item.fixed(100),
-                UiFlexLayout.Item.fixed(18),
-                UiFlexLayout.Item.fixed(18),
-                UiFlexLayout.Item.fixed(18),
-                UiFlexLayout.Item.fixed(18),
-                UiFlexLayout.Item.fixed(18),
-                UiFlexLayout.Item.fixed(18)
-        ));
-
-        UiRect textArea = col.get(0);
-        UiRect actionField = col.get(1);
-
-        List<UiRect> row3 = FormPanels.row(col.get(2), 4, UiFlexLayout.Align.STRETCH, List.of(
-                UiFlexLayout.Item.fixed(58), UiFlexLayout.Item.fixed(68),
-                UiFlexLayout.Item.fixed(90), UiFlexLayout.Item.fixed(90),
-                UiFlexLayout.Item.flex(90, 1)
-        ));
-
-        List<UiRect> row4 = FormPanels.row(col.get(3), 4, UiFlexLayout.Align.STRETCH, List.of(
-                UiFlexLayout.Item.fixed(40), UiFlexLayout.Item.fixed(40),
-                UiFlexLayout.Item.fixed(40), UiFlexLayout.Item.fixed(40),
-                UiFlexLayout.Item.fixed(122), UiFlexLayout.Item.flex(120, 1)
-        ));
-
-        List<UiRect> row5 = FormPanels.row(col.get(4), 4, UiFlexLayout.Align.STRETCH, List.of(
-                UiFlexLayout.Item.fixed(40), UiFlexLayout.Item.fixed(40),
-                UiFlexLayout.Item.fixed(40), UiFlexLayout.Item.fixed(40),
-                UiFlexLayout.Item.fixed(84), UiFlexLayout.Item.fixed(84),
-                UiFlexLayout.Item.flex(120, 1)
-        ));
-
-        List<UiRect> row6 = FormPanels.row(col.get(5), 4, UiFlexLayout.Align.STRETCH, List.of(
-                UiFlexLayout.Item.fixed(212),
-                UiFlexLayout.Item.fixed(88),
-                UiFlexLayout.Item.fixed(88),
-                UiFlexLayout.Item.flex(120, 1)
-        ));
-
-        UiRect apply = FormPanels.panel(boxX + MODAL_W - 134, boxY + MODAL_H - 24, 60, 18);
-        UiRect cancel = FormPanels.panel(boxX + MODAL_W - 70, boxY + MODAL_H - 24, 58, 18);
-
-        return new StandardAdvancedLayout(
-                textArea,
-                actionField,
-                row3.get(0), row3.get(1), row3.get(2), row3.get(3), row3.get(4),
-                row4.get(0), row4.get(1), row4.get(2), row4.get(3), row4.get(4), row4.get(5),
-                row5.get(0), row5.get(1), row5.get(2), row5.get(3), row6.get(1), row6.get(2), row6.get(0),
-                apply, cancel
-        );
+        return MacroWorkbenchAdvancedLayouts.standard(boxX, boxY, MODAL_W, MODAL_H);
     }
 
     private int[] cursorPixelWithScroll(int baseX, int baseY, String text, int cursorIndex, int scrollLine) {
@@ -2937,7 +2993,8 @@ public class MacroWorkbenchV2Screen extends Screen {
         drawModalButton(context, layout.linesMinus().x(), layout.linesMinus().y(), layout.linesMinus().width(), layout.linesMinus().height(), "L-", mouseX, mouseY);
         drawModalButton(context, layout.linesPlus().x(), layout.linesPlus().y(), layout.linesPlus().width(), layout.linesPlus().height(), "L+", mouseX, mouseY);
         context.drawTextWithShadow(this.textRenderer,
-                "Fade: " + advancedSecondaryFadeDurationMs + "ms  Alpha: " + advancedSecondaryMinAlpha + "  Max: " + advancedSecondaryMaxLines,
+                "Fade: " + advancedSecondaryFadeDurationMs + "ms  Alpha: " + advancedSecondaryMinAlpha + "  Max: " + advancedSecondaryMaxLines
+                        + "  BG: " + Math.round((Math.clamp(selected.backgroundAlpha, 0, 255) / 255.0f) * 100.0f) + "%",
                 layout.statsText().x(), layout.statsText().y(), 0xFFEAEAEA);
 
         int secondaryBgHexX = layout.bgHex().x();
@@ -2946,6 +3003,8 @@ public class MacroWorkbenchV2Screen extends Screen {
         int secondaryTxHexY = layout.txHex().y();
         drawModalButton(context, layout.bgMinus().x(), layout.bgMinus().y(), layout.bgMinus().width(), layout.bgMinus().height(), "BG-", mouseX, mouseY);
         drawModalButton(context, layout.bgPlus().x(), layout.bgPlus().y(), layout.bgPlus().width(), layout.bgPlus().height(), "BG+", mouseX, mouseY);
+        drawModalButton(context, layout.bgAlphaMinus().x(), layout.bgAlphaMinus().y(), layout.bgAlphaMinus().width(), layout.bgAlphaMinus().height(), "Opacity-", mouseX, mouseY);
+        drawModalButton(context, layout.bgAlphaPlus().x(), layout.bgAlphaPlus().y(), layout.bgAlphaPlus().width(), layout.bgAlphaPlus().height(), "Opacity+", mouseX, mouseY);
         context.drawTextWithShadow(this.textRenderer, "BG", secondaryBgHexX, secondaryBgHexY - 10, 0xFFEAEAEA);
         context.drawTextWithShadow(this.textRenderer, "TX", secondaryTxHexX, secondaryTxHexY - 10, 0xFFEAEAEA);
         int bgInputBg = advancedBgColorFocused ? 0xFF0F0F0F : 0xFF161616;
@@ -2986,14 +3045,15 @@ public class MacroWorkbenchV2Screen extends Screen {
         drawModalButton(context, layout.linePlus().x(), layout.linePlus().y(), layout.linePlus().width(), layout.linePlus().height(), "LH+", mouseX, mouseY);
         context.drawTextWithShadow(this.textRenderer,
                 "Scale: " + String.format("%.2f", selected == null ? 1.0f : selected.fontScale) +
-                        "  Line: " + (selected == null ? 9 : selected.lineHeight),
+                        "  Line: " + (selected == null ? 9 : selected.lineHeight)
+                        + "  BG: " + (selected == null ? 0 : Math.round((Math.clamp(selected.backgroundAlpha, 0, 255) / 255.0f) * 100.0f)) + "%",
                 layout.metrics().x(), layout.metrics().y() + 4, 0xFFEAEAEA);
 
         drawModalButton(context, layout.toggleBg().x(), layout.toggleBg().y(), layout.toggleBg().width(), layout.toggleBg().height(),
-                "BG: " + ((selected != null && selected.drawBackground) ? "ON" : "OFF"),
+                backgroundLabel(selected),
                 mouseX, mouseY);
         drawModalButton(context, layout.toggleBorder().x(), layout.toggleBorder().y(), layout.toggleBorder().width(), layout.toggleBorder().height(),
-                "Border: " + ((selected != null && selected.drawBorder) ? "ON" : "OFF"),
+                borderModeLabel(selected),
                 mouseX, mouseY);
         drawModalButton(context, layout.toggleVisible().x(), layout.toggleVisible().y(), layout.toggleVisible().width(), layout.toggleVisible().height(),
                 "Visible: " + ((selected != null && selected.visible) ? "YES" : "NO"),
@@ -3003,6 +3063,8 @@ public class MacroWorkbenchV2Screen extends Screen {
         drawModalButton(context, layout.colorBgPlus().x(), layout.colorBgPlus().y(), layout.colorBgPlus().width(), layout.colorBgPlus().height(), "BG+", mouseX, mouseY);
         drawModalButton(context, layout.colorTxMinus().x(), layout.colorTxMinus().y(), layout.colorTxMinus().width(), layout.colorTxMinus().height(), "TX-", mouseX, mouseY);
         drawModalButton(context, layout.colorTxPlus().x(), layout.colorTxPlus().y(), layout.colorTxPlus().width(), layout.colorTxPlus().height(), "TX+", mouseX, mouseY);
+        drawModalButton(context, layout.colorAlphaMinus().x(), layout.colorAlphaMinus().y(), layout.colorAlphaMinus().width(), layout.colorAlphaMinus().height(), "Opacity-", mouseX, mouseY);
+        drawModalButton(context, layout.colorAlphaPlus().x(), layout.colorAlphaPlus().y(), layout.colorAlphaPlus().width(), layout.colorAlphaPlus().height(), "Opacity+", mouseX, mouseY);
 
         drawModalButton(context, layout.alignH().x(), layout.alignH().y(), layout.alignH().width(), layout.alignH().height(),
                 "H: " + (selected == null ? "-" : selected.horizontalAlign.name()),
@@ -3059,224 +3121,36 @@ public class MacroWorkbenchV2Screen extends Screen {
     }
 
     private ProxyAdvancedLayout proxyAdvancedLayout(int boxX, int boxY, boolean pickup) {
-        UiRect rowScale = FormPanels.panel(boxX + 12, boxY + 52, MODAL_W - 24, 18);
-        UiRect rowToggles = FormPanels.panel(boxX + 12, boxY + 78, MODAL_W - 24, 18);
-        UiRect rowColorButtons = FormPanels.panel(boxX + 12, boxY + 104, MODAL_W - 24, 18);
-        UiRect rowColorInputs = FormPanels.panel(boxX + 12, boxY + 136, MODAL_W - 24, 18);
-        UiRect rowAlign = FormPanels.panel(boxX + 12, boxY + 166, MODAL_W - 24, 18);
-        UiRect rowPickupButtons = FormPanels.panel(boxX + 12, boxY + 196, MODAL_W - 24, 18);
-        UiRect rowPickupInfo = FormPanels.panel(boxX + 12, boxY + 220, MODAL_W - 24, 18);
-        UiRect rowActions = FormPanels.panel(boxX + MODAL_W - 134, boxY + MODAL_H - 24, 122, 18);
-
-        List<UiRect> scale = FormPanels.row(rowScale, 4, UiFlexLayout.Align.START, List.of(
-                UiFlexLayout.Item.fixed(64),
-                UiFlexLayout.Item.fixed(64),
-                UiFlexLayout.Item.fixed(64),
-                UiFlexLayout.Item.fixed(64),
-                UiFlexLayout.Item.flex(80, 1)
-        ));
-        List<UiRect> toggles = FormPanels.row(rowToggles, 4, UiFlexLayout.Align.START, List.of(
-                UiFlexLayout.Item.fixed(120),
-                UiFlexLayout.Item.fixed(120),
-                UiFlexLayout.Item.flex(120, 1)
-        ));
-        List<UiRect> colorButtons = FormPanels.row(rowColorButtons, 4, UiFlexLayout.Align.START, List.of(
-                UiFlexLayout.Item.fixed(64),
-                UiFlexLayout.Item.fixed(64),
-                UiFlexLayout.Item.fixed(64),
-                UiFlexLayout.Item.fixed(64)
-        ));
-        List<UiRect> colorInputs = FormPanels.row(rowColorInputs, 4, UiFlexLayout.Align.START, List.of(
-                UiFlexLayout.Item.fixed(140),
-                UiFlexLayout.Item.fixed(140)
-        ));
-        List<UiRect> align = FormPanels.row(rowAlign, 4, UiFlexLayout.Align.START, List.of(
-                UiFlexLayout.Item.fixed(120),
-                UiFlexLayout.Item.fixed(120),
-                UiFlexLayout.Item.flex(120, 1)
-        ));
-        List<UiRect> pickupButtons = FormPanels.row(rowPickupButtons, 4, UiFlexLayout.Align.START, List.of(
-                UiFlexLayout.Item.flex(90, 1),
-                UiFlexLayout.Item.flex(90, 1),
-                UiFlexLayout.Item.flex(90, 1),
-                UiFlexLayout.Item.flex(90, 1)
-        ));
-        List<UiRect> actions = FormPanels.row(rowActions, 4, UiFlexLayout.Align.START, List.of(
-                UiFlexLayout.Item.fixed(60),
-                UiFlexLayout.Item.fixed(58)
-        ));
-
-        UiRect empty = new UiRect(0, 0, 0, 0);
-        return new ProxyAdvancedLayout(
-                scale.get(0), scale.get(1), scale.get(2), scale.get(3), scale.get(4),
-                toggles.get(0), toggles.get(1), toggles.get(2),
-                colorButtons.get(0), colorButtons.get(1), colorButtons.get(2), colorButtons.get(3),
-                colorInputs.get(0), colorInputs.get(1),
-                align.get(0), align.get(1), align.get(2),
-                pickup ? pickupButtons.get(0) : empty,
-                pickup ? pickupButtons.get(1) : empty,
-                pickup ? pickupButtons.get(2) : empty,
-                pickup ? pickupButtons.get(3) : empty,
-                pickup ? rowPickupInfo : empty,
-                actions.get(0), actions.get(1)
-        );
+        return MacroWorkbenchAdvancedLayouts.proxy(boxX, boxY, MODAL_W, MODAL_H, pickup);
     }
 
     private SecondaryAdvancedLayout secondaryAdvancedLayout(int boxX, int boxY) {
-        UiRect row1 = FormPanels.panel(boxX + 12, boxY + 44, MODAL_W - 24, 18);
-        UiRect row2 = FormPanels.panel(boxX + 12, boxY + 68, MODAL_W - 24, 18);
-        UiRect row3 = FormPanels.panel(boxX + 12, boxY + 92, MODAL_W - 24, 18);
-        UiRect regexInput = FormPanels.panel(boxX + 12, boxY + 112, MODAL_W - 24, 86);
-        UiRect outgoingInput = FormPanels.panel(boxX + 12, boxY + 206, 244, 18);
-        UiRect statsButtons = FormPanels.panel(boxX + 12, boxY + 236, 308, 18);
-        UiRect colorButtons = FormPanels.panel(boxX + 324, boxY + 236, 132, 18);
-        UiRect colorHex = FormPanels.panel(boxX + 324, boxY + 274, 132, 18);
-        UiRect actions = FormPanels.panel(boxX + MODAL_W - 134, boxY + MODAL_H - 24, 122, 18);
-
-        List<UiRect> first = FormPanels.row(row1, 4, UiFlexLayout.Align.START, List.of(
-                UiFlexLayout.Item.fixed(150),
-                UiFlexLayout.Item.fixed(150),
-                UiFlexLayout.Item.flex(120, 1)
-        ));
-        List<UiRect> second = FormPanels.row(row2, 4, UiFlexLayout.Align.START, List.of(
-                UiFlexLayout.Item.flex(170, 1),
-                UiFlexLayout.Item.fixed(80),
-                UiFlexLayout.Item.fixed(44),
-                UiFlexLayout.Item.fixed(44),
-                UiFlexLayout.Item.fixed(44)
-        ));
-        UiRect linePlus = new UiRect(second.get(4).x(), row3.y(), second.get(4).width(), second.get(4).height());
-        List<UiRect> statButtons = FormPanels.row(statsButtons, 4, UiFlexLayout.Align.START, List.of(
-                UiFlexLayout.Item.fixed(48),
-                UiFlexLayout.Item.fixed(48),
-                UiFlexLayout.Item.fixed(48),
-                UiFlexLayout.Item.fixed(48),
-                UiFlexLayout.Item.fixed(48),
-                UiFlexLayout.Item.fixed(48)
-        ));
-        List<UiRect> colors = FormPanels.row(colorButtons, 4, UiFlexLayout.Align.START, List.of(
-                UiFlexLayout.Item.fixed(64),
-                UiFlexLayout.Item.fixed(64)
-        ));
-        List<UiRect> hexes = FormPanels.row(colorHex, 4, UiFlexLayout.Align.START, List.of(
-                UiFlexLayout.Item.fixed(64),
-                UiFlexLayout.Item.fixed(64)
-        ));
-        List<UiRect> actionButtons = FormPanels.row(actions, 4, UiFlexLayout.Align.START, List.of(
-                UiFlexLayout.Item.fixed(60),
-                UiFlexLayout.Item.fixed(58)
-        ));
-
-        return new SecondaryAdvancedLayout(
-                first.get(0), first.get(1), first.get(2),
-                second.get(0), second.get(1), second.get(2), second.get(3), second.get(4),
-                linePlus,
-                regexInput,
-                outgoingInput,
-                statButtons.get(0), statButtons.get(1), statButtons.get(2), statButtons.get(3), statButtons.get(4), statButtons.get(5),
-                new UiRect(statButtons.get(0).x(), statsButtons.y() + 24, statsButtons.width(), 9),
-                colors.get(0), colors.get(1),
-                hexes.get(0), hexes.get(1),
-                new UiRect(second.get(2).x(), row3.y() + 4, 152, 9),
-                actionButtons.get(0), actionButtons.get(1)
-        );
+        return MacroWorkbenchAdvancedLayouts.secondary(boxX, boxY, MODAL_W, MODAL_H);
     }
 
-    private record ProxyAdvancedLayout(
-            UiRect scaleMinus,
-            UiRect scalePlus,
-            UiRect lineMinus,
-            UiRect linePlus,
-            UiRect metrics,
-            UiRect toggleBg,
-            UiRect toggleBorder,
-            UiRect toggleVisible,
-            UiRect colorBgMinus,
-            UiRect colorBgPlus,
-            UiRect colorTxMinus,
-            UiRect colorTxPlus,
-            UiRect bgInput,
-            UiRect txInput,
-            UiRect alignH,
-            UiRect alignV,
-            UiRect anchor,
-            UiRect pickupDuration,
-            UiRect pickupLines,
-            UiRect pickupIcon,
-            UiRect pickupDirection,
-            UiRect pickupInfo,
-            UiRect apply,
-            UiRect cancel
-    ) {
+    private CustomWidgetAdvancedLayout customWidgetAdvancedLayout(int boxX, int boxY) {
+        return MacroWorkbenchAdvancedLayouts.custom(boxX, boxY, MODAL_W, MODAL_H);
     }
 
-    private record SecondaryAdvancedLayout(
-            UiRect guiOpen,
-            UiRect fadeToggle,
-            UiRect hoverReset,
-            UiRect noTransparency,
-            UiRect mode,
-            UiRect scaleMinus,
-            UiRect scalePlus,
-            UiRect lineMinus,
-            UiRect linePlus,
-            UiRect regexInput,
-            UiRect outgoingInput,
-            UiRect fadeMinus,
-            UiRect fadePlus,
-            UiRect alphaMinus,
-            UiRect alphaPlus,
-            UiRect linesMinus,
-            UiRect linesPlus,
-            UiRect statsText,
-            UiRect bgMinus,
-            UiRect bgPlus,
-            UiRect bgHex,
-            UiRect txHex,
-            UiRect metricsText,
-            UiRect apply,
-            UiRect cancel
-    ) {
+    private static UiRect slot(List<UiRect> row, int index) {
+        if (row == null || index < 0 || index >= row.size()) {
+            return new UiRect(0, 0, 0, 0);
+        }
+        return row.get(index);
     }
 
-    private record StandardAdvancedLayout(
-            UiRect textArea,
-            UiRect actionField,
-            UiRect bgToggle,
-            UiRect borderToggle,
-            UiRect hAlign,
-            UiRect vAlign,
-            UiRect anchor,
-            UiRect lineMinus,
-            UiRect linePlus,
-            UiRect fontMinus,
-            UiRect fontPlus,
-            UiRect visibility,
-            UiRect execution,
-            UiRect bgMinus,
-            UiRect bgPlus,
-            UiRect borderMinus,
-            UiRect borderPlus,
-            UiRect bgHex,
-            UiRect borderHex,
-            UiRect visibilityType,
-            UiRect apply,
-            UiRect cancel
-    ) {
-    }
 
     private void renderCustomWidgetAdvancedModal(DrawContext context, int mouseX, int mouseY, int boxX, int boxY) {
         if (selected == null) {
             return;
         }
-        int labelX = boxX + 12;
-        int labelY = boxY + 44;
-        int labelW = 214;
-        int labelH = 18;
-        int sourceX = boxX + 12;
-        int sourceY = boxY + 72;
-        int sourceW = 198;
-        int sourceH = 18;
+        CustomWidgetAdvancedLayout layout = customWidgetAdvancedLayout(boxX, boxY);
+        UiRect labelInput = layout.labelInput();
+        UiRect sourceInput = layout.sourceInput();
+        UiRect suggestionsArea = layout.suggestionArea();
+        List<UiRect> baseRow = layout.baseRow();
+        List<UiRect> generalRow1 = layout.generalRow1();
+        List<UiRect> generalRow2 = layout.generalRow2();
 
         context.drawTextWithShadow(this.textRenderer, selected.type + " Widget", boxX + 12, boxY + 12, 0xFFFFFFFF);
         context.drawTextWithShadow(this.textRenderer,
@@ -3285,27 +3159,26 @@ public class MacroWorkbenchV2Screen extends Screen {
                         : "Label + source token + type-specific controls",
                 boxX + 12, boxY + 24, 0xFFB0B0B0);
 
-        context.drawTextWithShadow(this.textRenderer, "Label", labelX, labelY - 10, 0xFFB8B8B8);
-        context.fill(labelX, labelY, labelX + labelW, labelY + labelH, advancedTextFocused ? 0xFF0F0F0F : 0xFF161616);
-        context.fill(labelX, labelY, labelX + labelW, labelY + 1, 0x60FFFFFF);
-        drawSingleLineSelection(context, labelX + 4, labelY + 5, advancedText, advancedSelectionAnchor, advancedCursor);
-        context.drawTextWithShadow(this.textRenderer, advancedText, labelX + 4, labelY + 5, 0xFFEAEAEA);
+        context.drawTextWithShadow(this.textRenderer, "Label", labelInput.x(), labelInput.y() - 10, 0xFFB8B8B8);
+        context.fill(labelInput.x(), labelInput.y(), labelInput.right(), labelInput.bottom(), advancedTextFocused ? 0xFF0F0F0F : 0xFF161616);
+        context.fill(labelInput.x(), labelInput.y(), labelInput.right(), labelInput.y() + 1, 0x60FFFFFF);
+        drawSingleLineSelection(context, labelInput.x() + 4, labelInput.y() + 5, advancedText, advancedSelectionAnchor, advancedCursor);
+        context.drawTextWithShadow(this.textRenderer, advancedText, labelInput.x() + 4, labelInput.y() + 5, 0xFFEAEAEA);
 
         context.drawTextWithShadow(this.textRenderer,
                 selected.type == MacroHudDataHandler.ElementType.ICON ? "Icon id" : "Source token",
-                sourceX, sourceY - 10, 0xFFB8B8B8);
-        context.fill(sourceX, sourceY, sourceX + sourceW, sourceY + sourceH, advancedActionFocused ? 0xFF0F0F0F : 0xFF161616);
-        context.fill(sourceX, sourceY, sourceX + sourceW, sourceY + 1, 0x60FFFFFF);
-        drawSingleLineSelection(context, sourceX + 4, sourceY + 5, advancedAction, advancedActionSelectionAnchor, advancedActionCursor);
-        context.drawTextWithShadow(this.textRenderer, advancedAction, sourceX + 4, sourceY + 5, 0xFFEAEAEA);
+                sourceInput.x(), sourceInput.y() - 10, 0xFFB8B8B8);
+        context.fill(sourceInput.x(), sourceInput.y(), sourceInput.right(), sourceInput.bottom(), advancedActionFocused ? 0xFF0F0F0F : 0xFF161616);
+        context.fill(sourceInput.x(), sourceInput.y(), sourceInput.right(), sourceInput.y() + 1, 0x60FFFFFF);
+        drawSingleLineSelection(context, sourceInput.x() + 4, sourceInput.y() + 5, advancedAction, advancedActionSelectionAnchor, advancedActionCursor);
+        context.drawTextWithShadow(this.textRenderer, advancedAction, sourceInput.x() + 4, sourceInput.y() + 5, 0xFFEAEAEA);
         List<String> suggestions = advancedActionSuggestions();
         if (!suggestions.isEmpty()) {
-            int dropX = sourceX;
-            int dropY = sourceY + 22;
-            int dropW = sourceW;
+            int dropX = suggestionsArea.x();
+            int dropY = suggestionsArea.y();
+            int dropW = suggestionsArea.width();
             int rowH = 10;
-            int bottomLimit = boxY + 208;
-            int maxVisible = Math.max(1, Math.min(suggestions.size(), Math.max(1, (bottomLimit - dropY) / rowH)));
+            int maxVisible = Math.max(1, Math.min(suggestions.size(), Math.max(1, suggestionsArea.height() / rowH)));
             int maxScroll = Math.max(0, suggestions.size() - maxVisible);
             advancedActionSuggestionScroll = Math.clamp(advancedActionSuggestionScroll, 0, maxScroll);
             context.fill(dropX, dropY, dropX + dropW, dropY + maxVisible * rowH, 0xC0101010);
@@ -3328,160 +3201,209 @@ public class MacroWorkbenchV2Screen extends Screen {
         }
 
         if (advancedTextFocused && (System.currentTimeMillis() / 500L) % 2L == 0L) {
-            int cx = labelX + 4 + this.textRenderer.getWidth(advancedText.substring(0, Math.clamp(advancedCursor, 0, advancedText.length())));
-            context.fill(cx, labelY + 4, cx + 1, labelY + 13, 0xFFFFFFFF);
+            int cx = labelInput.x() + 4 + this.textRenderer.getWidth(advancedText.substring(0, Math.clamp(advancedCursor, 0, advancedText.length())));
+            context.fill(cx, labelInput.y() + 4, cx + 1, labelInput.y() + 13, 0xFFFFFFFF);
         }
         if (advancedActionFocused && (System.currentTimeMillis() / 500L) % 2L == 0L) {
-            int cx = sourceX + 4 + this.textRenderer.getWidth(advancedAction.substring(0, Math.clamp(advancedActionCursor, 0, advancedAction.length())));
-            context.fill(cx, sourceY + 4, cx + 1, sourceY + 13, 0xFFFFFFFF);
+            int cx = sourceInput.x() + 4 + this.textRenderer.getWidth(advancedAction.substring(0, Math.clamp(advancedActionCursor, 0, advancedAction.length())));
+            context.fill(cx, sourceInput.y() + 4, cx + 1, sourceInput.y() + 13, 0xFFFFFFFF);
         }
 
-        drawModalButton(context, boxX + 232, boxY + 38, 54, 18, "BG-", containsBox(mouseX, mouseY, boxX + 232, boxY + 38, 54, 18));
-        drawModalButton(context, boxX + 290, boxY + 38, 54, 18, "BG+", containsBox(mouseX, mouseY, boxX + 290, boxY + 38, 54, 18));
-        drawModalButton(context, boxX + 348, boxY + 38, 54, 18, "BR-", containsBox(mouseX, mouseY, boxX + 348, boxY + 38, 54, 18));
-        drawModalButton(context, boxX + 406, boxY + 38, 50, 18, "BR+", containsBox(mouseX, mouseY, boxX + 406, boxY + 38, 50, 18));
-        drawModalButton(context, boxX + 232, boxY + 64, 54, 18, "FS-", containsBox(mouseX, mouseY, boxX + 232, boxY + 64, 54, 18));
-        drawModalButton(context, boxX + 290, boxY + 64, 54, 18, "FS+", containsBox(mouseX, mouseY, boxX + 290, boxY + 64, 54, 18));
-        drawModalButton(context, boxX + 348, boxY + 64, 108, 18, "Pick Src", containsBox(mouseX, mouseY, boxX + 348, boxY + 64, 108, 18));
-        context.drawTextWithShadow(this.textRenderer, "Scale: " + String.format(Locale.ROOT, "%.2f", selected.fontScale), boxX + 232, boxY + 76, 0xFFEAEAEA);
+        drawModalButton(context, slot(generalRow1, 0).x(), slot(generalRow1, 0).y(), slot(generalRow1, 0).width(), slot(generalRow1, 0).height(), "BG-", slot(generalRow1, 0).contains(mouseX, mouseY));
+        drawModalButton(context, slot(generalRow1, 1).x(), slot(generalRow1, 1).y(), slot(generalRow1, 1).width(), slot(generalRow1, 1).height(), "BG+", slot(generalRow1, 1).contains(mouseX, mouseY));
+        drawModalButton(context, slot(generalRow1, 2).x(), slot(generalRow1, 2).y(), slot(generalRow1, 2).width(), slot(generalRow1, 2).height(), "BR-", slot(generalRow1, 2).contains(mouseX, mouseY));
+        drawModalButton(context, slot(generalRow1, 3).x(), slot(generalRow1, 3).y(), slot(generalRow1, 3).width(), slot(generalRow1, 3).height(), "BR+", slot(generalRow1, 3).contains(mouseX, mouseY));
+        drawModalButton(context, slot(generalRow2, 0).x(), slot(generalRow2, 0).y(), slot(generalRow2, 0).width(), slot(generalRow2, 0).height(), "FS-", slot(generalRow2, 0).contains(mouseX, mouseY));
+        drawModalButton(context, slot(generalRow2, 1).x(), slot(generalRow2, 1).y(), slot(generalRow2, 1).width(), slot(generalRow2, 1).height(), "FS+", slot(generalRow2, 1).contains(mouseX, mouseY));
+        drawModalButton(context, slot(generalRow2, 2).x(), slot(generalRow2, 2).y(), slot(generalRow2, 2).width(), slot(generalRow2, 2).height(), "Pick Src", slot(generalRow2, 2).contains(mouseX, mouseY));
+        int bgPct = Math.round((Math.clamp(selected.backgroundAlpha, 0, 255) / 255.0f) * 100.0f);
+        context.drawTextWithShadow(this.textRenderer,
+                "Scale: " + String.format(Locale.ROOT, "%.2f", selected.fontScale) + "  BG Alpha: " + bgPct + "%",
+                layout.metricsText().x(), layout.metricsText().y(), 0xFFEAEAEA);
+
+        UiRect typeHint = layout.typeHintText();
+        context.drawTextWithShadow(this.textRenderer, "Type options", typeHint.x(), typeHint.y(), 0xFFB8B8B8);
 
         if (selected.type == MacroHudDataHandler.ElementType.ICON) {
-            drawModalButton(context, boxX + 232, boxY + 90, 124, 18, "Kind: " + selected.iconKind, containsBox(mouseX, mouseY, boxX + 232, boxY + 90, 124, 18));
-            drawModalButton(context, boxX + 360, boxY + 90, 96, 18, "Pick Id", containsBox(mouseX, mouseY, boxX + 360, boxY + 90, 96, 18));
+            List<UiRect> topButtons = FormPanels.row(layout.typeWideTop(), 4, UiFlexLayout.Align.STRETCH, 
+                    UiFlexLayout.Item.flex(80, 1), UiFlexLayout.Item.flex(60, 1)
+            );
+            drawModalButton(context, topButtons.get(0).x(), topButtons.get(0).y(), topButtons.get(0).width(), topButtons.get(0).height(), "Kind: " + selected.iconKind, topButtons.get(0).contains(mouseX, mouseY));
+            drawModalButton(context, topButtons.get(1).x(), topButtons.get(1).y(), topButtons.get(1).width(), topButtons.get(1).height(), "Pick Id", topButtons.get(1).contains(mouseX, mouseY));
             if ("entity_model".equalsIgnoreCase(selected.iconKind)) {
-                drawModalButton(context, boxX + 232, boxY + 138, 54, 18, "Z-", containsBox(mouseX, mouseY, boxX + 232, boxY + 138, 54, 18));
-                drawModalButton(context, boxX + 290, boxY + 138, 54, 18, "Z+", containsBox(mouseX, mouseY, boxX + 290, boxY + 138, 54, 18));
-                drawModalButton(context, boxX + 348, boxY + 138, 54, 18, "Y-", containsBox(mouseX, mouseY, boxX + 348, boxY + 138, 54, 18));
-                drawModalButton(context, boxX + 406, boxY + 138, 50, 18, "Y+", containsBox(mouseX, mouseY, boxX + 406, boxY + 138, 50, 18));
-                drawModalButton(context, boxX + 232, boxY + 162, 54, 18, "P-", containsBox(mouseX, mouseY, boxX + 232, boxY + 162, 54, 18));
-                drawModalButton(context, boxX + 290, boxY + 162, 54, 18, "P+", containsBox(mouseX, mouseY, boxX + 290, boxY + 162, 54, 18));
-                drawModalButton(context, boxX + 348, boxY + 162, 54, 18, "OX-", containsBox(mouseX, mouseY, boxX + 348, boxY + 162, 54, 18));
-                drawModalButton(context, boxX + 406, boxY + 162, 50, 18, "OX+", containsBox(mouseX, mouseY, boxX + 406, boxY + 162, 50, 18));
-                drawModalButton(context, boxX + 232, boxY + 186, 54, 18, "OY-", containsBox(mouseX, mouseY, boxX + 232, boxY + 186, 54, 18));
-                drawModalButton(context, boxX + 290, boxY + 186, 54, 18, "OY+", containsBox(mouseX, mouseY, boxX + 290, boxY + 186, 54, 18));
-                drawModalButton(context, boxX + 348, boxY + 186, 52, 18,
-                        "Fit: " + (selected.modelAutoFit ? "ON" : "OFF"),
-                        containsBox(mouseX, mouseY, boxX + 348, boxY + 186, 52, 18));
-                drawModalButton(context, boxX + 404, boxY + 186, 52, 18,
-                        "Look: " + (selected.modelFollowLook ? "ON" : "OFF"),
-                        containsBox(mouseX, mouseY, boxX + 404, boxY + 186, 52, 18));
-                context.drawTextWithShadow(this.textRenderer, "Id: " + selected.iconId, boxX + 232, boxY + 114, 0xFFEAEAEA);
+                List<UiRect> row1 = layout.typeRow1();
+                List<UiRect> row2 = layout.typeRow2();
+                List<UiRect> row3 = layout.typeRow3();
+                drawModalButton(context, row1.get(0).x(), row1.get(0).y(), row1.get(0).width(), row1.get(0).height(), "Z-", row1.get(0).contains(mouseX, mouseY));
+                drawModalButton(context, row1.get(1).x(), row1.get(1).y(), row1.get(1).width(), row1.get(1).height(), "Z+", row1.get(1).contains(mouseX, mouseY));
+                drawModalButton(context, row1.get(2).x(), row1.get(2).y(), row1.get(2).width(), row1.get(2).height(), "Y-", row1.get(2).contains(mouseX, mouseY));
+                drawModalButton(context, row1.get(3).x(), row1.get(3).y(), row1.get(3).width(), row1.get(3).height(), "Y+", row1.get(3).contains(mouseX, mouseY));
+                drawModalButton(context, row2.get(0).x(), row2.get(0).y(), row2.get(0).width(), row2.get(0).height(), "P-", row2.get(0).contains(mouseX, mouseY));
+                drawModalButton(context, row2.get(1).x(), row2.get(1).y(), row2.get(1).width(), row2.get(1).height(), "P+", row2.get(1).contains(mouseX, mouseY));
+                drawModalButton(context, row2.get(2).x(), row2.get(2).y(), row2.get(2).width(), row2.get(2).height(), "OX-", row2.get(2).contains(mouseX, mouseY));
+                drawModalButton(context, row2.get(3).x(), row2.get(3).y(), row2.get(3).width(), row2.get(3).height(), "OX+", row2.get(3).contains(mouseX, mouseY));
+                drawModalButton(context, row3.get(0).x(), row3.get(0).y(), row3.get(0).width(), row3.get(0).height(), "OY-", row3.get(0).contains(mouseX, mouseY));
+                drawModalButton(context, row3.get(1).x(), row3.get(1).y(), row3.get(1).width(), row3.get(1).height(), "OY+", row3.get(1).contains(mouseX, mouseY));
+                drawModalButton(context, row3.get(2).x(), row3.get(2).y(), row3.get(2).width(), row3.get(2).height(), "Fit: " + (selected.modelAutoFit ? "ON" : "OFF"), row3.get(2).contains(mouseX, mouseY));
+                drawModalButton(context, row3.get(3).x(), row3.get(3).y(), row3.get(3).width(), row3.get(3).height(), "Look: " + (selected.modelFollowLook ? "ON" : "OFF"), row3.get(3).contains(mouseX, mouseY));
+                context.drawTextWithShadow(this.textRenderer, "Id: " + selected.iconId, layout.typeInputLeft().x(), layout.typeInputLeft().y() - 10, 0xFFEAEAEA);
                 context.drawTextWithShadow(this.textRenderer,
                         String.format(Locale.ROOT, "Zoom %.2f  Yaw %.0f  Pitch %.0f", selected.modelZoom, selected.modelYaw, selected.modelPitch),
-                        boxX + 232, boxY + 126, 0xFFEAEAEA);
+                        layout.typeInfo1().x(), layout.typeInfo1().y(), 0xFFEAEAEA);
                 context.drawTextWithShadow(this.textRenderer,
                         "Offset X: " + selected.modelOffsetX + "  Y: " + selected.modelOffsetY,
-                        boxX + 232, boxY + 210, 0xFFEAEAEA);
+                        layout.typeInfo2().x(), layout.typeInfo2().y(), 0xFFEAEAEA);
             } else {
-                drawModalButton(context, boxX + 232, boxY + 114, 72, 18, "Count: " + (selected.iconShowCount ? "ON" : "OFF"), containsBox(mouseX, mouseY, boxX + 232, boxY + 114, 72, 18));
-                drawModalButton(context, boxX + 308, boxY + 114, 72, 18, "Dur: " + (selected.iconShowDurability ? "ON" : "OFF"), containsBox(mouseX, mouseY, boxX + 308, boxY + 114, 72, 18));
-                drawModalButton(context, boxX + 384, boxY + 114, 72, 18, "CD: " + (selected.iconShowCooldown ? "ON" : "OFF"), containsBox(mouseX, mouseY, boxX + 384, boxY + 114, 72, 18));
-                context.drawTextWithShadow(this.textRenderer, "Id: " + selected.iconId, boxX + 232, boxY + 136, 0xFFEAEAEA);
+                List<UiRect> row1 = layout.typeRow1();
+                drawModalButton(context, row1.get(0).x(), row1.get(0).y(), row1.get(0).width(), row1.get(0).height(), "Count: " + (selected.iconShowCount ? "ON" : "OFF"), row1.get(0).contains(mouseX, mouseY));
+                drawModalButton(context, row1.get(1).x(), row1.get(1).y(), row1.get(1).width(), row1.get(1).height(), "Dur: " + (selected.iconShowDurability ? "ON" : "OFF"), row1.get(1).contains(mouseX, mouseY));
+                drawModalButton(context, row1.get(2).x(), row1.get(2).y(), row1.get(2).width(), row1.get(2).height(), "CD: " + (selected.iconShowCooldown ? "ON" : "OFF"), row1.get(2).contains(mouseX, mouseY));
+                context.drawTextWithShadow(this.textRenderer, "Id: " + selected.iconId, layout.typeInfo1().x(), layout.typeInfo1().y(), 0xFFEAEAEA);
             }
         } else if (selected.type == MacroHudDataHandler.ElementType.BAR) {
-            drawModalButton(context, boxX + 232, boxY + 90, 224, 18, "Max Src: " + (safe(selected.sourceTokenMax).isBlank() ? "(none)" : selected.sourceTokenMax), containsBox(mouseX, mouseY, boxX + 232, boxY + 90, 224, 18));
-            drawModalButton(context, boxX + 232, boxY + 114, 90, 18, "Segmented: " + (selected.segmented ? "ON" : "OFF"), containsBox(mouseX, mouseY, boxX + 232, boxY + 114, 90, 18));
-            drawModalButton(context, boxX + 326, boxY + 114, 62, 18, "R-", containsBox(mouseX, mouseY, boxX + 326, boxY + 114, 62, 18));
-            drawModalButton(context, boxX + 392, boxY + 114, 64, 18, "R+", containsBox(mouseX, mouseY, boxX + 392, boxY + 114, 64, 18));
-            drawModalButton(context, boxX + 232, boxY + 138, 54, 18, "MIN-", containsBox(mouseX, mouseY, boxX + 232, boxY + 138, 54, 18));
-            drawModalButton(context, boxX + 290, boxY + 138, 54, 18, "MIN+", containsBox(mouseX, mouseY, boxX + 290, boxY + 138, 54, 18));
-            drawModalButton(context, boxX + 348, boxY + 138, 54, 18, "MAX-", containsBox(mouseX, mouseY, boxX + 348, boxY + 138, 54, 18));
-            drawModalButton(context, boxX + 406, boxY + 138, 50, 18, "MAX+", containsBox(mouseX, mouseY, boxX + 406, boxY + 138, 50, 18));
-            drawModalButton(context, boxX + 232, boxY + 162, 54, 18, "C1-", containsBox(mouseX, mouseY, boxX + 232, boxY + 162, 54, 18));
-            drawModalButton(context, boxX + 290, boxY + 162, 54, 18, "C1+", containsBox(mouseX, mouseY, boxX + 290, boxY + 162, 54, 18));
-            drawModalButton(context, boxX + 348, boxY + 162, 54, 18, "C2-", containsBox(mouseX, mouseY, boxX + 348, boxY + 162, 54, 18));
-            drawModalButton(context, boxX + 406, boxY + 162, 50, 18, "C2+", containsBox(mouseX, mouseY, boxX + 406, boxY + 162, 50, 18));
-            context.drawTextWithShadow(this.textRenderer, "Range: " + String.format(Locale.ROOT, "%.1f..%.1f", selected.minValue, selected.maxValue) + "  Segments: " + selected.segments, boxX + 232, boxY + 176, 0xFFEAEAEA);
+            List<UiRect> top = FormPanels.row(layout.typeWideTop(), 4, UiFlexLayout.Align.STRETCH, 
+                    UiFlexLayout.Item.flex(110, 2), UiFlexLayout.Item.flex(60, 1)
+            );
+            List<UiRect> row1 = layout.typeRow1();
+            List<UiRect> row2 = layout.typeRow2();
+            List<UiRect> row3 = layout.typeRow3();
+            drawModalButton(context, top.get(0).x(), top.get(0).y(), top.get(0).width(), top.get(0).height(), "Max Src: " + (safe(selected.sourceTokenMax).isBlank() ? "(none)" : selected.sourceTokenMax), top.get(0).contains(mouseX, mouseY));
+            drawModalButton(context, top.get(1).x(), top.get(1).y(), top.get(1).width(), top.get(1).height(), "Segmented: " + (selected.segmented ? "ON" : "OFF"), top.get(1).contains(mouseX, mouseY));
+            drawModalButton(context, row1.get(0).x(), row1.get(0).y(), row1.get(0).width(), row1.get(0).height(), "R-", row1.get(0).contains(mouseX, mouseY));
+            drawModalButton(context, row1.get(1).x(), row1.get(1).y(), row1.get(1).width(), row1.get(1).height(), "R+", row1.get(1).contains(mouseX, mouseY));
+            drawModalButton(context, row1.get(2).x(), row1.get(2).y(), row1.get(2).width(), row1.get(2).height(), "MIN-", row1.get(2).contains(mouseX, mouseY));
+            drawModalButton(context, row1.get(3).x(), row1.get(3).y(), row1.get(3).width(), row1.get(3).height(), "MIN+", row1.get(3).contains(mouseX, mouseY));
+            drawModalButton(context, row2.get(0).x(), row2.get(0).y(), row2.get(0).width(), row2.get(0).height(), "MAX-", row2.get(0).contains(mouseX, mouseY));
+            drawModalButton(context, row2.get(1).x(), row2.get(1).y(), row2.get(1).width(), row2.get(1).height(), "MAX+", row2.get(1).contains(mouseX, mouseY));
+            drawModalButton(context, row2.get(2).x(), row2.get(2).y(), row2.get(2).width(), row2.get(2).height(), "C1-", row2.get(2).contains(mouseX, mouseY));
+            drawModalButton(context, row2.get(3).x(), row2.get(3).y(), row2.get(3).width(), row2.get(3).height(), "C1+", row2.get(3).contains(mouseX, mouseY));
+            drawModalButton(context, row3.get(0).x(), row3.get(0).y(), row3.get(0).width(), row3.get(0).height(), "C2-", row3.get(0).contains(mouseX, mouseY));
+            drawModalButton(context, row3.get(1).x(), row3.get(1).y(), row3.get(1).width(), row3.get(1).height(), "C2+", row3.get(1).contains(mouseX, mouseY));
+            context.drawTextWithShadow(this.textRenderer, "Range: " + String.format(Locale.ROOT, "%.1f..%.1f", selected.minValue, selected.maxValue) + "  Segments: " + selected.segments, layout.typeInfo1().x(), layout.typeInfo1().y(), 0xFFEAEAEA);
 
-            int rangeX = boxX + 232;
-            int rangeY = boxY + 206;
-            int rangeW = 124;
-            int segX = boxX + 360;
-            int segY = boxY + 206;
-            int segW = 96;
-            context.drawTextWithShadow(this.textRenderer, "Range (min,max)", rangeX, rangeY - 10, 0xFFB8B8B8);
-            context.fill(rangeX, rangeY, rangeX + rangeW, rangeY + 18, advancedBgColorFocused ? 0xFF0F0F0F : 0xFF161616);
-            context.fill(rangeX, rangeY, rangeX + rangeW, rangeY + 1, 0x60FFFFFF);
-            context.drawTextWithShadow(this.textRenderer, advancedBgColor, rangeX + 4, rangeY + 5, 0xFFEAEAEA);
+            UiRect rangeInput = layout.typeInputLeft();
+            UiRect segInput = layout.typeInputRight();
+            context.drawTextWithShadow(this.textRenderer, "Range (min,max)", rangeInput.x(), rangeInput.y() - 10, 0xFFB8B8B8);
+            context.fill(rangeInput.x(), rangeInput.y(), rangeInput.right(), rangeInput.bottom(), advancedBgColorFocused ? 0xFF0F0F0F : 0xFF161616);
+            context.fill(rangeInput.x(), rangeInput.y(), rangeInput.right(), rangeInput.y() + 1, 0x60FFFFFF);
+            context.drawTextWithShadow(this.textRenderer, advancedBgColor, rangeInput.x() + 4, rangeInput.y() + 5, 0xFFEAEAEA);
 
-            context.drawTextWithShadow(this.textRenderer, "Segments", segX, segY - 10, 0xFFB8B8B8);
-            context.fill(segX, segY, segX + segW, segY + 18, advancedBorderColorFocused ? 0xFF0F0F0F : 0xFF161616);
-            context.fill(segX, segY, segX + segW, segY + 1, 0x60FFFFFF);
-            context.drawTextWithShadow(this.textRenderer, advancedBorderColor, segX + 4, segY + 5, 0xFFEAEAEA);
+            context.drawTextWithShadow(this.textRenderer, "Segments", segInput.x(), segInput.y() - 10, 0xFFB8B8B8);
+            context.fill(segInput.x(), segInput.y(), segInput.right(), segInput.bottom(), advancedBorderColorFocused ? 0xFF0F0F0F : 0xFF161616);
+            context.fill(segInput.x(), segInput.y(), segInput.right(), segInput.y() + 1, 0x60FFFFFF);
+            context.drawTextWithShadow(this.textRenderer, advancedBorderColor, segInput.x() + 4, segInput.y() + 5, 0xFFEAEAEA);
 
             if (advancedBgColorFocused && (System.currentTimeMillis() / 500L) % 2L == 0L) {
-                int cx = rangeX + 4 + this.textRenderer.getWidth(advancedBgColor.substring(0, Math.clamp(advancedBgCursor, 0, advancedBgColor.length())));
-                context.fill(cx, rangeY + 4, cx + 1, rangeY + 13, 0xFFFFFFFF);
+                int cx = rangeInput.x() + 4 + this.textRenderer.getWidth(advancedBgColor.substring(0, Math.clamp(advancedBgCursor, 0, advancedBgColor.length())));
+                context.fill(cx, rangeInput.y() + 4, cx + 1, rangeInput.y() + 13, 0xFFFFFFFF);
             }
             if (advancedBorderColorFocused && (System.currentTimeMillis() / 500L) % 2L == 0L) {
-                int cx = segX + 4 + this.textRenderer.getWidth(advancedBorderColor.substring(0, Math.clamp(advancedBorderCursor, 0, advancedBorderColor.length())));
-                context.fill(cx, segY + 4, cx + 1, segY + 13, 0xFFFFFFFF);
+                int cx = segInput.x() + 4 + this.textRenderer.getWidth(advancedBorderColor.substring(0, Math.clamp(advancedBorderCursor, 0, advancedBorderColor.length())));
+                context.fill(cx, segInput.y() + 4, cx + 1, segInput.y() + 13, 0xFFFFFFFF);
             }
         } else if (selected.type == MacroHudDataHandler.ElementType.VALUE) {
-            drawModalButton(context, boxX + 232, boxY + 90, 54, 18, "WRN-", containsBox(mouseX, mouseY, boxX + 232, boxY + 90, 54, 18));
-            drawModalButton(context, boxX + 290, boxY + 90, 54, 18, "WRN+", containsBox(mouseX, mouseY, boxX + 290, boxY + 90, 54, 18));
-            drawModalButton(context, boxX + 348, boxY + 90, 54, 18, "CRT-", containsBox(mouseX, mouseY, boxX + 348, boxY + 90, 54, 18));
-            drawModalButton(context, boxX + 406, boxY + 90, 50, 18, "CRT+", containsBox(mouseX, mouseY, boxX + 406, boxY + 90, 50, 18));
-            drawModalButton(context, boxX + 232, boxY + 114, 54, 18, "W-", containsBox(mouseX, mouseY, boxX + 232, boxY + 114, 54, 18));
-            drawModalButton(context, boxX + 290, boxY + 114, 54, 18, "W+", containsBox(mouseX, mouseY, boxX + 290, boxY + 114, 54, 18));
-            drawModalButton(context, boxX + 348, boxY + 114, 54, 18, "C-", containsBox(mouseX, mouseY, boxX + 348, boxY + 114, 54, 18));
-            drawModalButton(context, boxX + 406, boxY + 114, 50, 18, "C+", containsBox(mouseX, mouseY, boxX + 406, boxY + 114, 50, 18));
-            drawModalButton(context, boxX + 232, boxY + 138, 108, 18, "Prefix preset", containsBox(mouseX, mouseY, boxX + 232, boxY + 138, 108, 18));
-            drawModalButton(context, boxX + 344, boxY + 138, 112, 18, "Suffix preset", containsBox(mouseX, mouseY, boxX + 344, boxY + 138, 112, 18));
-            context.drawTextWithShadow(this.textRenderer, "Warn/Crit: " + String.format(Locale.ROOT, "%.1f / %.1f", selected.warnThreshold, selected.critThreshold), boxX + 232, boxY + 162, 0xFFEAEAEA);
-            context.drawTextWithShadow(this.textRenderer, "Prefix", boxX + 232, boxY + 186, 0xFFB8B8B8);
-            context.drawTextWithShadow(this.textRenderer, "Suffix", boxX + 344, boxY + 186, 0xFFB8B8B8);
-            context.fill(boxX + 232, boxY + 196, boxX + 340, boxY + 214, advancedBgColorFocused ? 0xFF0F0F0F : 0xFF161616);
-            context.fill(boxX + 232, boxY + 196, boxX + 340, boxY + 197, 0x60FFFFFF);
-            context.fill(boxX + 344, boxY + 196, boxX + 456, boxY + 214, advancedBorderColorFocused ? 0xFF0F0F0F : 0xFF161616);
-            context.fill(boxX + 344, boxY + 196, boxX + 456, boxY + 197, 0x60FFFFFF);
-            drawSingleLineSelection(context, boxX + 236, boxY + 201, advancedBgColor, advancedBgSelectionAnchor, advancedBgCursor);
-            drawSingleLineSelection(context, boxX + 348, boxY + 201, advancedBorderColor, advancedBorderSelectionAnchor, advancedBorderCursor);
-            context.drawTextWithShadow(this.textRenderer, advancedBgColor, boxX + 236, boxY + 201, 0xFFEAEAEA);
-            context.drawTextWithShadow(this.textRenderer, advancedBorderColor, boxX + 348, boxY + 201, 0xFFEAEAEA);
+            List<UiRect> row1 = layout.typeRow1();
+            List<UiRect> row2 = layout.typeRow2();
+            List<UiRect> row3 = layout.typeRow3();
+            List<UiRect> presets = FormPanels.row(layout.typeWideTop(), 4, UiFlexLayout.Align.STRETCH, 
+                    UiFlexLayout.Item.flex(80, 1), UiFlexLayout.Item.flex(80, 1)
+            );
+            drawModalButton(context, slot(row1, 0).x(), slot(row1, 0).y(), slot(row1, 0).width(), slot(row1, 0).height(), "WRN-", slot(row1, 0).contains(mouseX, mouseY));
+            drawModalButton(context, slot(row1, 1).x(), slot(row1, 1).y(), slot(row1, 1).width(), slot(row1, 1).height(), "WRN+", slot(row1, 1).contains(mouseX, mouseY));
+            drawModalButton(context, slot(row1, 2).x(), slot(row1, 2).y(), slot(row1, 2).width(), slot(row1, 2).height(), "CRT-", slot(row1, 2).contains(mouseX, mouseY));
+            drawModalButton(context, slot(row1, 3).x(), slot(row1, 3).y(), slot(row1, 3).width(), slot(row1, 3).height(), "CRT+", slot(row1, 3).contains(mouseX, mouseY));
+            drawModalButton(context, slot(row2, 0).x(), slot(row2, 0).y(), slot(row2, 0).width(), slot(row2, 0).height(), "WarnClr-", slot(row2, 0).contains(mouseX, mouseY));
+            drawModalButton(context, slot(row2, 1).x(), slot(row2, 1).y(), slot(row2, 1).width(), slot(row2, 1).height(), "WarnClr+", slot(row2, 1).contains(mouseX, mouseY));
+            drawModalButton(context, slot(row2, 2).x(), slot(row2, 2).y(), slot(row2, 2).width(), slot(row2, 2).height(), "CritClr-", slot(row2, 2).contains(mouseX, mouseY));
+            drawModalButton(context, slot(row2, 3).x(), slot(row2, 3).y(), slot(row2, 3).width(), slot(row2, 3).height(), "CritClr+", slot(row2, 3).contains(mouseX, mouseY));
+            drawModalButton(context, slot(row3, 0).x(), slot(row3, 0).y(), slot(row3, 0).width(), slot(row3, 0).height(), "BG-", slot(row3, 0).contains(mouseX, mouseY));
+            drawModalButton(context, slot(row3, 1).x(), slot(row3, 1).y(), slot(row3, 1).width(), slot(row3, 1).height(), "BG+", slot(row3, 1).contains(mouseX, mouseY));
+            drawModalButton(context, slot(row3, 2).x(), slot(row3, 2).y(), slot(row3, 2).width(), slot(row3, 2).height(), "TX-", slot(row3, 2).contains(mouseX, mouseY));
+            drawModalButton(context, slot(row3, 3).x(), slot(row3, 3).y(), slot(row3, 3).width(), slot(row3, 3).height(), "TX+", slot(row3, 3).contains(mouseX, mouseY));
+            drawModalButton(context, slot(presets, 0).x(), slot(presets, 0).y(), slot(presets, 0).width(), slot(presets, 0).height(), "Prefix preset", slot(presets, 0).contains(mouseX, mouseY));
+            drawModalButton(context, slot(presets, 1).x(), slot(presets, 1).y(), slot(presets, 1).width(), slot(presets, 1).height(), "Suffix preset", slot(presets, 1).contains(mouseX, mouseY));
+            context.drawTextWithShadow(this.textRenderer, "Warn/Crit: " + String.format(Locale.ROOT, "%.1f / %.1f", selected.warnThreshold, selected.critThreshold), layout.typeInfo1().x(), layout.typeInfo1().y(), 0xFFEAEAEA);
+            context.drawTextWithShadow(this.textRenderer, "Tip: right-click Warn/Crit/BG/TX color buttons to open picker", layout.typeInfo2().x(), layout.typeInfo2().y(), 0xFF98B8D8);
+            context.drawTextWithShadow(this.textRenderer, "Prefix", layout.typeInputLeft().x(), layout.typeInputLeft().y() - 10, 0xFFB8B8B8);
+            context.drawTextWithShadow(this.textRenderer, "Suffix", layout.typeInputRight().x(), layout.typeInputRight().y() - 10, 0xFFB8B8B8);
+            context.fill(layout.typeInputLeft().x(), layout.typeInputLeft().y(), layout.typeInputLeft().right(), layout.typeInputLeft().bottom(), advancedBgColorFocused ? 0xFF0F0F0F : 0xFF161616);
+            context.fill(layout.typeInputLeft().x(), layout.typeInputLeft().y(), layout.typeInputLeft().right(), layout.typeInputLeft().y() + 1, 0x60FFFFFF);
+            context.fill(layout.typeInputRight().x(), layout.typeInputRight().y(), layout.typeInputRight().right(), layout.typeInputRight().bottom(), advancedBorderColorFocused ? 0xFF0F0F0F : 0xFF161616);
+            context.fill(layout.typeInputRight().x(), layout.typeInputRight().y(), layout.typeInputRight().right(), layout.typeInputRight().y() + 1, 0x60FFFFFF);
+            drawSingleLineSelection(context, layout.typeInputLeft().x() + 4, layout.typeInputLeft().y() + 5, advancedBgColor, advancedBgSelectionAnchor, advancedBgCursor);
+            drawSingleLineSelection(context, layout.typeInputRight().x() + 4, layout.typeInputRight().y() + 5, advancedBorderColor, advancedBorderSelectionAnchor, advancedBorderCursor);
+            context.drawTextWithShadow(this.textRenderer, advancedBgColor, layout.typeInputLeft().x() + 4, layout.typeInputLeft().y() + 5, 0xFFEAEAEA);
+            context.drawTextWithShadow(this.textRenderer, advancedBorderColor, layout.typeInputRight().x() + 4, layout.typeInputRight().y() + 5, 0xFFEAEAEA);
             if (advancedBgColorFocused && (System.currentTimeMillis() / 500L) % 2L == 0L) {
-                int cx = boxX + 236 + this.textRenderer.getWidth(advancedBgColor.substring(0, Math.clamp(advancedBgCursor, 0, advancedBgColor.length())));
-                context.fill(cx, boxY + 200, cx + 1, boxY + 209, 0xFFFFFFFF);
+                int cx = layout.typeInputLeft().x() + 4 + this.textRenderer.getWidth(advancedBgColor.substring(0, Math.clamp(advancedBgCursor, 0, advancedBgColor.length())));
+                context.fill(cx, layout.typeInputLeft().y() + 4, cx + 1, layout.typeInputLeft().y() + 13, 0xFFFFFFFF);
             }
             if (advancedBorderColorFocused && (System.currentTimeMillis() / 500L) % 2L == 0L) {
-                int cx = boxX + 348 + this.textRenderer.getWidth(advancedBorderColor.substring(0, Math.clamp(advancedBorderCursor, 0, advancedBorderColor.length())));
-                context.fill(cx, boxY + 200, cx + 1, boxY + 209, 0xFFFFFFFF);
+                int cx = layout.typeInputRight().x() + 4 + this.textRenderer.getWidth(advancedBorderColor.substring(0, Math.clamp(advancedBorderCursor, 0, advancedBorderColor.length())));
+                context.fill(cx, layout.typeInputRight().y() + 4, cx + 1, layout.typeInputRight().y() + 13, 0xFFFFFFFF);
             }
         } else if (selected.type == MacroHudDataHandler.ElementType.LIST) {
-            drawModalButton(context, boxX + 232, boxY + 90, 224, 18, "List source preset", containsBox(mouseX, mouseY, boxX + 232, boxY + 90, 224, 18));
-            drawModalButton(context, boxX + 232, boxY + 114, 54, 18, "L-", containsBox(mouseX, mouseY, boxX + 232, boxY + 114, 54, 18));
-            drawModalButton(context, boxX + 290, boxY + 114, 54, 18, "L+", containsBox(mouseX, mouseY, boxX + 290, boxY + 114, 54, 18));
-            drawModalButton(context, boxX + 348, boxY + 114, 54, 18, "S-", containsBox(mouseX, mouseY, boxX + 348, boxY + 114, 54, 18));
-            drawModalButton(context, boxX + 406, boxY + 114, 50, 18, "S+", containsBox(mouseX, mouseY, boxX + 406, boxY + 114, 50, 18));
-            context.drawTextWithShadow(this.textRenderer, "Max lines: " + selected.maxLines + "  Scroll: " + selected.listScroll, boxX + 232, boxY + 138, 0xFFEAEAEA);
+            drawModalButton(context, layout.typeWideTop().x(), layout.typeWideTop().y(), layout.typeWideTop().width(), layout.typeWideTop().height(), "List source preset", layout.typeWideTop().contains(mouseX, mouseY));
+            List<UiRect> row1 = layout.typeRow1();
+            drawModalButton(context, row1.get(0).x(), row1.get(0).y(), row1.get(0).width(), row1.get(0).height(), "L-", row1.get(0).contains(mouseX, mouseY));
+            drawModalButton(context, row1.get(1).x(), row1.get(1).y(), row1.get(1).width(), row1.get(1).height(), "L+", row1.get(1).contains(mouseX, mouseY));
+            drawModalButton(context, row1.get(2).x(), row1.get(2).y(), row1.get(2).width(), row1.get(2).height(), "S-", row1.get(2).contains(mouseX, mouseY));
+            drawModalButton(context, row1.get(3).x(), row1.get(3).y(), row1.get(3).width(), row1.get(3).height(), "S+", row1.get(3).contains(mouseX, mouseY));
+            context.drawTextWithShadow(this.textRenderer, "Max lines: " + selected.maxLines + "  Scroll: " + selected.listScroll, layout.typeInfo1().x(), layout.typeInfo1().y(), 0xFFEAEAEA);
         } else if (selected.type == MacroHudDataHandler.ElementType.SHAPE) {
-            drawModalButton(context, boxX + 232, boxY + 90, 224, 18, "Type: " + selected.shapeType, containsBox(mouseX, mouseY, boxX + 232, boxY + 90, 224, 18));
-            drawModalButton(context, boxX + 232, boxY + 114, 90, 18, "Filled: " + (selected.shapeFilled ? "ON" : "OFF"), containsBox(mouseX, mouseY, boxX + 232, boxY + 114, 90, 18));
-            drawModalButton(context, boxX + 326, boxY + 114, 62, 18, "R-", containsBox(mouseX, mouseY, boxX + 326, boxY + 114, 62, 18));
-            drawModalButton(context, boxX + 392, boxY + 114, 64, 18, "R+", containsBox(mouseX, mouseY, boxX + 392, boxY + 114, 64, 18));
-            drawModalButton(context, boxX + 326, boxY + 138, 62, 18, "T-", containsBox(mouseX, mouseY, boxX + 326, boxY + 138, 62, 18));
-            drawModalButton(context, boxX + 392, boxY + 138, 64, 18, "T+", containsBox(mouseX, mouseY, boxX + 392, boxY + 138, 64, 18));
-            context.drawTextWithShadow(this.textRenderer, "Radius: " + selected.shapeRadius + "  Thickness: " + selected.shapeThickness, boxX + 232, boxY + 162, 0xFFEAEAEA);
+            drawModalButton(context, layout.typeWideTop().x(), layout.typeWideTop().y(), layout.typeWideTop().width(), layout.typeWideTop().height(), "Type: " + selected.shapeType, layout.typeWideTop().contains(mouseX, mouseY));
+            List<UiRect> row1 = layout.typeRow1();
+            List<UiRect> row2 = layout.typeRow2();
+            drawModalButton(context, row1.get(0).x(), row1.get(0).y(), row1.get(0).width(), row1.get(0).height(), "Filled: " + (selected.shapeFilled ? "ON" : "OFF"), row1.get(0).contains(mouseX, mouseY));
+            drawModalButton(context, row1.get(1).x(), row1.get(1).y(), row1.get(1).width(), row1.get(1).height(), "R-", row1.get(1).contains(mouseX, mouseY));
+            drawModalButton(context, row1.get(2).x(), row1.get(2).y(), row1.get(2).width(), row1.get(2).height(), "R+", row1.get(2).contains(mouseX, mouseY));
+            drawModalButton(context, row2.get(0).x(), row2.get(0).y(), row2.get(0).width(), row2.get(0).height(), "T-", row2.get(0).contains(mouseX, mouseY));
+            drawModalButton(context, row2.get(1).x(), row2.get(1).y(), row2.get(1).width(), row2.get(1).height(), "T+", row2.get(1).contains(mouseX, mouseY));
+            context.drawTextWithShadow(this.textRenderer, "Radius: " + selected.shapeRadius + "  Thickness: " + selected.shapeThickness, layout.typeInfo1().x(), layout.typeInfo1().y(), 0xFFEAEAEA);
         } else if (selected.type == MacroHudDataHandler.ElementType.STATE_BADGE) {
-            context.drawTextWithShadow(this.textRenderer, "Use Pick Src above for state source", boxX + 232, boxY + 96, 0xFFB8B8B8);
-            drawModalButton(context, boxX + 232, boxY + 114, 108, 18, "ON text", containsBox(mouseX, mouseY, boxX + 232, boxY + 114, 108, 18));
-            drawModalButton(context, boxX + 344, boxY + 114, 112, 18, "OFF text", containsBox(mouseX, mouseY, boxX + 344, boxY + 114, 112, 18));
-            drawModalButton(context, boxX + 232, boxY + 138, 54, 18, "ON-", containsBox(mouseX, mouseY, boxX + 232, boxY + 138, 54, 18));
-            drawModalButton(context, boxX + 290, boxY + 138, 54, 18, "ON+", containsBox(mouseX, mouseY, boxX + 290, boxY + 138, 54, 18));
-            drawModalButton(context, boxX + 348, boxY + 138, 54, 18, "OFF-", containsBox(mouseX, mouseY, boxX + 348, boxY + 138, 54, 18));
-            drawModalButton(context, boxX + 406, boxY + 138, 50, 18, "OFF+", containsBox(mouseX, mouseY, boxX + 406, boxY + 138, 50, 18));
-            drawModalButton(context, boxX + 232, boxY + 162, 224, 18, "Show Value: " + (selected.stateShowValue ? "ON" : "OFF"), containsBox(mouseX, mouseY, boxX + 232, boxY + 162, 224, 18));
-            context.drawTextWithShadow(this.textRenderer, "ON: " + selected.stateOnText + "  OFF: " + selected.stateOffText, boxX + 232, boxY + 184, 0xFFEAEAEA);
+            List<UiRect> stateText = FormPanels.row(layout.typeWideTop(), 4, UiFlexLayout.Align.STRETCH, 
+                    UiFlexLayout.Item.flex(80, 1), UiFlexLayout.Item.flex(80, 1)
+            );
+            List<UiRect> row1 = layout.typeRow1();
+            List<UiRect> row2 = layout.typeRow2();
+            drawModalButton(context, slot(stateText, 0).x(), slot(stateText, 0).y(), slot(stateText, 0).width(), slot(stateText, 0).height(), "ON: " + selected.stateOnText, slot(stateText, 0).contains(mouseX, mouseY));
+            drawModalButton(context, slot(stateText, 1).x(), slot(stateText, 1).y(), slot(stateText, 1).width(), slot(stateText, 1).height(), "OFF: " + selected.stateOffText, slot(stateText, 1).contains(mouseX, mouseY));
+            drawModalButton(context, slot(row1, 0).x(), slot(row1, 0).y(), slot(row1, 0).width(), slot(row1, 0).height(), "ON-", slot(row1, 0).contains(mouseX, mouseY));
+            drawModalButton(context, slot(row1, 1).x(), slot(row1, 1).y(), slot(row1, 1).width(), slot(row1, 1).height(), "ON+", slot(row1, 1).contains(mouseX, mouseY));
+            drawModalButton(context, slot(row1, 2).x(), slot(row1, 2).y(), slot(row1, 2).width(), slot(row1, 2).height(), "OFF-", slot(row1, 2).contains(mouseX, mouseY));
+            drawModalButton(context, slot(row1, 3).x(), slot(row1, 3).y(), slot(row1, 3).width(), slot(row1, 3).height(), "OFF+", slot(row1, 3).contains(mouseX, mouseY));
+            drawModalButton(context, slot(row2, 0).x(), slot(row2, 0).y(), slot(row2, 0).width(), slot(row2, 0).height(), "Show Value: " + (selected.stateShowValue ? "ON" : "OFF"), slot(row2, 0).contains(mouseX, mouseY));
+            drawModalButton(context, slot(row2, 1).x(), slot(row2, 1).y(), slot(row2, 1).width(), slot(row2, 1).height(), "TX-", slot(row2, 1).contains(mouseX, mouseY));
+            drawModalButton(context, slot(row2, 2).x(), slot(row2, 2).y(), slot(row2, 2).width(), slot(row2, 2).height(), "TX+", slot(row2, 2).contains(mouseX, mouseY));
+            drawModalButton(context, slot(row2, 3).x(), slot(row2, 3).y(), slot(row2, 3).width(), slot(row2, 3).height(), "Src preset", slot(row2, 3).contains(mouseX, mouseY));
+            context.drawTextWithShadow(this.textRenderer, "True tokens (csv)", layout.typeInputLeft().x(), layout.typeInputLeft().y() - 10, 0xFFB8B8B8);
+            context.drawTextWithShadow(this.textRenderer, "False tokens (csv)", layout.typeInputRight().x(), layout.typeInputRight().y() - 10, 0xFFB8B8B8);
+            context.fill(layout.typeInputLeft().x(), layout.typeInputLeft().y(), layout.typeInputLeft().right(), layout.typeInputLeft().bottom(), advancedBgColorFocused ? 0xFF0F0F0F : 0xFF161616);
+            context.fill(layout.typeInputLeft().x(), layout.typeInputLeft().y(), layout.typeInputLeft().right(), layout.typeInputLeft().y() + 1, 0x60FFFFFF);
+            context.fill(layout.typeInputRight().x(), layout.typeInputRight().y(), layout.typeInputRight().right(), layout.typeInputRight().bottom(), advancedBorderColorFocused ? 0xFF0F0F0F : 0xFF161616);
+            context.fill(layout.typeInputRight().x(), layout.typeInputRight().y(), layout.typeInputRight().right(), layout.typeInputRight().y() + 1, 0x60FFFFFF);
+            drawSingleLineSelection(context, layout.typeInputLeft().x() + 4, layout.typeInputLeft().y() + 5, advancedBgColor, advancedBgSelectionAnchor, advancedBgCursor);
+            drawSingleLineSelection(context, layout.typeInputRight().x() + 4, layout.typeInputRight().y() + 5, advancedBorderColor, advancedBorderSelectionAnchor, advancedBorderCursor);
+            context.drawTextWithShadow(this.textRenderer, advancedBgColor, layout.typeInputLeft().x() + 4, layout.typeInputLeft().y() + 5, 0xFFEAEAEA);
+            context.drawTextWithShadow(this.textRenderer, advancedBorderColor, layout.typeInputRight().x() + 4, layout.typeInputRight().y() + 5, 0xFFEAEAEA);
+            if (advancedBgColorFocused && (System.currentTimeMillis() / 500L) % 2L == 0L) {
+                int cx = layout.typeInputLeft().x() + 4 + this.textRenderer.getWidth(advancedBgColor.substring(0, Math.clamp(advancedBgCursor, 0, advancedBgColor.length())));
+                context.fill(cx, layout.typeInputLeft().y() + 4, cx + 1, layout.typeInputLeft().y() + 13, 0xFFFFFFFF);
+            }
+            if (advancedBorderColorFocused && (System.currentTimeMillis() / 500L) % 2L == 0L) {
+                int cx = layout.typeInputRight().x() + 4 + this.textRenderer.getWidth(advancedBorderColor.substring(0, Math.clamp(advancedBorderCursor, 0, advancedBorderColor.length())));
+                context.fill(cx, layout.typeInputRight().y() + 4, cx + 1, layout.typeInputRight().y() + 13, 0xFFFFFFFF);
+            }
         }
 
-        drawModalButton(context, boxX + 12, boxY + 218, 82, 18, "H: " + selected.horizontalAlign.name(), containsBox(mouseX, mouseY, boxX + 12, boxY + 218, 82, 18));
-        drawModalButton(context, boxX + 98, boxY + 218, 82, 18, "V: " + selected.verticalAlign.name(), containsBox(mouseX, mouseY, boxX + 98, boxY + 218, 82, 18));
-        drawModalButton(context, boxX + 184, boxY + 218, 110, 18, "Anchor: " + shortAnchor(selected.anchor), containsBox(mouseX, mouseY, boxX + 184, boxY + 218, 110, 18));
+        drawModalButton(context, slot(baseRow, 0).x(), slot(baseRow, 0).y(), slot(baseRow, 0).width(), slot(baseRow, 0).height(), "H: " + selected.horizontalAlign.name(), slot(baseRow, 0).contains(mouseX, mouseY));
+        drawModalButton(context, slot(baseRow, 1).x(), slot(baseRow, 1).y(), slot(baseRow, 1).width(), slot(baseRow, 1).height(), "V: " + selected.verticalAlign.name(), slot(baseRow, 1).contains(mouseX, mouseY));
+        drawModalButton(context, slot(baseRow, 2).x(), slot(baseRow, 2).y(), slot(baseRow, 2).width(), slot(baseRow, 2).height(), "Anchor: " + shortAnchor(selected.anchor), slot(baseRow, 2).contains(mouseX, mouseY));
+        drawModalButton(context, slot(baseRow, 3).x(), slot(baseRow, 3).y(), slot(baseRow, 3).width(), slot(baseRow, 3).height(), backgroundLabel(selected), slot(baseRow, 3).contains(mouseX, mouseY));
+        drawModalButton(context, slot(baseRow, 4).x(), slot(baseRow, 4).y(), slot(baseRow, 4).width(), slot(baseRow, 4).height(), borderModeLabel(selected), slot(baseRow, 4).contains(mouseX, mouseY));
 
-        drawModalButton(context, boxX + MODAL_W - 134, boxY + MODAL_H - 24, 60, 18, "Apply",
-                containsBox(mouseX, mouseY, boxX + MODAL_W - 134, boxY + MODAL_H - 24, 60, 18));
-        drawModalButton(context, boxX + MODAL_W - 70, boxY + MODAL_H - 24, 58, 18, "Cancel",
-                containsBox(mouseX, mouseY, boxX + MODAL_W - 70, boxY + MODAL_H - 24, 58, 18));
+        drawModalButton(context, layout.apply().x(), layout.apply().y(), layout.apply().width(), layout.apply().height(), "Apply", layout.apply().contains(mouseX, mouseY));
+        drawModalButton(context, layout.cancel().x(), layout.cancel().y(), layout.cancel().width(), layout.cancel().height(), "Cancel", layout.cancel().contains(mouseX, mouseY));
     }
 
     private boolean onCustomWidgetAdvancedClick(Click click, int boxX, int boxY) {
@@ -3492,23 +3414,21 @@ public class MacroWorkbenchV2Screen extends Screen {
         if (selected == null) {
             return true;
         }
-        int labelX = boxX + 12;
-        int labelY = boxY + 44;
-        int labelW = 214;
-        int labelH = 18;
-        int sourceX = boxX + 12;
-        int sourceY = boxY + 72;
-        int sourceW = 198;
-        int sourceH = 18;
+        CustomWidgetAdvancedLayout layout = customWidgetAdvancedLayout(boxX, boxY);
+        UiRect labelInput = layout.labelInput();
+        UiRect sourceInput = layout.sourceInput();
+        UiRect suggestionsArea = layout.suggestionArea();
+        List<UiRect> baseRow = layout.baseRow();
+        List<UiRect> generalRow1 = layout.generalRow1();
+        List<UiRect> generalRow2 = layout.generalRow2();
 
         List<String> suggestions = advancedActionSuggestions();
         if (!suggestions.isEmpty()) {
-            int dropX = sourceX;
-            int dropY = sourceY + 22;
-            int dropW = sourceW;
+            int dropX = suggestionsArea.x();
+            int dropY = suggestionsArea.y();
+            int dropW = suggestionsArea.width();
             int rowH = 10;
-            int bottomLimit = boxY + 208;
-            int maxVisible = Math.max(1, Math.min(suggestions.size(), Math.max(1, (bottomLimit - dropY) / rowH)));
+            int maxVisible = Math.max(1, Math.min(suggestions.size(), Math.max(1, suggestionsArea.height() / rowH)));
             int maxScroll = Math.max(0, suggestions.size() - maxVisible);
             advancedActionSuggestionScroll = Math.clamp(advancedActionSuggestionScroll, 0, maxScroll);
             for (int i = 0; i < maxVisible; i++) {
@@ -3525,40 +3445,48 @@ public class MacroWorkbenchV2Screen extends Screen {
             }
         }
 
-        if (containsBox(click.x(), click.y(), boxX + MODAL_W - 134, boxY + MODAL_H - 24, 60, 18)) {
+        if (containsBox(click.x(), click.y(), layout.apply())) {
             applyAdvancedAndClose();
             return true;
         }
-        if (containsBox(click.x(), click.y(), boxX + MODAL_W - 70, boxY + MODAL_H - 24, 58, 18)) {
+        if (containsBox(click.x(), click.y(), layout.cancel())) {
             closeAdvancedModal();
             return true;
         }
 
-        if (containsBox(click.x(), click.y(), boxX + 232, boxY + 38, 54, 18)) {
-            selected.backgroundColor = cycleStyleColor(selected.backgroundColor, false);
+        if (containsBox(click.x(), click.y(), slot(generalRow1, 0))) {
+            if (forward) {
+                selected.backgroundColor = cycleStyleColor(selected.backgroundColor, false);
+            } else {
+                adjustBackgroundAlpha(selected, -stepInt(8));
+            }
             return true;
         }
-        if (containsBox(click.x(), click.y(), boxX + 290, boxY + 38, 54, 18)) {
-            selected.backgroundColor = cycleStyleColor(selected.backgroundColor, true);
+        if (containsBox(click.x(), click.y(), slot(generalRow1, 1))) {
+            if (forward) {
+                selected.backgroundColor = cycleStyleColor(selected.backgroundColor, true);
+            } else {
+                adjustBackgroundAlpha(selected, stepInt(8));
+            }
             return true;
         }
-        if (containsBox(click.x(), click.y(), boxX + 348, boxY + 38, 54, 18)) {
+        if (containsBox(click.x(), click.y(), slot(generalRow1, 2))) {
             selected.borderColor = cycleStyleColor(selected.borderColor, false);
             return true;
         }
-        if (containsBox(click.x(), click.y(), boxX + 406, boxY + 38, 50, 18)) {
+        if (containsBox(click.x(), click.y(), slot(generalRow1, 3))) {
             selected.borderColor = cycleStyleColor(selected.borderColor, true);
             return true;
         }
-        if (containsBox(click.x(), click.y(), boxX + 232, boxY + 64, 54, 18)) {
+        if (containsBox(click.x(), click.y(), slot(generalRow2, 0))) {
             selected.fontScale = Math.clamp((float) (selected.fontScale - stepDouble(0.1)), 0.5f, 4.0f);
             return true;
         }
-        if (containsBox(click.x(), click.y(), boxX + 290, boxY + 64, 54, 18)) {
+        if (containsBox(click.x(), click.y(), slot(generalRow2, 1))) {
             selected.fontScale = Math.clamp((float) (selected.fontScale + stepDouble(0.1)), 0.5f, 4.0f);
             return true;
         }
-        if (containsBox(click.x(), click.y(), boxX + 348, boxY + 64, 108, 18)) {
+        if (containsBox(click.x(), click.y(), slot(generalRow2, 2))) {
             String[] presets = switch (selected.type) {
                 case LIST -> LIST_SOURCE_PRESETS;
                 case STATE_BADGE -> STATE_SOURCE_PRESETS;
@@ -3571,15 +3499,15 @@ public class MacroWorkbenchV2Screen extends Screen {
             return true;
         }
 
-        if (containsBox(click.x(), click.y(), boxX + 12, boxY + 218, 82, 18)) {
+        if (containsBox(click.x(), click.y(), slot(baseRow, 0))) {
             selected.horizontalAlign = cycleHorizontalAlign(selected.horizontalAlign, forward);
             return true;
         }
-        if (containsBox(click.x(), click.y(), boxX + 98, boxY + 218, 82, 18)) {
+        if (containsBox(click.x(), click.y(), slot(baseRow, 1))) {
             selected.verticalAlign = cycleVerticalAlign(selected.verticalAlign, forward);
             return true;
         }
-        if (containsBox(click.x(), click.y(), boxX + 184, boxY + 218, 110, 18)) {
+        if (containsBox(click.x(), click.y(), slot(baseRow, 2))) {
             int oldScreenX = resolveElementX(selected);
             int oldScreenY = resolveElementY(selected);
             selected.anchor = cycleAnchor(selected.anchor, forward);
@@ -3587,9 +3515,31 @@ public class MacroWorkbenchV2Screen extends Screen {
             clampElementToCanvas(selected);
             return true;
         }
+        if (containsBox(click.x(), click.y(), slot(baseRow, 3))) {
+            if (forward) {
+                selected.drawBackground = !selected.drawBackground;
+                ensureVisibleBackground(selected);
+            } else {
+                selected.drawBackground = true;
+                selected.backgroundOpaque = false;
+                adjustBackgroundAlpha(selected, 255 - Math.clamp(selected.backgroundAlpha, 0, 255));
+            }
+            return true;
+        }
+        if (containsBox(click.x(), click.y(), slot(baseRow, 4))) {
+            cycleBorderSetting(selected, forward);
+            return true;
+        }
 
         if (selected.type == MacroHudDataHandler.ElementType.ICON) {
-            if (containsBox(click.x(), click.y(), boxX + 232, boxY + 90, 124, 18)) {
+            List<UiRect> topButtons = FormPanels.row(layout.typeWideTop(), 4, UiFlexLayout.Align.STRETCH, 
+                    UiFlexLayout.Item.flex(80, 1), UiFlexLayout.Item.flex(60, 1)
+            );
+            List<UiRect> row1 = layout.typeRow1();
+            List<UiRect> row2 = layout.typeRow2();
+            List<UiRect> row3 = layout.typeRow3();
+
+            if (containsBox(click.x(), click.y(), topButtons.get(0))) {
                 selected.iconKind = cyclePreset(selected.iconKind, ICON_KIND_PRESETS, forward);
                 if ("entity_model".equalsIgnoreCase(selected.iconKind)
                         && (safe(selected.iconId).isBlank() || "minecraft:stone".equalsIgnoreCase(safe(selected.iconId)))) {
@@ -3597,310 +3547,437 @@ public class MacroWorkbenchV2Screen extends Screen {
                 }
                 return true;
             }
-            if (containsBox(click.x(), click.y(), boxX + 360, boxY + 90, 96, 18)) {
+            if (containsBox(click.x(), click.y(), topButtons.get(1))) {
                 String[] ids = iconIdSuggestionsForKind(selected.iconKind);
                 selected.iconId = cyclePreset(selected.iconId, ids, forward);
                 return true;
             }
             if ("entity_model".equalsIgnoreCase(selected.iconKind)) {
-                if (containsBox(click.x(), click.y(), boxX + 232, boxY + 138, 54, 18)) {
+                if (containsBox(click.x(), click.y(), row1.get(0))) {
                     selected.modelZoom = Math.clamp((float) (selected.modelZoom - stepDouble(0.05)), 0.2f, 2.5f);
                     return true;
                 }
-                if (containsBox(click.x(), click.y(), boxX + 290, boxY + 138, 54, 18)) {
+                if (containsBox(click.x(), click.y(), row1.get(1))) {
                     selected.modelZoom = Math.clamp((float) (selected.modelZoom + stepDouble(0.05)), 0.2f, 2.5f);
                     return true;
                 }
-                if (containsBox(click.x(), click.y(), boxX + 348, boxY + 138, 54, 18)) {
+                if (containsBox(click.x(), click.y(), row1.get(2))) {
                     selected.modelYaw = Math.clamp((float) (selected.modelYaw - stepDouble(5.0)), -180.0f, 180.0f);
                     return true;
                 }
-                if (containsBox(click.x(), click.y(), boxX + 406, boxY + 138, 50, 18)) {
+                if (containsBox(click.x(), click.y(), row1.get(3))) {
                     selected.modelYaw = Math.clamp((float) (selected.modelYaw + stepDouble(5.0)), -180.0f, 180.0f);
                     return true;
                 }
-                if (containsBox(click.x(), click.y(), boxX + 232, boxY + 162, 54, 18)) {
+                if (containsBox(click.x(), click.y(), row2.get(0))) {
                     selected.modelPitch = Math.clamp((float) (selected.modelPitch - stepDouble(5.0)), -90.0f, 90.0f);
                     return true;
                 }
-                if (containsBox(click.x(), click.y(), boxX + 290, boxY + 162, 54, 18)) {
+                if (containsBox(click.x(), click.y(), row2.get(1))) {
                     selected.modelPitch = Math.clamp((float) (selected.modelPitch + stepDouble(5.0)), -90.0f, 90.0f);
                     return true;
                 }
-                if (containsBox(click.x(), click.y(), boxX + 348, boxY + 162, 54, 18)) {
+                if (containsBox(click.x(), click.y(), row2.get(2))) {
                     selected.modelOffsetX = Math.clamp(selected.modelOffsetX - stepInt(1), -200, 200);
                     return true;
                 }
-                if (containsBox(click.x(), click.y(), boxX + 406, boxY + 162, 50, 18)) {
+                if (containsBox(click.x(), click.y(), row2.get(3))) {
                     selected.modelOffsetX = Math.clamp(selected.modelOffsetX + stepInt(1), -200, 200);
                     return true;
                 }
-                if (containsBox(click.x(), click.y(), boxX + 232, boxY + 186, 54, 18)) {
+                if (containsBox(click.x(), click.y(), row3.get(0))) {
                     selected.modelOffsetY = Math.clamp(selected.modelOffsetY - stepInt(1), -200, 200);
                     return true;
                 }
-                if (containsBox(click.x(), click.y(), boxX + 290, boxY + 186, 54, 18)) {
+                if (containsBox(click.x(), click.y(), row3.get(1))) {
                     selected.modelOffsetY = Math.clamp(selected.modelOffsetY + stepInt(1), -200, 200);
                     return true;
                 }
-                if (containsBox(click.x(), click.y(), boxX + 348, boxY + 186, 52, 18)) {
+                if (containsBox(click.x(), click.y(), row3.get(2))) {
                     selected.modelAutoFit = !selected.modelAutoFit;
                     return true;
                 }
-                if (containsBox(click.x(), click.y(), boxX + 404, boxY + 186, 52, 18)) {
+                if (containsBox(click.x(), click.y(), row3.get(3))) {
                     selected.modelFollowLook = !selected.modelFollowLook;
                     return true;
                 }
             } else {
-                if (containsBox(click.x(), click.y(), boxX + 232, boxY + 114, 72, 18)) {
+                if (containsBox(click.x(), click.y(), row1.get(0))) {
                     selected.iconShowCount = !selected.iconShowCount;
                     return true;
                 }
-                if (containsBox(click.x(), click.y(), boxX + 308, boxY + 114, 72, 18)) {
+                if (containsBox(click.x(), click.y(), row1.get(1))) {
                     selected.iconShowDurability = !selected.iconShowDurability;
                     return true;
                 }
-                if (containsBox(click.x(), click.y(), boxX + 384, boxY + 114, 72, 18)) {
+                if (containsBox(click.x(), click.y(), row1.get(2))) {
                     selected.iconShowCooldown = !selected.iconShowCooldown;
                     return true;
                 }
             }
         } else if (selected.type == MacroHudDataHandler.ElementType.BAR) {
-            if (containsBox(click.x(), click.y(), boxX + 232, boxY + 90, 224, 18)) {
+            List<UiRect> top = FormPanels.row(layout.typeWideTop(), 4, UiFlexLayout.Align.STRETCH, 
+                    UiFlexLayout.Item.flex(110, 2), UiFlexLayout.Item.flex(60, 1)
+            );
+            List<UiRect> row1 = layout.typeRow1();
+            List<UiRect> row2 = layout.typeRow2();
+            List<UiRect> row3 = layout.typeRow3();
+            if (containsBox(click.x(), click.y(), top.get(0))) {
                 selected.sourceTokenMax = cyclePreset(selected.sourceTokenMax, new String[]{"", "max_hp", "food", "players.count"}, forward);
                 return true;
             }
-            if (containsBox(click.x(), click.y(), boxX + 232, boxY + 114, 90, 18)) {
+            if (containsBox(click.x(), click.y(), top.get(1))) {
                 selected.segmented = !selected.segmented;
                 return true;
             }
-            if (containsBox(click.x(), click.y(), boxX + 326, boxY + 114, 62, 18)) {
+            if (containsBox(click.x(), click.y(), row1.get(0))) {
                 selected.segments = Math.max(1, selected.segments - stepInt(1));
                 return true;
             }
-            if (containsBox(click.x(), click.y(), boxX + 392, boxY + 114, 64, 18)) {
+            if (containsBox(click.x(), click.y(), row1.get(1))) {
                 selected.segments = Math.min(120, selected.segments + stepInt(1));
                 return true;
             }
-            if (containsBox(click.x(), click.y(), boxX + 232, boxY + 138, 54, 18)) {
+            if (containsBox(click.x(), click.y(), row1.get(2))) {
                 selected.minValue -= stepDouble(1.0);
                 return true;
             }
-            if (containsBox(click.x(), click.y(), boxX + 290, boxY + 138, 54, 18)) {
+            if (containsBox(click.x(), click.y(), row1.get(3))) {
                 selected.minValue += stepDouble(1.0);
                 return true;
             }
-            if (containsBox(click.x(), click.y(), boxX + 348, boxY + 138, 54, 18)) {
+            if (containsBox(click.x(), click.y(), row2.get(0))) {
                 selected.maxValue = Math.max(selected.minValue + 1.0, selected.maxValue - stepDouble(1.0));
                 return true;
             }
-            if (containsBox(click.x(), click.y(), boxX + 406, boxY + 138, 50, 18)) {
+            if (containsBox(click.x(), click.y(), row2.get(1))) {
                 selected.maxValue = selected.maxValue + stepDouble(1.0);
                 return true;
             }
-            if (containsBox(click.x(), click.y(), boxX + 232, boxY + 162, 54, 18)) {
+            if (containsBox(click.x(), click.y(), row2.get(2))) {
                 selected.colorStart = cycleStyleColor(selected.colorStart, false);
                 return true;
             }
-            if (containsBox(click.x(), click.y(), boxX + 290, boxY + 162, 54, 18)) {
+            if (containsBox(click.x(), click.y(), row2.get(3))) {
                 selected.colorStart = cycleStyleColor(selected.colorStart, true);
                 return true;
             }
-            if (containsBox(click.x(), click.y(), boxX + 348, boxY + 162, 54, 18)) {
+            if (containsBox(click.x(), click.y(), row3.get(0))) {
                 selected.colorEnd = cycleStyleColor(selected.colorEnd, false);
                 return true;
             }
-            if (containsBox(click.x(), click.y(), boxX + 406, boxY + 162, 50, 18)) {
+            if (containsBox(click.x(), click.y(), row3.get(1))) {
                 selected.colorEnd = cycleStyleColor(selected.colorEnd, true);
                 return true;
             }
         } else if (selected.type == MacroHudDataHandler.ElementType.VALUE) {
-            if (containsBox(click.x(), click.y(), boxX + 232, boxY + 90, 54, 18)) {
+            List<UiRect> row1 = layout.typeRow1();
+            List<UiRect> row2 = layout.typeRow2();
+            List<UiRect> row3 = layout.typeRow3();
+            List<UiRect> presets = FormPanels.row(layout.typeWideTop(), 4, UiFlexLayout.Align.STRETCH, 
+                    UiFlexLayout.Item.flex(80, 1), UiFlexLayout.Item.flex(80, 1)
+            );
+            if (containsBox(click.x(), click.y(), slot(row1, 0))) {
                 selected.warnThreshold -= stepDouble(1.0);
                 return true;
             }
-            if (containsBox(click.x(), click.y(), boxX + 290, boxY + 90, 54, 18)) {
+            if (containsBox(click.x(), click.y(), slot(row1, 1))) {
                 selected.warnThreshold += stepDouble(1.0);
                 return true;
             }
-            if (containsBox(click.x(), click.y(), boxX + 348, boxY + 90, 54, 18)) {
+            if (containsBox(click.x(), click.y(), slot(row1, 2))) {
                 selected.critThreshold -= stepDouble(1.0);
                 return true;
             }
-            if (containsBox(click.x(), click.y(), boxX + 406, boxY + 90, 50, 18)) {
+            if (containsBox(click.x(), click.y(), slot(row1, 3))) {
                 selected.critThreshold += stepDouble(1.0);
                 return true;
             }
-            if (containsBox(click.x(), click.y(), boxX + 232, boxY + 114, 54, 18)) {
-                selected.colorWarn = cycleStyleColor(selected.colorWarn, false);
+            if (containsBox(click.x(), click.y(), slot(row2, 0))) {
+                if (forward) {
+                    selected.colorWarn = cycleStyleColor(selected.colorWarn, false);
+                } else {
+                    openColorPicker(color -> selected.colorWarn = color, "Pick Warn Color", slot(row2, 0).right() + 8, slot(row2, 0).y() - 6);
+                }
                 return true;
             }
-            if (containsBox(click.x(), click.y(), boxX + 290, boxY + 114, 54, 18)) {
-                selected.colorWarn = cycleStyleColor(selected.colorWarn, true);
+            if (containsBox(click.x(), click.y(), slot(row2, 1))) {
+                if (forward) {
+                    selected.colorWarn = cycleStyleColor(selected.colorWarn, true);
+                } else {
+                    openColorPicker(color -> selected.colorWarn = color, "Pick Warn Color", slot(row2, 1).right() + 8, slot(row2, 1).y() - 6);
+                }
                 return true;
             }
-            if (containsBox(click.x(), click.y(), boxX + 348, boxY + 114, 54, 18)) {
-                selected.colorCrit = cycleStyleColor(selected.colorCrit, false);
+            if (containsBox(click.x(), click.y(), slot(row2, 2))) {
+                if (forward) {
+                    selected.colorCrit = cycleStyleColor(selected.colorCrit, false);
+                } else {
+                    openColorPicker(color -> selected.colorCrit = color, "Pick Crit Color", slot(row2, 2).right() + 8, slot(row2, 2).y() - 6);
+                }
                 return true;
             }
-            if (containsBox(click.x(), click.y(), boxX + 406, boxY + 114, 50, 18)) {
-                selected.colorCrit = cycleStyleColor(selected.colorCrit, true);
+            if (containsBox(click.x(), click.y(), slot(row2, 3))) {
+                if (forward) {
+                    selected.colorCrit = cycleStyleColor(selected.colorCrit, true);
+                } else {
+                    openColorPicker(color -> selected.colorCrit = color, "Pick Crit Color", slot(row2, 3).right() + 8, slot(row2, 3).y() - 6);
+                }
                 return true;
             }
-            if (containsBox(click.x(), click.y(), boxX + 232, boxY + 138, 108, 18)) {
+            if (containsBox(click.x(), click.y(), slot(row3, 0))) {
+                if (forward) {
+                    selected.backgroundColor = cycleStyleColor(selected.backgroundColor, false);
+                } else {
+                    openColorPicker(color -> {
+                        selected.backgroundColor = color;
+                        selected.backgroundAlpha = (color >>> 24) & 0xFF;
+                    }, "Pick BG", slot(row3, 0).right() + 8, slot(row3, 0).y() - 6);
+                }
+                return true;
+            }
+            if (containsBox(click.x(), click.y(), slot(row3, 1))) {
+                if (forward) {
+                    selected.backgroundColor = cycleStyleColor(selected.backgroundColor, true);
+                } else {
+                    openColorPicker(color -> {
+                        selected.backgroundColor = color;
+                        selected.backgroundAlpha = (color >>> 24) & 0xFF;
+                    }, "Pick BG", slot(row3, 1).right() + 8, slot(row3, 1).y() - 6);
+                }
+                return true;
+            }
+            if (containsBox(click.x(), click.y(), slot(row3, 2))) {
+                if (forward) {
+                    selected.textColor = cycleStyleColor(selected.textColor, false);
+                } else {
+                    openColorPicker(color -> selected.textColor = color, "Pick Text Color", slot(row3, 2).right() + 8, slot(row3, 2).y() - 6);
+                }
+                return true;
+            }
+            if (containsBox(click.x(), click.y(), slot(row3, 3))) {
+                if (forward) {
+                    selected.textColor = cycleStyleColor(selected.textColor, true);
+                } else {
+                    openColorPicker(color -> selected.textColor = color, "Pick Text Color", slot(row3, 3).right() + 8, slot(row3, 3).y() - 6);
+                }
+                return true;
+            }
+            if (containsBox(click.x(), click.y(), slot(presets, 0))) {
                 selected.prefix = cyclePreset(selected.prefix, new String[]{"", "HP: ", "Food: ", "FPS: "}, forward);
                 return true;
             }
-            if (containsBox(click.x(), click.y(), boxX + 344, boxY + 138, 112, 18)) {
+            if (containsBox(click.x(), click.y(), slot(presets, 1))) {
                 selected.suffix = cyclePreset(selected.suffix, new String[]{"", "%", " hp", " ms"}, forward);
                 return true;
             }
         } else if (selected.type == MacroHudDataHandler.ElementType.LIST) {
-            if (containsBox(click.x(), click.y(), boxX + 232, boxY + 90, 224, 18)) {
+            List<UiRect> row1 = layout.typeRow1();
+            if (containsBox(click.x(), click.y(), layout.typeWideTop())) {
                 advancedAction = cyclePreset(advancedAction, LIST_SOURCE_PRESETS, forward);
                 advancedActionCursor = advancedAction.length();
                 return true;
             }
-            if (containsBox(click.x(), click.y(), boxX + 232, boxY + 114, 54, 18)) {
+            if (containsBox(click.x(), click.y(), row1.get(0))) {
                 selected.maxLines = Math.max(1, selected.maxLines - stepInt(1));
                 return true;
             }
-            if (containsBox(click.x(), click.y(), boxX + 290, boxY + 114, 54, 18)) {
+            if (containsBox(click.x(), click.y(), row1.get(1))) {
                 selected.maxLines = Math.min(200, selected.maxLines + stepInt(1));
                 return true;
             }
-            if (containsBox(click.x(), click.y(), boxX + 348, boxY + 114, 54, 18)) {
+            if (containsBox(click.x(), click.y(), row1.get(2))) {
                 selected.listScroll = Math.max(0, selected.listScroll - stepInt(1));
                 return true;
             }
-            if (containsBox(click.x(), click.y(), boxX + 406, boxY + 114, 50, 18)) {
+            if (containsBox(click.x(), click.y(), row1.get(3))) {
                 selected.listScroll = Math.min(500, selected.listScroll + stepInt(1));
                 return true;
             }
         } else if (selected.type == MacroHudDataHandler.ElementType.SHAPE) {
-            if (containsBox(click.x(), click.y(), boxX + 232, boxY + 90, 224, 18)) {
+            List<UiRect> row1 = layout.typeRow1();
+            List<UiRect> row2 = layout.typeRow2();
+            if (containsBox(click.x(), click.y(), layout.typeWideTop())) {
                 selected.shapeType = cyclePreset(selected.shapeType, SHAPE_TYPE_PRESETS, forward);
                 return true;
             }
-            if (containsBox(click.x(), click.y(), boxX + 232, boxY + 114, 90, 18)) {
+            if (containsBox(click.x(), click.y(), row1.get(0))) {
                 selected.shapeFilled = !selected.shapeFilled;
                 return true;
             }
-            if (containsBox(click.x(), click.y(), boxX + 326, boxY + 114, 62, 18)) {
+            if (containsBox(click.x(), click.y(), row1.get(1))) {
                 selected.shapeRadius = Math.max(0, selected.shapeRadius - stepInt(1));
                 return true;
             }
-            if (containsBox(click.x(), click.y(), boxX + 392, boxY + 114, 64, 18)) {
+            if (containsBox(click.x(), click.y(), row1.get(2))) {
                 selected.shapeRadius = Math.min(64, selected.shapeRadius + stepInt(1));
                 return true;
             }
-            if (containsBox(click.x(), click.y(), boxX + 326, boxY + 138, 62, 18)) {
+            if (containsBox(click.x(), click.y(), row2.get(0))) {
                 selected.shapeThickness = Math.max(1, selected.shapeThickness - stepInt(1));
                 return true;
             }
-            if (containsBox(click.x(), click.y(), boxX + 392, boxY + 138, 64, 18)) {
+            if (containsBox(click.x(), click.y(), row2.get(1))) {
                 selected.shapeThickness = Math.min(24, selected.shapeThickness + stepInt(1));
                 return true;
             }
         } else if (selected.type == MacroHudDataHandler.ElementType.STATE_BADGE) {
-            if (containsBox(click.x(), click.y(), boxX + 232, boxY + 114, 108, 18)) {
-                selected.stateOnText = cyclePreset(selected.stateOnText, new String[]{"ON", "YES", "ENABLED", "ACTIVE"}, true);
+            List<UiRect> textButtons = FormPanels.row(layout.typeWideTop(), 4, UiFlexLayout.Align.STRETCH, 
+                    UiFlexLayout.Item.flex(80, 1), UiFlexLayout.Item.flex(80, 1)
+            );
+            List<UiRect> row1 = layout.typeRow1();
+            List<UiRect> row2 = layout.typeRow2();
+            if (containsBox(click.x(), click.y(), slot(textButtons, 0))) {
+                selected.stateOnText = cyclePreset(selected.stateOnText, new String[]{"ON", "YES", "ENABLED", "ACTIVE"}, forward);
                 return true;
             }
-            if (containsBox(click.x(), click.y(), boxX + 344, boxY + 114, 112, 18)) {
-                selected.stateOffText = cyclePreset(selected.stateOffText, new String[]{"OFF", "NO", "DISABLED", "IDLE"}, true);
+            if (containsBox(click.x(), click.y(), slot(textButtons, 1))) {
+                selected.stateOffText = cyclePreset(selected.stateOffText, new String[]{"OFF", "NO", "DISABLED", "IDLE"}, forward);
                 return true;
             }
-            if (containsBox(click.x(), click.y(), boxX + 232, boxY + 138, 54, 18)) {
-                selected.colorStart = cycleStyleColor(selected.colorStart, false);
+            if (containsBox(click.x(), click.y(), slot(row1, 0))) {
+                if (forward) {
+                    selected.colorStart = cycleStyleColor(selected.colorStart, false);
+                } else {
+                    openColorPicker(color -> selected.colorStart = color, "Pick ON Color", slot(row1, 0).right() + 8, slot(row1, 0).y() - 6);
+                }
                 return true;
             }
-            if (containsBox(click.x(), click.y(), boxX + 290, boxY + 138, 54, 18)) {
-                selected.colorStart = cycleStyleColor(selected.colorStart, true);
+            if (containsBox(click.x(), click.y(), slot(row1, 1))) {
+                if (forward) {
+                    selected.colorStart = cycleStyleColor(selected.colorStart, true);
+                } else {
+                    openColorPicker(color -> selected.colorStart = color, "Pick ON Color", slot(row1, 1).right() + 8, slot(row1, 1).y() - 6);
+                }
                 return true;
             }
-            if (containsBox(click.x(), click.y(), boxX + 348, boxY + 138, 54, 18)) {
-                selected.colorEnd = cycleStyleColor(selected.colorEnd, false);
+            if (containsBox(click.x(), click.y(), slot(row1, 2))) {
+                if (forward) {
+                    selected.colorEnd = cycleStyleColor(selected.colorEnd, false);
+                } else {
+                    openColorPicker(color -> selected.colorEnd = color, "Pick OFF Color", slot(row1, 2).right() + 8, slot(row1, 2).y() - 6);
+                }
                 return true;
             }
-            if (containsBox(click.x(), click.y(), boxX + 406, boxY + 138, 50, 18)) {
-                selected.colorEnd = cycleStyleColor(selected.colorEnd, true);
+            if (containsBox(click.x(), click.y(), slot(row1, 3))) {
+                if (forward) {
+                    selected.colorEnd = cycleStyleColor(selected.colorEnd, true);
+                } else {
+                    openColorPicker(color -> selected.colorEnd = color, "Pick OFF Color", slot(row1, 3).right() + 8, slot(row1, 3).y() - 6);
+                }
                 return true;
             }
-            if (containsBox(click.x(), click.y(), boxX + 232, boxY + 162, 224, 18)) {
+            if (containsBox(click.x(), click.y(), slot(row2, 0))) {
                 selected.stateShowValue = !selected.stateShowValue;
+                return true;
+            }
+            if (containsBox(click.x(), click.y(), slot(row2, 1))) {
+                if (forward) {
+                    selected.textColor = cycleStyleColor(selected.textColor, false);
+                } else {
+                    openColorPicker(color -> selected.textColor = color, "Pick Text Color", slot(row2, 1).right() + 8, slot(row2, 1).y() - 6);
+                }
+                return true;
+            }
+            if (containsBox(click.x(), click.y(), slot(row2, 2))) {
+                if (forward) {
+                    selected.textColor = cycleStyleColor(selected.textColor, true);
+                } else {
+                    openColorPicker(color -> selected.textColor = color, "Pick Text Color", slot(row2, 2).right() + 8, slot(row2, 2).y() - 6);
+                }
+                return true;
+            }
+            if (containsBox(click.x(), click.y(), slot(row2, 3))) {
+                advancedAction = cyclePreset(advancedAction, STATE_SOURCE_PRESETS, forward);
+                advancedActionCursor = advancedAction.length();
+                return true;
+            }
+            if (containsBox(click.x(), click.y(), layout.typeInputLeft())) {
+                advancedBgColorFocused = true;
+                advancedBorderColorFocused = false;
+                advancedTextFocused = false;
+                advancedActionFocused = false;
+                advancedBgSelectionAnchor = -1;
+                advancedBgCursor = cursorIndexFromPoint(advancedBgColor, (int) (click.x() - (layout.typeInputLeft().x() + 4)), 0, 9);
+                beginModalSelectionDrag(ModalDragSelectionField.ADVANCED_BG);
+                return true;
+            }
+            if (containsBox(click.x(), click.y(), layout.typeInputRight())) {
+                advancedBorderColorFocused = true;
+                advancedBgColorFocused = false;
+                advancedTextFocused = false;
+                advancedActionFocused = false;
+                advancedBorderSelectionAnchor = -1;
+                advancedBorderCursor = cursorIndexFromPoint(advancedBorderColor, (int) (click.x() - (layout.typeInputRight().x() + 4)), 0, 9);
+                beginModalSelectionDrag(ModalDragSelectionField.ADVANCED_BORDER);
                 return true;
             }
         }
 
         if (selected.type == MacroHudDataHandler.ElementType.BAR) {
-            int rangeX = boxX + 232;
-            int rangeY = boxY + 206;
-            int rangeW = 124;
-            int segX = boxX + 360;
-            int segY = boxY + 206;
-            int segW = 96;
-            if (containsBox(click.x(), click.y(), rangeX, rangeY, rangeW, 18)) {
+            UiRect rangeInput = layout.typeInputLeft();
+            UiRect segInput = layout.typeInputRight();
+            if (containsBox(click.x(), click.y(), rangeInput)) {
                 advancedBgColorFocused = true;
                 advancedBorderColorFocused = false;
                 advancedTextFocused = false;
                 advancedActionFocused = false;
-                advancedBgCursor = cursorIndexFromPoint(advancedBgColor, (int) (click.x() - (rangeX + 4)), 0, 9);
+                advancedBgCursor = cursorIndexFromPoint(advancedBgColor, (int) (click.x() - (rangeInput.x() + 4)), 0, 9);
                 beginModalSelectionDrag(ModalDragSelectionField.ADVANCED_BG);
                 return true;
             }
-            if (containsBox(click.x(), click.y(), segX, segY, segW, 18)) {
+            if (containsBox(click.x(), click.y(), segInput)) {
                 advancedBorderColorFocused = true;
                 advancedBgColorFocused = false;
                 advancedTextFocused = false;
                 advancedActionFocused = false;
-                advancedBorderCursor = cursorIndexFromPoint(advancedBorderColor, (int) (click.x() - (segX + 4)), 0, 9);
+                advancedBorderCursor = cursorIndexFromPoint(advancedBorderColor, (int) (click.x() - (segInput.x() + 4)), 0, 9);
                 beginModalSelectionDrag(ModalDragSelectionField.ADVANCED_BORDER);
                 return true;
             }
         }
 
         if (selected.type == MacroHudDataHandler.ElementType.VALUE) {
-            if (containsBox(click.x(), click.y(), boxX + 232, boxY + 196, 108, 18)) {
+            if (containsBox(click.x(), click.y(), layout.typeInputLeft())) {
                 advancedBgColorFocused = true;
                 advancedBorderColorFocused = false;
                 advancedTextFocused = false;
                 advancedActionFocused = false;
                 advancedBgSelectionAnchor = -1;
-                advancedBgCursor = cursorIndexFromPoint(advancedBgColor, (int) (click.x() - (boxX + 236)), 0, 9);
+                advancedBgCursor = cursorIndexFromPoint(advancedBgColor, (int) (click.x() - (layout.typeInputLeft().x() + 4)), 0, 9);
                 beginModalSelectionDrag(ModalDragSelectionField.ADVANCED_BG);
                 return true;
             }
-            if (containsBox(click.x(), click.y(), boxX + 344, boxY + 196, 112, 18)) {
+            if (containsBox(click.x(), click.y(), layout.typeInputRight())) {
                 advancedBorderColorFocused = true;
                 advancedBgColorFocused = false;
                 advancedTextFocused = false;
                 advancedActionFocused = false;
                 advancedBorderSelectionAnchor = -1;
-                advancedBorderCursor = cursorIndexFromPoint(advancedBorderColor, (int) (click.x() - (boxX + 348)), 0, 9);
+                advancedBorderCursor = cursorIndexFromPoint(advancedBorderColor, (int) (click.x() - (layout.typeInputRight().x() + 4)), 0, 9);
                 beginModalSelectionDrag(ModalDragSelectionField.ADVANCED_BORDER);
                 return true;
             }
         }
 
-        advancedTextFocused = containsBox(click.x(), click.y(), labelX, labelY, labelW, labelH);
+        advancedTextFocused = containsBox(click.x(), click.y(), labelInput);
         if (advancedTextFocused) {
             advancedActionFocused = false;
             advancedBgColorFocused = false;
             advancedBorderColorFocused = false;
             advancedSelectionAnchor = -1;
-            advancedCursor = cursorIndexFromPoint(advancedText, (int) (click.x() - (labelX + 4)), 0, 9);
+            advancedCursor = cursorIndexFromPoint(advancedText, (int) (click.x() - (labelInput.x() + 4)), 0, 9);
             beginModalSelectionDrag(ModalDragSelectionField.ADVANCED_TEXT);
             return true;
         }
 
-        advancedActionFocused = containsBox(click.x(), click.y(), sourceX, sourceY, sourceW, sourceH);
+        advancedActionFocused = containsBox(click.x(), click.y(), sourceInput);
         if (advancedActionFocused) {
             advancedTextFocused = false;
             advancedBgColorFocused = false;
             advancedBorderColorFocused = false;
             advancedActionSelectionAnchor = -1;
-            advancedActionCursor = cursorIndexFromPoint(advancedAction, (int) (click.x() - (sourceX + 4)), 0, 9);
+            advancedActionCursor = cursorIndexFromPoint(advancedAction, (int) (click.x() - (sourceInput.x() + 4)), 0, 9);
             beginModalSelectionDrag(ModalDragSelectionField.ADVANCED_ACTION);
             return true;
         }
@@ -4098,6 +4175,75 @@ public class MacroWorkbenchV2Screen extends Screen {
         };
     }
 
+    private static void cycleBorderSetting(MacroHudDataHandler.HudElement element, boolean forward) {
+        if (element == null) {
+            return;
+        }
+        if (!element.drawBorder) {
+            element.drawBorder = true;
+            element.borderMode = MacroHudDataHandler.BorderMode.FULL;
+            return;
+        }
+        MacroHudDataHandler.BorderMode next = cycleBorderMode(element.borderMode, forward);
+        if (next == null) {
+            element.drawBorder = false;
+            return;
+        }
+        element.borderMode = next;
+    }
+
+    private static MacroHudDataHandler.BorderMode cycleBorderMode(MacroHudDataHandler.BorderMode current, boolean forward) {
+        MacroHudDataHandler.BorderMode[] order = {
+                MacroHudDataHandler.BorderMode.FULL,
+                MacroHudDataHandler.BorderMode.LEFT,
+                MacroHudDataHandler.BorderMode.RIGHT,
+                MacroHudDataHandler.BorderMode.TOP,
+                MacroHudDataHandler.BorderMode.BOTTOM
+        };
+        MacroHudDataHandler.BorderMode base = current == null ? MacroHudDataHandler.BorderMode.FULL : current;
+        int idx = 0;
+        for (int i = 0; i < order.length; i++) {
+            if (order[i] == base) {
+                idx = i;
+                break;
+            }
+        }
+        int next = forward ? idx + 1 : idx - 1;
+        if (next < 0 || next >= order.length) {
+            return null;
+        }
+        return order[next];
+    }
+
+    private static String borderModeLabel(MacroHudDataHandler.HudElement element) {
+        if (element == null || !element.drawBorder) {
+            return "Border: OFF";
+        }
+        MacroHudDataHandler.BorderMode mode = element.borderMode == null
+                ? MacroHudDataHandler.BorderMode.FULL
+                : element.borderMode;
+        return "Border: " + mode.name();
+    }
+
+    private static String backgroundLabel(MacroHudDataHandler.HudElement element) {
+        if (element == null || !element.drawBackground) {
+            return "BG: OFF";
+        }
+        int alpha = Math.clamp(element.backgroundAlpha, 0, 255);
+        int pct = Math.round((alpha / 255.0f) * 100.0f);
+        return element.backgroundOpaque ? "BG:" + pct + "% O" : "BG:" + pct + "%";
+    }
+
+    private static void adjustBackgroundAlpha(MacroHudDataHandler.HudElement element, int delta) {
+        if (element == null) {
+            return;
+        }
+        int current = Math.clamp(element.backgroundAlpha, 0, 255);
+        int next = Math.clamp(current + delta, 0, 255);
+        element.backgroundAlpha = next;
+        element.backgroundColor = (next << 24) | (element.backgroundColor & 0x00FFFFFF);
+    }
+
     private static MacroHudDataHandler.Anchor cycleAnchor(MacroHudDataHandler.Anchor current, boolean forward) {
         MacroHudDataHandler.Anchor[] order = {
                 MacroHudDataHandler.Anchor.TOP_LEFT,
@@ -4155,8 +4301,8 @@ public class MacroWorkbenchV2Screen extends Screen {
 
     private void applyAdvancedAndClose() {
         if (selected != null) {
-            boolean valueCustom = selected.type == MacroHudDataHandler.ElementType.VALUE;
-            if (!valueCustom) {
+            boolean colorHexFields = !isCustomWidgetType(selected);
+            if (colorHexFields) {
                 applyAdvancedColorFieldsToSelection();
             }
             if (isSecondaryChatProxy(selected)) {
@@ -4220,6 +4366,9 @@ public class MacroWorkbenchV2Screen extends Screen {
                 } else if (selected.type == MacroHudDataHandler.ElementType.VALUE) {
                     selected.prefix = advancedBgColor == null ? "" : advancedBgColor;
                     selected.suffix = advancedBorderColor == null ? "" : advancedBorderColor;
+                } else if (selected.type == MacroHudDataHandler.ElementType.STATE_BADGE) {
+                    selected.stateTrueValues = safe(advancedBgColor);
+                    selected.stateFalseValues = safe(advancedBorderColor);
                 }
             } else if (selected.type == MacroHudDataHandler.ElementType.BUTTON) {
                 selected.buttonAction = advancedText;
@@ -4236,6 +4385,7 @@ public class MacroWorkbenchV2Screen extends Screen {
     private void closeAdvancedModal() {
         this.advancedOpen = false;
         this.advancedModalDragging = false;
+        this.colorPickerDragging = false;
         this.advancedTextFocused = false;
         this.advancedActionFocused = false;
         this.advancedBgColorFocused = false;
@@ -4243,7 +4393,13 @@ public class MacroWorkbenchV2Screen extends Screen {
         this.advancedVisibilityScreenTypeFocused = false;
         this.advancedTextScrollLine = 0;
         this.advancedTextManualScroll = false;
+        this.colorPickerOpen = false;
+        this.colorPickerApply = null;
+        this.colorPickerTitle = "Pick Color";
         this.activeDragSelectionField = ModalDragSelectionField.NONE;
+        this.modalDragStartMouseX = Integer.MIN_VALUE;
+        this.modalDragStartMouseY = Integer.MIN_VALUE;
+        this.modalDragSelectionStarted = false;
     }
 
     private void openKeyboardCommandsModal() {
@@ -4265,6 +4421,9 @@ public class MacroWorkbenchV2Screen extends Screen {
         this.kbCommandsModalOpen = false;
         this.kbCommandsFocused = false;
         this.activeDragSelectionField = ModalDragSelectionField.NONE;
+        this.modalDragStartMouseX = Integer.MIN_VALUE;
+        this.modalDragStartMouseY = Integer.MIN_VALUE;
+        this.modalDragSelectionStarted = false;
     }
 
     private void renderKeyboardCommandsModal(DrawContext context, int mouseX, int mouseY) {
@@ -4308,6 +4467,8 @@ public class MacroWorkbenchV2Screen extends Screen {
         if (click.button() != 0) {
             return true;
         }
+
+        this.activeDragSelectionField = ModalDragSelectionField.NONE;
 
         int boxX = this.width / 2 - (MODAL_W / 2);
         int boxY = this.height / 2 - (MODAL_H / 2);
@@ -5187,6 +5348,7 @@ public class MacroWorkbenchV2Screen extends Screen {
         Integer parsedBg = parseArgb(advancedBgColor);
         if (parsedBg != null) {
             selected.backgroundColor = parsedBg;
+            selected.backgroundAlpha = (parsedBg >>> 24) & 0xFF;
         }
         Integer parsedBorder = parseArgb(advancedBorderColor);
         if (parsedBorder != null) {
@@ -5200,6 +5362,119 @@ public class MacroWorkbenchV2Screen extends Screen {
         advancedBorderColor = formatColor((isSecondaryChatProxy(selected) || isNbtInspectorProxy(selected) || isMacroKeybindProxy(selected) || isPickupNotifierProxy(selected)) ? selected.textColor : selected.borderColor);
         advancedBgCursor = Math.clamp(advancedBgCursor, 0, advancedBgColor.length());
         advancedBorderCursor = Math.clamp(advancedBorderCursor, 0, advancedBorderColor.length());
+    }
+
+    private void openColorPicker(boolean forBackground, int anchorX, int anchorY) {
+        IntConsumer apply = forBackground
+                ? color -> {
+            advancedBgColor = formatColor(color);
+            advancedBgCursor = advancedBgColor.length();
+            if (selected != null) {
+                selected.backgroundColor = color;
+                selected.backgroundAlpha = (color >>> 24) & 0xFF;
+            }
+        }
+                : color -> {
+            advancedBorderColor = formatColor(color);
+            advancedBorderCursor = advancedBorderColor.length();
+            if (selected != null) {
+                if (isSecondaryChatProxy(selected) || isNbtInspectorProxy(selected) || isMacroKeybindProxy(selected) || isPickupNotifierProxy(selected)) {
+                    selected.textColor = color;
+                } else {
+                    selected.borderColor = color;
+                }
+            }
+        };
+        openColorPicker(apply, forBackground ? "Pick BG" : "Pick Color", anchorX, anchorY);
+    }
+
+    private void openColorPicker(IntConsumer apply, String title, int anchorX, int anchorY) {
+        colorPickerApply = apply;
+        colorPickerTitle = safe(title).isBlank() ? "Pick Color" : safe(title);
+        int pickerW = 140;
+        int pickerH = 86;
+        colorPickerX = Math.clamp(anchorX, 6, Math.max(6, this.width - pickerW - 6));
+        colorPickerY = Math.clamp(anchorY, 26, Math.max(26, this.height - pickerH - 6));
+        colorPickerDragging = false;
+        colorPickerOpen = true;
+    }
+
+    private boolean handleColorPickerClick(Click click) {
+        int pickerW = 140;
+        int pickerH = 86;
+        int headerH = 18;
+        if (!containsBox(click.x(), click.y(), colorPickerX, colorPickerY, pickerW, pickerH)) {
+            colorPickerDragging = false;
+            colorPickerOpen = false;
+            return true;
+        }
+        int closeX = colorPickerX + pickerW - 16;
+        int closeY = colorPickerY + 4;
+        if (containsBox(click.x(), click.y(), closeX, closeY, 12, 12)) {
+            colorPickerDragging = false;
+            colorPickerOpen = false;
+            return true;
+        }
+        if (containsBox(click.x(), click.y(), colorPickerX, colorPickerY, pickerW, headerH)) {
+            colorPickerDragging = true;
+            colorPickerDragOffsetX = (int) click.x() - colorPickerX;
+            colorPickerDragOffsetY = (int) click.y() - colorPickerY;
+            return true;
+        }
+        int swX = colorPickerX + 8;
+        int swY = colorPickerY + 20;
+        int sw = 12;
+        int gap = 4;
+        for (int i = 0; i < COLOR_PICKER_PRESETS.length; i++) {
+            int col = i % 8;
+            int row = i / 8;
+            int x = swX + col * (sw + gap);
+            int y = swY + row * (sw + gap);
+            if (containsBox(click.x(), click.y(), x, y, sw, sw)) {
+                applyColorPickerSelection(COLOR_PICKER_PRESETS[i]);
+                return true;
+            }
+        }
+        return true;
+    }
+
+    private void applyColorPickerSelection(int color) {
+        if (colorPickerApply != null) {
+            colorPickerApply.accept(color);
+        }
+    }
+
+    private void renderColorPickerPopup(DrawContext context, int mouseX, int mouseY) {
+        if (!colorPickerOpen) {
+            return;
+        }
+        int pickerW = 140;
+        int pickerH = 60;
+        GuiSystem.drawPanel(context, colorPickerX, colorPickerY, pickerW, pickerH);
+        context.drawTextWithShadow(this.textRenderer, colorPickerTitle, colorPickerX + 8, colorPickerY + 6, 0xFFFFFFFF);
+        drawModalButton(context, colorPickerX + pickerW - 16, colorPickerY + 4, 12, 12, "x",
+                containsBox(mouseX, mouseY, colorPickerX + pickerW - 16, colorPickerY + 4, 12, 12));
+
+        int swX = colorPickerX + 8;
+        int swY = colorPickerY + 20;
+        int sw = 12;
+        int gap = 4;
+        for (int i = 0; i < COLOR_PICKER_PRESETS.length; i++) {
+            int col = i % 8;
+            int row = i / 8;
+            int x = swX + col * (sw + gap);
+            int y = swY + row * (sw + gap);
+            int color = COLOR_PICKER_PRESETS[i];
+            context.fill(x, y, x + sw, y + sw, color);
+            context.fill(x, y, x + sw, y + 1, 0x90FFFFFF);
+            context.fill(x, y + sw - 1, x + sw, y + sw, 0x90000000);
+            if (containsBox(mouseX, mouseY, x, y, sw, sw)) {
+                context.fill(x - 1, y - 1, x + sw + 1, y, 0xFFFFFFFF);
+                context.fill(x - 1, y + sw, x + sw + 1, y + sw + 1, 0xFFFFFFFF);
+                context.fill(x - 1, y, x, y + sw, 0xFFFFFFFF);
+                context.fill(x + sw, y, x + sw + 1, y + sw, 0xFFFFFFFF);
+            }
+        }
     }
 
     private static Integer parseArgb(String raw) {
@@ -6125,16 +6400,47 @@ public class MacroWorkbenchV2Screen extends Screen {
 
     private void beginModalSelectionDrag(ModalDragSelectionField field) {
         this.activeDragSelectionField = field == null ? ModalDragSelectionField.NONE : field;
+        this.modalDragStartMouseX = Integer.MIN_VALUE;
+        this.modalDragStartMouseY = Integer.MIN_VALUE;
+        this.modalDragSelectionStarted = false;
     }
 
     private void updateModalDragSelection(int mouseX, int mouseY) {
         if (this.client == null || activeDragSelectionField == ModalDragSelectionField.NONE) {
             return;
         }
+
+        if ((activeDragSelectionField == ModalDragSelectionField.ADVANCED_TEXT && !advancedTextFocused)
+                || (activeDragSelectionField == ModalDragSelectionField.ADVANCED_ACTION && !advancedActionFocused)
+                || (activeDragSelectionField == ModalDragSelectionField.ADVANCED_BG && !advancedBgColorFocused)
+                || (activeDragSelectionField == ModalDragSelectionField.ADVANCED_BORDER && !advancedBorderColorFocused)
+                || (activeDragSelectionField == ModalDragSelectionField.KB_COMMANDS && !kbCommandsFocused)) {
+            activeDragSelectionField = ModalDragSelectionField.NONE;
+            return;
+        }
+
         long window = this.client.getWindow().getHandle();
         if (GLFW.glfwGetMouseButton(window, GLFW.GLFW_MOUSE_BUTTON_LEFT) != GLFW.GLFW_PRESS) {
             activeDragSelectionField = ModalDragSelectionField.NONE;
+            modalDragStartMouseX = Integer.MIN_VALUE;
+            modalDragStartMouseY = Integer.MIN_VALUE;
+            modalDragSelectionStarted = false;
             return;
+        }
+
+        if (modalDragStartMouseX == Integer.MIN_VALUE || modalDragStartMouseY == Integer.MIN_VALUE) {
+            modalDragStartMouseX = mouseX;
+            modalDragStartMouseY = mouseY;
+            return;
+        }
+
+        if (!modalDragSelectionStarted) {
+            int dx = Math.abs(mouseX - modalDragStartMouseX);
+            int dy = Math.abs(mouseY - modalDragStartMouseY);
+            if (dx < 2 && dy < 2) {
+                return;
+            }
+            modalDragSelectionStarted = true;
         }
 
         int boxX = modalX();
@@ -6453,6 +6759,42 @@ public class MacroWorkbenchV2Screen extends Screen {
 
     private static String safe(String s) {
         return s == null ? "" : s.trim();
+    }
+
+    private static String preserve(String s) {
+        return s == null ? "" : s;
+    }
+
+    private static int canvasBackgroundColor(MacroHudDataHandler.HudElement element) {
+        if (element == null) {
+            return 0x00000000;
+        }
+        int alpha = Math.clamp(element.backgroundAlpha, 0, 255);
+        int color = (alpha << 24) | (element.backgroundColor & 0x00FFFFFF);
+        if (element.backgroundOpaque) {
+            return 0xFF000000 | (color & 0x00FFFFFF);
+        }
+        return color;
+    }
+
+    private static void drawCanvasElementBorder(DrawContext context, MacroHudDataHandler.HudElement element,
+                                                int x1, int y1, int x2, int y2) {
+        MacroHudDataHandler.BorderMode mode = element == null || element.borderMode == null
+                ? MacroHudDataHandler.BorderMode.FULL
+                : element.borderMode;
+        int color = element == null ? 0xFFFFFFFF : element.borderColor;
+        if (mode == MacroHudDataHandler.BorderMode.FULL || mode == MacroHudDataHandler.BorderMode.TOP) {
+            context.fill(x1, y1, x2, y1 + 1, color);
+        }
+        if (mode == MacroHudDataHandler.BorderMode.FULL || mode == MacroHudDataHandler.BorderMode.BOTTOM) {
+            context.fill(x1, y2 - 1, x2, y2, color);
+        }
+        if (mode == MacroHudDataHandler.BorderMode.FULL || mode == MacroHudDataHandler.BorderMode.LEFT) {
+            context.fill(x1, y1, x1 + 1, y2, color);
+        }
+        if (mode == MacroHudDataHandler.BorderMode.FULL || mode == MacroHudDataHandler.BorderMode.RIGHT) {
+            context.fill(x2 - 1, y1, x2, y2, color);
+        }
     }
 
     net.minecraft.client.font.TextRenderer workbenchTextRenderer() {
@@ -7278,6 +7620,12 @@ public class MacroWorkbenchV2Screen extends Screen {
         if ((e.backgroundColor >>> 24) == 0) {
             e.backgroundColor = 0xAA101010;
         }
+        if (e.backgroundAlpha <= 0) {
+            e.backgroundAlpha = (e.backgroundColor >>> 24) & 0xFF;
+            if (e.backgroundAlpha <= 0) {
+                e.backgroundAlpha = 0xAA;
+            }
+        }
         if (e.height < 14) {
             e.height = 14;
         }
@@ -7529,4 +7877,7 @@ public class MacroWorkbenchV2Screen extends Screen {
         return false;
     }
 }
+
+
+
 

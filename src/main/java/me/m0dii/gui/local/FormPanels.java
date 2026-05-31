@@ -1,5 +1,6 @@
 package me.m0dii.gui.local;
 
+import java.util.Arrays;
 import java.util.List;
 
 public final class FormPanels {
@@ -14,12 +15,24 @@ public final class FormPanels {
         return UiFlexLayout.row(bounds, gap, align, items);
     }
 
+    public static List<UiRect> row(UiRect bounds, int gap, UiFlexLayout.Align align, UiFlexLayout.Item... items) {
+        return UiFlexLayout.row(bounds, gap, align, Arrays.asList(items));
+    }
+
     public static List<UiRect> column(UiRect bounds, int gap, UiFlexLayout.Align align, List<UiFlexLayout.Item> items) {
         return UiFlexLayout.column(bounds, gap, align, items);
     }
 
+    public static List<UiRect> column(UiRect bounds, int gap, UiFlexLayout.Align align, UiFlexLayout.Item... items) {
+        return UiFlexLayout.column(bounds, gap, align, Arrays.asList(items));
+    }
+
     public static List<UiRect> grid(UiRect bounds, int columns, int itemCount, int horizontalGap, int verticalGap) {
         return UiGridLayout.cells(bounds, columns, itemCount, horizontalGap, verticalGap);
+    }
+
+    public static List<UiRect> grid(UiRect bounds, int columns, int itemCount, int horizontalGap, int verticalGap, int maxCellWidth) {
+        return UiGridLayout.cells(bounds, columns, itemCount, horizontalGap, verticalGap, maxCellWidth);
     }
 }
 

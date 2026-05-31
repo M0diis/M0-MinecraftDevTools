@@ -48,6 +48,14 @@ public final class MacroHudDataHandler {
         KOTLIN_SCRIPT
     }
 
+    public enum BorderMode {
+        FULL,
+        LEFT,
+        RIGHT,
+        TOP,
+        BOTTOM
+    }
+
     public enum HorizontalAlign {
         LEFT,
         CENTER,
@@ -83,6 +91,7 @@ public final class MacroHudDataHandler {
         // Optional direct action for button elements (e.g. "/say hi", "msg:hello", "cmd:/spawn").
         public String buttonAction = "";
         public ButtonExecutionMode buttonExecutionMode = ButtonExecutionMode.COMMAND;
+        public boolean runScriptsAsync = true;
         // Position offsets relative to the selected anchor.
         public int x = 20;
         public int y = 60;
@@ -92,10 +101,13 @@ public final class MacroHudDataHandler {
         public int lineHeight = 9;
         public float fontScale = 1.0f;
         public int backgroundColor = 0xAA101010;
+        public int backgroundAlpha = 0xAA;
         public int borderColor = 0xFFFFFFFF;
         public int textColor = 0xFFFFFFFF;
         public boolean drawBackground = true;
+        public boolean backgroundOpaque = false;
         public boolean drawBorder = true;
+        public BorderMode borderMode = BorderMode.FULL;
         public HorizontalAlign horizontalAlign = HorizontalAlign.CENTER;
         public VerticalAlign verticalAlign = VerticalAlign.CENTER;
         public VisibilityMode visibilityMode = VisibilityMode.ALWAYS;
@@ -147,6 +159,8 @@ public final class MacroHudDataHandler {
         // STATE badge behavior.
         public String stateOnText = "ON";
         public String stateOffText = "OFF";
+        public String stateTrueValues = "true,on,yes,1,enabled,active";
+        public String stateFalseValues = "false,off,no,0,disabled,idle";
         public boolean stateShowValue = true;
     }
 
@@ -376,6 +390,7 @@ public final class MacroHudDataHandler {
             element.drawBackground = true;
             element.drawBorder = true;
         }
+        element.backgroundAlpha = (element.backgroundColor >>> 24) & 0xFF;
         return element;
     }
 
@@ -429,6 +444,7 @@ public final class MacroHudDataHandler {
             e.macroId = raw.macroId == null ? "" : raw.macroId.trim();
             e.buttonAction = raw.buttonAction == null ? "" : raw.buttonAction.trim();
             e.buttonExecutionMode = raw.buttonExecutionMode == null ? ButtonExecutionMode.COMMAND : raw.buttonExecutionMode;
+            e.runScriptsAsync = raw.runScriptsAsync;
             if (e.buttonExecutionMode == ButtonExecutionMode.COMMAND && e.type == ElementType.BUTTON) {
                 String actionLower = e.buttonAction.toLowerCase(Locale.ROOT);
                 if (actionLower.startsWith("kotlin:") || actionLower.startsWith("kts:")) {
@@ -445,10 +461,14 @@ public final class MacroHudDataHandler {
             e.lineHeight = Math.clamp(raw.lineHeight, 6, 24);
             e.fontScale = Math.clamp(raw.fontScale, 0.5f, 4.0f);
             e.backgroundColor = raw.backgroundColor;
+            int alphaFromColor = (raw.backgroundColor >>> 24) & 0xFF;
+            e.backgroundAlpha = Math.clamp(raw.backgroundAlpha <= 0 ? alphaFromColor : raw.backgroundAlpha, 0, 255);
             e.borderColor = (raw.borderColor >>> 24) == 0 ? 0xFFFFFFFF : raw.borderColor;
             e.textColor = raw.textColor;
             e.drawBackground = raw.drawBackground;
+            e.backgroundOpaque = raw.backgroundOpaque;
             e.drawBorder = raw.drawBorder;
+            e.borderMode = raw.borderMode == null ? BorderMode.FULL : raw.borderMode;
             e.horizontalAlign = raw.horizontalAlign == null ? HorizontalAlign.CENTER : raw.horizontalAlign;
             e.verticalAlign = raw.verticalAlign == null ? VerticalAlign.CENTER : raw.verticalAlign;
             if (raw.visibilityMode == null || raw.visibilityMode == VisibilityMode.CHAT) {
@@ -497,6 +517,8 @@ public final class MacroHudDataHandler {
             e.shapeThickness = Math.clamp(raw.shapeThickness, 1, 24);
             e.stateOnText = safe(raw.stateOnText, "ON");
             e.stateOffText = safe(raw.stateOffText, "OFF");
+            e.stateTrueValues = safe(raw.stateTrueValues, "true,on,yes,1,enabled,active");
+            e.stateFalseValues = safe(raw.stateFalseValues, "false,off,no,0,disabled,idle");
             e.stateShowValue = raw.stateShowValue;
             if (e.type == ElementType.TEXT && "Open chat to click HUD buttons".equalsIgnoreCase(e.text)) {
                 continue;
@@ -554,6 +576,7 @@ public final class MacroHudDataHandler {
         cloned.macroId = e.macroId;
         cloned.buttonAction = e.buttonAction;
         cloned.buttonExecutionMode = e.buttonExecutionMode;
+        cloned.runScriptsAsync = e.runScriptsAsync;
         cloned.x = e.x;
         cloned.y = e.y;
         cloned.anchor = e.anchor;
@@ -562,10 +585,13 @@ public final class MacroHudDataHandler {
         cloned.lineHeight = e.lineHeight;
         cloned.fontScale = e.fontScale;
         cloned.backgroundColor = e.backgroundColor;
+        cloned.backgroundAlpha = e.backgroundAlpha;
         cloned.borderColor = e.borderColor;
         cloned.textColor = e.textColor;
         cloned.drawBackground = e.drawBackground;
+        cloned.backgroundOpaque = e.backgroundOpaque;
         cloned.drawBorder = e.drawBorder;
+        cloned.borderMode = e.borderMode;
         cloned.horizontalAlign = e.horizontalAlign;
         cloned.verticalAlign = e.verticalAlign;
         cloned.visibilityMode = e.visibilityMode;
@@ -605,6 +631,8 @@ public final class MacroHudDataHandler {
         cloned.shapeThickness = e.shapeThickness;
         cloned.stateOnText = e.stateOnText;
         cloned.stateOffText = e.stateOffText;
+        cloned.stateTrueValues = e.stateTrueValues;
+        cloned.stateFalseValues = e.stateFalseValues;
         cloned.stateShowValue = e.stateShowValue;
         return cloned;
     }

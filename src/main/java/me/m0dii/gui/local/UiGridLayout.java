@@ -8,6 +8,10 @@ public final class UiGridLayout {
     }
 
     public static List<UiRect> cells(UiRect bounds, int columns, int itemCount, int horizontalGap, int verticalGap) {
+        return cells(bounds, columns, itemCount, horizontalGap, verticalGap, -1);
+    }
+
+    public static List<UiRect> cells(UiRect bounds, int columns, int itemCount, int horizontalGap, int verticalGap, int maxCellWidth) {
         if (bounds == null || columns <= 0 || itemCount <= 0) {
             return List.of();
         }
@@ -17,6 +21,9 @@ public final class UiGridLayout {
         int rows = (int) Math.ceil(itemCount / (double) columns);
 
         int cellW = Math.max(1, (bounds.width() - hGap * (columns - 1)) / columns);
+        if (maxCellWidth > 0) {
+            cellW = Math.min(cellW, maxCellWidth);
+        }
         int cellH = Math.max(1, (bounds.height() - vGap * (rows - 1)) / rows);
 
         List<UiRect> out = new ArrayList<>(itemCount);

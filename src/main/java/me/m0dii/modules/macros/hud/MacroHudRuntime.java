@@ -106,7 +106,7 @@ public final class MacroHudRuntime {
             if (element.buttonAction != null && !element.buttonAction.isBlank()) {
                 switch (element.buttonExecutionMode) {
                     case COMMAND -> CommandMacros.runInlineAction(actionName, element.buttonAction);
-                    case GROOVY_SCRIPT, KOTLIN_SCRIPT -> HudButtonScriptExecutor.runScript(actionName, element.buttonAction, element.buttonExecutionMode);
+                    case GROOVY_SCRIPT, KOTLIN_SCRIPT -> HudButtonScriptExecutor.runScript(actionName, element.buttonAction, element.buttonExecutionMode, element.runScriptsAsync);
                 }
                 return true;
             }
@@ -159,10 +159,11 @@ public final class MacroHudRuntime {
     private static void renderTextElement(DrawContext context, MacroHudDataHandler.HudElement element, int x, int y) {
         List<String> lines = splitLines(expanded(element.text));
         if (element.drawBackground) {
-            context.fill(x, y, x + element.width, y + element.height, effectiveBackgroundColor(element.backgroundColor));
+            context.fill(x, y, x + element.width, y + element.height,
+                    effectiveBackgroundColor(element.backgroundColor, element.backgroundOpaque, element.backgroundAlpha));
         }
         if (element.drawBorder) {
-            drawBorder(context, x, y, element.width, element.height, element.borderColor);
+            drawBorder(context, x, y, element.width, element.height, element.borderColor, element.borderMode);
         }
 
         int startY;
@@ -186,14 +187,30 @@ public final class MacroHudRuntime {
         int y2 = y + element.height;
         List<String> lines = splitLines(expanded(element.label));
 
+        MinecraftClient client = MinecraftClient.getInstance();
+        boolean hovered = false;
+        if (interactiveMode) {
+            int screenW = client.getWindow().getScaledWidth();
+            int screenH = client.getWindow().getScaledHeight();
+            int mx = (int) Math.round(client.mouse.getX() * (double) screenW / Math.max(1, client.getWindow().getWidth()));
+            int my = (int) Math.round(client.mouse.getY() * (double) screenH / Math.max(1, client.getWindow().getHeight()));
+            hovered = contains(x, y, element, mx, my);
+        }
+
         if (element.drawBackground) {
-            int bg = interactiveMode ? brighten(element.backgroundColor, 0x10101010) : element.backgroundColor;
-            bg = effectiveBackgroundColor(bg);
+            int bg = interactiveMode ? brighten(element.backgroundColor, hovered ? 0x30303030 : 0x10101010) : element.backgroundColor;
+            bg = effectiveBackgroundColor(bg, element.backgroundOpaque, element.backgroundAlpha);
             context.fill(x1, y1, x2, y2, bg);
         }
 
         if (element.drawBorder) {
-            drawBorder(context, x1, y1, element.width, element.height, element.borderColor);
+            int border = hovered ? brighten(element.borderColor, 0x00181818) : element.borderColor;
+            drawBorder(context, x1, y1, element.width, element.height, border, element.borderMode);
+        }
+
+        if (hovered) {
+            context.fill(x1 + 1, y1 + 1, x2 - 1, y1 + 2, 0x60FFFFFF);
+            context.fill(x1 + 1, y2 - 2, x2 - 1, y2 - 1, 0x50000000);
         }
 
         float scale = Math.clamp(element.fontScale, 0.5f, 4.0f);
@@ -235,10 +252,11 @@ public final class MacroHudRuntime {
 
     private static void renderIconElement(DrawContext context, MacroHudDataHandler.HudElement element, int x, int y) {
         if (element.drawBackground) {
-            context.fill(x, y, x + element.width, y + element.height, effectiveBackgroundColor(element.backgroundColor));
+            context.fill(x, y, x + element.width, y + element.height,
+                    effectiveBackgroundColor(element.backgroundColor, element.backgroundOpaque, element.backgroundAlpha));
         }
         if (element.drawBorder) {
-            drawBorder(context, x, y, element.width, element.height, element.borderColor);
+            drawBorder(context, x, y, element.width, element.height, element.borderColor, element.borderMode);
         }
 
         if ("entity_model".equalsIgnoreCase(safe(element.iconKind))) {
@@ -290,10 +308,11 @@ public final class MacroHudRuntime {
 
     private static void renderBarElement(DrawContext context, MacroHudDataHandler.HudElement element, int x, int y) {
         if (element.drawBackground) {
-            context.fill(x, y, x + element.width, y + element.height, effectiveBackgroundColor(element.backgroundColor));
+            context.fill(x, y, x + element.width, y + element.height,
+                    effectiveBackgroundColor(element.backgroundColor, element.backgroundOpaque, element.backgroundAlpha));
         }
         if (element.drawBorder) {
-            drawBorder(context, x, y, element.width, element.height, element.borderColor);
+            drawBorder(context, x, y, element.width, element.height, element.borderColor, element.borderMode);
         }
 
         double min = element.minValue;
@@ -351,10 +370,11 @@ public final class MacroHudRuntime {
 
     private static void renderValueElement(DrawContext context, MacroHudDataHandler.HudElement element, int x, int y) {
         if (element.drawBackground) {
-            context.fill(x, y, x + element.width, y + element.height, effectiveBackgroundColor(element.backgroundColor));
+            context.fill(x, y, x + element.width, y + element.height,
+                    effectiveBackgroundColor(element.backgroundColor, element.backgroundOpaque, element.backgroundAlpha));
         }
         if (element.drawBorder) {
-            drawBorder(context, x, y, element.width, element.height, element.borderColor);
+            drawBorder(context, x, y, element.width, element.height, element.borderColor, element.borderMode);
         }
 
         Double valueToken = resolveNumericToken(element.sourceToken);
@@ -366,14 +386,14 @@ public final class MacroHudRuntime {
             color = element.colorWarn;
         }
 
-        String prefix = safe(element.prefix);
+        String prefix = preserve(element.prefix);
         if (prefix.isBlank()) {
             String label = safe(element.label);
             if (!label.isBlank() && !"Value".equalsIgnoreCase(label)) {
                 prefix = label + ": ";
             }
         }
-        String text = prefix + formatValue(value) + safe(element.suffix);
+        String text = prefix + formatValue(value) + preserve(element.suffix);
         float scale = Math.max(0.5f, element.fontScale);
         int tx = alignedStartX(x, element, text, element.drawBackground, scale);
         int ty = alignedStartY(y, element, Math.max(9, Math.round(9 * scale)), element.drawBackground);
@@ -382,10 +402,11 @@ public final class MacroHudRuntime {
 
     private static void renderListElement(DrawContext context, MacroHudDataHandler.HudElement element, int x, int y) {
         if (element.drawBackground) {
-            context.fill(x, y, x + element.width, y + element.height, effectiveBackgroundColor(element.backgroundColor));
+            context.fill(x, y, x + element.width, y + element.height,
+                    effectiveBackgroundColor(element.backgroundColor, element.backgroundOpaque, element.backgroundAlpha));
         }
         if (element.drawBorder) {
-            drawBorder(context, x, y, element.width, element.height, element.borderColor);
+            drawBorder(context, x, y, element.width, element.height, element.borderColor, element.borderMode);
         }
 
         String src = MacroPlaceholders.expand(MinecraftClient.getInstance(), "{" + element.sourceToken + "}");
@@ -414,38 +435,45 @@ public final class MacroHudRuntime {
 
         switch (shape) {
             case "line" -> drawLineShape(context, x, y, w, h,
-                    element.drawBorder ? element.borderColor : element.backgroundColor,
+                    effectiveBackgroundColor(element.drawBorder ? element.borderColor : element.backgroundColor,
+                            element.backgroundOpaque, element.backgroundAlpha),
                     Math.max(1, element.shapeThickness),
                     element.drawBorder || element.shapeFilled);
             case "cross" -> drawCrossShape(context, x, y, w, h,
-                    element.drawBorder ? element.borderColor : element.backgroundColor,
+                    effectiveBackgroundColor(element.drawBorder ? element.borderColor : element.backgroundColor,
+                            element.backgroundOpaque, element.backgroundAlpha),
                     Math.max(1, element.shapeThickness),
                     element.drawBorder || element.shapeFilled);
             case "triangle" -> drawTriangleShape(context, x, y, w, h,
-                    element.backgroundColor, element.borderColor,
+                    effectiveBackgroundColor(element.backgroundColor, element.backgroundOpaque, element.backgroundAlpha),
+                    effectiveBackgroundColor(element.borderColor, element.backgroundOpaque, element.backgroundAlpha),
                     element.shapeFilled || element.drawBackground,
                     element.drawBorder,
                     Math.max(1, element.shapeThickness));
             case "diamond" -> drawDiamondShape(context, x, y, w, h,
-                    element.backgroundColor, element.borderColor,
+                    effectiveBackgroundColor(element.backgroundColor, element.backgroundOpaque, element.backgroundAlpha),
+                    effectiveBackgroundColor(element.borderColor, element.backgroundOpaque, element.backgroundAlpha),
                     element.shapeFilled || element.drawBackground,
                     element.drawBorder,
                     Math.max(1, element.shapeThickness));
             case "circle" -> drawCircleShape(context, x + (w / 2), y + (h / 2), Math.max(1, Math.min(w, h) / 2),
-                    element.backgroundColor, element.borderColor,
+                    effectiveBackgroundColor(element.backgroundColor, element.backgroundOpaque, element.backgroundAlpha),
+                    effectiveBackgroundColor(element.borderColor, element.backgroundOpaque, element.backgroundAlpha),
                     element.shapeFilled || element.drawBackground,
                     element.drawBorder,
                     Math.max(1, element.shapeThickness));
             case "rect" -> {
                 if (element.shapeFilled || element.drawBackground) {
-                    context.fill(x, y, x + w, y + h, element.backgroundColor);
+                    context.fill(x, y, x + w, y + h,
+                            effectiveBackgroundColor(element.backgroundColor, element.backgroundOpaque, element.backgroundAlpha));
                 }
                 if (element.drawBorder) {
-                    drawBorder(context, x, y, w, h, element.borderColor);
+                    drawBorder(context, x, y, w, h, element.borderColor, element.borderMode);
                 }
             }
             default -> drawRoundedRectShape(context, x, y, w, h, Math.max(0, element.shapeRadius),
-                    element.backgroundColor, element.borderColor,
+                    effectiveBackgroundColor(element.backgroundColor, element.backgroundOpaque, element.backgroundAlpha),
+                    effectiveBackgroundColor(element.borderColor, element.backgroundOpaque, element.backgroundAlpha),
                     element.shapeFilled || element.drawBackground,
                     element.drawBorder,
                     Math.max(1, element.shapeThickness));
@@ -454,12 +482,12 @@ public final class MacroHudRuntime {
 
     private static void renderStateBadgeElement(DrawContext context, MacroHudDataHandler.HudElement element, int x, int y) {
         String raw = MacroPlaceholders.expand(MinecraftClient.getInstance(), "{" + element.sourceToken + "}");
-        boolean on = parseBoolean(raw);
-        int bg = on ? element.colorStart : element.colorEnd;
+        boolean on = resolveStateBoolean(raw, element);
+        int bg = effectiveBackgroundColor(on ? element.colorStart : element.colorEnd, element.backgroundOpaque, element.backgroundAlpha);
 
         context.fill(x, y, x + element.width, y + element.height, bg);
         if (element.drawBorder) {
-            drawBorder(context, x, y, element.width, element.height, element.borderColor);
+            drawBorder(context, x, y, element.width, element.height, element.borderColor, element.borderMode);
         }
 
         String label = safe(element.label).isBlank() ? "STATE" : element.label;
@@ -473,10 +501,11 @@ public final class MacroHudRuntime {
 
     private static void renderLinesElement(DrawContext context, MacroHudDataHandler.HudElement element, int x, int y, List<String> lines) {
         if (element.drawBackground) {
-            context.fill(x, y, x + element.width, y + element.height, element.backgroundColor);
+            context.fill(x, y, x + element.width, y + element.height,
+                    effectiveBackgroundColor(element.backgroundColor, element.backgroundOpaque, element.backgroundAlpha));
         }
         if (element.drawBorder) {
-            drawBorder(context, x, y, element.width, element.height, element.borderColor);
+            drawBorder(context, x, y, element.width, element.height, element.borderColor, element.borderMode);
         }
 
         float scale = Math.clamp(element.fontScale, 0.5f, 4.0f);
@@ -500,13 +529,22 @@ public final class MacroHudRuntime {
         return mouseX >= x && mouseX <= x + e.width && mouseY >= y && mouseY <= y + e.height;
     }
 
-    private static void drawBorder(DrawContext context, int x, int y, int width, int height, int color) {
+    private static void drawBorder(DrawContext context, int x, int y, int width, int height, int color, MacroHudDataHandler.BorderMode mode) {
         int x2 = x + width;
         int y2 = y + height;
-        context.fill(x, y, x2, y + 1, color);
-        context.fill(x, y2 - 1, x2, y2, color);
-        context.fill(x, y, x + 1, y2, color);
-        context.fill(x2 - 1, y, x2, y2, color);
+        MacroHudDataHandler.BorderMode resolved = mode == null ? MacroHudDataHandler.BorderMode.FULL : mode;
+        if (resolved == MacroHudDataHandler.BorderMode.FULL || resolved == MacroHudDataHandler.BorderMode.TOP) {
+            context.fill(x, y, x2, y + 1, color);
+        }
+        if (resolved == MacroHudDataHandler.BorderMode.FULL || resolved == MacroHudDataHandler.BorderMode.BOTTOM) {
+            context.fill(x, y2 - 1, x2, y2, color);
+        }
+        if (resolved == MacroHudDataHandler.BorderMode.FULL || resolved == MacroHudDataHandler.BorderMode.LEFT) {
+            context.fill(x, y, x + 1, y2, color);
+        }
+        if (resolved == MacroHudDataHandler.BorderMode.FULL || resolved == MacroHudDataHandler.BorderMode.RIGHT) {
+            context.fill(x2 - 1, y, x2, y2, color);
+        }
     }
 
     private static int brighten(int color, int add) {
@@ -534,16 +572,20 @@ public final class MacroHudRuntime {
         return (a << 24) | (r << 16) | (g << 8) | b;
     }
 
-    private static int effectiveBackgroundColor(int color) {
+    private static int effectiveBackgroundColor(int color, boolean forceOpaque, int alphaOverride) {
+        int alpha = Math.clamp(alphaOverride, 0, 255);
+        int withAlpha = (alpha << 24) | (color & 0x00FFFFFF);
+        if (forceOpaque) {
+            return 0xFF000000 | (withAlpha & 0x00FFFFFF);
+        }
         MinecraftClient client = MinecraftClient.getInstance();
         if (client.currentScreen instanceof HandledScreen<?> handled && !(handled instanceof InventoryScreen)) {
             // Reduce alpha and lift brightness so HUD remains readable above container dim overlays.
-            int alpha = (color >>> 24) & 0xFF;
             int targetAlpha = Math.max(0x66, Math.min(0xA0, alpha));
-            int brightened = brighten(color, 0x14141414);
+            int brightened = brighten(withAlpha, 0x14141414);
             return (targetAlpha << 24) | (brightened & 0x00FFFFFF);
         }
-        return color;
+        return withAlpha;
     }
 
     private static ItemStack resolveIconStack(MacroHudDataHandler.HudElement element) {
@@ -1262,6 +1304,37 @@ public final class MacroHudRuntime {
         return t.equals("true") || t.equals("1") || t.equals("yes") || t.equals("on") || t.equals("enabled");
     }
 
+    private static boolean resolveStateBoolean(String raw, MacroHudDataHandler.HudElement element) {
+        String t = raw == null ? "" : raw.trim().toLowerCase(Locale.ROOT);
+        if (!t.isEmpty()) {
+            for (String token : splitCsv(element.stateTrueValues)) {
+                if (t.equals(token)) {
+                    return true;
+                }
+            }
+            for (String token : splitCsv(element.stateFalseValues)) {
+                if (t.equals(token)) {
+                    return false;
+                }
+            }
+        }
+        return parseBoolean(raw);
+    }
+
+    private static List<String> splitCsv(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return List.of();
+        }
+        List<String> out = new ArrayList<>();
+        for (String part : raw.split(",")) {
+            String token = part == null ? "" : part.trim().toLowerCase(Locale.ROOT);
+            if (!token.isEmpty()) {
+                out.add(token);
+            }
+        }
+        return out;
+    }
+
     private static void drawRoundedRectShape(DrawContext context, int x, int y, int w, int h, int radius,
                                              int fillColor, int borderColor, boolean filled,
                                              boolean drawBorder, int thickness) {
@@ -1276,7 +1349,7 @@ public final class MacroHudRuntime {
         }
         if (drawBorder) {
             for (int i = 0; i < thickness; i++) {
-                drawBorder(context, x + i, y + i, Math.max(1, w - i * 2), Math.max(1, h - i * 2), borderColor);
+                drawBorder(context, x + i, y + i, Math.max(1, w - i * 2), Math.max(1, h - i * 2), borderColor, MacroHudDataHandler.BorderMode.FULL);
             }
         }
     }
@@ -1425,6 +1498,10 @@ public final class MacroHudRuntime {
     }
 
     private static String safe(String value) {
+        return value == null ? "" : value;
+    }
+
+    private static String preserve(String value) {
         return value == null ? "" : value;
     }
 

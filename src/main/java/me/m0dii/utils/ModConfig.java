@@ -36,6 +36,7 @@ public class ModConfig extends MidnightConfig {
     @MidnightConfig.Entry(name = "Message History Limit", category = CATEGORY_GENERAL, min = 10, max = 1000)
     public static int messageHistoryLimit = 500;
 
+
     public static final String CATEGORY_OVERLAY = "Overlay";
 
     @MidnightConfig.Entry(name = "Entity Radar Radius", category = CATEGORY_OVERLAY, isSlider = true, min = 16, max = 256)

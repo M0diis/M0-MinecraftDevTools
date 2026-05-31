@@ -8,9 +8,10 @@ val serverWorld = server.getWorld(world.registryKey) as ServerWorld
 val roomWidth = 7
 val roomHeight = 5
 val roomLength = 7
-val numRooms = 8
-val doorHeight = 2
-val doorWidth = 2
+val numRooms = 10
+val corridorWidth = 3
+val corridorHeight = 3
+val spacing = 12
 
 val startX = floor(player.x).toInt()
 val startY = floor(player.y).toInt()
@@ -23,9 +24,6 @@ val torch = Blocks.TORCH.defaultState
 
 data class Room(val gx: Int, val gz: Int)
 
-val rooms = mutableListOf(Room(0, 0))
-val used = mutableSetOf(Room(0, 0))
-
 val dirs = listOf(
     Room(1, 0),
     Room(-1, 0),
@@ -33,105 +31,119 @@ val dirs = listOf(
     Room(0, -1)
 )
 
-// Generate random connected room layout
+val rooms = mutableListOf(Room(0, 0))
+val used = mutableSetOf(Room(0, 0))
+val links = mutableListOf<Pair<Room, Room>>()
+
 while (rooms.size < numRooms) {
-    val base = rooms.random()
+    val from = rooms.random()
     val dir = dirs.random()
-    val next = Room(base.gx + dir.gx, base.gz + dir.gz)
+    val next = Room(from.gx + dir.gx, from.gz + dir.gz)
 
     if (next !in used) {
         rooms.add(next)
         used.add(next)
+        links.add(from to next)
     }
 }
 
-fun roomBase(room: Room): Pair<Int, Int> {
-    val spacingX = roomWidth - 1
-    val spacingZ = roomLength - 1
+fun base(room: Room): Pair<Int, Int> {
     return Pair(
-        startX + room.gx * spacingX,
-        startZ + room.gz * spacingZ
+        startX + room.gx * spacing,
+        startZ + room.gz * spacing
     )
 }
 
+fun setBox(x1: Int, y1: Int, z1: Int, x2: Int, y2: Int, z2: Int, block: net.minecraft.block.BlockState) {
+    for (x in minOf(x1, x2)..maxOf(x1, x2)) {
+        for (y in minOf(y1, y2)..maxOf(y1, y2)) {
+            for (z in minOf(z1, z2)..maxOf(z1, z2)) {
+                serverWorld.setBlockState(BlockPos(x, y, z), block)
+            }
+        }
+    }
+}
+
 fun buildRoom(room: Room) {
-    val (baseX, baseZ) = roomBase(room)
+    val (bx, bz) = base(room)
 
-    for (y in 0 until roomHeight) {
-        for (x in 0 until roomWidth) {
+    for (x in 0 until roomWidth) {
+        for (y in 0 until roomHeight) {
             for (z in 0 until roomLength) {
-                val pos = BlockPos(baseX + x, startY + y, baseZ + z)
-
                 val isFloor = y == 0
                 val isCeiling = y == roomHeight - 1
-                val isWall =
-                    x == 0 || x == roomWidth - 1 ||
-                            z == 0 || z == roomLength - 1
+                val isWall = x == 0 || x == roomWidth - 1 || z == 0 || z == roomLength - 1
 
-                when {
-                    isFloor -> serverWorld.setBlockState(pos, floor)
-                    isCeiling || isWall -> serverWorld.setBlockState(pos, wall)
-                    else -> serverWorld.setBlockState(pos, air)
+                val block = when {
+                    isFloor -> floor
+                    isCeiling || isWall -> wall
+                    else -> air
                 }
+
+                serverWorld.setBlockState(BlockPos(bx + x, startY + y, bz + z), block)
             }
         }
     }
 
     serverWorld.setBlockState(
-        BlockPos(baseX + roomWidth / 2, startY + 1, baseZ + roomLength / 2),
+        BlockPos(bx + roomWidth / 2, startY + 1, bz + roomLength / 2),
         torch
     )
 }
 
-fun carveDoorBetween(a: Room, b: Room) {
-    val (ax, az) = roomBase(a)
-    val (bx, bz) = roomBase(b)
+fun carveCorridor(a: Room, b: Room) {
+    val (ax, az) = base(a)
+    val (bx, bz) = base(b)
 
-    val dx = b.gx - a.gx
-    val dz = b.gz - a.gz
+    val acx = ax + roomWidth / 2
+    val acz = az + roomLength / 2
+    val bcx = bx + roomWidth / 2
+    val bcz = bz + roomLength / 2
 
-    if (dx == 1) {
-        val doorX = ax + roomWidth - 1
-        val doorZ = az + roomLength / 2 - doorWidth / 2
-        for (w in 0 until doorWidth) {
-            for (y in 1..doorHeight) {
-                serverWorld.setBlockState(BlockPos(doorX, startY + y, doorZ + w), air)
-                serverWorld.setBlockState(BlockPos(doorX + 1, startY + y, doorZ + w), air)
-            }
-        }
+    val half = corridorWidth / 2
+
+    if (acx != bcx) {
+        setBox(
+            acx,
+            startY + 1,
+            acz - half,
+            bcx,
+            startY + corridorHeight,
+            acz + half,
+            air
+        )
+
+        setBox(
+            acx,
+            startY,
+            acz - half,
+            bcx,
+            startY,
+            acz + half,
+            floor
+        )
     }
 
-    if (dx == -1) {
-        val doorX = ax
-        val doorZ = az + roomLength / 2 - doorWidth / 2
-        for (w in 0 until doorWidth) {
-            for (y in 1..doorHeight) {
-                serverWorld.setBlockState(BlockPos(doorX, startY + y, doorZ + w), air)
-                serverWorld.setBlockState(BlockPos(doorX - 1, startY + y, doorZ + w), air)
-            }
-        }
-    }
+    if (acz != bcz) {
+        setBox(
+            bcx - half,
+            startY + 1,
+            acz,
+            bcx + half,
+            startY + corridorHeight,
+            bcz,
+            air
+        )
 
-    if (dz == 1) {
-        val doorZ = az + roomLength - 1
-        val doorX = ax + roomWidth / 2 - doorWidth / 2
-        for (w in 0 until doorWidth) {
-            for (y in 1..doorHeight) {
-                serverWorld.setBlockState(BlockPos(doorX + w, startY + y, doorZ), air)
-                serverWorld.setBlockState(BlockPos(doorX + w, startY + y, doorZ + 1), air)
-            }
-        }
-    }
-
-    if (dz == -1) {
-        val doorZ = az
-        val doorX = ax + roomWidth / 2 - doorWidth / 2
-        for (w in 0 until doorWidth) {
-            for (y in 1..doorHeight) {
-                serverWorld.setBlockState(BlockPos(doorX + w, startY + y, doorZ), air)
-                serverWorld.setBlockState(BlockPos(doorX + w, startY + y, doorZ - 1), air)
-            }
-        }
+        setBox(
+            bcx - half,
+            startY,
+            acz,
+            bcx + half,
+            startY,
+            bcz,
+            floor
+        )
     }
 }
 
@@ -139,8 +151,8 @@ for (room in rooms) {
     buildRoom(room)
 }
 
-for (i in 1 until rooms.size) {
-    carveDoorBetween(rooms[i - 1], rooms[i])
+for ((a, b) in links) {
+    carveCorridor(a, b)
 }
 
-"Generated $numRooms randomly connected dungeon rooms!"
+"Generated $numRooms connected dungeon rooms with proper corridors!"
