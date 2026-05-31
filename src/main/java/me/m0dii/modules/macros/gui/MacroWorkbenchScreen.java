@@ -2069,7 +2069,7 @@ public class MacroWorkbenchScreen extends Screen {
     }
 
     private void drawSnapGuides(DrawContext context) {
-        if (!(dragging && isShiftDown()) && !(resizing && isCtrlDown())) {
+        if (!(dragging && isShiftDown()) && !(resizing && isShiftDown())) {
             return;
         }
         int canvasBottom = Math.max(CANVAS_CONTENT_TOP + 1, this.height - BOTTOM_BAR_H);
