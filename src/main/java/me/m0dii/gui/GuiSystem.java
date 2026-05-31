@@ -1,5 +1,6 @@
 package me.m0dii.gui;
 
+import me.m0dii.gui.local.UiRect;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
 
@@ -34,6 +35,10 @@ public final class GuiSystem {
 
     public static boolean contains(double x, double y, int boxX, int boxY, int boxW, int boxH) {
         return x >= boxX && x <= boxX + boxW && y >= boxY && y <= boxY + boxH;
+    }
+
+    public static boolean contains(double x, double y, UiRect rect) {
+        return rect != null && rect.contains(x, y);
     }
 
     public static void drawPanel(DrawContext context, int x, int y, int w, int h) {

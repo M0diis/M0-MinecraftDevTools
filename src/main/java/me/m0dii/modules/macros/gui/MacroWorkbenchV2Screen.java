@@ -3423,26 +3423,8 @@ public class MacroWorkbenchV2Screen extends Screen {
         List<UiRect> generalRow2 = layout.generalRow2();
 
         List<String> suggestions = advancedActionSuggestions();
-        if (!suggestions.isEmpty()) {
-            int dropX = suggestionsArea.x();
-            int dropY = suggestionsArea.y();
-            int dropW = suggestionsArea.width();
-            int rowH = 10;
-            int maxVisible = Math.max(1, Math.min(suggestions.size(), Math.max(1, suggestionsArea.height() / rowH)));
-            int maxScroll = Math.max(0, suggestions.size() - maxVisible);
-            advancedActionSuggestionScroll = Math.clamp(advancedActionSuggestionScroll, 0, maxScroll);
-            for (int i = 0; i < maxVisible; i++) {
-                int yy = dropY + i * rowH;
-                if (containsBox(click.x(), click.y(), dropX, yy, dropW, rowH)) {
-                    int idx = advancedActionSuggestionScroll + i;
-                    if (idx >= 0 && idx < suggestions.size() && !isSuggestionHeader(suggestions.get(idx))) {
-                        advancedAction = suggestionValue(suggestions.get(idx));
-                        advancedActionCursor = advancedAction.length();
-                        advancedActionSuggestionIndex = idx;
-                    }
-                    return true;
-                }
-            }
+        if (handleAdvancedSuggestionClick(click, suggestionsArea, suggestions)) {
+            return true;
         }
 
         if (containsBox(click.x(), click.y(), layout.apply())) {
@@ -3454,6 +3436,60 @@ public class MacroWorkbenchV2Screen extends Screen {
             return true;
         }
 
+        if (handleCustomWidgetGeneralRowClick(click, generalRow1, generalRow2, forward)) {
+            return true;
+        }
+
+        if (handleCustomWidgetBaseRowClick(click, baseRow, forward)) {
+            return true;
+        }
+
+        if (handleCustomWidgetTypeClick(click, layout, forward)) {
+            return true;
+        }
+
+        if (handleCustomWidgetTypeInputFocus(click, layout)) {
+            return true;
+        }
+
+        if (focusAdvancedLabelInput(click, labelInput)) {
+            return true;
+        }
+
+        if (focusAdvancedSourceInput(click, sourceInput)) {
+            return true;
+        }
+
+        return true;
+    }
+
+    private boolean handleAdvancedSuggestionClick(Click click, UiRect suggestionsArea, List<String> suggestions) {
+        if (suggestions.isEmpty()) {
+            return false;
+        }
+        int dropX = suggestionsArea.x();
+        int dropY = suggestionsArea.y();
+        int dropW = suggestionsArea.width();
+        int rowH = 10;
+        int maxVisible = Math.max(1, Math.min(suggestions.size(), Math.max(1, suggestionsArea.height() / rowH)));
+        int maxScroll = Math.max(0, suggestions.size() - maxVisible);
+        advancedActionSuggestionScroll = Math.clamp(advancedActionSuggestionScroll, 0, maxScroll);
+        for (int i = 0; i < maxVisible; i++) {
+            int yy = dropY + i * rowH;
+            if (containsBox(click.x(), click.y(), dropX, yy, dropW, rowH)) {
+                int idx = advancedActionSuggestionScroll + i;
+                if (idx >= 0 && idx < suggestions.size() && !isSuggestionHeader(suggestions.get(idx))) {
+                    advancedAction = suggestionValue(suggestions.get(idx));
+                    advancedActionCursor = advancedAction.length();
+                    advancedActionSuggestionIndex = idx;
+                }
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean handleCustomWidgetGeneralRowClick(Click click, List<UiRect> generalRow1, List<UiRect> generalRow2, boolean forward) {
         if (containsBox(click.x(), click.y(), slot(generalRow1, 0))) {
             if (forward) {
                 selected.backgroundColor = cycleStyleColor(selected.backgroundColor, false);
@@ -3498,7 +3534,10 @@ public class MacroWorkbenchV2Screen extends Screen {
             advancedActionSuggestionScroll = 0;
             return true;
         }
+        return false;
+    }
 
+    private boolean handleCustomWidgetBaseRowClick(Click click, List<UiRect> baseRow, boolean forward) {
         if (containsBox(click.x(), click.y(), slot(baseRow, 0))) {
             selected.horizontalAlign = cycleHorizontalAlign(selected.horizontalAlign, forward);
             return true;
@@ -3530,15 +3569,51 @@ public class MacroWorkbenchV2Screen extends Screen {
             cycleBorderSetting(selected, forward);
             return true;
         }
+        return false;
+    }
+
+    private boolean focusAdvancedLabelInput(Click click, UiRect labelInput) {
+        if (!containsBox(click.x(), click.y(), labelInput)) {
+            advancedTextFocused = false;
+            return false;
+        }
+        advancedTextFocused = true;
+        advancedActionFocused = false;
+        advancedBgColorFocused = false;
+        advancedBorderColorFocused = false;
+        advancedSelectionAnchor = -1;
+        advancedCursor = cursorIndexFromPoint(advancedText, (int) (click.x() - (labelInput.x() + 4)), 0, 9);
+        beginModalSelectionDrag(ModalDragSelectionField.ADVANCED_TEXT);
+        return true;
+    }
+
+    private boolean focusAdvancedSourceInput(Click click, UiRect sourceInput) {
+        if (!containsBox(click.x(), click.y(), sourceInput)) {
+            advancedActionFocused = false;
+            return false;
+        }
+        advancedActionFocused = true;
+        advancedTextFocused = false;
+        advancedBgColorFocused = false;
+        advancedBorderColorFocused = false;
+        advancedActionSelectionAnchor = -1;
+        advancedActionCursor = cursorIndexFromPoint(advancedAction, (int) (click.x() - (sourceInput.x() + 4)), 0, 9);
+        beginModalSelectionDrag(ModalDragSelectionField.ADVANCED_ACTION);
+        return true;
+    }
+
+    private boolean handleCustomWidgetTypeClick(Click click, CustomWidgetAdvancedLayout layout, boolean forward) {
+        if (selected == null) {
+            return false;
+        }
 
         if (selected.type == MacroHudDataHandler.ElementType.ICON) {
-            List<UiRect> topButtons = FormPanels.row(layout.typeWideTop(), 4, UiFlexLayout.Align.STRETCH, 
+            List<UiRect> topButtons = FormPanels.row(layout.typeWideTop(), 4, UiFlexLayout.Align.STRETCH,
                     UiFlexLayout.Item.flex(80, 1), UiFlexLayout.Item.flex(60, 1)
             );
             List<UiRect> row1 = layout.typeRow1();
             List<UiRect> row2 = layout.typeRow2();
             List<UiRect> row3 = layout.typeRow3();
-
             if (containsBox(click.x(), click.y(), topButtons.get(0))) {
                 selected.iconKind = cyclePreset(selected.iconKind, ICON_KIND_PRESETS, forward);
                 if ("entity_model".equalsIgnoreCase(selected.iconKind)
@@ -3615,8 +3690,11 @@ public class MacroWorkbenchV2Screen extends Screen {
                     return true;
                 }
             }
-        } else if (selected.type == MacroHudDataHandler.ElementType.BAR) {
-            List<UiRect> top = FormPanels.row(layout.typeWideTop(), 4, UiFlexLayout.Align.STRETCH, 
+            return false;
+        }
+
+        if (selected.type == MacroHudDataHandler.ElementType.BAR) {
+            List<UiRect> top = FormPanels.row(layout.typeWideTop(), 4, UiFlexLayout.Align.STRETCH,
                     UiFlexLayout.Item.flex(110, 2), UiFlexLayout.Item.flex(60, 1)
             );
             List<UiRect> row1 = layout.typeRow1();
@@ -3670,11 +3748,14 @@ public class MacroWorkbenchV2Screen extends Screen {
                 selected.colorEnd = cycleStyleColor(selected.colorEnd, true);
                 return true;
             }
-        } else if (selected.type == MacroHudDataHandler.ElementType.VALUE) {
+            return false;
+        }
+
+        if (selected.type == MacroHudDataHandler.ElementType.VALUE) {
             List<UiRect> row1 = layout.typeRow1();
             List<UiRect> row2 = layout.typeRow2();
             List<UiRect> row3 = layout.typeRow3();
-            List<UiRect> presets = FormPanels.row(layout.typeWideTop(), 4, UiFlexLayout.Align.STRETCH, 
+            List<UiRect> presets = FormPanels.row(layout.typeWideTop(), 4, UiFlexLayout.Align.STRETCH,
                     UiFlexLayout.Item.flex(80, 1), UiFlexLayout.Item.flex(80, 1)
             );
             if (containsBox(click.x(), click.y(), slot(row1, 0))) {
@@ -3771,7 +3852,10 @@ public class MacroWorkbenchV2Screen extends Screen {
                 selected.suffix = cyclePreset(selected.suffix, new String[]{"", "%", " hp", " ms"}, forward);
                 return true;
             }
-        } else if (selected.type == MacroHudDataHandler.ElementType.LIST) {
+            return false;
+        }
+
+        if (selected.type == MacroHudDataHandler.ElementType.LIST) {
             List<UiRect> row1 = layout.typeRow1();
             if (containsBox(click.x(), click.y(), layout.typeWideTop())) {
                 advancedAction = cyclePreset(advancedAction, LIST_SOURCE_PRESETS, forward);
@@ -3794,7 +3878,10 @@ public class MacroWorkbenchV2Screen extends Screen {
                 selected.listScroll = Math.min(500, selected.listScroll + stepInt(1));
                 return true;
             }
-        } else if (selected.type == MacroHudDataHandler.ElementType.SHAPE) {
+            return false;
+        }
+
+        if (selected.type == MacroHudDataHandler.ElementType.SHAPE) {
             List<UiRect> row1 = layout.typeRow1();
             List<UiRect> row2 = layout.typeRow2();
             if (containsBox(click.x(), click.y(), layout.typeWideTop())) {
@@ -3821,8 +3908,11 @@ public class MacroWorkbenchV2Screen extends Screen {
                 selected.shapeThickness = Math.min(24, selected.shapeThickness + stepInt(1));
                 return true;
             }
-        } else if (selected.type == MacroHudDataHandler.ElementType.STATE_BADGE) {
-            List<UiRect> textButtons = FormPanels.row(layout.typeWideTop(), 4, UiFlexLayout.Align.STRETCH, 
+            return false;
+        }
+
+        if (selected.type == MacroHudDataHandler.ElementType.STATE_BADGE) {
+            List<UiRect> textButtons = FormPanels.row(layout.typeWideTop(), 4, UiFlexLayout.Align.STRETCH,
                     UiFlexLayout.Item.flex(80, 1), UiFlexLayout.Item.flex(80, 1)
             );
             List<UiRect> row1 = layout.typeRow1();
@@ -3892,96 +3982,59 @@ public class MacroWorkbenchV2Screen extends Screen {
                 advancedActionCursor = advancedAction.length();
                 return true;
             }
-            if (containsBox(click.x(), click.y(), layout.typeInputLeft())) {
-                advancedBgColorFocused = true;
-                advancedBorderColorFocused = false;
-                advancedTextFocused = false;
-                advancedActionFocused = false;
-                advancedBgSelectionAnchor = -1;
-                advancedBgCursor = cursorIndexFromPoint(advancedBgColor, (int) (click.x() - (layout.typeInputLeft().x() + 4)), 0, 9);
-                beginModalSelectionDrag(ModalDragSelectionField.ADVANCED_BG);
-                return true;
-            }
-            if (containsBox(click.x(), click.y(), layout.typeInputRight())) {
-                advancedBorderColorFocused = true;
-                advancedBgColorFocused = false;
-                advancedTextFocused = false;
-                advancedActionFocused = false;
-                advancedBorderSelectionAnchor = -1;
-                advancedBorderCursor = cursorIndexFromPoint(advancedBorderColor, (int) (click.x() - (layout.typeInputRight().x() + 4)), 0, 9);
-                beginModalSelectionDrag(ModalDragSelectionField.ADVANCED_BORDER);
-                return true;
-            }
+            return false;
         }
 
+        return false;
+    }
+
+    private boolean handleCustomWidgetTypeInputFocus(Click click, CustomWidgetAdvancedLayout layout) {
+        if (selected == null) {
+            return false;
+        }
         if (selected.type == MacroHudDataHandler.ElementType.BAR) {
             UiRect rangeInput = layout.typeInputLeft();
             UiRect segInput = layout.typeInputRight();
-            if (containsBox(click.x(), click.y(), rangeInput)) {
-                advancedBgColorFocused = true;
-                advancedBorderColorFocused = false;
-                advancedTextFocused = false;
-                advancedActionFocused = false;
-                advancedBgCursor = cursorIndexFromPoint(advancedBgColor, (int) (click.x() - (rangeInput.x() + 4)), 0, 9);
-                beginModalSelectionDrag(ModalDragSelectionField.ADVANCED_BG);
+            if (focusAdvancedTypeInputField(click, rangeInput, ModalDragSelectionField.ADVANCED_BG, false)) {
                 return true;
             }
-            if (containsBox(click.x(), click.y(), segInput)) {
-                advancedBorderColorFocused = true;
-                advancedBgColorFocused = false;
-                advancedTextFocused = false;
-                advancedActionFocused = false;
-                advancedBorderCursor = cursorIndexFromPoint(advancedBorderColor, (int) (click.x() - (segInput.x() + 4)), 0, 9);
-                beginModalSelectionDrag(ModalDragSelectionField.ADVANCED_BORDER);
+            if (focusAdvancedTypeInputField(click, segInput, ModalDragSelectionField.ADVANCED_BORDER, false)) {
+                return true;
+            }
+            return false;
+        }
+        if (selected.type == MacroHudDataHandler.ElementType.VALUE || selected.type == MacroHudDataHandler.ElementType.STATE_BADGE) {
+            if (focusAdvancedTypeInputField(click, layout.typeInputLeft(), ModalDragSelectionField.ADVANCED_BG, true)) {
+                return true;
+            }
+            if (focusAdvancedTypeInputField(click, layout.typeInputRight(), ModalDragSelectionField.ADVANCED_BORDER, true)) {
                 return true;
             }
         }
+        return false;
+    }
 
-        if (selected.type == MacroHudDataHandler.ElementType.VALUE) {
-            if (containsBox(click.x(), click.y(), layout.typeInputLeft())) {
-                advancedBgColorFocused = true;
-                advancedBorderColorFocused = false;
-                advancedTextFocused = false;
-                advancedActionFocused = false;
+    private boolean focusAdvancedTypeInputField(Click click, UiRect input, ModalDragSelectionField field, boolean resetSelectionAnchor) {
+        if (!containsBox(click.x(), click.y(), input)) {
+            return false;
+        }
+        boolean bgField = field == ModalDragSelectionField.ADVANCED_BG;
+        advancedBgColorFocused = bgField;
+        advancedBorderColorFocused = !bgField;
+        advancedTextFocused = false;
+        advancedActionFocused = false;
+        if (bgField) {
+            if (resetSelectionAnchor) {
                 advancedBgSelectionAnchor = -1;
-                advancedBgCursor = cursorIndexFromPoint(advancedBgColor, (int) (click.x() - (layout.typeInputLeft().x() + 4)), 0, 9);
-                beginModalSelectionDrag(ModalDragSelectionField.ADVANCED_BG);
-                return true;
             }
-            if (containsBox(click.x(), click.y(), layout.typeInputRight())) {
-                advancedBorderColorFocused = true;
-                advancedBgColorFocused = false;
-                advancedTextFocused = false;
-                advancedActionFocused = false;
+            advancedBgCursor = cursorIndexFromPoint(advancedBgColor, (int) (click.x() - (input.x() + 4)), 0, 9);
+        } else {
+            if (resetSelectionAnchor) {
                 advancedBorderSelectionAnchor = -1;
-                advancedBorderCursor = cursorIndexFromPoint(advancedBorderColor, (int) (click.x() - (layout.typeInputRight().x() + 4)), 0, 9);
-                beginModalSelectionDrag(ModalDragSelectionField.ADVANCED_BORDER);
-                return true;
             }
+            advancedBorderCursor = cursorIndexFromPoint(advancedBorderColor, (int) (click.x() - (input.x() + 4)), 0, 9);
         }
-
-        advancedTextFocused = containsBox(click.x(), click.y(), labelInput);
-        if (advancedTextFocused) {
-            advancedActionFocused = false;
-            advancedBgColorFocused = false;
-            advancedBorderColorFocused = false;
-            advancedSelectionAnchor = -1;
-            advancedCursor = cursorIndexFromPoint(advancedText, (int) (click.x() - (labelInput.x() + 4)), 0, 9);
-            beginModalSelectionDrag(ModalDragSelectionField.ADVANCED_TEXT);
-            return true;
-        }
-
-        advancedActionFocused = containsBox(click.x(), click.y(), sourceInput);
-        if (advancedActionFocused) {
-            advancedTextFocused = false;
-            advancedBgColorFocused = false;
-            advancedBorderColorFocused = false;
-            advancedActionSelectionAnchor = -1;
-            advancedActionCursor = cursorIndexFromPoint(advancedAction, (int) (click.x() - (sourceInput.x() + 4)), 0, 9);
-            beginModalSelectionDrag(ModalDragSelectionField.ADVANCED_ACTION);
-            return true;
-        }
-
+        beginModalSelectionDrag(field);
         return true;
     }
 
@@ -4160,88 +4213,27 @@ public class MacroWorkbenchV2Screen extends Screen {
     }
 
     private static MacroHudDataHandler.HorizontalAlign cycleHorizontalAlign(MacroHudDataHandler.HorizontalAlign current, boolean forward) {
-        return switch (current) {
-            case LEFT -> forward ? MacroHudDataHandler.HorizontalAlign.CENTER : MacroHudDataHandler.HorizontalAlign.RIGHT;
-            case CENTER -> forward ? MacroHudDataHandler.HorizontalAlign.RIGHT : MacroHudDataHandler.HorizontalAlign.LEFT;
-            case RIGHT -> forward ? MacroHudDataHandler.HorizontalAlign.LEFT : MacroHudDataHandler.HorizontalAlign.CENTER;
-        };
+        return MacroWorkbenchUiOps.cycleHorizontalAlign(current, forward);
     }
 
     private static MacroHudDataHandler.VerticalAlign cycleVerticalAlign(MacroHudDataHandler.VerticalAlign current, boolean forward) {
-        return switch (current) {
-            case TOP -> forward ? MacroHudDataHandler.VerticalAlign.CENTER : MacroHudDataHandler.VerticalAlign.BOTTOM;
-            case CENTER -> forward ? MacroHudDataHandler.VerticalAlign.BOTTOM : MacroHudDataHandler.VerticalAlign.TOP;
-            case BOTTOM -> forward ? MacroHudDataHandler.VerticalAlign.TOP : MacroHudDataHandler.VerticalAlign.CENTER;
-        };
+        return MacroWorkbenchUiOps.cycleVerticalAlign(current, forward);
     }
 
     private static void cycleBorderSetting(MacroHudDataHandler.HudElement element, boolean forward) {
-        if (element == null) {
-            return;
-        }
-        if (!element.drawBorder) {
-            element.drawBorder = true;
-            element.borderMode = MacroHudDataHandler.BorderMode.FULL;
-            return;
-        }
-        MacroHudDataHandler.BorderMode next = cycleBorderMode(element.borderMode, forward);
-        if (next == null) {
-            element.drawBorder = false;
-            return;
-        }
-        element.borderMode = next;
-    }
-
-    private static MacroHudDataHandler.BorderMode cycleBorderMode(MacroHudDataHandler.BorderMode current, boolean forward) {
-        MacroHudDataHandler.BorderMode[] order = {
-                MacroHudDataHandler.BorderMode.FULL,
-                MacroHudDataHandler.BorderMode.LEFT,
-                MacroHudDataHandler.BorderMode.RIGHT,
-                MacroHudDataHandler.BorderMode.TOP,
-                MacroHudDataHandler.BorderMode.BOTTOM
-        };
-        MacroHudDataHandler.BorderMode base = current == null ? MacroHudDataHandler.BorderMode.FULL : current;
-        int idx = 0;
-        for (int i = 0; i < order.length; i++) {
-            if (order[i] == base) {
-                idx = i;
-                break;
-            }
-        }
-        int next = forward ? idx + 1 : idx - 1;
-        if (next < 0 || next >= order.length) {
-            return null;
-        }
-        return order[next];
+        MacroWorkbenchUiOps.cycleBorderSetting(element, forward);
     }
 
     private static String borderModeLabel(MacroHudDataHandler.HudElement element) {
-        if (element == null || !element.drawBorder) {
-            return "Border: OFF";
-        }
-        MacroHudDataHandler.BorderMode mode = element.borderMode == null
-                ? MacroHudDataHandler.BorderMode.FULL
-                : element.borderMode;
-        return "Border: " + mode.name();
+        return MacroWorkbenchUiOps.borderModeLabel(element);
     }
 
     private static String backgroundLabel(MacroHudDataHandler.HudElement element) {
-        if (element == null || !element.drawBackground) {
-            return "BG: OFF";
-        }
-        int alpha = Math.clamp(element.backgroundAlpha, 0, 255);
-        int pct = Math.round((alpha / 255.0f) * 100.0f);
-        return element.backgroundOpaque ? "BG:" + pct + "% O" : "BG:" + pct + "%";
+        return MacroWorkbenchUiOps.backgroundLabel(element);
     }
 
     private static void adjustBackgroundAlpha(MacroHudDataHandler.HudElement element, int delta) {
-        if (element == null) {
-            return;
-        }
-        int current = Math.clamp(element.backgroundAlpha, 0, 255);
-        int next = Math.clamp(current + delta, 0, 255);
-        element.backgroundAlpha = next;
-        element.backgroundColor = (next << 24) | (element.backgroundColor & 0x00FFFFFF);
+        MacroWorkbenchUiOps.adjustBackgroundAlpha(element, delta);
     }
 
     private static MacroHudDataHandler.Anchor cycleAnchor(MacroHudDataHandler.Anchor current, boolean forward) {
@@ -4275,28 +4267,7 @@ public class MacroWorkbenchV2Screen extends Screen {
     }
 
     private static String cyclePreset(String current, String[] presets, boolean forward) {
-        if (presets == null || presets.length == 0) {
-            return current == null ? "" : current;
-        }
-        String c = current == null ? "" : current;
-        int idx = -1;
-        for (int i = 0; i < presets.length; i++) {
-            if (Objects.equals(c, presets[i])) {
-                idx = i;
-                break;
-            }
-        }
-        if (idx < 0) {
-            return presets[0];
-        }
-        int next = forward ? idx + 1 : idx - 1;
-        if (next < 0) {
-            next = presets.length - 1;
-        }
-        if (next >= presets.length) {
-            next = 0;
-        }
-        return presets[next];
+        return MacroWorkbenchUiOps.cyclePreset(current, presets, forward);
     }
 
     private void applyAdvancedAndClose() {
@@ -6584,7 +6555,7 @@ public class MacroWorkbenchV2Screen extends Screen {
     }
 
     private static boolean containsBox(double x, double y, UiRect rect) {
-        return rect != null && rect.contains(x, y);
+        return GuiSystem.contains(x, y, rect);
     }
 
     private static String firstLine(String raw) {
@@ -7635,19 +7606,7 @@ public class MacroWorkbenchV2Screen extends Screen {
     }
 
     private static int cycleStyleColor(int current, boolean forward) {
-        for (int i = 0; i < STYLE_COLOR_PALETTE.length; i++) {
-            if (STYLE_COLOR_PALETTE[i] == current) {
-                int next = forward ? i + 1 : i - 1;
-                if (next < 0) {
-                    next = STYLE_COLOR_PALETTE.length - 1;
-                }
-                if (next >= STYLE_COLOR_PALETTE.length) {
-                    next = 0;
-                }
-                return STYLE_COLOR_PALETTE[next];
-            }
-        }
-        return STYLE_COLOR_PALETTE[0];
+        return MacroWorkbenchUiOps.cycleStyleColor(current, forward, STYLE_COLOR_PALETTE);
     }
 
 
