@@ -22,7 +22,11 @@ import me.m0dii.modules.nbthud.NBTInfoHudOverlayModule;
 import me.m0dii.modules.pickup.ItemPickupNotifierModule;
 import me.m0dii.modules.pickup.PickupFeedSettings;
 import me.m0dii.modules.scripting.ScriptStorage;
+import me.m0dii.utils.ColorUtils;
 import me.m0dii.utils.ModConfig;
+import me.m0dii.utils.ReflectionUtils;
+import me.m0dii.utils.StringUtils;
+import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.Click;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
@@ -34,7 +38,6 @@ import net.minecraft.client.input.KeyInput;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
 import net.minecraft.entity.Entity;
-import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.mob.HostileEntity;
 import net.minecraft.entity.passive.PassiveEntity;
 import net.minecraft.item.ItemStack;
@@ -44,11 +47,8 @@ import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
 import org.lwjgl.glfw.GLFW;
 
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
 import java.util.*;
 import java.util.function.IntConsumer;
-import java.util.regex.Pattern;
 
 public class MacroWorkbenchV2Screen extends Screen {
 
@@ -71,7 +71,6 @@ public class MacroWorkbenchV2Screen extends Screen {
     private static final String EXTERNAL_SECONDARY_CHAT_ID = "__ext_secondary_chat";
     private static final String EXTERNAL_MACRO_KEYBINDS_ID = "__ext_macro_keybinds";
     private static final String EXTERNAL_PICKUP_NOTIFIER_ID = "__ext_pickup_notifier";
-    private static final Pattern HEX_COLOR = Pattern.compile("#[0-9a-fA-F]{6}");
     private static boolean GRID_ENABLED_PREF = false;
     private static int GRID_ROWS_PREF = 12;
     private static int GRID_COLS_PREF = 16;
@@ -2230,7 +2229,7 @@ public class MacroWorkbenchV2Screen extends Screen {
             drawCanvasElementBorder(context, e, x1, y1, x2, y2);
         }
         if ("entity_model".equalsIgnoreCase(safe(e.iconKind))) {
-            drawCanvasPlayerModelPreview(context, e, x1, y1, e.width, e.height);
+            MacroWorkbenchEntityModelRenderer.draw(context, this.client, e, x1, y1, e.width, e.height);
         } else {
             ItemStack stack = resolvePreviewIconStack(e.iconKind, e.iconId);
             int ix = x1 + Math.max(0, (e.width - 16) / 2);
@@ -3152,6 +3151,42 @@ public class MacroWorkbenchV2Screen extends Screen {
         List<UiRect> generalRow1 = layout.generalRow1();
         List<UiRect> generalRow2 = layout.generalRow2();
 
+        renderCustomWidgetAdvancedHeader(context, boxX, boxY, labelInput, sourceInput);
+        renderCustomWidgetSuggestionDropdown(context, suggestionsArea);
+        renderCustomWidgetMainInputCarets(context, labelInput, sourceInput);
+        renderCustomWidgetGeneralButtons(context, mouseX, mouseY, layout, generalRow1, generalRow2);
+
+        UiRect typeHint = layout.typeHintText();
+        context.drawTextWithShadow(this.textRenderer, "Type options", typeHint.x(), typeHint.y(), 0xFFB8B8B8);
+        MacroWorkbenchCustomWidgetTypeRenderer.render(
+                context,
+                this.textRenderer,
+                selected,
+                layout,
+                mouseX,
+                mouseY,
+                advancedBgColor,
+                advancedBgSelectionAnchor,
+                advancedBgCursor,
+                advancedBgColorFocused,
+                advancedBorderColor,
+                advancedBorderSelectionAnchor,
+                advancedBorderCursor,
+                advancedBorderColorFocused,
+                this::drawSingleLineSelection
+        );
+
+        drawModalButton(context, slot(baseRow, 0).x(), slot(baseRow, 0).y(), slot(baseRow, 0).width(), slot(baseRow, 0).height(), "H: " + selected.horizontalAlign.name(), slot(baseRow, 0).contains(mouseX, mouseY));
+        drawModalButton(context, slot(baseRow, 1).x(), slot(baseRow, 1).y(), slot(baseRow, 1).width(), slot(baseRow, 1).height(), "V: " + selected.verticalAlign.name(), slot(baseRow, 1).contains(mouseX, mouseY));
+        drawModalButton(context, slot(baseRow, 2).x(), slot(baseRow, 2).y(), slot(baseRow, 2).width(), slot(baseRow, 2).height(), "Anchor: " + shortAnchor(selected.anchor), slot(baseRow, 2).contains(mouseX, mouseY));
+        drawModalButton(context, slot(baseRow, 3).x(), slot(baseRow, 3).y(), slot(baseRow, 3).width(), slot(baseRow, 3).height(), backgroundLabel(selected), slot(baseRow, 3).contains(mouseX, mouseY));
+        drawModalButton(context, slot(baseRow, 4).x(), slot(baseRow, 4).y(), slot(baseRow, 4).width(), slot(baseRow, 4).height(), borderModeLabel(selected), slot(baseRow, 4).contains(mouseX, mouseY));
+
+        drawModalButton(context, layout.apply().x(), layout.apply().y(), layout.apply().width(), layout.apply().height(), "Apply", layout.apply().contains(mouseX, mouseY));
+        drawModalButton(context, layout.cancel().x(), layout.cancel().y(), layout.cancel().width(), layout.cancel().height(), "Cancel", layout.cancel().contains(mouseX, mouseY));
+    }
+
+    private void renderCustomWidgetAdvancedHeader(DrawContext context, int boxX, int boxY, UiRect labelInput, UiRect sourceInput) {
         context.drawTextWithShadow(this.textRenderer, selected.type + " Widget", boxX + 12, boxY + 12, 0xFFFFFFFF);
         context.drawTextWithShadow(this.textRenderer,
                 selected.type == MacroHudDataHandler.ElementType.ICON
@@ -3172,34 +3207,40 @@ public class MacroWorkbenchV2Screen extends Screen {
         context.fill(sourceInput.x(), sourceInput.y(), sourceInput.right(), sourceInput.y() + 1, 0x60FFFFFF);
         drawSingleLineSelection(context, sourceInput.x() + 4, sourceInput.y() + 5, advancedAction, advancedActionSelectionAnchor, advancedActionCursor);
         context.drawTextWithShadow(this.textRenderer, advancedAction, sourceInput.x() + 4, sourceInput.y() + 5, 0xFFEAEAEA);
-        List<String> suggestions = advancedActionSuggestions();
-        if (!suggestions.isEmpty()) {
-            int dropX = suggestionsArea.x();
-            int dropY = suggestionsArea.y();
-            int dropW = suggestionsArea.width();
-            int rowH = 10;
-            int maxVisible = Math.max(1, Math.min(suggestions.size(), Math.max(1, suggestionsArea.height() / rowH)));
-            int maxScroll = Math.max(0, suggestions.size() - maxVisible);
-            advancedActionSuggestionScroll = Math.clamp(advancedActionSuggestionScroll, 0, maxScroll);
-            context.fill(dropX, dropY, dropX + dropW, dropY + maxVisible * rowH, 0xC0101010);
-            for (int i = 0; i < maxVisible; i++) {
-                int idx = advancedActionSuggestionScroll + i;
-                String token = suggestions.get(idx);
-                int yy = dropY + i * rowH;
-                boolean selectedSuggestion = (advancedActionSuggestionIndex == idx);
-                if (selectedSuggestion) {
-                    context.fill(dropX, yy, dropX + dropW, yy + rowH, 0x503777AA);
-                }
-                int color = isSuggestionHeader(token) ? 0xFFB8D8FF : 0xFF8FC8FF;
-                context.drawTextWithShadow(this.textRenderer, token, dropX + 3, yy + 1, color);
-            }
-            if (suggestions.size() > maxVisible) {
-                context.drawTextWithShadow(this.textRenderer,
-                            "scroll " + (advancedActionSuggestionScroll + 1) + "/" + (maxScroll + 1),
-                        dropX + 3, dropY + maxVisible * rowH + 2, 0xFF909090);
-            }
-        }
+    }
 
+    private void renderCustomWidgetSuggestionDropdown(DrawContext context, UiRect suggestionsArea) {
+        List<String> suggestions = advancedActionSuggestions();
+        if (suggestions.isEmpty()) {
+            return;
+        }
+        int dropX = suggestionsArea.x();
+        int dropY = suggestionsArea.y();
+        int dropW = suggestionsArea.width();
+        int rowH = 10;
+        int maxVisible = Math.max(1, Math.min(suggestions.size(), Math.max(1, suggestionsArea.height() / rowH)));
+        int maxScroll = Math.max(0, suggestions.size() - maxVisible);
+        advancedActionSuggestionScroll = Math.clamp(advancedActionSuggestionScroll, 0, maxScroll);
+        context.fill(dropX, dropY, dropX + dropW, dropY + maxVisible * rowH, 0xC0101010);
+        for (int i = 0; i < maxVisible; i++) {
+            int idx = advancedActionSuggestionScroll + i;
+            String token = suggestions.get(idx);
+            int yy = dropY + i * rowH;
+            boolean selectedSuggestion = (advancedActionSuggestionIndex == idx);
+            if (selectedSuggestion) {
+                context.fill(dropX, yy, dropX + dropW, yy + rowH, 0x503777AA);
+            }
+            int color = isSuggestionHeader(token) ? 0xFFB8D8FF : 0xFF8FC8FF;
+            context.drawTextWithShadow(this.textRenderer, token, dropX + 3, yy + 1, color);
+        }
+        if (suggestions.size() > maxVisible) {
+            context.drawTextWithShadow(this.textRenderer,
+                    "scroll " + (advancedActionSuggestionScroll + 1) + "/" + (maxScroll + 1),
+                    dropX + 3, dropY + maxVisible * rowH + 2, 0xFF909090);
+        }
+    }
+
+    private void renderCustomWidgetMainInputCarets(DrawContext context, UiRect labelInput, UiRect sourceInput) {
         if (advancedTextFocused && (System.currentTimeMillis() / 500L) % 2L == 0L) {
             int cx = labelInput.x() + 4 + this.textRenderer.getWidth(advancedText.substring(0, Math.clamp(advancedCursor, 0, advancedText.length())));
             context.fill(cx, labelInput.y() + 4, cx + 1, labelInput.y() + 13, 0xFFFFFFFF);
@@ -3208,7 +3249,14 @@ public class MacroWorkbenchV2Screen extends Screen {
             int cx = sourceInput.x() + 4 + this.textRenderer.getWidth(advancedAction.substring(0, Math.clamp(advancedActionCursor, 0, advancedAction.length())));
             context.fill(cx, sourceInput.y() + 4, cx + 1, sourceInput.y() + 13, 0xFFFFFFFF);
         }
+    }
 
+    private void renderCustomWidgetGeneralButtons(DrawContext context,
+                                                  int mouseX,
+                                                  int mouseY,
+                                                  CustomWidgetAdvancedLayout layout,
+                                                  List<UiRect> generalRow1,
+                                                  List<UiRect> generalRow2) {
         drawModalButton(context, slot(generalRow1, 0).x(), slot(generalRow1, 0).y(), slot(generalRow1, 0).width(), slot(generalRow1, 0).height(), "BG-", slot(generalRow1, 0).contains(mouseX, mouseY));
         drawModalButton(context, slot(generalRow1, 1).x(), slot(generalRow1, 1).y(), slot(generalRow1, 1).width(), slot(generalRow1, 1).height(), "BG+", slot(generalRow1, 1).contains(mouseX, mouseY));
         drawModalButton(context, slot(generalRow1, 2).x(), slot(generalRow1, 2).y(), slot(generalRow1, 2).width(), slot(generalRow1, 2).height(), "BR-", slot(generalRow1, 2).contains(mouseX, mouseY));
@@ -3220,190 +3268,6 @@ public class MacroWorkbenchV2Screen extends Screen {
         context.drawTextWithShadow(this.textRenderer,
                 "Scale: " + String.format(Locale.ROOT, "%.2f", selected.fontScale) + "  BG Alpha: " + bgPct + "%",
                 layout.metricsText().x(), layout.metricsText().y(), 0xFFEAEAEA);
-
-        UiRect typeHint = layout.typeHintText();
-        context.drawTextWithShadow(this.textRenderer, "Type options", typeHint.x(), typeHint.y(), 0xFFB8B8B8);
-
-        if (selected.type == MacroHudDataHandler.ElementType.ICON) {
-            List<UiRect> topButtons = FormPanels.row(layout.typeWideTop(), 4, UiFlexLayout.Align.STRETCH, 
-                    UiFlexLayout.Item.flex(80, 1), UiFlexLayout.Item.flex(60, 1)
-            );
-            drawModalButton(context, topButtons.get(0).x(), topButtons.get(0).y(), topButtons.get(0).width(), topButtons.get(0).height(), "Kind: " + selected.iconKind, topButtons.get(0).contains(mouseX, mouseY));
-            drawModalButton(context, topButtons.get(1).x(), topButtons.get(1).y(), topButtons.get(1).width(), topButtons.get(1).height(), "Pick Id", topButtons.get(1).contains(mouseX, mouseY));
-            if ("entity_model".equalsIgnoreCase(selected.iconKind)) {
-                List<UiRect> row1 = layout.typeRow1();
-                List<UiRect> row2 = layout.typeRow2();
-                List<UiRect> row3 = layout.typeRow3();
-                drawModalButton(context, row1.get(0).x(), row1.get(0).y(), row1.get(0).width(), row1.get(0).height(), "Z-", row1.get(0).contains(mouseX, mouseY));
-                drawModalButton(context, row1.get(1).x(), row1.get(1).y(), row1.get(1).width(), row1.get(1).height(), "Z+", row1.get(1).contains(mouseX, mouseY));
-                drawModalButton(context, row1.get(2).x(), row1.get(2).y(), row1.get(2).width(), row1.get(2).height(), "Y-", row1.get(2).contains(mouseX, mouseY));
-                drawModalButton(context, row1.get(3).x(), row1.get(3).y(), row1.get(3).width(), row1.get(3).height(), "Y+", row1.get(3).contains(mouseX, mouseY));
-                drawModalButton(context, row2.get(0).x(), row2.get(0).y(), row2.get(0).width(), row2.get(0).height(), "P-", row2.get(0).contains(mouseX, mouseY));
-                drawModalButton(context, row2.get(1).x(), row2.get(1).y(), row2.get(1).width(), row2.get(1).height(), "P+", row2.get(1).contains(mouseX, mouseY));
-                drawModalButton(context, row2.get(2).x(), row2.get(2).y(), row2.get(2).width(), row2.get(2).height(), "OX-", row2.get(2).contains(mouseX, mouseY));
-                drawModalButton(context, row2.get(3).x(), row2.get(3).y(), row2.get(3).width(), row2.get(3).height(), "OX+", row2.get(3).contains(mouseX, mouseY));
-                drawModalButton(context, row3.get(0).x(), row3.get(0).y(), row3.get(0).width(), row3.get(0).height(), "OY-", row3.get(0).contains(mouseX, mouseY));
-                drawModalButton(context, row3.get(1).x(), row3.get(1).y(), row3.get(1).width(), row3.get(1).height(), "OY+", row3.get(1).contains(mouseX, mouseY));
-                drawModalButton(context, row3.get(2).x(), row3.get(2).y(), row3.get(2).width(), row3.get(2).height(), "Fit: " + (selected.modelAutoFit ? "ON" : "OFF"), row3.get(2).contains(mouseX, mouseY));
-                drawModalButton(context, row3.get(3).x(), row3.get(3).y(), row3.get(3).width(), row3.get(3).height(), "Look: " + (selected.modelFollowLook ? "ON" : "OFF"), row3.get(3).contains(mouseX, mouseY));
-                context.drawTextWithShadow(this.textRenderer, "Id: " + selected.iconId, layout.typeInputLeft().x(), layout.typeInputLeft().y() - 10, 0xFFEAEAEA);
-                context.drawTextWithShadow(this.textRenderer,
-                        String.format(Locale.ROOT, "Zoom %.2f  Yaw %.0f  Pitch %.0f", selected.modelZoom, selected.modelYaw, selected.modelPitch),
-                        layout.typeInfo1().x(), layout.typeInfo1().y(), 0xFFEAEAEA);
-                context.drawTextWithShadow(this.textRenderer,
-                        "Offset X: " + selected.modelOffsetX + "  Y: " + selected.modelOffsetY,
-                        layout.typeInfo2().x(), layout.typeInfo2().y(), 0xFFEAEAEA);
-            } else {
-                List<UiRect> row1 = layout.typeRow1();
-                drawModalButton(context, row1.get(0).x(), row1.get(0).y(), row1.get(0).width(), row1.get(0).height(), "Count: " + (selected.iconShowCount ? "ON" : "OFF"), row1.get(0).contains(mouseX, mouseY));
-                drawModalButton(context, row1.get(1).x(), row1.get(1).y(), row1.get(1).width(), row1.get(1).height(), "Dur: " + (selected.iconShowDurability ? "ON" : "OFF"), row1.get(1).contains(mouseX, mouseY));
-                drawModalButton(context, row1.get(2).x(), row1.get(2).y(), row1.get(2).width(), row1.get(2).height(), "CD: " + (selected.iconShowCooldown ? "ON" : "OFF"), row1.get(2).contains(mouseX, mouseY));
-                context.drawTextWithShadow(this.textRenderer, "Id: " + selected.iconId, layout.typeInfo1().x(), layout.typeInfo1().y(), 0xFFEAEAEA);
-            }
-        } else if (selected.type == MacroHudDataHandler.ElementType.BAR) {
-            List<UiRect> top = FormPanels.row(layout.typeWideTop(), 4, UiFlexLayout.Align.STRETCH, 
-                    UiFlexLayout.Item.flex(110, 2), UiFlexLayout.Item.flex(60, 1)
-            );
-            List<UiRect> row1 = layout.typeRow1();
-            List<UiRect> row2 = layout.typeRow2();
-            List<UiRect> row3 = layout.typeRow3();
-            drawModalButton(context, top.get(0).x(), top.get(0).y(), top.get(0).width(), top.get(0).height(), "Max Src: " + (safe(selected.sourceTokenMax).isBlank() ? "(none)" : selected.sourceTokenMax), top.get(0).contains(mouseX, mouseY));
-            drawModalButton(context, top.get(1).x(), top.get(1).y(), top.get(1).width(), top.get(1).height(), "Segmented: " + (selected.segmented ? "ON" : "OFF"), top.get(1).contains(mouseX, mouseY));
-            drawModalButton(context, row1.get(0).x(), row1.get(0).y(), row1.get(0).width(), row1.get(0).height(), "R-", row1.get(0).contains(mouseX, mouseY));
-            drawModalButton(context, row1.get(1).x(), row1.get(1).y(), row1.get(1).width(), row1.get(1).height(), "R+", row1.get(1).contains(mouseX, mouseY));
-            drawModalButton(context, row1.get(2).x(), row1.get(2).y(), row1.get(2).width(), row1.get(2).height(), "MIN-", row1.get(2).contains(mouseX, mouseY));
-            drawModalButton(context, row1.get(3).x(), row1.get(3).y(), row1.get(3).width(), row1.get(3).height(), "MIN+", row1.get(3).contains(mouseX, mouseY));
-            drawModalButton(context, row2.get(0).x(), row2.get(0).y(), row2.get(0).width(), row2.get(0).height(), "MAX-", row2.get(0).contains(mouseX, mouseY));
-            drawModalButton(context, row2.get(1).x(), row2.get(1).y(), row2.get(1).width(), row2.get(1).height(), "MAX+", row2.get(1).contains(mouseX, mouseY));
-            drawModalButton(context, row2.get(2).x(), row2.get(2).y(), row2.get(2).width(), row2.get(2).height(), "C1-", row2.get(2).contains(mouseX, mouseY));
-            drawModalButton(context, row2.get(3).x(), row2.get(3).y(), row2.get(3).width(), row2.get(3).height(), "C1+", row2.get(3).contains(mouseX, mouseY));
-            drawModalButton(context, row3.get(0).x(), row3.get(0).y(), row3.get(0).width(), row3.get(0).height(), "C2-", row3.get(0).contains(mouseX, mouseY));
-            drawModalButton(context, row3.get(1).x(), row3.get(1).y(), row3.get(1).width(), row3.get(1).height(), "C2+", row3.get(1).contains(mouseX, mouseY));
-            context.drawTextWithShadow(this.textRenderer, "Range: " + String.format(Locale.ROOT, "%.1f..%.1f", selected.minValue, selected.maxValue) + "  Segments: " + selected.segments, layout.typeInfo1().x(), layout.typeInfo1().y(), 0xFFEAEAEA);
-
-            UiRect rangeInput = layout.typeInputLeft();
-            UiRect segInput = layout.typeInputRight();
-            context.drawTextWithShadow(this.textRenderer, "Range (min,max)", rangeInput.x(), rangeInput.y() - 10, 0xFFB8B8B8);
-            context.fill(rangeInput.x(), rangeInput.y(), rangeInput.right(), rangeInput.bottom(), advancedBgColorFocused ? 0xFF0F0F0F : 0xFF161616);
-            context.fill(rangeInput.x(), rangeInput.y(), rangeInput.right(), rangeInput.y() + 1, 0x60FFFFFF);
-            context.drawTextWithShadow(this.textRenderer, advancedBgColor, rangeInput.x() + 4, rangeInput.y() + 5, 0xFFEAEAEA);
-
-            context.drawTextWithShadow(this.textRenderer, "Segments", segInput.x(), segInput.y() - 10, 0xFFB8B8B8);
-            context.fill(segInput.x(), segInput.y(), segInput.right(), segInput.bottom(), advancedBorderColorFocused ? 0xFF0F0F0F : 0xFF161616);
-            context.fill(segInput.x(), segInput.y(), segInput.right(), segInput.y() + 1, 0x60FFFFFF);
-            context.drawTextWithShadow(this.textRenderer, advancedBorderColor, segInput.x() + 4, segInput.y() + 5, 0xFFEAEAEA);
-
-            if (advancedBgColorFocused && (System.currentTimeMillis() / 500L) % 2L == 0L) {
-                int cx = rangeInput.x() + 4 + this.textRenderer.getWidth(advancedBgColor.substring(0, Math.clamp(advancedBgCursor, 0, advancedBgColor.length())));
-                context.fill(cx, rangeInput.y() + 4, cx + 1, rangeInput.y() + 13, 0xFFFFFFFF);
-            }
-            if (advancedBorderColorFocused && (System.currentTimeMillis() / 500L) % 2L == 0L) {
-                int cx = segInput.x() + 4 + this.textRenderer.getWidth(advancedBorderColor.substring(0, Math.clamp(advancedBorderCursor, 0, advancedBorderColor.length())));
-                context.fill(cx, segInput.y() + 4, cx + 1, segInput.y() + 13, 0xFFFFFFFF);
-            }
-        } else if (selected.type == MacroHudDataHandler.ElementType.VALUE) {
-            List<UiRect> row1 = layout.typeRow1();
-            List<UiRect> row2 = layout.typeRow2();
-            List<UiRect> row3 = layout.typeRow3();
-            List<UiRect> presets = FormPanels.row(layout.typeWideTop(), 4, UiFlexLayout.Align.STRETCH, 
-                    UiFlexLayout.Item.flex(80, 1), UiFlexLayout.Item.flex(80, 1)
-            );
-            drawModalButton(context, slot(row1, 0).x(), slot(row1, 0).y(), slot(row1, 0).width(), slot(row1, 0).height(), "WRN-", slot(row1, 0).contains(mouseX, mouseY));
-            drawModalButton(context, slot(row1, 1).x(), slot(row1, 1).y(), slot(row1, 1).width(), slot(row1, 1).height(), "WRN+", slot(row1, 1).contains(mouseX, mouseY));
-            drawModalButton(context, slot(row1, 2).x(), slot(row1, 2).y(), slot(row1, 2).width(), slot(row1, 2).height(), "CRT-", slot(row1, 2).contains(mouseX, mouseY));
-            drawModalButton(context, slot(row1, 3).x(), slot(row1, 3).y(), slot(row1, 3).width(), slot(row1, 3).height(), "CRT+", slot(row1, 3).contains(mouseX, mouseY));
-            drawModalButton(context, slot(row2, 0).x(), slot(row2, 0).y(), slot(row2, 0).width(), slot(row2, 0).height(), "WarnClr-", slot(row2, 0).contains(mouseX, mouseY));
-            drawModalButton(context, slot(row2, 1).x(), slot(row2, 1).y(), slot(row2, 1).width(), slot(row2, 1).height(), "WarnClr+", slot(row2, 1).contains(mouseX, mouseY));
-            drawModalButton(context, slot(row2, 2).x(), slot(row2, 2).y(), slot(row2, 2).width(), slot(row2, 2).height(), "CritClr-", slot(row2, 2).contains(mouseX, mouseY));
-            drawModalButton(context, slot(row2, 3).x(), slot(row2, 3).y(), slot(row2, 3).width(), slot(row2, 3).height(), "CritClr+", slot(row2, 3).contains(mouseX, mouseY));
-            drawModalButton(context, slot(row3, 0).x(), slot(row3, 0).y(), slot(row3, 0).width(), slot(row3, 0).height(), "BG-", slot(row3, 0).contains(mouseX, mouseY));
-            drawModalButton(context, slot(row3, 1).x(), slot(row3, 1).y(), slot(row3, 1).width(), slot(row3, 1).height(), "BG+", slot(row3, 1).contains(mouseX, mouseY));
-            drawModalButton(context, slot(row3, 2).x(), slot(row3, 2).y(), slot(row3, 2).width(), slot(row3, 2).height(), "TX-", slot(row3, 2).contains(mouseX, mouseY));
-            drawModalButton(context, slot(row3, 3).x(), slot(row3, 3).y(), slot(row3, 3).width(), slot(row3, 3).height(), "TX+", slot(row3, 3).contains(mouseX, mouseY));
-            drawModalButton(context, slot(presets, 0).x(), slot(presets, 0).y(), slot(presets, 0).width(), slot(presets, 0).height(), "Prefix preset", slot(presets, 0).contains(mouseX, mouseY));
-            drawModalButton(context, slot(presets, 1).x(), slot(presets, 1).y(), slot(presets, 1).width(), slot(presets, 1).height(), "Suffix preset", slot(presets, 1).contains(mouseX, mouseY));
-            context.drawTextWithShadow(this.textRenderer, "Warn/Crit: " + String.format(Locale.ROOT, "%.1f / %.1f", selected.warnThreshold, selected.critThreshold), layout.typeInfo1().x(), layout.typeInfo1().y(), 0xFFEAEAEA);
-            context.drawTextWithShadow(this.textRenderer, "Tip: right-click Warn/Crit/BG/TX color buttons to open picker", layout.typeInfo2().x(), layout.typeInfo2().y(), 0xFF98B8D8);
-            context.drawTextWithShadow(this.textRenderer, "Prefix", layout.typeInputLeft().x(), layout.typeInputLeft().y() - 10, 0xFFB8B8B8);
-            context.drawTextWithShadow(this.textRenderer, "Suffix", layout.typeInputRight().x(), layout.typeInputRight().y() - 10, 0xFFB8B8B8);
-            context.fill(layout.typeInputLeft().x(), layout.typeInputLeft().y(), layout.typeInputLeft().right(), layout.typeInputLeft().bottom(), advancedBgColorFocused ? 0xFF0F0F0F : 0xFF161616);
-            context.fill(layout.typeInputLeft().x(), layout.typeInputLeft().y(), layout.typeInputLeft().right(), layout.typeInputLeft().y() + 1, 0x60FFFFFF);
-            context.fill(layout.typeInputRight().x(), layout.typeInputRight().y(), layout.typeInputRight().right(), layout.typeInputRight().bottom(), advancedBorderColorFocused ? 0xFF0F0F0F : 0xFF161616);
-            context.fill(layout.typeInputRight().x(), layout.typeInputRight().y(), layout.typeInputRight().right(), layout.typeInputRight().y() + 1, 0x60FFFFFF);
-            drawSingleLineSelection(context, layout.typeInputLeft().x() + 4, layout.typeInputLeft().y() + 5, advancedBgColor, advancedBgSelectionAnchor, advancedBgCursor);
-            drawSingleLineSelection(context, layout.typeInputRight().x() + 4, layout.typeInputRight().y() + 5, advancedBorderColor, advancedBorderSelectionAnchor, advancedBorderCursor);
-            context.drawTextWithShadow(this.textRenderer, advancedBgColor, layout.typeInputLeft().x() + 4, layout.typeInputLeft().y() + 5, 0xFFEAEAEA);
-            context.drawTextWithShadow(this.textRenderer, advancedBorderColor, layout.typeInputRight().x() + 4, layout.typeInputRight().y() + 5, 0xFFEAEAEA);
-            if (advancedBgColorFocused && (System.currentTimeMillis() / 500L) % 2L == 0L) {
-                int cx = layout.typeInputLeft().x() + 4 + this.textRenderer.getWidth(advancedBgColor.substring(0, Math.clamp(advancedBgCursor, 0, advancedBgColor.length())));
-                context.fill(cx, layout.typeInputLeft().y() + 4, cx + 1, layout.typeInputLeft().y() + 13, 0xFFFFFFFF);
-            }
-            if (advancedBorderColorFocused && (System.currentTimeMillis() / 500L) % 2L == 0L) {
-                int cx = layout.typeInputRight().x() + 4 + this.textRenderer.getWidth(advancedBorderColor.substring(0, Math.clamp(advancedBorderCursor, 0, advancedBorderColor.length())));
-                context.fill(cx, layout.typeInputRight().y() + 4, cx + 1, layout.typeInputRight().y() + 13, 0xFFFFFFFF);
-            }
-        } else if (selected.type == MacroHudDataHandler.ElementType.LIST) {
-            drawModalButton(context, layout.typeWideTop().x(), layout.typeWideTop().y(), layout.typeWideTop().width(), layout.typeWideTop().height(), "List source preset", layout.typeWideTop().contains(mouseX, mouseY));
-            List<UiRect> row1 = layout.typeRow1();
-            drawModalButton(context, row1.get(0).x(), row1.get(0).y(), row1.get(0).width(), row1.get(0).height(), "L-", row1.get(0).contains(mouseX, mouseY));
-            drawModalButton(context, row1.get(1).x(), row1.get(1).y(), row1.get(1).width(), row1.get(1).height(), "L+", row1.get(1).contains(mouseX, mouseY));
-            drawModalButton(context, row1.get(2).x(), row1.get(2).y(), row1.get(2).width(), row1.get(2).height(), "S-", row1.get(2).contains(mouseX, mouseY));
-            drawModalButton(context, row1.get(3).x(), row1.get(3).y(), row1.get(3).width(), row1.get(3).height(), "S+", row1.get(3).contains(mouseX, mouseY));
-            context.drawTextWithShadow(this.textRenderer, "Max lines: " + selected.maxLines + "  Scroll: " + selected.listScroll, layout.typeInfo1().x(), layout.typeInfo1().y(), 0xFFEAEAEA);
-        } else if (selected.type == MacroHudDataHandler.ElementType.SHAPE) {
-            drawModalButton(context, layout.typeWideTop().x(), layout.typeWideTop().y(), layout.typeWideTop().width(), layout.typeWideTop().height(), "Type: " + selected.shapeType, layout.typeWideTop().contains(mouseX, mouseY));
-            List<UiRect> row1 = layout.typeRow1();
-            List<UiRect> row2 = layout.typeRow2();
-            drawModalButton(context, row1.get(0).x(), row1.get(0).y(), row1.get(0).width(), row1.get(0).height(), "Filled: " + (selected.shapeFilled ? "ON" : "OFF"), row1.get(0).contains(mouseX, mouseY));
-            drawModalButton(context, row1.get(1).x(), row1.get(1).y(), row1.get(1).width(), row1.get(1).height(), "R-", row1.get(1).contains(mouseX, mouseY));
-            drawModalButton(context, row1.get(2).x(), row1.get(2).y(), row1.get(2).width(), row1.get(2).height(), "R+", row1.get(2).contains(mouseX, mouseY));
-            drawModalButton(context, row2.get(0).x(), row2.get(0).y(), row2.get(0).width(), row2.get(0).height(), "T-", row2.get(0).contains(mouseX, mouseY));
-            drawModalButton(context, row2.get(1).x(), row2.get(1).y(), row2.get(1).width(), row2.get(1).height(), "T+", row2.get(1).contains(mouseX, mouseY));
-            context.drawTextWithShadow(this.textRenderer, "Radius: " + selected.shapeRadius + "  Thickness: " + selected.shapeThickness, layout.typeInfo1().x(), layout.typeInfo1().y(), 0xFFEAEAEA);
-        } else if (selected.type == MacroHudDataHandler.ElementType.STATE_BADGE) {
-            List<UiRect> stateText = FormPanels.row(layout.typeWideTop(), 4, UiFlexLayout.Align.STRETCH, 
-                    UiFlexLayout.Item.flex(80, 1), UiFlexLayout.Item.flex(80, 1)
-            );
-            List<UiRect> row1 = layout.typeRow1();
-            List<UiRect> row2 = layout.typeRow2();
-            drawModalButton(context, slot(stateText, 0).x(), slot(stateText, 0).y(), slot(stateText, 0).width(), slot(stateText, 0).height(), "ON: " + selected.stateOnText, slot(stateText, 0).contains(mouseX, mouseY));
-            drawModalButton(context, slot(stateText, 1).x(), slot(stateText, 1).y(), slot(stateText, 1).width(), slot(stateText, 1).height(), "OFF: " + selected.stateOffText, slot(stateText, 1).contains(mouseX, mouseY));
-            drawModalButton(context, slot(row1, 0).x(), slot(row1, 0).y(), slot(row1, 0).width(), slot(row1, 0).height(), "ON-", slot(row1, 0).contains(mouseX, mouseY));
-            drawModalButton(context, slot(row1, 1).x(), slot(row1, 1).y(), slot(row1, 1).width(), slot(row1, 1).height(), "ON+", slot(row1, 1).contains(mouseX, mouseY));
-            drawModalButton(context, slot(row1, 2).x(), slot(row1, 2).y(), slot(row1, 2).width(), slot(row1, 2).height(), "OFF-", slot(row1, 2).contains(mouseX, mouseY));
-            drawModalButton(context, slot(row1, 3).x(), slot(row1, 3).y(), slot(row1, 3).width(), slot(row1, 3).height(), "OFF+", slot(row1, 3).contains(mouseX, mouseY));
-            drawModalButton(context, slot(row2, 0).x(), slot(row2, 0).y(), slot(row2, 0).width(), slot(row2, 0).height(), "Show Value: " + (selected.stateShowValue ? "ON" : "OFF"), slot(row2, 0).contains(mouseX, mouseY));
-            drawModalButton(context, slot(row2, 1).x(), slot(row2, 1).y(), slot(row2, 1).width(), slot(row2, 1).height(), "TX-", slot(row2, 1).contains(mouseX, mouseY));
-            drawModalButton(context, slot(row2, 2).x(), slot(row2, 2).y(), slot(row2, 2).width(), slot(row2, 2).height(), "TX+", slot(row2, 2).contains(mouseX, mouseY));
-            drawModalButton(context, slot(row2, 3).x(), slot(row2, 3).y(), slot(row2, 3).width(), slot(row2, 3).height(), "Src preset", slot(row2, 3).contains(mouseX, mouseY));
-            context.drawTextWithShadow(this.textRenderer, "True tokens (csv)", layout.typeInputLeft().x(), layout.typeInputLeft().y() - 10, 0xFFB8B8B8);
-            context.drawTextWithShadow(this.textRenderer, "False tokens (csv)", layout.typeInputRight().x(), layout.typeInputRight().y() - 10, 0xFFB8B8B8);
-            context.fill(layout.typeInputLeft().x(), layout.typeInputLeft().y(), layout.typeInputLeft().right(), layout.typeInputLeft().bottom(), advancedBgColorFocused ? 0xFF0F0F0F : 0xFF161616);
-            context.fill(layout.typeInputLeft().x(), layout.typeInputLeft().y(), layout.typeInputLeft().right(), layout.typeInputLeft().y() + 1, 0x60FFFFFF);
-            context.fill(layout.typeInputRight().x(), layout.typeInputRight().y(), layout.typeInputRight().right(), layout.typeInputRight().bottom(), advancedBorderColorFocused ? 0xFF0F0F0F : 0xFF161616);
-            context.fill(layout.typeInputRight().x(), layout.typeInputRight().y(), layout.typeInputRight().right(), layout.typeInputRight().y() + 1, 0x60FFFFFF);
-            drawSingleLineSelection(context, layout.typeInputLeft().x() + 4, layout.typeInputLeft().y() + 5, advancedBgColor, advancedBgSelectionAnchor, advancedBgCursor);
-            drawSingleLineSelection(context, layout.typeInputRight().x() + 4, layout.typeInputRight().y() + 5, advancedBorderColor, advancedBorderSelectionAnchor, advancedBorderCursor);
-            context.drawTextWithShadow(this.textRenderer, advancedBgColor, layout.typeInputLeft().x() + 4, layout.typeInputLeft().y() + 5, 0xFFEAEAEA);
-            context.drawTextWithShadow(this.textRenderer, advancedBorderColor, layout.typeInputRight().x() + 4, layout.typeInputRight().y() + 5, 0xFFEAEAEA);
-            if (advancedBgColorFocused && (System.currentTimeMillis() / 500L) % 2L == 0L) {
-                int cx = layout.typeInputLeft().x() + 4 + this.textRenderer.getWidth(advancedBgColor.substring(0, Math.clamp(advancedBgCursor, 0, advancedBgColor.length())));
-                context.fill(cx, layout.typeInputLeft().y() + 4, cx + 1, layout.typeInputLeft().y() + 13, 0xFFFFFFFF);
-            }
-            if (advancedBorderColorFocused && (System.currentTimeMillis() / 500L) % 2L == 0L) {
-                int cx = layout.typeInputRight().x() + 4 + this.textRenderer.getWidth(advancedBorderColor.substring(0, Math.clamp(advancedBorderCursor, 0, advancedBorderColor.length())));
-                context.fill(cx, layout.typeInputRight().y() + 4, cx + 1, layout.typeInputRight().y() + 13, 0xFFFFFFFF);
-            }
-        }
-
-        drawModalButton(context, slot(baseRow, 0).x(), slot(baseRow, 0).y(), slot(baseRow, 0).width(), slot(baseRow, 0).height(), "H: " + selected.horizontalAlign.name(), slot(baseRow, 0).contains(mouseX, mouseY));
-        drawModalButton(context, slot(baseRow, 1).x(), slot(baseRow, 1).y(), slot(baseRow, 1).width(), slot(baseRow, 1).height(), "V: " + selected.verticalAlign.name(), slot(baseRow, 1).contains(mouseX, mouseY));
-        drawModalButton(context, slot(baseRow, 2).x(), slot(baseRow, 2).y(), slot(baseRow, 2).width(), slot(baseRow, 2).height(), "Anchor: " + shortAnchor(selected.anchor), slot(baseRow, 2).contains(mouseX, mouseY));
-        drawModalButton(context, slot(baseRow, 3).x(), slot(baseRow, 3).y(), slot(baseRow, 3).width(), slot(baseRow, 3).height(), backgroundLabel(selected), slot(baseRow, 3).contains(mouseX, mouseY));
-        drawModalButton(context, slot(baseRow, 4).x(), slot(baseRow, 4).y(), slot(baseRow, 4).width(), slot(baseRow, 4).height(), borderModeLabel(selected), slot(baseRow, 4).contains(mouseX, mouseY));
-
-        drawModalButton(context, layout.apply().x(), layout.apply().y(), layout.apply().width(), layout.apply().height(), "Apply", layout.apply().contains(mouseX, mouseY));
-        drawModalButton(context, layout.cancel().x(), layout.cancel().y(), layout.cancel().width(), layout.cancel().height(), "Cancel", layout.cancel().contains(mouseX, mouseY));
     }
 
     private boolean onCustomWidgetAdvancedClick(Click click, int boxX, int boxY) {
@@ -5512,7 +5376,7 @@ public class MacroWorkbenchV2Screen extends Screen {
                     continue;
                 }
                 gameBindingNames.computeIfAbsent(code, k -> new ArrayList<>())
-                        .add(getGameKeybindDisplayName(kb, this.client.options));
+                        .add(ReflectionUtils.getGameKeybindDisplayName(kb, this.client.options));
             }
         }
     }
@@ -6559,69 +6423,42 @@ public class MacroWorkbenchV2Screen extends Screen {
     }
 
     private static String firstLine(String raw) {
-        if (raw == null || raw.isEmpty()) {
-            return "";
-        }
-        String normalized = normalizeMultilineInput(raw);
-        int idx = normalized.indexOf('\n');
-        return idx < 0 ? normalized : normalized.substring(0, idx);
+        return StringUtils.firstLine(raw);
     }
 
     private static List<String> splitLinesRaw(String raw) {
-        if (raw == null || raw.isEmpty()) {
-            return List.of("");
-        }
-        String normalized = normalizeMultilineInput(raw);
-        String[] parts = normalized.split("\\n", -1);
-        List<String> out = new ArrayList<>(parts.length);
-        for (String p : parts) {
-            out.add(p == null ? "" : p);
-        }
-        return out;
+        return StringUtils.splitLinesRaw(raw);
     }
 
     private static String normalizeMultilineInput(String raw) {
-        if (raw == null || raw.isEmpty()) {
-            return "";
-        }
-        return raw
-                .replace("\\n", "\n")
-                .replace("\r\n", "\n")
-                .replace('\r', '\n');
+        return StringUtils.normalizeMultilineInput(raw);
     }
 
     private static String normalizeSingleLineInput(String raw) {
-        String normalized = normalizeMultilineInput(raw);
-        if (normalized.isEmpty()) {
-            return "";
-        }
-        return normalized.replace('\n', ' ');
+        return StringUtils.normalizeSingleLineInput(raw);
     }
 
     private static List<String> splitLines(String raw) {
         return splitLinesRaw(raw);
     }
 
-    private record TextRun(String text, int color) {
-    }
-
     private int styledLineWidth(String raw) {
         int width = 0;
-        for (TextRun run : parseColorRuns(raw, 0xFFFFFFFF)) {
+        for (MacroWorkbenchTextStyling.TextRun run : MacroWorkbenchTextStyling.parseColorRuns(raw, 0xFFFFFFFF)) {
             width += this.textRenderer.getWidth(run.text());
         }
         return width;
     }
 
     private void drawStyledTextLine(DrawContext context, String raw, int x, int y, int defaultColor, float scale) {
-        List<TextRun> runs = parseColorRuns(raw, defaultColor);
+        List<MacroWorkbenchTextStyling.TextRun> runs = MacroWorkbenchTextStyling.parseColorRuns(raw, defaultColor);
         context.getMatrices().pushMatrix();
         context.getMatrices().scale(scale, scale);
 
         int logicalX = Math.round(x / scale);
         int logicalY = Math.round(y / scale);
         int cursor = logicalX;
-        for (TextRun run : runs) {
+        for (MacroWorkbenchTextStyling.TextRun run : runs) {
             if (run.text().isEmpty()) {
                 continue;
             }
@@ -6630,77 +6467,6 @@ public class MacroWorkbenchV2Screen extends Screen {
         }
 
         context.getMatrices().popMatrix();
-    }
-
-    private List<TextRun> parseColorRuns(String raw, int defaultColor) {
-        List<TextRun> runs = new ArrayList<>();
-        if (raw == null || raw.isEmpty()) {
-            runs.add(new TextRun("", defaultColor));
-            return runs;
-        }
-
-        StringBuilder chunk = new StringBuilder();
-        int color = defaultColor;
-        int i = 0;
-        while (i < raw.length()) {
-            char c = raw.charAt(i);
-            if (c == '&' && i + 1 < raw.length()) {
-                int mapped = mapLegacyColor(raw.charAt(i + 1));
-                if (mapped != Integer.MIN_VALUE) {
-                    if (!chunk.isEmpty()) {
-                        runs.add(new TextRun(chunk.toString(), color));
-                        chunk.setLength(0);
-                    }
-                    color = mapped;
-                    i += 2;
-                    continue;
-                }
-            }
-
-            if (c == '#') {
-                int end = Math.min(raw.length(), i + 7);
-                String token = raw.substring(i, end);
-                if (token.length() == 7 && HEX_COLOR.matcher(token).matches()) {
-                    if (!chunk.isEmpty()) {
-                        runs.add(new TextRun(chunk.toString(), color));
-                        chunk.setLength(0);
-                    }
-                    color = 0xFF000000 | Integer.parseInt(token.substring(1), 16);
-                    i += 7;
-                    continue;
-                }
-            }
-
-            chunk.append(c);
-            i++;
-        }
-
-        if (!chunk.isEmpty() || runs.isEmpty()) {
-            runs.add(new TextRun(chunk.toString(), color));
-        }
-        return runs;
-    }
-
-    private static int mapLegacyColor(char code) {
-        return switch (Character.toLowerCase(code)) {
-            case '0' -> 0xFF000000;
-            case '1' -> 0xFF0000AA;
-            case '2' -> 0xFF00AA00;
-            case '3' -> 0xFF00AAAA;
-            case '4' -> 0xFFAA0000;
-            case '5' -> 0xFFAA00AA;
-            case '6' -> 0xFFFFAA00;
-            case '7' -> 0xFFAAAAAA;
-            case '8' -> 0xFF555555;
-            case '9' -> 0xFF5555FF;
-            case 'a' -> 0xFF55FF55;
-            case 'b' -> 0xFF55FFFF;
-            case 'c' -> 0xFFFF5555;
-            case 'd' -> 0xFFFF55FF;
-            case 'e' -> 0xFFFFFF55;
-            case 'f' -> 0xFFFFFFFF;
-            default -> Integer.MIN_VALUE;
-        };
     }
 
     private int cursorIndexFromPoint(String text, int localX, int localY, int lineHeight) {
@@ -6729,11 +6495,11 @@ public class MacroWorkbenchV2Screen extends Screen {
     }
 
     private static String safe(String s) {
-        return s == null ? "" : s.trim();
+        return StringUtils.safe(s);
     }
 
     private static String preserve(String s) {
-        return s == null ? "" : s;
+        return StringUtils.preserve(s);
     }
 
     private static int canvasBackgroundColor(MacroHudDataHandler.HudElement element) {
@@ -6768,7 +6534,7 @@ public class MacroWorkbenchV2Screen extends Screen {
         }
     }
 
-    net.minecraft.client.font.TextRenderer workbenchTextRenderer() {
+    TextRenderer workbenchTextRenderer() {
         return this.textRenderer;
     }
 
@@ -6811,512 +6577,6 @@ public class MacroWorkbenchV2Screen extends Screen {
             return new ItemStack(Registries.ITEM.get(id));
         }
         return new ItemStack(Items.STONE);
-    }
-
-    private void drawCanvasPlayerModelPreview(DrawContext context, MacroHudDataHandler.HudElement element, int x, int y, int w, int h) {
-        if (this.client == null) {
-            return;
-        }
-        net.minecraft.entity.Entity target = resolveCanvasModelTargetEntity(element);
-        if (target == null) {
-            return;
-        }
-        int safeW = Math.max(1, w);
-        int safeH = Math.max(1, h);
-        int innerPad = element.drawBorder ? 2 : 1;
-        int boxW = Math.max(1, safeW - (innerPad * 2));
-        int boxH = Math.max(1, safeH - (innerPad * 2));
-        int baseSize = element.modelAutoFit
-                ? Math.max(8, Math.round(Math.min(boxW, boxH) * 0.48f))
-                : Math.max(8, Math.min(safeW, safeH) - 4);
-        int size = Math.max(8, Math.round(baseSize * Math.clamp(element.modelZoom, 0.2f, 2.5f)));
-        int left = x + innerPad + element.modelOffsetX;
-        int top = y + innerPad + element.modelOffsetY;
-        int right = x + safeW - innerPad + element.modelOffsetX;
-        int bottom = y + safeH - innerPad + element.modelOffsetY;
-        if (right <= left) {
-            right = left + 1;
-        }
-        if (bottom <= top) {
-            bottom = top + 1;
-        }
-        drawEntityModelReflective(context, target, left, top, right, bottom, size,
-                element.modelYaw, element.modelPitch, element.modelFollowLook);
-    }
-
-    private net.minecraft.entity.Entity resolveCanvasModelTargetEntity(MacroHudDataHandler.HudElement element) {
-        if (this.client == null) {
-            return null;
-        }
-        String id = safe(element == null ? null : element.iconId).toLowerCase(Locale.ROOT);
-        if (id.isBlank() || "player".equals(id) || "minecraft:player".equals(id)) {
-            return this.client.player;
-        }
-        return this.client.player != null ? this.client.player : this.client.getCameraEntity();
-    }
-
-    private void drawEntityModelReflective(DrawContext context, net.minecraft.entity.Entity entity,
-                                           int left, int top, int right, int bottom,
-                                           int size, float yaw, float pitch, boolean followLook) {
-        if (entity == null || size < 1) {
-            return;
-        }
-        try {
-            Class<?> inventoryScreen = Class.forName("net.minecraft.client.gui.screen.ingame.InventoryScreen");
-            Class<?> drawContextClass = Class.forName("net.minecraft.client.gui.DrawContext");
-            Class<?> entityClass = Class.forName("net.minecraft.entity.Entity");
-            Class<?> vectorClass = Class.forName("org.joml.Vector3f");
-            Class<?> quaternionClass = Class.forName("org.joml.Quaternionf");
-            Class<?> livingEntityClass = Class.forName("net.minecraft.entity.LivingEntity");
-
-            float[] resolvedAngles = resolveModelAngles(entity, yaw, pitch, followLook);
-            float resolvedYaw = resolvedAngles[0];
-            float resolvedPitch = resolvedAngles[1];
-
-            Object vecZero = vectorClass.getConstructor(float.class, float.class, float.class).newInstance(0.0f, 0.0f, 0.0f);
-            Object modelQuat = buildModelQuaternion(quaternionClass, resolvedYaw, resolvedPitch);
-            Object identityQuat = quaternionClass.getConstructor().newInstance();
-
-            if (invokePreferredEntityDrawPreview(inventoryScreen, context, entity,
-                    left, top, right, bottom, size,
-                    vecZero, modelQuat, identityQuat,
-                    drawContextClass, vectorClass, quaternionClass, entityClass, livingEntityClass,
-                    resolvedYaw, resolvedPitch)) {
-                return;
-            }
-
-            List<Class<?>> owners = List.of(inventoryScreen, drawContextClass);
-            for (Class<?> owner : owners) {
-                for (Method method : owner.getMethods()) {
-                    if (!"drawEntity".equals(method.getName())) {
-                        continue;
-                    }
-                    boolean staticMethod = java.lang.reflect.Modifier.isStatic(method.getModifiers());
-                    if (!staticMethod && !drawContextClass.isAssignableFrom(owner)) {
-                        continue;
-                    }
-
-                    Class<?>[] paramTypes = method.getParameterTypes();
-                    int intParams = 0;
-                    for (Class<?> type : paramTypes) {
-                        if (type == int.class || type == Integer.class) {
-                            intParams++;
-                        }
-                    }
-                    if (intParams < 3) {
-                        continue;
-                    }
-
-                    int[] intArgValues = buildEntityDrawIntArgs(left, top, right, bottom, size, intParams);
-                    if (intArgValues == null) {
-                        continue;
-                    }
-
-                    float fallbackCx = (intArgValues.length >= 2)
-                            ? (intArgValues[0] + (intArgValues.length >= 4 ? intArgValues[2] : intArgValues[0])) / 2.0f
-                            : 0.0f;
-                    float fallbackCy = (intArgValues.length >= 2)
-                            ? (intArgValues[1] + (intArgValues.length >= 4 ? intArgValues[3] : intArgValues[1])) / 2.0f
-                            : 0.0f;
-                    float mouseX = fallbackCx - 40.0f * (float) Math.tan(Math.clamp(resolvedYaw, -30f, 30f) / 20.0f);
-                    float mouseY = fallbackCy + 40.0f * (float) Math.tan(Math.clamp(resolvedPitch, -30f, 30f) / 20.0f);
-
-                    Object[] args = new Object[paramTypes.length];
-                    int intArg = 0;
-                    int quatArg = 0;
-                    int floatArg = 0;
-                    boolean accepted = true;
-                    for (int i = 0; i < paramTypes.length; i++) {
-                        Class<?> type = paramTypes[i];
-                        if (drawContextClass.isAssignableFrom(type)) {
-                            args[i] = context;
-                        } else if (type == int.class || type == Integer.class) {
-                            args[i] = intArgValues[Math.min(intArg++, intArgValues.length - 1)];
-                        } else if (type == float.class || type == Float.class) {
-                            switch (floatArg++) {
-                                case 0 -> args[i] = 0.0625f;
-                                case 1 -> args[i] = mouseX;
-                                case 2 -> args[i] = mouseY;
-                                default -> args[i] = 0.0f;
-                            }
-                        } else if (type == double.class || type == Double.class) {
-                            args[i] = 0.0d;
-                        } else if (type == boolean.class || type == Boolean.class) {
-                            args[i] = false;
-                        } else if (type.getName().equals("org.joml.Vector3f")) {
-                            args[i] = vecZero;
-                        } else if (type.getName().equals("org.joml.Quaternionf")) {
-                            args[i] = (quatArg++ == 0) ? modelQuat : identityQuat;
-                        } else if (entityClass.isAssignableFrom(type)) {
-                            args[i] = entity;
-                        } else {
-                            accepted = false;
-                            break;
-                        }
-                    }
-                    if (!accepted) {
-                        continue;
-                    }
-                    EntityOrientationSnapshot snapshot = captureEntityOrientation(entity);
-                    applyEntityOrientationForScreen(entity, 180.0f + resolvedYaw, resolvedPitch);
-                    try {
-                        method.invoke(staticMethod ? null : context, args);
-                        return;
-                    } catch (Throwable ignoredInvokeFailure) {
-                        // Keep trying compatible signatures.
-                    } finally {
-                        restoreEntityOrientation(entity, snapshot);
-                    }
-                }
-            }
-        } catch (Exception ignored) {
-            // Graceful fallback when mapped signatures differ across versions.
-        }
-    }
-
-    private boolean invokePreferredEntityDrawPreview(Class<?> inventoryScreen,
-                                                     DrawContext context,
-                                                     net.minecraft.entity.Entity entity,
-                                                     int left, int top, int right, int bottom, int size,
-                                                     Object vecZero, Object modelQuat, Object identityQuat,
-                                                     Class<?> drawContextClass, Class<?> vectorClass, Class<?> quaternionClass,
-                                                     Class<?> entityClass, Class<?> livingEntityClass,
-                                                     float resolvedYaw, float resolvedPitch) {
-        int cx = left + ((right - left) / 2);
-        int cy = bottom;
-
-        // Collect all static drawEntity methods so we can prioritise.
-        java.util.List<Method> candidates = new java.util.ArrayList<>();
-        for (Method m : inventoryScreen.getMethods()) {
-            if ("drawEntity".equals(m.getName()) && java.lang.reflect.Modifier.isStatic(m.getModifiers())) {
-                candidates.add(m);
-            }
-        }
-
-        // ── Priority 1: MC 1.21.x low-level 8-param overload ───────────────────────
-        // drawEntity(DrawContext, float x, float y, float size,
-        //            Vector3f, Quaternionf, @Nullable Quaternionf, LivingEntity)
-        for (Method method : candidates) {
-            Class<?>[] p = method.getParameterTypes();
-            if (!matchesFloatXYSizeVecQuatSignature(p, drawContextClass, vectorClass, quaternionClass, livingEntityClass)) {
-                continue;
-            }
-            if (!p[7].isInstance(entity)) {
-                continue;
-            }
-            try {
-                float entityScale = (entity instanceof LivingEntity le) ? le.getScale() : 1.0f;
-                float q = (float) size / entityScale;
-                float mcYaw = 180.0f + resolvedYaw;
-                float pitchRad = (float) (-resolvedPitch * Math.PI / 180.0);
-                Object uiQuat = quaternionClass.getConstructor().newInstance();
-                Method rotZ = quaternionClass.getMethod("rotateZ", float.class);
-                Method rotX = quaternionClass.getMethod("rotateX", float.class);
-                rotZ.invoke(uiQuat, (float) Math.PI);
-                rotX.invoke(uiQuat, pitchRad);
-                Object lightQuat = quaternionClass.getConstructor().newInstance();
-                rotX.invoke(lightQuat, pitchRad);
-                Object vec = vectorClass.getConstructor(float.class, float.class, float.class)
-                        .newInstance(0.0f, entity.getHeight() / 2.0f + 0.0625f * entityScale, 0.0f);
-                float fcx = (left + right) / 2.0f;
-                float fcy = (top + bottom) / 2.0f;
-                EntityOrientationSnapshot snapshot = captureEntityOrientation(entity);
-                applyEntityOrientationForScreen(entity, mcYaw, resolvedPitch);
-                try {
-                    method.invoke(null, context, fcx, fcy, q, vec, uiQuat, lightQuat, entity);
-                    return true;
-                } finally {
-                    restoreEntityOrientation(entity, snapshot);
-                }
-            } catch (Throwable ignored) {
-            }
-        }
-
-        // ── Priority 2: MC 1.21.x primary 10-param overload ────────────────────────
-        // drawEntity(DrawContext, int x1, int y1, int x2, int y2, int size,
-        //            float f, float mouseX, float mouseY, LivingEntity)
-        for (Method method : candidates) {
-            Class<?>[] p = method.getParameterTypes();
-            if (!matchesRectMouseFloat3Signature(p, drawContextClass, livingEntityClass)) {
-                continue;
-            }
-            if (!p[9].isInstance(entity)) {
-                continue;
-            }
-            try {
-                float fcx = (left + right) / 2.0f;
-                float fcy = (top + bottom) / 2.0f;
-                float clampedYaw = Math.clamp(resolvedYaw, -30.0f, 30.0f);
-                float clampedPitch = Math.clamp(resolvedPitch, -30.0f, 30.0f);
-                float mx = fcx - 40.0f * (float) Math.tan(clampedYaw / 20.0f);
-                float my = fcy + 40.0f * (float) Math.tan(clampedPitch / 20.0f);
-                method.invoke(null, context, left, top, right, bottom, size, 0.0625f, mx, my, entity);
-                return true;
-            } catch (Throwable ignored) {
-            }
-        }
-
-        // ── Priority 3: legacy quaternion-based APIs (pre-1.20.5) ───────────────────
-        for (Method method : candidates) {
-            Class<?>[] p = method.getParameterTypes();
-            try {
-                if (matchesRectQuatSignature(p, drawContextClass, vectorClass, quaternionClass)
-                        && p[9].isInstance(entity)) {
-                    EntityOrientationSnapshot snapshot = captureEntityOrientation(entity);
-                    applyEntityOrientationForScreen(entity, 180.0f + resolvedYaw, resolvedPitch);
-                    try {
-                        method.invoke(null, context, left, top, right, bottom, size, vecZero, modelQuat, identityQuat, entity);
-                        return true;
-                    } finally {
-                        restoreEntityOrientation(entity, snapshot);
-                    }
-                }
-
-                if (matchesCenterQuatSignature(p, drawContextClass, quaternionClass, entityClass)
-                        && p[6].isInstance(entity)) {
-                    EntityOrientationSnapshot snapshot = captureEntityOrientation(entity);
-                    applyEntityOrientationForScreen(entity, 180.0f + resolvedYaw, resolvedPitch);
-                    try {
-                        method.invoke(null, context, cx, cy, size, modelQuat, identityQuat, entity);
-                        return true;
-                    } finally {
-                        restoreEntityOrientation(entity, snapshot);
-                    }
-                }
-
-                if (matchesMouseFloatSignature(p, drawContextClass, entityClass)
-                        && p[6].isInstance(entity)) {
-                    float clampedYaw = Math.clamp(resolvedYaw, -30.0f, 30.0f);
-                    float clampedPitch = Math.clamp(resolvedPitch, -30.0f, 30.0f);
-                    float mx = cx - 40.0f * (float) Math.tan(clampedYaw / 20.0f);
-                    float my = cy + 40.0f * (float) Math.tan(clampedPitch / 20.0f);
-                    method.invoke(null, context, cx, cy, size, mx, my, entity);
-                    return true;
-                }
-            } catch (Throwable ignored) {
-            }
-        }
-        return false;
-    }
-
-    // ── MC 1.21.x primary overload ──────────────────────────────────────────────
-    private boolean matchesRectMouseFloat3Signature(Class<?>[] p, Class<?> dcClass, Class<?> livingEntityClass) {
-        return p.length == 10
-                && dcClass.isAssignableFrom(p[0])
-                && p[1] == int.class && p[2] == int.class && p[3] == int.class
-                && p[4] == int.class && p[5] == int.class
-                && p[6] == float.class && p[7] == float.class && p[8] == float.class
-                && livingEntityClass.isAssignableFrom(p[9]);
-    }
-
-    // ── MC 1.21.x low-level 8-param overload ────────────────────────────────────
-    private boolean matchesFloatXYSizeVecQuatSignature(Class<?>[] p, Class<?> dcClass, Class<?> vectorClass,
-                                                        Class<?> quaternionClass, Class<?> livingEntityClass) {
-        return p.length == 8
-                && dcClass.isAssignableFrom(p[0])
-                && p[1] == float.class && p[2] == float.class && p[3] == float.class
-                && vectorClass.getName().equals(p[4].getName())
-                && quaternionClass.getName().equals(p[5].getName())
-                && (quaternionClass.getName().equals(p[6].getName()) || !p[6].isPrimitive())
-                && livingEntityClass.isAssignableFrom(p[7]);
-    }
-
-    private boolean matchesRectQuatSignature(Class<?>[] p,
-                                             Class<?> drawContextClass,
-                                             Class<?> vectorClass,
-                                             Class<?> quaternionClass) {
-        return p.length == 10
-                && drawContextClass.isAssignableFrom(p[0])
-                && p[1] == int.class && p[2] == int.class && p[3] == int.class && p[4] == int.class && p[5] == int.class
-                && vectorClass.getName().equals(p[6].getName())
-                && quaternionClass.getName().equals(p[7].getName())
-                && quaternionClass.getName().equals(p[8].getName());
-    }
-
-    private boolean matchesCenterQuatSignature(Class<?>[] p,
-                                               Class<?> drawContextClass,
-                                               Class<?> quaternionClass,
-                                               Class<?> entityClass) {
-        return p.length == 7
-                && drawContextClass.isAssignableFrom(p[0])
-                && p[1] == int.class && p[2] == int.class && p[3] == int.class
-                && quaternionClass.getName().equals(p[4].getName())
-                && quaternionClass.getName().equals(p[5].getName())
-                && entityClass.isAssignableFrom(p[6]);
-    }
-
-    private boolean matchesMouseFloatSignature(Class<?>[] p,
-                                               Class<?> drawContextClass,
-                                               Class<?> entityClass) {
-        return p.length == 7
-                && drawContextClass.isAssignableFrom(p[0])
-                && p[1] == int.class && p[2] == int.class && p[3] == int.class
-                && p[4] == float.class && p[5] == float.class
-                && entityClass.isAssignableFrom(p[6]);
-    }
-
-    private EntityOrientationSnapshot captureEntityOrientation(net.minecraft.entity.Entity entity) {
-        if (entity == null) {
-            return new EntityOrientationSnapshot(0.0f, 0.0f, null, null, null);
-        }
-        Float bodyYaw = null;
-        Float headYaw = null;
-        Float prevHeadYaw = null;
-        if (entity instanceof LivingEntity living) {
-            bodyYaw = living.getBodyYaw();
-            headYaw = living.getHeadYaw();
-            prevHeadYaw = getFieldFloat(LivingEntity.class, living, "prevHeadYaw");
-        }
-        return new EntityOrientationSnapshot(entity.getYaw(), entity.getPitch(), bodyYaw, headYaw, prevHeadYaw);
-    }
-
-    private void applyEntityOrientation(net.minecraft.entity.Entity entity, float yaw, float pitch) {
-        if (entity == null) return;
-        entity.setYaw(yaw);
-        entity.setPitch(pitch);
-        if (entity instanceof LivingEntity living) {
-            living.setBodyYaw(yaw);
-            living.setHeadYaw(yaw);
-            setFieldFloat(LivingEntity.class, living, "prevHeadYaw", yaw);
-        }
-    }
-
-    private void applyEntityOrientationForScreen(net.minecraft.entity.Entity entity, float displayYaw, float pitch) {
-        if (entity == null) return;
-        entity.setYaw(displayYaw);
-        entity.setPitch(pitch);
-        if (entity instanceof LivingEntity living) {
-            living.setBodyYaw(displayYaw);
-            living.setHeadYaw(displayYaw);
-            setFieldFloat(LivingEntity.class, living, "prevHeadYaw", displayYaw);
-        }
-    }
-
-    private void restoreEntityOrientation(net.minecraft.entity.Entity entity, EntityOrientationSnapshot snapshot) {
-        if (entity == null || snapshot == null) {
-            return;
-        }
-        entity.setYaw(snapshot.yaw());
-        entity.setPitch(snapshot.pitch());
-        if (entity instanceof LivingEntity living) {
-            if (snapshot.bodyYaw() != null) {
-                living.setBodyYaw(snapshot.bodyYaw());
-            }
-            if (snapshot.headYaw() != null) {
-                living.setHeadYaw(snapshot.headYaw());
-            }
-            if (snapshot.prevHeadYaw() != null) {
-                setFieldFloat(LivingEntity.class, living, "prevHeadYaw", snapshot.prevHeadYaw());
-            }
-        }
-    }
-
-    private Float getFieldFloat(Class<?> clazz, Object obj, String fieldName) {
-        for (Class<?> c = clazz; c != null; c = c.getSuperclass()) {
-            try {
-                java.lang.reflect.Field f = c.getDeclaredField(fieldName);
-                f.setAccessible(true);
-                return f.getFloat(obj);
-            } catch (NoSuchFieldException ignored) {
-                // Try parent
-            } catch (Exception ignored) {
-                break;
-            }
-        }
-        return null;
-    }
-
-    private void setFieldFloat(Class<?> clazz, Object obj, String fieldName, float value) {
-        for (Class<?> c = clazz; c != null; c = c.getSuperclass()) {
-            try {
-                java.lang.reflect.Field f = c.getDeclaredField(fieldName);
-                f.setAccessible(true);
-                f.setFloat(obj, value);
-                return;
-            } catch (NoSuchFieldException ignored) {
-                // Try parent
-            } catch (Exception ignored) {
-                break;
-            }
-        }
-    }
-
-    private record EntityOrientationSnapshot(float yaw, float pitch, Float bodyYaw, Float headYaw, Float prevHeadYaw) {
-    }
-
-    private float[] resolveModelAngles(net.minecraft.entity.Entity entity, float yawOffset, float pitchOffset, boolean followLook) {
-        float baseYaw = 0.0f;
-        float basePitch = 0.0f;
-        if (followLook && entity != null) {
-            baseYaw = entity instanceof LivingEntity living ? living.getHeadYaw() : entity.getYaw();
-            basePitch = entity.getPitch();
-        }
-        float resolvedYaw = wrapDegrees(baseYaw + yawOffset);
-        float resolvedPitch = Math.clamp(basePitch + pitchOffset, -90.0f, 90.0f);
-        return new float[]{resolvedYaw, resolvedPitch};
-    }
-
-
-    private float wrapDegrees(float degrees) {
-        float wrapped = degrees % 360.0f;
-        if (wrapped >= 180.0f) {
-            wrapped -= 360.0f;
-        }
-        if (wrapped < -180.0f) {
-            wrapped += 360.0f;
-        }
-        return wrapped;
-    }
-
-    private Object buildModelQuaternion(Class<?> quaternionClass, float yaw, float pitch) {
-        try {
-            Object quat = quaternionClass.getConstructor().newInstance();
-            try {
-                Method rotateZ = quaternionClass.getMethod("rotateZ", float.class);
-                rotateZ.invoke(quat, (float) Math.PI);
-            } catch (Exception ignored) {
-            }
-            float pitchRad = (float) (-pitch * Math.PI / 180.0);
-            try {
-                Method rotateX = quaternionClass.getMethod("rotateX", float.class);
-                rotateX.invoke(quat, pitchRad);
-            } catch (Exception ignored) {
-            }
-            return quat;
-        } catch (Exception ignored) {
-            try {
-                return quaternionClass.getConstructor().newInstance();
-            } catch (Exception ignored2) {
-                return null;
-            }
-        }
-    }
-
-    private int[] buildEntityDrawIntArgs(int left, int top, int right, int bottom, int size, int intParams) {
-        int safeSize = Math.max(8, size);
-        int safeLeft = left;
-        int safeTop = top;
-        int safeRight = Math.max(right, safeLeft + 1);
-        int safeBottom = Math.max(bottom, safeTop + 1);
-        if (intParams == 3) {
-            int cx = safeLeft + ((safeRight - safeLeft) / 2);
-            int cy = safeBottom;
-            return new int[]{cx, cy, safeSize};
-        }
-        if (intParams >= 5) {
-            int[] args = new int[intParams];
-            args[0] = safeLeft;
-            args[1] = safeTop;
-            args[2] = safeRight;
-            args[3] = safeBottom;
-            args[4] = safeSize;
-            for (int i = 5; i < intParams; i++) {
-                args[i] = safeSize;
-            }
-            return args;
-        }
-        // Skip ambiguous 4-int signatures instead of risking invalid x2/y2 bounds.
-        return null;
     }
 
     private void drawCanvasTriangleShape(DrawContext context, int x, int y, int w, int h,
@@ -7385,121 +6645,31 @@ public class MacroWorkbenchV2Screen extends Screen {
     }
 
     private static Double parseCanvasFirstDouble(String raw) {
-        if (raw == null || raw.isBlank()) {
-            return null;
-        }
-        String cleaned = raw.trim().replace(',', '.');
-        try {
-            return Double.parseDouble(cleaned);
-        } catch (Exception ignored) {
-            StringBuilder num = new StringBuilder();
-            boolean dotSeen = false;
-            for (int i = 0; i < cleaned.length(); i++) {
-                char c = cleaned.charAt(i);
-                if ((c >= '0' && c <= '9') || (num.isEmpty() && (c == '-' || c == '+'))) {
-                    num.append(c);
-                } else if (c == '.' && !dotSeen) {
-                    dotSeen = true;
-                    num.append(c);
-                } else if (!num.isEmpty()) {
-                    break;
-                }
-            }
-            if (!num.isEmpty()) {
-                try {
-                    return Double.parseDouble(num.toString());
-                } catch (Exception ignored2) {
-                    return null;
-                }
-            }
-            return null;
-        }
+        return MacroWorkbenchCanvasUtils.parseFirstDouble(raw);
     }
 
     private static String formatCanvasValue(double value) {
-        if (!Double.isFinite(value)) {
-            return "0";
-        }
-        double rounded = Math.rint(value);
-        if (Math.abs(value - rounded) < 0.0001) {
-            return Integer.toString((int) rounded);
-        }
-        return String.format(Locale.ROOT, "%.2f", value);
+        return MacroWorkbenchCanvasUtils.formatValue(value);
     }
 
     private static List<String> splitListSourceForCanvas(String src) {
-        if (src == null || src.isBlank()) {
-            return new ArrayList<>();
-        }
-        String normalized = src.replace("\\n", "\n").replace("\r", "");
-        List<String> out = new ArrayList<>();
-        if (normalized.contains("\n")) {
-            for (String line : normalized.split("\\n")) {
-                String t = line.trim();
-                if (!t.isEmpty()) {
-                    out.add(t);
-                }
-            }
-            return out;
-        }
-        for (String part : normalized.split(",")) {
-            String t = part.trim();
-            if (!t.isEmpty()) {
-                out.add(t);
-            }
-        }
-        return out;
+        return MacroWorkbenchCanvasUtils.splitListSource(src);
     }
 
     private static int blendColor(int c1, int c2, float t) {
-        float tt = Math.clamp(t, 0.0f, 1.0f);
-        int a1 = (c1 >>> 24) & 0xFF;
-        int r1 = (c1 >>> 16) & 0xFF;
-        int g1 = (c1 >>> 8) & 0xFF;
-        int b1 = c1 & 0xFF;
-        int a2 = (c2 >>> 24) & 0xFF;
-        int r2 = (c2 >>> 16) & 0xFF;
-        int g2 = (c2 >>> 8) & 0xFF;
-        int b2 = c2 & 0xFF;
-        int a = Math.round(a1 + (a2 - a1) * tt);
-        int r = Math.round(r1 + (r2 - r1) * tt);
-        int g = Math.round(g1 + (g2 - g1) * tt);
-        int b = Math.round(b1 + (b2 - b1) * tt);
-        return (a << 24) | (r << 16) | (g << 8) | b;
+        return ColorUtils.blendColor(c1, c2, t);
     }
 
     private static String shortAnchor(MacroHudDataHandler.Anchor anchor) {
-        return switch (anchor) {
-            case TOP_LEFT -> "TL";
-            case TOP_CENTER -> "TC";
-            case TOP_RIGHT -> "TR";
-            case MIDDLE_LEFT -> "ML";
-            case MIDDLE_RIGHT -> "MR";
-            case BOTTOM_LEFT -> "BL";
-            case BOTTOM_CENTER -> "BC";
-            case BOTTOM_RIGHT -> "BR";
-            case MIDDLE_CENTER -> "MC";
-            case CENTER -> "C*";
-        };
+        return MacroWorkbenchCanvasUtils.shortAnchor(anchor);
     }
 
     private static String shortVisibility(MacroHudDataHandler.VisibilityMode mode) {
-        return switch (mode) {
-            case ALWAYS -> "ALL";
-            case CHAT -> "CHAT";
-            case INVENTORY -> "INV";
-            case CONTAINER -> "CONT";
-            case CHEST -> "CHEST";
-            case SCREEN -> "SCR";
-        };
+        return MacroWorkbenchCanvasUtils.shortVisibility(mode);
     }
 
     private static String shortExecutionMode(MacroHudDataHandler.ButtonExecutionMode mode) {
-        return switch (mode == null ? MacroHudDataHandler.ButtonExecutionMode.COMMAND : mode) {
-            case COMMAND -> "Command";
-            case GROOVY_SCRIPT -> "Groovy Script";
-            case KOTLIN_SCRIPT -> "Kotlin Script";
-        };
+        return MacroWorkbenchCanvasUtils.shortExecutionMode(mode);
     }
 
     private static MacroHudDataHandler.VisibilityMode cycleVisibilityMode(MacroHudDataHandler.VisibilityMode mode, boolean forward) {
@@ -7542,46 +6712,7 @@ public class MacroWorkbenchV2Screen extends Screen {
 
 
     private static String keyLabel(int keyCode) {
-        return switch (keyCode) {
-            case GLFW.GLFW_KEY_ESCAPE -> "Esc";
-            case GLFW.GLFW_KEY_LEFT_CONTROL -> "L.C";
-            case GLFW.GLFW_KEY_RIGHT_CONTROL -> "R.C";
-            case GLFW.GLFW_KEY_LEFT_ALT -> "L.A";
-            case GLFW.GLFW_KEY_RIGHT_ALT -> "R.A";
-            case GLFW.GLFW_KEY_LEFT_SHIFT -> "L.S";
-            case GLFW.GLFW_KEY_RIGHT_SHIFT -> "R.S";
-            case GLFW.GLFW_KEY_UP -> "Up";
-            case GLFW.GLFW_KEY_DOWN -> "Dn";
-            case GLFW.GLFW_KEY_LEFT -> "Lt";
-            case GLFW.GLFW_KEY_RIGHT -> "Rt";
-            case GLFW.GLFW_KEY_BACKSPACE -> "Bksp";
-            case GLFW.GLFW_KEY_CAPS_LOCK -> "Caps";
-            case GLFW.GLFW_KEY_KP_ADD -> "Num+";
-            case GLFW.GLFW_KEY_KP_SUBTRACT -> "Num-";
-            case GLFW.GLFW_KEY_KP_MULTIPLY -> "Num*";
-            case GLFW.GLFW_KEY_KP_DIVIDE -> "Num/";
-            case GLFW.GLFW_KEY_KP_ENTER -> "NumE";
-            case GLFW.GLFW_KEY_KP_DECIMAL -> "Num.";
-            case GLFW.GLFW_KEY_HOME -> "Home";
-            case GLFW.GLFW_KEY_END -> "End";
-            case GLFW.GLFW_KEY_PAGE_UP -> "PgUp";
-            case GLFW.GLFW_KEY_PAGE_DOWN -> "PgDn";
-            case GLFW.GLFW_KEY_INSERT -> "Ins";
-            case GLFW.GLFW_KEY_DELETE -> "Del";
-            case GLFW.GLFW_MOUSE_BUTTON_LEFT -> "M1";
-            case GLFW.GLFW_MOUSE_BUTTON_RIGHT -> "M2";
-            case GLFW.GLFW_MOUSE_BUTTON_MIDDLE -> "M3";
-            case GLFW.GLFW_MOUSE_BUTTON_4 -> "M4";
-            case GLFW.GLFW_MOUSE_BUTTON_5 -> "M5";
-            default -> {
-                try {
-                    String s = InputUtil.Type.KEYSYM.createFromCode(keyCode).getLocalizedText().getString();
-                    yield s.length() > 7 ? s.substring(0, 7) : s;
-                } catch (Exception ignored) {
-                    yield "?";
-                }
-            }
-        };
+        return MacroWorkbenchCanvasUtils.keyLabel(keyCode);
     }
 
     private static void ensureVisibleBackground(MacroHudDataHandler.HudElement e) {
@@ -7632,194 +6763,19 @@ public class MacroWorkbenchV2Screen extends Screen {
     }
 
     private static String formatColor(int argb) {
-        return String.format("#%08X", argb);
+        return ColorUtils.formatColor(argb);
     }
 
     private static int lineStart(String text, int index) {
-        int cursor = Math.clamp(index, 0, text.length());
-        int prevNewline = text.lastIndexOf('\n', Math.max(0, cursor - 1));
-        return prevNewline < 0 ? 0 : prevNewline + 1;
+        return StringUtils.lineStart(text, index);
     }
 
     private static int lineEnd(String text, int index) {
-        int cursor = Math.clamp(index, 0, text.length());
-        int nextNewline = text.indexOf('\n', cursor);
-        return nextNewline < 0 ? text.length() : nextNewline;
+        return StringUtils.lineEnd(text, index);
     }
 
     private static int moveCursorVertical(String text, int index, int dir) {
-        int cursor = Math.clamp(index, 0, text.length());
-        int start = lineStart(text, cursor);
-        int col = cursor - start;
-
-        if (dir < 0) {
-            if (start == 0) {
-                return cursor;
-            }
-            int prevEnd = start - 1;
-            int prevStart = lineStart(text, prevEnd);
-            return Math.min(prevStart + col, prevEnd);
-        }
-
-        int end = lineEnd(text, cursor);
-        if (end >= text.length()) {
-            return cursor;
-        }
-        int nextStart = end + 1;
-        int nextEnd = lineEnd(text, nextStart);
-        return Math.min(nextStart + col, nextEnd);
-    }
-
-    private static String getGameKeybindDisplayName(KeyBinding kb, Object options) {
-        String action = reflectActionName(kb);
-        if ((action == null || action.isBlank()) && options != null) {
-            action = deriveActionFromOptionsField(kb, options);
-        }
-        if (action == null || action.isBlank()) {
-            return kb.getBoundKeyLocalizedText().getString();
-        }
-        return action;
-    }
-
-    private static String deriveActionFromOptionsField(KeyBinding kb, Object options) {
-        Class<?> c = options.getClass();
-        while (c != null) {
-            for (Field f : c.getDeclaredFields()) {
-                if (!KeyBinding.class.isAssignableFrom(f.getType())) {
-                    continue;
-                }
-                try {
-                    f.setAccessible(true);
-                    Object v = f.get(options);
-                    if (v == kb) {
-                        return humanizeFieldName(f.getName());
-                    }
-                } catch (Exception ignored) {
-                }
-            }
-            c = c.getSuperclass();
-        }
-        return null;
-    }
-
-    private static String humanizeFieldName(String field) {
-        if (field == null || field.isBlank()) {
-            return null;
-        }
-        String raw = field.endsWith("Key") ? field.substring(0, field.length() - 3) : field;
-        StringBuilder out = new StringBuilder();
-        for (int i = 0; i < raw.length(); i++) {
-            char ch = raw.charAt(i);
-            if (i > 0 && Character.isUpperCase(ch)) {
-                out.append(' ');
-            }
-            out.append(ch);
-        }
-        if (out.isEmpty()) {
-            return null;
-        }
-        out.setCharAt(0, Character.toUpperCase(out.charAt(0)));
-        return out.toString();
-    }
-
-    private static String reflectActionName(KeyBinding kb) {
-        String action = extractActionKeyFromMethods(kb);
-        if (action != null) {
-            return humanizeTranslation(action);
-        }
-
-        action = extractActionKeyFromFields(kb);
-        if (action != null) {
-            return humanizeTranslation(action);
-        }
-
-        // Last-ditch fallback: parse class string if it exposes key identifiers.
-        String fallback = kb.toString();
-        if (fallback != null) {
-            int idx = fallback.indexOf("key.");
-            if (idx >= 0) {
-                String candidate = fallback.substring(idx).split("[^a-zA-Z0-9_.]", 2)[0];
-                if (isActionTranslationKey(candidate)) {
-                    return humanizeTranslation(candidate);
-                }
-            }
-        }
-
-        return null;
-    }
-
-    private static String extractActionKeyFromMethods(KeyBinding kb) {
-        try {
-            Method m = kb.getClass().getMethod("getTranslationKey");
-            Object v = m.invoke(kb);
-            if (v instanceof String s && isActionTranslationKey(s)) {
-                return s;
-            }
-        } catch (Exception ignored) {
-        }
-
-        for (Method m : kb.getClass().getMethods()) {
-            if (m.getParameterCount() != 0 || m.getReturnType() != String.class) {
-                continue;
-            }
-            try {
-                Object v = m.invoke(kb);
-                if (v instanceof String s && isActionTranslationKey(s)) {
-                    return s;
-                }
-            } catch (Exception ignored) {
-            }
-        }
-
-        return null;
-    }
-
-    private static String extractActionKeyFromFields(KeyBinding kb) {
-        Class<?> c = kb.getClass();
-        while (c != null) {
-            for (Field f : c.getDeclaredFields()) {
-                if (f.getType() != String.class) {
-                    continue;
-                }
-                try {
-                    f.setAccessible(true);
-                    Object v = f.get(kb);
-                    if (v instanceof String s && isActionTranslationKey(s)) {
-                        return s;
-                    }
-                } catch (Exception ignored) {
-                }
-            }
-            c = c.getSuperclass();
-        }
-
-        return null;
-    }
-
-    private static boolean isActionTranslationKey(String key) {
-        if (key == null || key.isBlank()) {
-            return false;
-        }
-        if (!key.startsWith("key.")) {
-            return false;
-        }
-        if (key.startsWith("key.keyboard.") || key.startsWith("key.mouse.")) {
-            return false;
-        }
-        return true;
-    }
-
-    private static String humanizeTranslation(String key) {
-        if (key == null || key.isBlank()) {
-            return null;
-        }
-        String[] parts = key.split("\\.");
-        String tail = parts.length == 0 ? key : parts[parts.length - 1];
-        String spaced = tail.replace('_', ' ');
-        if (spaced.isBlank()) {
-            return key;
-        }
-        return Character.toUpperCase(spaced.charAt(0)) + spaced.substring(1);
+        return StringUtils.moveCursorVertical(text, index, dir);
     }
 
     @Override
