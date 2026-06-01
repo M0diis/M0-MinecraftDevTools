@@ -2,10 +2,12 @@ package me.m0dii.mixin;
 
 
 import me.m0dii.modules.freecam.FreecamModule;
+import me.m0dii.modules.tweaks.TweaksModule;
 import me.m0dii.modules.zoom.ZoomModule;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.Camera;
 import net.minecraft.client.render.GameRenderer;
+import net.minecraft.client.util.math.MatrixStack;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -43,6 +45,20 @@ public abstract class GameRendererMixin {
     @Inject(method = "renderHand", at = @At("HEAD"), cancellable = true)
     private void removeHandRendering(CallbackInfo ci) {
         if (FreecamModule.INSTANCE.isEnabled()) {
+            ci.cancel();
+        }
+    }
+
+    @Inject(method = "tiltViewWhenHurt", at = @At("HEAD"), cancellable = true)
+    private void disableHurtTilt(MatrixStack matrices, float tickProgress, CallbackInfo ci) {
+        if (TweaksModule.INSTANCE.disableHurtCamera()) {
+            ci.cancel();
+        }
+    }
+
+    @Inject(method = "bobView", at = @At("HEAD"), cancellable = true)
+    private void disableViewBobbing(MatrixStack matrices, float tickProgress, CallbackInfo ci) {
+        if (TweaksModule.INSTANCE.disableViewBobbing()) {
             ci.cancel();
         }
     }

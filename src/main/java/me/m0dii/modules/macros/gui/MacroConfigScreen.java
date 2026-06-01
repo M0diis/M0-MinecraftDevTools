@@ -3,6 +3,7 @@ package me.m0dii.modules.macros.gui;
 import me.m0dii.modules.macros.CommandMacros;
 import me.m0dii.modules.macros.MacroDataHandler;
 import me.m0dii.modules.macros.MacroPlaceholders;
+import me.m0dii.modules.performance.DynamicFpsModule;
 import me.m0dii.utils.ModConfig;
 import me.shedaniel.clothconfig2.api.*;
 import me.shedaniel.clothconfig2.impl.builders.SubCategoryBuilder;
@@ -43,6 +44,8 @@ public final class MacroConfigScreen {
         ConfigEntryBuilder eb = builder.entryBuilder();
         ConfigCategory category = builder.getOrCreateCategory(Text.literal("Macros"));
         boolean[] overlayVisible = new boolean[]{ModConfig.showMacroKeybindOverlay};
+        boolean[] dynamicFpsEnabled = new boolean[]{DynamicFpsModule.INSTANCE.isEnabled()};
+        AtomicInteger dynamicFpsUnfocusedCap = new AtomicInteger(Math.clamp(ModConfig.dynamicFpsUnfocusedFps, 5, 260));
 
         SubCategoryBuilder overlaySettings = eb.startSubCategory(Text.literal("Overlay Settings"))
                 .setExpanded(false);
@@ -51,6 +54,25 @@ public final class MacroConfigScreen {
                 .setSaveConsumer(val -> overlayVisible[0] = val)
                 .build());
         category.addEntry(overlaySettings.build());
+
+        SubCategoryBuilder performanceSettings = eb.startSubCategory(Text.literal("Performance"))
+                .setExpanded(false);
+        performanceSettings.add(eb.startBooleanToggle(Text.literal("Dynamic FPS when unfocused"), dynamicFpsEnabled[0])
+                .setTooltip(Text.literal("Automatically limits FPS while the game window is not focused"))
+                .setSaveConsumer(val -> dynamicFpsEnabled[0] = val)
+                .build());
+        performanceSettings.add(eb.startIntField(Text.literal("Unfocused FPS cap"), dynamicFpsUnfocusedCap.get())
+                .setTooltip(Text.literal("FPS cap applied while unfocused"))
+                .setMin(5)
+                .setMax(260)
+                .setDefaultValue(30)
+                .setSaveConsumer(val -> {
+                    if (val != null) {
+                        dynamicFpsUnfocusedCap.set(Math.clamp(val, 5, 260));
+                    }
+                })
+                .build());
+        category.addEntry(performanceSettings.build());
 
         SubCategoryBuilder subInstructors = eb.startSubCategory(Text.literal("Instructions"))
                 .setExpanded(false);
@@ -212,7 +234,12 @@ public final class MacroConfigScreen {
         category.addEntry(addSub.build());
 
         builder.setSavingRunnable(() -> {
-            ModConfig.updateAndSave(() -> ModConfig.showMacroKeybindOverlay = overlayVisible[0]);
+            ModConfig.updateAndSave(() -> {
+                ModConfig.showMacroKeybindOverlay = overlayVisible[0];
+                ModConfig.dynamicFpsUnfocusedFps = Math.clamp(dynamicFpsUnfocusedCap.get(), 5, 260);
+            });
+
+            DynamicFpsModule.INSTANCE.setEnabled(dynamicFpsEnabled[0]);
 
             // Apply deletions and updates
             for (MacroState state : states) {

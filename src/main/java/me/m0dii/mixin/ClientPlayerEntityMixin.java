@@ -4,6 +4,7 @@ import com.mojang.authlib.GameProfile;
 import me.m0dii.modules.freecam.CameraUtils;
 import me.m0dii.modules.freecam.DummyMovementInput;
 import me.m0dii.modules.freecam.FreecamModule;
+import me.m0dii.modules.tweaks.TweaksModule;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.input.Input;
 import net.minecraft.client.network.AbstractClientPlayerEntity;
@@ -67,6 +68,25 @@ public abstract class ClientPlayerEntityMixin extends AbstractClientPlayerEntity
     private void preventHandSwing(Hand hand, CallbackInfo ci) {
         if (CameraUtils.shouldPreventPlayerInputs() && this.isLocalClientPlayer()) {
             ci.cancel();
+        }
+    }
+
+    @Inject(method = "tickMovement", at = @At("TAIL"))
+    private void preventWallUnsprint(CallbackInfo ci) {
+        if (!TweaksModule.INSTANCE.disableWallUnsprint()) {
+            return;
+        }
+
+        if (!this.horizontalCollision || this.input == null || this.input.playerInput == null) {
+            return;
+        }
+
+        if (!this.input.playerInput.forward()) {
+            return;
+        }
+
+        if (this.input.playerInput.sprint() || TweaksModule.INSTANCE.permanentSprint()) {
+            this.setSprinting(true);
         }
     }
 

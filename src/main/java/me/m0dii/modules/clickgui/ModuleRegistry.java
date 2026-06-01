@@ -19,6 +19,7 @@ import me.m0dii.modules.nbttooltip.NBTTooltipModule;
 import me.m0dii.modules.nbttooltip.ShulkerTooltipModule;
 import me.m0dii.modules.overlays.*;
 import me.m0dii.modules.pickup.ItemPickupNotifierModule;
+import me.m0dii.modules.tweaks.TweaksModule;
 import me.m0dii.modules.uiutilities.UiUtilitiesModule;
 import me.m0dii.modules.watson.WatsonCoreProtectModule;
 import me.m0dii.modules.waypoints.WaypointModule;
@@ -85,6 +86,7 @@ public class ModuleRegistry {
         safeAdd(utilities, ShulkerTooltipModule.INSTANCE);
         safeAdd(utilities, FullbrightModule.INSTANCE);
         safeAdd(utilities, HeldLightModule.INSTANCE);
+        safeAdd(utilities, TweaksModule.INSTANCE);
         safeAdd(utilities, WatsonCoreProtectModule.INSTANCE);
         categories.add(utilities);
 

@@ -36,6 +36,61 @@ public class ModConfig extends MidnightConfig {
     @MidnightConfig.Entry(name = "Message History Limit", category = CATEGORY_GENERAL, min = 10, max = 1000)
     public static int messageHistoryLimit = 500;
 
+    public static final String CATEGORY_PERFORMANCE = "Performance";
+
+    @MidnightConfig.Entry(name = "Dynamic FPS Enabled", category = CATEGORY_PERFORMANCE)
+    public static boolean dynamicFpsEnabled = true;
+
+    @MidnightConfig.Entry(name = "Dynamic FPS Unfocused Cap", category = CATEGORY_PERFORMANCE, isSlider = true, min = 5, max = 260)
+    public static int dynamicFpsUnfocusedFps = 30;
+
+    public static final String CATEGORY_TWEAKS = "Tweaks";
+
+    @MidnightConfig.Entry(name = "Tweaks Module Enabled", category = CATEGORY_TWEAKS)
+    public static boolean tweaksModuleEnabled = true;
+
+    @MidnightConfig.Entry(name = "Hide Own Effect Particles", category = CATEGORY_TWEAKS)
+    public static boolean tweaksHideOwnEffectParticles = false;
+
+    @MidnightConfig.Entry(name = "Hide Offhand Item", category = CATEGORY_TWEAKS)
+    public static boolean tweaksHideOffhandItem = false;
+
+    @MidnightConfig.Entry(name = "Disable Block Breaking Particles", category = CATEGORY_TWEAKS)
+    public static boolean tweaksDisableBlockBreakingParticles = false;
+
+    @MidnightConfig.Entry(name = "Disable Entity Rendering", category = CATEGORY_TWEAKS)
+    public static boolean tweaksDisableEntityRendering = false;
+
+    @MidnightConfig.Entry(name = "Disable Nether Fog", category = CATEGORY_TWEAKS)
+    public static boolean tweaksDisableNetherFog = false;
+
+    @MidnightConfig.Entry(name = "Disable Rain Effects", category = CATEGORY_TWEAKS)
+    public static boolean tweaksDisableRainEffects = false;
+
+    @MidnightConfig.Entry(name = "Disable Sounds", category = CATEGORY_TWEAKS)
+    public static boolean tweaksDisableSounds = false;
+
+    @MidnightConfig.Entry(name = "Disable Wall Unsprint", category = CATEGORY_TWEAKS)
+    public static boolean tweaksDisableWallUnsprint = false;
+
+    @MidnightConfig.Entry(name = "Fast Block Placement", category = CATEGORY_TWEAKS)
+    public static boolean tweaksFastBlockPlacement = false;
+
+    @MidnightConfig.Entry(name = "Angel Block", category = CATEGORY_TWEAKS)
+    public static boolean tweaksAngelBlock = false;
+
+    @MidnightConfig.Entry(name = "Permanent Sneak", category = CATEGORY_TWEAKS)
+    public static boolean tweaksPermanentSneak = false;
+
+    @MidnightConfig.Entry(name = "Permanent Sprint", category = CATEGORY_TWEAKS)
+    public static boolean tweaksPermanentSprint = false;
+
+    @MidnightConfig.Entry(name = "Disable Hurt Camera", category = CATEGORY_TWEAKS)
+    public static boolean tweaksDisableHurtCamera = false;
+
+    @MidnightConfig.Entry(name = "Disable View Bobbing", category = CATEGORY_TWEAKS)
+    public static boolean tweaksDisableViewBobbing = false;
+
 
     public static final String CATEGORY_OVERLAY = "Overlay";
 

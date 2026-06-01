@@ -21,6 +21,7 @@
     "GameRendererBlockAttributesMixin",
     "GameRendererMixin",
     "HandledScreenMoveMixin",
+    "InactivityFpsLimiterMixin",
     "ItemstackMixin",
     "ItemStackTooltipDataMixin",
     "MiddleClickMixin",
@@ -33,6 +34,14 @@
     "WorldRendererMixin",
     "macros.ChatScreenMacroHudMixin",
     "macros.HandledScreenMacroHudMixin",
+    "tweaks.AtmosphericFogModifierMixin",
+    "tweaks.ClientWorldMixin",
+    "tweaks.EntityRenderManagerMixin",
+    "tweaks.HeldItemRendererMixin",
+    "tweaks.KeyboardInputMixin",
+    "tweaks.LivingEntityPotionSwirlsMixin",
+    "tweaks.SoundManagerMixin",
+    "tweaks.WeatherRenderingMixin",
     "uiutilities.BookEditScreenMixin",
     "uiutilities.BookScreenMixin",
     "uiutilities.ClientCommonNetworkHandlerMixin",
@@ -40,6 +49,7 @@
     "uiutilities.HandledScreenMixin",
     "uiutilities.MultiplayerScreenMixin",
     "uiutilities.SignEditScreenMixin",
-    "uiutilities.SleepingChatScreenMixin"
+    "uiutilities.SleepingChatScreenMixin",
+    "uiutilities.SplashOverlayMixin"
   ]
 }
