@@ -5,6 +5,7 @@ import me.m0dii.utils.ReflectionUtils;
 import me.m0dii.utils.StringUtils;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
+import net.minecraft.client.gui.screen.ingame.InventoryScreen;
 import net.minecraft.entity.LivingEntity;
 
 import java.lang.reflect.Method;
@@ -57,9 +58,24 @@ public final class MacroWorkbenchEntityModelRenderer {
                                                                                MacroHudDataHandler.HudElement element) {
         String id = StringUtils.safe(element == null ? null : element.iconId).toLowerCase(Locale.ROOT);
         if (id.isBlank() || "player".equals(id) || "minecraft:player".equals(id)) {
+            if (client.player != null) {
+                return client.player;
+            }
+            net.minecraft.entity.Entity camera = client.getCameraEntity();
+            return camera instanceof LivingEntity ? camera : null;
+        }
+        if (client.world != null && !id.contains(":")) {
+            for (var player : client.world.getPlayers()) {
+                if (player != null && player.getName().getString().equalsIgnoreCase(id)) {
+                    return player;
+                }
+            }
+        }
+        if (client.player != null) {
             return client.player;
         }
-        return client.player != null ? client.player : client.getCameraEntity();
+        net.minecraft.entity.Entity camera = client.getCameraEntity();
+        return camera instanceof LivingEntity ? camera : null;
     }
 
     private static void drawEntityModelReflective(DrawContext context,
@@ -76,16 +92,20 @@ public final class MacroWorkbenchEntityModelRenderer {
             return;
         }
         try {
+            float[] resolvedAngles = resolveModelAngles(entity, yaw, pitch, followLook);
+            float resolvedYaw = resolvedAngles[0];
+            float resolvedPitch = resolvedAngles[1];
+
+            if (drawEntityModelDirect(context, entity, left, top, right, bottom, size, resolvedYaw, resolvedPitch)) {
+                return;
+            }
+
             Class<?> inventoryScreen = Class.forName("net.minecraft.client.gui.screen.ingame.InventoryScreen");
             Class<?> drawContextClass = Class.forName("net.minecraft.client.gui.DrawContext");
             Class<?> entityClass = Class.forName("net.minecraft.entity.Entity");
             Class<?> vectorClass = Class.forName("org.joml.Vector3f");
             Class<?> quaternionClass = Class.forName("org.joml.Quaternionf");
             Class<?> livingEntityClass = Class.forName("net.minecraft.entity.LivingEntity");
-
-            float[] resolvedAngles = resolveModelAngles(entity, yaw, pitch, followLook);
-            float resolvedYaw = resolvedAngles[0];
-            float resolvedPitch = resolvedAngles[1];
 
             Object vecZero = vectorClass.getConstructor(float.class, float.class, float.class).newInstance(0.0f, 0.0f, 0.0f);
             Object modelQuat = buildModelQuaternion(quaternionClass, resolvedPitch);
@@ -185,6 +205,32 @@ public final class MacroWorkbenchEntityModelRenderer {
             }
         } catch (Exception ignored) {
             // Graceful fallback when mapped signatures differ across versions.
+        }
+    }
+
+    private static boolean drawEntityModelDirect(DrawContext context,
+                                                 net.minecraft.entity.Entity entity,
+                                                 int left,
+                                                 int top,
+                                                 int right,
+                                                 int bottom,
+                                                 int size,
+                                                 float resolvedYaw,
+                                                 float resolvedPitch) {
+        if (!(entity instanceof LivingEntity living)) {
+            return false;
+        }
+        try {
+            float cx = (left + right) / 2.0f;
+            float cy = (top + bottom) / 2.0f;
+            float clampedYaw = Math.clamp(resolvedYaw, -30.0f, 30.0f);
+            float clampedPitch = Math.clamp(resolvedPitch, -30.0f, 30.0f);
+            float mx = cx - 40.0f * (float) Math.tan(clampedYaw / 20.0f);
+            float my = cy + 40.0f * (float) Math.tan(clampedPitch / 20.0f);
+            InventoryScreen.drawEntity(context, left, top, right, bottom, size, 0.0625f, mx, my, living);
+            return true;
+        } catch (Throwable ignored) {
+            return false;
         }
     }
 

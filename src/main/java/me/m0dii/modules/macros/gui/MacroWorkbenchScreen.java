@@ -98,6 +98,11 @@ public class MacroWorkbenchScreen extends Screen {
     };
     private static final String[] ICON_KIND_PRESETS = {"item", "block", "entity", "entity_model"};
     private static final String[] SHAPE_TYPE_PRESETS = {"rounded_rect", "rect", "circle", "line", "triangle", "cross", "diamond"};
+    private static final Set<String> SCRIPT_HIGHLIGHT_KEYWORDS = Set.of(
+            "def", "class", "if", "else", "for", "while", "return", "import", "new",
+            "true", "false", "null", "fun", "val", "var", "object", "when",
+            "try", "catch", "finally", "throw", "in", "as", "is"
+    );
 
     private final Screen parent;
     private Tab tab;
@@ -2753,7 +2758,11 @@ public class MacroWorkbenchScreen extends Screen {
                 break;
             }
             String line = lines.get(i);
-            context.drawTextWithShadow(this.textRenderer, line, textArea.x() + 4, y, 0xFFEAEAEA);
+            if (shouldHighlightButtonScript()) {
+                drawButtonScriptHighlightedLine(context, line, textArea.x() + 4, y);
+            } else {
+                context.drawTextWithShadow(this.textRenderer, line, textArea.x() + 4, y, 0xFFEAEAEA);
+            }
             y += 9;
         }
 
@@ -5583,6 +5592,103 @@ public class MacroWorkbenchScreen extends Screen {
         }
 
         context.getMatrices().popMatrix();
+    }
+
+    private boolean shouldHighlightButtonScript() {
+        return selected != null
+                && selected.type == MacroHudDataHandler.ElementType.BUTTON
+                && selected.buttonExecutionMode != MacroHudDataHandler.ButtonExecutionMode.COMMAND;
+    }
+
+    private void drawButtonScriptHighlightedLine(DrawContext context, String line, int x, int y) {
+        List<ScriptTokenSpan> spans = tokenizeButtonScriptLine(line);
+        if (spans.isEmpty()) {
+            return;
+        }
+        int drawX = x;
+        for (ScriptTokenSpan span : spans) {
+            if (span.end() <= span.start() || span.start() < 0 || span.end() > line.length()) {
+                continue;
+            }
+            String part = line.substring(span.start(), span.end());
+            context.drawText(this.textRenderer, part, drawX, y, span.color(), false);
+            drawX += this.textRenderer.getWidth(part);
+        }
+    }
+
+    private static List<ScriptTokenSpan> tokenizeButtonScriptLine(String line) {
+        List<ScriptTokenSpan> out = new ArrayList<>();
+        if (line == null || line.isEmpty()) {
+            return out;
+        }
+        int i = 0;
+        while (i < line.length()) {
+            char c = line.charAt(i);
+            if (i + 1 < line.length() && c == '/' && line.charAt(i + 1) == '/') {
+                out.add(new ScriptTokenSpan(i, line.length(), 0xFF6FA86F));
+                break;
+            }
+            if (c == '"' || c == '\'') {
+                int j = i + 1;
+                while (j < line.length()) {
+                    if (line.charAt(j) == c && line.charAt(j - 1) != '\\') {
+                        j++;
+                        break;
+                    }
+                    j++;
+                }
+                out.add(new ScriptTokenSpan(i, Math.min(j, line.length()), 0xFFE6C07B));
+                i = j;
+                continue;
+            }
+            if (c == '{') {
+                int close = line.indexOf('}', i + 1);
+                if (close > i + 1 && isScriptPlaceholderToken(line.substring(i + 1, close))) {
+                    out.add(new ScriptTokenSpan(i, close + 1, 0xFF56B6C2));
+                    i = close + 1;
+                    continue;
+                }
+            }
+            if (Character.isDigit(c)) {
+                int j = i + 1;
+                while (j < line.length() && (Character.isDigit(line.charAt(j)) || line.charAt(j) == '.')) {
+                    j++;
+                }
+                out.add(new ScriptTokenSpan(i, j, 0xFFD19A66));
+                i = j;
+                continue;
+            }
+            if (Character.isLetter(c) || c == '_') {
+                int j = i + 1;
+                while (j < line.length() && (Character.isLetterOrDigit(line.charAt(j)) || line.charAt(j) == '_')) {
+                    j++;
+                }
+                String token = line.substring(i, j);
+                int color = SCRIPT_HIGHLIGHT_KEYWORDS.contains(token) ? 0xFF61AFEF : 0xFFDCDCAA;
+                out.add(new ScriptTokenSpan(i, j, color));
+                i = j;
+                continue;
+            }
+            out.add(new ScriptTokenSpan(i, i + 1, 0xFFEAEAEA));
+            i++;
+        }
+        return out;
+    }
+
+    private static boolean isScriptPlaceholderToken(String token) {
+        if (token == null || token.isBlank()) {
+            return false;
+        }
+        for (int i = 0; i < token.length(); i++) {
+            char ch = token.charAt(i);
+            if (!(Character.isLetterOrDigit(ch) || ch == '_' || ch == '.' || ch == '-')) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private record ScriptTokenSpan(int start, int end, int color) {
     }
 
     private int cursorIndexFromPoint(String text, int localX, int localY, int lineHeight) {

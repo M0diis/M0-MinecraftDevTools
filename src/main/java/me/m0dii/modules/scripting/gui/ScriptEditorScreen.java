@@ -112,6 +112,7 @@ public class ScriptEditorScreen extends Screen {
     private int selectedScriptIndex = -1;
     private int scriptsScroll = 0;
     private String scriptSearch = "";
+    private boolean scriptsSearchFocused = false;
     private SortMode sortMode = SortMode.NAME_ASC;
     private FilterMode filterMode = FilterMode.ALL;
 
@@ -176,25 +177,32 @@ public class ScriptEditorScreen extends Screen {
                 case 1 -> UiTab.DOCS;
                 default -> UiTab.SCRIPTS;
             };
+            scriptsSearchFocused = false;
             hideSuggestions();
             return true;
         }
 
         if (tab == UiTab.DOCS) {
             editor.focused = false;
+            scriptsSearchFocused = false;
             return false;
         }
 
         if (tab == UiTab.SCRIPTS) {
+            if (scriptsSearchRect().contains(click.x(), click.y())) {
+                scriptsSearchFocused = true;
+                editor.focused = false;
+                hideSuggestions();
+                return true;
+            }
+            scriptsSearchFocused = false;
             if (scriptsBodyRect().contains(click.x(), click.y())) {
                 int idx = visibleScriptIndexAt(click.y());
                 if (idx >= 0 && idx < visibleScripts.size()) {
+                    editor.focused = false;
                     openScriptByVisibleIndex(idx, false);
                     return true;
                 }
-            }
-            if (scriptsSearchRect().contains(click.x(), click.y())) {
-                return true;
             }
             if (scriptsBtnCreate().contains(click.x(), click.y())) return createScript();
             if (scriptsBtnRename().contains(click.x(), click.y())) return renameScript();
@@ -206,6 +214,7 @@ public class ScriptEditorScreen extends Screen {
             if (scriptsBtnRun().contains(click.x(), click.y())) return runScript();
             if (scriptsBtnAsync().contains(click.x(), click.y())) return toggleScriptAsync();
         } else {
+            scriptsSearchFocused = false;
             if (mainBtnSave().contains(click.x(), click.y())) return saveScript();
             if (mainBtnRun().contains(click.x(), click.y())) return runScript();
             if (mainBtnValidate().contains(click.x(), click.y())) return validateNow();
@@ -238,11 +247,13 @@ public class ScriptEditorScreen extends Screen {
         Rect gutter = gutterRect(editorRect());
         if (gutter.contains(click.x(), click.y())) {
             editor.focused = true;
+            scriptsSearchFocused = false;
             hideSuggestions();
             return true;
         }
         if (code.contains(click.x(), click.y())) {
             editor.focused = true;
+            scriptsSearchFocused = false;
             int idx = indexFromMouse((int) click.x(), (int) click.y(), code);
             updateClickCount(idx);
             if (editor.clickCount >= 3) {
@@ -263,6 +274,7 @@ public class ScriptEditorScreen extends Screen {
         }
 
         editor.focused = false;
+        scriptsSearchFocused = false;
         hideSuggestions();
         return false;
     }
@@ -312,7 +324,7 @@ public class ScriptEditorScreen extends Screen {
     @Override
     public boolean charTyped(CharInput input) {
         int codepoint = input.codepoint();
-        if (tab == UiTab.SCRIPTS && scriptsSearchRect().contains(mouseX(), mouseY()) && (codepoint >= 32 && codepoint != 127)) {
+        if (tab == UiTab.SCRIPTS && scriptsSearchFocused && (codepoint >= 32 && codepoint != 127)) {
             scriptSearch = scriptSearch + new String(Character.toChars(codepoint));
             refreshScripts();
             return true;
@@ -335,7 +347,7 @@ public class ScriptEditorScreen extends Screen {
         boolean ctrl = isCtrlDown();
         boolean shift = isShiftDown();
 
-        if (tab == UiTab.SCRIPTS && key == GLFW.GLFW_KEY_BACKSPACE && !editor.focused && !scriptSearch.isEmpty()) {
+        if (tab == UiTab.SCRIPTS && scriptsSearchFocused && key == GLFW.GLFW_KEY_BACKSPACE && !scriptSearch.isEmpty()) {
             scriptSearch = scriptSearch.substring(0, scriptSearch.length() - 1);
             refreshScripts();
             return true;
@@ -511,8 +523,15 @@ public class ScriptEditorScreen extends Screen {
         context.drawTextWithShadow(textRenderer, "Scripts", pane.x + 6, pane.y + 4, 0xFFFFFFFF);
 
         Rect search = scriptsSearchRect();
-        context.fill(search.x, search.y, search.x + search.w, search.y + search.h, 0xFF111111);
-        context.drawText(textRenderer, "Search: " + scriptSearch, search.x + 4, search.y + 5, 0xFFDADADA, false);
+        context.fill(search.x, search.y, search.x + search.w, search.y + search.h, scriptsSearchFocused ? 0xFF162030 : 0xFF111111);
+        String searchLine = "Search: " + scriptSearch;
+        context.drawText(textRenderer, searchLine, search.x + 4, search.y + 5, 0xFFDADADA, false);
+        if (scriptsSearchFocused && blinkOn()) {
+            int cursorX = search.x + 4 + textRenderer.getWidth(searchLine);
+            if (cursorX < search.x + search.w - 2) {
+                context.fill(cursorX, search.y + 4, cursorX + 1, search.y + 13, 0xFFFFFFFF);
+            }
+        }
 
         Rect body = scriptsBodyRect();
         context.fill(body.x, body.y, body.x + body.w, body.y + body.h, 0xFF111111);
@@ -690,13 +709,26 @@ public class ScriptEditorScreen extends Screen {
             outputText = "Select a script first.";
             return true;
         }
-        String renamed = nextName(current, "_renamed");
+        String requestedName = scriptSearch == null ? "" : scriptSearch.trim();
+        String renamed = requestedName.isBlank()
+                ? nextName(current, "_renamed", allScripts)
+                : normalizeScriptNameForRename(requestedName, current);
+        if (renamed.indexOf('/') >= 0 || renamed.indexOf('\\') >= 0 || renamed.indexOf(':') >= 0) {
+            outputText = "Invalid script name.";
+            return true;
+        }
+        if (renamed.equals(current)) {
+            outputText = "Rename target is unchanged.";
+            return true;
+        }
         try {
             if (!ScriptStorage.renameScript(current, renamed)) {
                 outputText = "Rename failed: target already exists.";
                 return true;
             }
             currentScriptName = renamed;
+            scriptSearch = "";
+            scriptsSearchFocused = false;
             refreshScripts();
             selectByName(renamed, true);
             outputText = "Renamed to " + renamed;
@@ -712,7 +744,7 @@ public class ScriptEditorScreen extends Screen {
             outputText = "Select a script first.";
             return true;
         }
-        String duplicate = nextName(current, "_copy");
+        String duplicate = nextName(current, "_copy", allScripts);
         try {
             ScriptStorage.writeScript(duplicate, editor.text);
             refreshScripts();
@@ -1109,11 +1141,45 @@ public class ScriptEditorScreen extends Screen {
         return visibleScripts.get(selectedScriptIndex);
     }
 
-    private static String nextName(String existing, String suffix) {
+    private static String nextName(String existing, String suffix, Collection<String> takenNames) {
         int dot = existing.lastIndexOf('.');
         String base = dot < 0 ? existing : existing.substring(0, dot);
         String ext = dot < 0 ? "" : existing.substring(dot);
-        return base + suffix + ext;
+        String candidate = base + suffix + ext;
+        int idx = 2;
+        while (containsIgnoreCase(takenNames, candidate)) {
+            candidate = base + suffix + "_" + idx + ext;
+            idx++;
+        }
+        return candidate;
+    }
+
+    private static boolean containsIgnoreCase(Collection<String> names, String target) {
+        if (target == null || target.isBlank() || names == null || names.isEmpty()) {
+            return false;
+        }
+        for (String name : names) {
+            if (name != null && name.equalsIgnoreCase(target)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static String normalizeScriptNameForRename(String raw, String current) {
+        String name = raw == null ? "" : raw.trim();
+        if (name.isEmpty()) {
+            return normalizeScriptName(current);
+        }
+        String lower = name.toLowerCase(Locale.ROOT);
+        if (lower.endsWith(GROOVY_EXT) || lower.endsWith(KOTLIN_EXT)) {
+            return name;
+        }
+        String currentLower = current == null ? "" : current.toLowerCase(Locale.ROOT);
+        if (currentLower.endsWith(GROOVY_EXT)) {
+            return name + GROOVY_EXT;
+        }
+        return name + KOTLIN_EXT;
     }
 
     private void rebuildDocs() {
