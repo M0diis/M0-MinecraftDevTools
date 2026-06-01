@@ -7,7 +7,7 @@ import me.m0dii.modules.fullbright.FullbrightModule;
 import me.m0dii.modules.heldlight.HeldLightModule;
 import me.m0dii.modules.instantbreak.InstantBreakModule;
 import me.m0dii.modules.inventorymove.InventoryMoveModule;
-import me.m0dii.modules.nbthud.NBTInfoHudOverlayModule;
+import me.m0dii.modules.nbthud.NBTInfoHudModule;
 import me.m0dii.modules.nbttooltip.NBTTooltipModule;
 import me.m0dii.modules.nbttooltip.ShulkerTooltipModule;
 import me.m0dii.modules.overlays.*;
@@ -137,7 +137,7 @@ final class MacroWorkbenchConfigurationTab {
         }, rightX, rowY(0), settingW, ROW_H);
 
         this.nbtHudToggleButton = button("NBT Inspector HUD", b -> {
-            NBTInfoHudOverlayModule.INSTANCE.setEnabled(!NBTInfoHudOverlayModule.INSTANCE.isEnabled());
+            NBTInfoHudModule.INSTANCE.setEnabled(!NBTInfoHudModule.INSTANCE.isEnabled());
             syncControls();
         }, rightX, rowY(1), settingW, ROW_H);
 
@@ -375,7 +375,7 @@ final class MacroWorkbenchConfigurationTab {
         ensureRegexSelectionInBounds();
 
         this.macroOverlayToggleButton.setMessage(Text.literal("Macro Keybind HUD: " + (ModConfig.showMacroKeybindOverlay ? "ON" : "OFF")));
-        this.nbtHudToggleButton.setMessage(Text.literal("NBT Inspector HUD: " + (NBTInfoHudOverlayModule.INSTANCE.isEnabled() ? "ON" : "OFF")));
+        this.nbtHudToggleButton.setMessage(Text.literal("NBT Inspector HUD: " + (NBTInfoHudModule.INSTANCE.isEnabled() ? "ON" : "OFF")));
 
         this.secondaryEnabledToggleButton.setMessage(Text.literal("Secondary Chat: " + (SecondaryChatModule.INSTANCE.isEnabled() ? "ON" : "OFF")));
         this.secondaryOverlayToggleButton.setMessage(Text.literal("Secondary Overlay: " + (secondary.showOverlay ? "ON" : "OFF")));

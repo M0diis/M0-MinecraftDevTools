@@ -20,7 +20,7 @@ import me.m0dii.modules.macros.gui.MacroWorkbenchAdvancedLayouts.StandardAdvance
 import me.m0dii.modules.macros.hud.HudElementUtils;
 import me.m0dii.modules.macros.hud.MacroHudDataHandler;
 import me.m0dii.modules.messagehistory.MessageHistoryManager;
-import me.m0dii.modules.nbthud.NBTInfoHudOverlayModule;
+import me.m0dii.modules.nbthud.NBTInfoHudModule;
 import me.m0dii.modules.pickup.ItemPickupNotifierModule;
 import me.m0dii.modules.pickup.PickupFeedSettings;
 import me.m0dii.utils.*;
@@ -5148,11 +5148,11 @@ public class MacroWorkbenchScreen extends Screen {
             return active ? ExternalProxyRenderState.ACTIVE : ExternalProxyRenderState.MODULE_DISABLED;
         }
         if (isNbtInspectorProxy(element)) {
-            boolean active = NBTInfoHudOverlayModule.INSTANCE.isEnabled();
+            boolean active = NBTInfoHudModule.INSTANCE.isEnabled();
             return active ? ExternalProxyRenderState.ACTIVE : ExternalProxyRenderState.MODULE_DISABLED;
         }
         if (isMacroKeybindProxy(element)) {
-            boolean active = MacroKeybindOverlayModule.INSTANCE.isEnabled() && ModConfig.showMacroKeybindOverlay;
+            boolean active = MacroKeybindHudModule.INSTANCE.isEnabled() && ModConfig.showMacroKeybindOverlay;
             return active ? ExternalProxyRenderState.ACTIVE : ExternalProxyRenderState.MODULE_DISABLED;
         }
         if (isPickupNotifierProxy(element)) {

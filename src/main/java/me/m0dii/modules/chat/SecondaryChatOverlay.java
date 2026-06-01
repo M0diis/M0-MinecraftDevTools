@@ -1,8 +1,10 @@
 package me.m0dii.modules.chat;
 
+import me.m0dii.M0DevToolsClient;
 import me.m0dii.gui.GuiSystem;
 import me.m0dii.modules.hudcanvas.HudCanvasDataHandler;
-import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
+import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
+import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
@@ -10,6 +12,7 @@ import net.minecraft.client.gui.screen.ChatScreen;
 import net.minecraft.client.render.RenderTickCounter;
 import net.minecraft.text.OrderedText;
 import net.minecraft.text.Text;
+import net.minecraft.util.Identifier;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -21,7 +24,10 @@ public final class SecondaryChatOverlay {
     private static int scrollOffset = 0;
 
     public static void register() {
-        HudRenderCallback.EVENT.register(SecondaryChatOverlay::onHudRender);
+        HudElementRegistry.attachElementBefore(VanillaHudElements.CHAT,
+                Identifier.of(M0DevToolsClient.MOD_ID, "secondary_chat"),
+                SecondaryChatOverlay::onHudRender
+        );
     }
 
     public static void scroll(int amount) {

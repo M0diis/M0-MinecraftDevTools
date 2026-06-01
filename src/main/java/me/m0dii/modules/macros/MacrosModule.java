@@ -6,11 +6,11 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import me.m0dii.modules.Module;
 import me.m0dii.modules.macros.gui.MacroConfigScreen;
-import me.m0dii.modules.macros.gui.MacroKeybindOverlayModule;
+import me.m0dii.modules.macros.gui.MacroKeybindHudModule;
 import me.m0dii.modules.macros.gui.MacroWorkbenchScreen;
-import me.m0dii.modules.macros.gui.PendingMacrosOverlayModule;
+import me.m0dii.modules.macros.gui.PendingMacrosHudModule;
 import me.m0dii.modules.macros.hud.MacroHudDataHandler;
-import me.m0dii.modules.macros.hud.MacroHudOverlayModule;
+import me.m0dii.modules.macros.hud.MacroHudModule;
 import me.m0dii.utils.KeybindCatalog;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
@@ -62,9 +62,9 @@ public class MacrosModule extends Module {
                 client -> client.setScreen(MacroWorkbenchScreen.create(client.currentScreen, MacroWorkbenchScreen.Tab.KEYBOARD))
         );
 
-        MacroKeybindOverlayModule.INSTANCE.register();
-        PendingMacrosOverlayModule.INSTANCE.register();
-        MacroHudOverlayModule.INSTANCE.register();
+        MacroKeybindHudModule.INSTANCE.register();
+        PendingMacrosHudModule.INSTANCE.register();
+        MacroHudModule.INSTANCE.register();
     }
 
     private static void registerMacroCommands(CommandDispatcher<FabricClientCommandSource> dispatcher) {

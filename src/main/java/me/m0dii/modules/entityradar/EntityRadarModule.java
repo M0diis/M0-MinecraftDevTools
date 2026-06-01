@@ -1,14 +1,17 @@
 package me.m0dii.modules.entityradar;
 
+import me.m0dii.M0DevToolsClient;
 import me.m0dii.modules.Module;
 import me.m0dii.utils.KeybindCatalog;
 import me.m0dii.utils.ModConfig;
-import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
+import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
+import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
 import net.minecraft.client.util.InputUtil;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.mob.Monster;
 import net.minecraft.entity.passive.AnimalEntity;
 import net.minecraft.entity.passive.PassiveEntity;
+import net.minecraft.util.Identifier;
 import net.minecraft.util.math.Box;
 
 import java.util.ArrayList;
@@ -29,7 +32,10 @@ public class EntityRadarModule extends Module {
 
     @Override
     public void register() {
-        HudRenderCallback.EVENT.register(hudRenderer::onHudRender);
+        HudElementRegistry.attachElementBefore(VanillaHudElements.CHAT,
+                Identifier.of(M0DevToolsClient.MOD_ID, "entity_radar_hud"),
+                hudRenderer::onHudRender
+        );
 
         worldRenderer.register();
 

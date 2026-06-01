@@ -1,27 +1,33 @@
 package me.m0dii.modules.macros.gui;
 
+import me.m0dii.M0DevToolsClient;
 import me.m0dii.modules.Module;
 import me.m0dii.modules.macros.CommandMacros;
 import me.m0dii.utils.ModConfig;
-import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
+import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
+import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.render.RenderTickCounter;
+import net.minecraft.util.Identifier;
 
 import java.util.List;
 
-public class PendingMacrosOverlayModule extends Module {
+public class PendingMacrosHudModule extends Module {
 
-    public static final PendingMacrosOverlayModule INSTANCE = new PendingMacrosOverlayModule();
+    public static final PendingMacrosHudModule INSTANCE = new PendingMacrosHudModule();
 
-    private PendingMacrosOverlayModule() {
+    private PendingMacrosHudModule() {
         super("pending_macros_hud", "Pending Macros HUD", true);
     }
 
     @Override
     public void register() {
-        HudRenderCallback.EVENT.register(this::onHudRender);
+        HudElementRegistry.attachElementBefore(VanillaHudElements.CHAT,
+                Identifier.of(M0DevToolsClient.MOD_ID, "pending_macros_hud"),
+                this::onHudRender
+        );
     }
 
     private void onHudRender(DrawContext ctx, RenderTickCounter tickCounter) {

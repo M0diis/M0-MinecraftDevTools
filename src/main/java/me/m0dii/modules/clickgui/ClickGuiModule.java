@@ -1,11 +1,14 @@
 package me.m0dii.modules.clickgui;
 
 import lombok.Getter;
+import me.m0dii.M0DevToolsClient;
 import me.m0dii.modules.Module;
 import me.m0dii.utils.KeybindCatalog;
 import me.m0dii.utils.ModConfig;
-import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
+import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
+import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
 import net.minecraft.client.util.InputUtil;
+import net.minecraft.util.Identifier;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -25,7 +28,10 @@ public class ClickGuiModule extends Module {
     public void register() {
         this.renderer = new ClickGuiRenderer();
 
-        HudRenderCallback.EVENT.register(renderer::onHudRender);
+        HudElementRegistry.attachElementBefore(VanillaHudElements.CHAT,
+                Identifier.of(M0DevToolsClient.MOD_ID, "click_gui"),
+                renderer::onHudRender
+        );
 
         registerPressedKeybind(
                 KeybindCatalog.CLICKGUI_TOGGLE.translationKey(),

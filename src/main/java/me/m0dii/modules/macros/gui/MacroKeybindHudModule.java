@@ -1,31 +1,37 @@
 package me.m0dii.modules.macros.gui;
 
+import me.m0dii.M0DevToolsClient;
 import me.m0dii.modules.Module;
 import me.m0dii.modules.hudcanvas.HudCanvasDataHandler;
 import me.m0dii.modules.macros.MacroDataHandler;
 import me.m0dii.utils.ModConfig;
-import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
+import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
+import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.render.RenderTickCounter;
 import net.minecraft.client.util.InputUtil;
+import net.minecraft.util.Identifier;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-public class MacroKeybindOverlayModule extends Module {
+public class MacroKeybindHudModule extends Module {
 
-    public static final MacroKeybindOverlayModule INSTANCE = new MacroKeybindOverlayModule();
+    public static final MacroKeybindHudModule INSTANCE = new MacroKeybindHudModule();
 
-    private MacroKeybindOverlayModule() {
-        super("macro_keybind_overlay", "Macro Keybind HUD", true);
+    private MacroKeybindHudModule() {
+        super("macro_keybind_hud", "Macro Keybind HUD", true);
     }
 
     @Override
     public void register() {
-        HudRenderCallback.EVENT.register(this::onHudRender);
+        HudElementRegistry.attachElementBefore(VanillaHudElements.CHAT,
+                Identifier.of(M0DevToolsClient.MOD_ID, "macro_keybind_hud"),
+                this::onHudRender
+        );
     }
 
     private void onHudRender(DrawContext ctx, RenderTickCounter tickCounter) {
@@ -36,8 +42,9 @@ public class MacroKeybindOverlayModule extends Module {
 
         HudCanvasDataHandler.HudCanvasElement layout = HudCanvasDataHandler.getMutableElement(
                 HudCanvasDataHandler.ELEMENT_MACRO_KEYBINDS,
-                MacroKeybindOverlayModule::defaultHudCanvasLayout
+                MacroKeybindHudModule::defaultHudCanvasLayout
         );
+
         if (!layout.visible) {
             return;
         }

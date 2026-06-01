@@ -1,15 +1,18 @@
 package me.m0dii.modules.pickup;
 
+import me.m0dii.M0DevToolsClient;
 import me.m0dii.modules.Module;
 import me.m0dii.modules.hudcanvas.HudCanvasDataHandler;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
+import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
+import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.render.RenderTickCounter;
 import net.minecraft.item.ItemStack;
 import net.minecraft.registry.Registries;
+import net.minecraft.util.Identifier;
 
 import java.util.*;
 
@@ -29,7 +32,10 @@ public class ItemPickupNotifierModule extends Module {
     @Override
     public void register() {
         ClientTickEvents.END_CLIENT_TICK.register(this::onEndTick);
-        HudRenderCallback.EVENT.register(this::onHudRender);
+        HudElementRegistry.attachElementBefore(VanillaHudElements.CHAT,
+                Identifier.of(M0DevToolsClient.MOD_ID, "pickup_notifier"),
+                this::onHudRender
+        );
     }
 
     private void onEndTick(MinecraftClient client) {

@@ -17,7 +17,7 @@ import me.m0dii.modules.instantbreak.InstantBreakModule;
 import me.m0dii.modules.inventorymove.InventoryMoveModule;
 import me.m0dii.modules.macros.MacrosModule;
 import me.m0dii.modules.messagehistory.MessageHistoryModule;
-import me.m0dii.modules.nbthud.NBTInfoHudOverlayModule;
+import me.m0dii.modules.nbthud.NBTInfoHudModule;
 import me.m0dii.modules.nbttooltip.NBTTooltipModule;
 import me.m0dii.modules.nbttooltip.ShulkerTooltipModule;
 import me.m0dii.modules.overlays.*;
@@ -57,7 +57,7 @@ public class M0DevToolsClient implements ClientModInitializer {
         CommandHistoryModule.INSTANCE.register();
         MessageHistoryModule.INSTANCE.register();
         SecondaryChatModule.INSTANCE.register();
-        NBTInfoHudOverlayModule.INSTANCE.register();
+        NBTInfoHudModule.INSTANCE.register();
         ChunkBorderOverlayModule.INSTANCE.register();
         StructureBoundingBoxOverlay.INSTANCE.register();
         WaypointModule.INSTANCE.register();
