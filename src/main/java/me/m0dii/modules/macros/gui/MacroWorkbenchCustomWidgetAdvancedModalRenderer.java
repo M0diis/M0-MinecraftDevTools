@@ -112,6 +112,8 @@ public final class MacroWorkbenchCustomWidgetAdvancedModalRenderer {
         context.drawTextWithShadow(textRenderer,
                 selected.type == MacroHudDataHandler.ElementType.ICON
                         ? "Label + icon id + type-specific controls"
+                        : selected.type == MacroHudDataHandler.ElementType.INVENTORY
+                        ? "Label + inventory mode + type-specific controls"
                         : "Label + source token + type-specific controls",
                 boxX + 12, boxY + 24, 0xFFB0B0B0);
 
@@ -122,7 +124,11 @@ public final class MacroWorkbenchCustomWidgetAdvancedModalRenderer {
         context.drawTextWithShadow(textRenderer, advancedText, labelInput.x() + 4, labelInput.y() + 5, 0xFFEAEAEA);
 
         context.drawTextWithShadow(textRenderer,
-                selected.type == MacroHudDataHandler.ElementType.ICON ? "Icon id" : "Source token",
+                selected.type == MacroHudDataHandler.ElementType.ICON
+                        ? "Icon id"
+                        : selected.type == MacroHudDataHandler.ElementType.INVENTORY
+                        ? "Mode"
+                        : "Source token",
                 sourceInput.x(), sourceInput.y() - 10, 0xFFB8B8B8);
         context.fill(sourceInput.x(), sourceInput.y(), sourceInput.right(), sourceInput.bottom(), advancedActionFocused ? 0xFF0F0F0F : 0xFF161616);
         context.fill(sourceInput.x(), sourceInput.y(), sourceInput.right(), sourceInput.y() + 1, 0x60FFFFFF);

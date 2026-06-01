@@ -63,6 +63,9 @@ public final class MacroWorkbenchCustomWidgetTypeClickHandler {
         if (selected.type == MacroHudDataHandler.ElementType.LIST) {
             return handleListClick(click, layout, forward, selected, listSourcePresets, ops);
         }
+        if (selected.type == MacroHudDataHandler.ElementType.INVENTORY) {
+            return handleInventoryClick(click, layout, forward, selected, ops);
+        }
         if (selected.type == MacroHudDataHandler.ElementType.SHAPE) {
             return handleShapeClick(click, layout, forward, selected, shapeTypePresets, ops);
         }
@@ -70,6 +73,59 @@ public final class MacroWorkbenchCustomWidgetTypeClickHandler {
             return handleStateBadgeClick(click, layout, forward, selected, stateSourcePresets, ops);
         }
         return false;
+    }
+
+    private static boolean handleInventoryClick(Click click,
+                                                CustomWidgetAdvancedLayout layout,
+                                                boolean forward,
+                                                MacroHudDataHandler.HudElement selected,
+                                                Ops ops) {
+        if (!layout.typeWideTop().contains(click.x(), click.y())) {
+            return false;
+        }
+        selected.inventoryDisplayMode = cycleInventoryDisplayMode(selected.inventoryDisplayMode, forward);
+        applyInventoryDefaultSize(selected);
+        String mode = selected.inventoryDisplayMode.name();
+        ops.setAdvancedAction(mode);
+        ops.setAdvancedActionCursor(mode.length());
+        ops.setAdvancedActionSuggestionScroll(0);
+        return true;
+    }
+
+    private static MacroHudDataHandler.InventoryDisplayMode cycleInventoryDisplayMode(
+            MacroHudDataHandler.InventoryDisplayMode current,
+            boolean forward
+    ) {
+        MacroHudDataHandler.InventoryDisplayMode[] values = MacroHudDataHandler.InventoryDisplayMode.values();
+        int index = current == null ? 0 : current.ordinal();
+        int next = forward ? (index + 1) : (index - 1);
+        if (next < 0) {
+            next = values.length - 1;
+        }
+        if (next >= values.length) {
+            next = 0;
+        }
+        return values[next];
+    }
+
+    private static void applyInventoryDefaultSize(MacroHudDataHandler.HudElement selected) {
+        MacroHudDataHandler.InventoryDisplayMode mode = selected.inventoryDisplayMode == null
+                ? MacroHudDataHandler.InventoryDisplayMode.HOTBAR
+                : selected.inventoryDisplayMode;
+        switch (mode) {
+            case HOTBAR -> {
+                selected.width = 182;
+                selected.height = 22;
+            }
+            case INVENTORY -> {
+                selected.width = 182;
+                selected.height = 62;
+            }
+            case ARMOR -> {
+                selected.width = 22;
+                selected.height = 102;
+            }
+        }
     }
 
     private static boolean handleIconClick(Click click,

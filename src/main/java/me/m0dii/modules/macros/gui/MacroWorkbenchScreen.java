@@ -59,7 +59,6 @@ public class MacroWorkbenchScreen extends Screen {
         ENTITY_RADAR,
         COMMAND_HISTORY,
         MESSAGE_HISTORY,
-        INVENTORY,
         CONFIGURATION
     }
 
@@ -301,12 +300,11 @@ public class MacroWorkbenchScreen extends Screen {
                 Tab.ENTITY_RADAR,
                 Tab.COMMAND_HISTORY,
                 Tab.MESSAGE_HISTORY,
-                Tab.INVENTORY,
                 Tab.CONFIGURATION
         );
-        List<String> labels = List.of("Canvas", "Keyboard", "Placeholders", "Entity Radar", "Cmd Hist", "Msg Hist", "Inventory", "Configuration");
-        List<String> compactLabels = List.of("Canvas", "Keys", "Place", "Radar", "Cmd", "Msg", "Inv", "Config");
-        List<String> tinyLabels = List.of("CV", "KB", "PH", "ER", "CH", "MH", "IV", "CF");
+        List<String> labels = List.of("Canvas", "Keyboard", "Placeholders", "Entity Radar", "Cmd Hist", "Msg Hist", "Configuration");
+        List<String> compactLabels = List.of("Canvas", "Keys", "Place", "Radar", "Cmd", "Msg", "Config");
+        List<String> tinyLabels = List.of("CV", "KB", "PH", "ER", "CH", "MH", "CF");
         int tabGap = 4;
         int tabsStartX = 8;
         int tabsEndX = saveX - 8;
@@ -611,11 +609,6 @@ public class MacroWorkbenchScreen extends Screen {
             dragging = false;
             msgHistoryItems = new ArrayList<>(MessageHistoryManager.getHistory());
             msgHistoryScroll = 0;
-        } else if (next == Tab.INVENTORY) {
-            applyQuickEdit();
-            closeAdvancedModal();
-            closeKeyboardCommandsModal();
-            dragging = false;
         } else if (next == Tab.CONFIGURATION) {
             applyQuickEdit();
             closeAdvancedModal();
@@ -666,8 +659,6 @@ public class MacroWorkbenchScreen extends Screen {
             renderCommandHistoryTab(context, mouseX, mouseY);
         } else if (this.tab == Tab.MESSAGE_HISTORY) {
             renderMessageHistoryTab(context, mouseX, mouseY);
-        } else if (this.tab == Tab.INVENTORY) {
-            renderInventoryTab(context);
         } else if (this.tab == Tab.CONFIGURATION) {
             renderConfigurationTab(context);
         } else {
@@ -970,66 +961,6 @@ public class MacroWorkbenchScreen extends Screen {
         }
     }
 
-    private void renderInventoryTab(DrawContext context) {
-        int top = TOP_BAR_H + 8;
-        context.drawCenteredTextWithShadow(this.textRenderer, Text.literal("Inventory"), this.width / 2, top, 0xFFFFFFFF);
-
-        if (this.client == null || this.client.player == null) {
-            context.drawCenteredTextWithShadow(this.textRenderer, Text.literal("Inventory unavailable."), this.width / 2, top + 18, 0xFFAAAAAA);
-            return;
-        }
-
-        var inventory = this.client.player.getInventory();
-        int cell = 20;
-        int slot = 18;
-        int gridWidth = cell * 9;
-        int gridX = (this.width - gridWidth) / 2;
-        int mainY = top + 34;
-
-        context.drawTextWithShadow(this.textRenderer, "Main", gridX, mainY - 12, 0xFFB8D8D8);
-        for (int row = 0; row < 3; row++) {
-            for (int col = 0; col < 9; col++) {
-                int index = 9 + (row * 9) + col;
-                int x = gridX + (col * cell);
-                int y = mainY + (row * cell);
-                drawInventorySlot(context, x, y, slot, inventory.getStack(index), false);
-            }
-        }
-
-        int hotbarY = mainY + (cell * 3) + 12;
-        context.drawTextWithShadow(this.textRenderer, "Hotbar", gridX, hotbarY - 12, 0xFFB8D8D8);
-        int selectedSlot = inventory.getSelectedSlot();
-        for (int col = 0; col < 9; col++) {
-            int x = gridX + (col * cell);
-            drawInventorySlot(context, x, hotbarY, slot, inventory.getStack(col), col == selectedSlot);
-        }
-
-        int equipX = gridX + gridWidth + 24;
-        int equipY = mainY;
-        context.drawTextWithShadow(this.textRenderer, "Equipment", equipX, equipY - 12, 0xFFB8D8D8);
-        drawInventorySlot(context, equipX, equipY, slot, this.client.player.getEquippedStack(EquipmentSlot.HEAD), false);
-        drawInventorySlot(context, equipX, equipY + cell, slot, this.client.player.getEquippedStack(EquipmentSlot.CHEST), false);
-        drawInventorySlot(context, equipX, equipY + (cell * 2), slot, this.client.player.getEquippedStack(EquipmentSlot.LEGS), false);
-        drawInventorySlot(context, equipX, equipY + (cell * 3), slot, this.client.player.getEquippedStack(EquipmentSlot.FEET), false);
-        drawInventorySlot(context, equipX, equipY + (cell * 4) + 8, slot, this.client.player.getOffHandStack(), false);
-    }
-
-    private void drawInventorySlot(DrawContext context, int x, int y, int size, ItemStack stack, boolean selected) {
-        int bg = selected ? 0xA0785A20 : 0xAA1A1A1A;
-        context.fill(x, y, x + size, y + size, bg);
-        context.fill(x, y, x + size, y + 1, 0x50FFFFFF);
-        context.fill(x, y + size - 1, x + size, y + size, 0x50303030);
-        context.fill(x, y, x + 1, y + size, 0x50FFFFFF);
-        context.fill(x + size - 1, y, x + size, y + size, 0x50303030);
-
-        if (!stack.isEmpty()) {
-            int ix = x + 1;
-            int iy = y + 1;
-            context.drawItem(stack, ix, iy);
-            context.drawStackOverlay(this.textRenderer, stack, ix, iy);
-        }
-    }
-
     private boolean onCommandHistoryClick(double mouseX, double mouseY) {
         if (cmdHistoryItems.isEmpty()) {
             return false;
@@ -1191,9 +1122,6 @@ public class MacroWorkbenchScreen extends Screen {
             return onKeyboardClick(click.x(), click.y());
         }
         if (this.tab == Tab.ENTITY_RADAR) {
-            return false;
-        }
-        if (this.tab == Tab.INVENTORY) {
             return false;
         }
         if (this.tab == Tab.COMMAND_HISTORY) {
@@ -2200,6 +2128,7 @@ public class MacroWorkbenchScreen extends Screen {
                 || element.type == MacroHudDataHandler.ElementType.BAR
                 || element.type == MacroHudDataHandler.ElementType.VALUE
                 || element.type == MacroHudDataHandler.ElementType.LIST
+                || element.type == MacroHudDataHandler.ElementType.INVENTORY
                 || element.type == MacroHudDataHandler.ElementType.SHAPE
                 || element.type == MacroHudDataHandler.ElementType.STATE_BADGE;
 
@@ -2253,6 +2182,7 @@ public class MacroWorkbenchScreen extends Screen {
             case BAR -> drawCanvasBarPreview(context, e, x1, y1, x2, y2);
             case VALUE -> drawCanvasValuePreview(context, e, x1, y1, x2, y2);
             case LIST -> drawCanvasListPreview(context, e, x1, y1, x2, y2);
+            case INVENTORY -> drawCanvasInventoryPreview(context, e, x1, y1, x2, y2);
             case SHAPE -> drawCanvasShapePreview(context, e, x1, y1, x2, y2);
             case STATE_BADGE -> drawCanvasStateBadgePreview(context, e, x1, y1, x2, y2);
             default -> {
@@ -2366,6 +2296,107 @@ public class MacroWorkbenchScreen extends Screen {
             }
             drawStyledTextLine(context, visible.get(i), x1 + 4, yy, e.textColor, Math.max(0.5f, e.fontScale));
         }
+    }
+
+    private void drawCanvasInventoryPreview(DrawContext context, MacroHudDataHandler.HudElement e, int x1, int y1, int x2, int y2) {
+        if (e.drawBackground) {
+            context.fill(x1, y1, x2, y2, canvasBackgroundColor(e));
+        }
+        if (e.drawBorder) {
+            drawCanvasElementBorder(context, e, x1, y1, x2, y2);
+        }
+        if (this.client == null || this.client.player == null) {
+            return;
+        }
+
+        List<ItemStack> stacks = new ArrayList<>();
+        int cols = 9;
+        int rows = 1;
+        int selectedSlot = -1;
+        MacroHudDataHandler.InventoryDisplayMode mode = e.inventoryDisplayMode == null
+                ? MacroHudDataHandler.InventoryDisplayMode.HOTBAR
+                : e.inventoryDisplayMode;
+        switch (mode) {
+            case HOTBAR -> {
+                cols = 9;
+                rows = 1;
+                for (int i = 0; i < 9; i++) {
+                    stacks.add(this.client.player.getInventory().getStack(i));
+                }
+                selectedSlot = this.client.player.getInventory().getSelectedSlot();
+            }
+            case INVENTORY -> {
+                cols = 9;
+                rows = 3;
+                for (int row = 0; row < 3; row++) {
+                    for (int col = 0; col < 9; col++) {
+                        int index = 9 + row * 9 + col;
+                        stacks.add(this.client.player.getInventory().getStack(index));
+                    }
+                }
+            }
+            case ARMOR -> {
+                cols = 1;
+                rows = 5;
+                stacks.add(this.client.player.getEquippedStack(EquipmentSlot.HEAD));
+                stacks.add(this.client.player.getEquippedStack(EquipmentSlot.CHEST));
+                stacks.add(this.client.player.getEquippedStack(EquipmentSlot.LEGS));
+                stacks.add(this.client.player.getEquippedStack(EquipmentSlot.FEET));
+                stacks.add(this.client.player.getOffHandStack());
+            }
+        }
+
+        int padding = 2;
+        int gap = 2;
+        int contentW = Math.max(1, e.width - padding * 2);
+        int contentH = Math.max(1, e.height - padding * 2);
+        int cellW = Math.max(1, (contentW - gap * Math.max(0, cols - 1)) / Math.max(1, cols));
+        int cellH = Math.max(1, (contentH - gap * Math.max(0, rows - 1)) / Math.max(1, rows));
+        int cell = Math.max(8, Math.min(18, Math.min(cellW, cellH)));
+        int gridW = cols * cell + gap * Math.max(0, cols - 1);
+        int gridH = rows * cell + gap * Math.max(0, rows - 1);
+        int startX = x1 + padding + Math.max(0, (contentW - gridW) / 2);
+        int startY = y1 + padding + Math.max(0, (contentH - gridH) / 2);
+
+        for (int i = 0; i < stacks.size(); i++) {
+            int col = i % cols;
+            int row = i / cols;
+            int slotX = startX + col * (cell + gap);
+            int slotY = startY + row * (cell + gap);
+            boolean selectedSlotCell = mode == MacroHudDataHandler.InventoryDisplayMode.HOTBAR && i == selectedSlot;
+            drawCanvasInventorySlot(context, slotX, slotY, cell, stacks.get(i), selectedSlotCell);
+        }
+    }
+
+    private void drawCanvasInventorySlot(DrawContext context, int x, int y, int size, ItemStack stack, boolean selectedSlot) {
+        int bg = selectedSlot ? 0xA0785A20 : 0xAA1A1A1A;
+        context.fill(x, y, x + size, y + size, bg);
+        context.fill(x, y, x + size, y + 1, 0x50FFFFFF);
+        context.fill(x, y + size - 1, x + size, y + size, 0x50303030);
+        context.fill(x, y, x + 1, y + size, 0x50FFFFFF);
+        context.fill(x + size - 1, y, x + size, y + size, 0x50303030);
+
+        if (stack.isEmpty()) {
+            return;
+        }
+
+        if (size >= 18) {
+            int ix = x + 1;
+            int iy = y + 1;
+            context.drawItem(stack, ix, iy);
+            context.drawStackOverlay(this.textRenderer, stack, ix, iy);
+            return;
+        }
+
+        float scale = size / 18.0f;
+        int inner = Math.max(1, Math.round(16 * scale));
+        int ix = x + Math.max(0, (size - inner) / 2);
+        int iy = y + Math.max(0, (size - inner) / 2);
+        context.getMatrices().pushMatrix();
+        context.getMatrices().translate(ix, iy);
+        context.getMatrices().scale(scale, scale);
+        context.drawItem(stack, 0, 0);
+        context.getMatrices().popMatrix();
     }
 
     private void drawCanvasShapePreview(DrawContext context, MacroHudDataHandler.HudElement e, int x1, int y1, int x2, int y2) {
@@ -2754,9 +2785,13 @@ public class MacroWorkbenchScreen extends Screen {
             this.advancedBorderCursor = this.advancedBorderColor.length();
         } else if (isCustomWidgetType(selected)) {
             this.advancedText = StringUtils.safe(selected.label);
-            this.advancedAction = selected.type == MacroHudDataHandler.ElementType.ICON
-                    ? StringUtils.safe(selected.iconId)
-                    : StringUtils.safe(selected.sourceToken);
+            this.advancedAction = switch (selected.type) {
+                case ICON -> StringUtils.safe(selected.iconId);
+                case INVENTORY -> (selected.inventoryDisplayMode == null
+                        ? MacroHudDataHandler.InventoryDisplayMode.HOTBAR
+                        : selected.inventoryDisplayMode).name();
+                default -> StringUtils.safe(selected.sourceToken);
+            };
             this.advancedCursor = this.advancedText.length();
             this.advancedActionCursor = this.advancedAction.length();
             if (selected.type == MacroHudDataHandler.ElementType.BAR) {
@@ -3456,6 +3491,7 @@ public class MacroWorkbenchScreen extends Screen {
                 || element.type == MacroHudDataHandler.ElementType.BAR
                 || element.type == MacroHudDataHandler.ElementType.VALUE
                 || element.type == MacroHudDataHandler.ElementType.LIST
+                || element.type == MacroHudDataHandler.ElementType.INVENTORY
                 || element.type == MacroHudDataHandler.ElementType.SHAPE
                 || element.type == MacroHudDataHandler.ElementType.STATE_BADGE;
     }
@@ -3518,6 +3554,21 @@ public class MacroWorkbenchScreen extends Screen {
         return MacroWorkbenchUiOps.cyclePreset(current, presets, forward);
     }
 
+    private static MacroHudDataHandler.InventoryDisplayMode parseInventoryDisplayMode(
+            String raw,
+            MacroHudDataHandler.InventoryDisplayMode fallback
+    ) {
+        String value = StringUtils.safe(raw).trim();
+        if (value.isEmpty()) {
+            return fallback == null ? MacroHudDataHandler.InventoryDisplayMode.HOTBAR : fallback;
+        }
+        try {
+            return MacroHudDataHandler.InventoryDisplayMode.valueOf(value.toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException ignored) {
+            return fallback == null ? MacroHudDataHandler.InventoryDisplayMode.HOTBAR : fallback;
+        }
+    }
+
     private void applyAdvancedAndClose() {
         if (selected != null) {
             boolean colorHexFields = !isCustomWidgetType(selected);
@@ -3563,6 +3614,9 @@ public class MacroWorkbenchScreen extends Screen {
                 selected.label = StringUtils.safe(advancedText);
                 if (selected.type == MacroHudDataHandler.ElementType.ICON) {
                     selected.iconId = StringUtils.safe(advancedAction);
+                    selected.sourceToken = "";
+                } else if (selected.type == MacroHudDataHandler.ElementType.INVENTORY) {
+                    selected.inventoryDisplayMode = parseInventoryDisplayMode(advancedAction, selected.inventoryDisplayMode);
                     selected.sourceToken = "";
                 } else {
                     selected.sourceToken = StringUtils.safe(advancedAction);
@@ -3724,7 +3778,7 @@ public class MacroWorkbenchScreen extends Screen {
         context.drawTextWithShadow(this.textRenderer, "Add Element", boxX + 12, boxY + 10, 0xFFFFFFFF);
         context.drawTextWithShadow(this.textRenderer, "Pick element type", boxX + 12, boxY + 22, 0xFFB0B0B0);
 
-        String[] labels = {"Button", "Text", "Macro List", "Icon", "Bar", "Value", "List", "Shape", "State Badge"};
+        String[] labels = {"Button", "Text", "Macro List", "Icon", "Bar", "Value", "List", "Inventory", "Shape", "State Badge"};
         for (int i = 0; i < labels.length; i++) {
             int row = i / 3;
             int col = i % 3;
@@ -3756,6 +3810,7 @@ public class MacroWorkbenchScreen extends Screen {
                 MacroHudDataHandler.ElementType.BAR,
                 MacroHudDataHandler.ElementType.VALUE,
                 MacroHudDataHandler.ElementType.LIST,
+                MacroHudDataHandler.ElementType.INVENTORY,
                 MacroHudDataHandler.ElementType.SHAPE,
                 MacroHudDataHandler.ElementType.STATE_BADGE
         };

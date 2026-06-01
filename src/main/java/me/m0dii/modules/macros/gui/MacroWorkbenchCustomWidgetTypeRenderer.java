@@ -61,6 +61,10 @@ public final class MacroWorkbenchCustomWidgetTypeRenderer {
             renderList(context, textRenderer, selected, layout, mouseX, mouseY);
             return;
         }
+        if (selected.type == MacroHudDataHandler.ElementType.INVENTORY) {
+            renderInventory(context, textRenderer, selected, layout, mouseX, mouseY);
+            return;
+        }
         if (selected.type == MacroHudDataHandler.ElementType.SHAPE) {
             renderShape(context, textRenderer, selected, layout, mouseX, mouseY);
             return;
@@ -257,6 +261,20 @@ public final class MacroWorkbenchCustomWidgetTypeRenderer {
         drawModalButton(context, textRenderer, row2.get(0), "T-", mouseX, mouseY);
         drawModalButton(context, textRenderer, row2.get(1), "T+", mouseX, mouseY);
         context.drawTextWithShadow(textRenderer, "Radius: " + selected.shapeRadius + "  Thickness: " + selected.shapeThickness, layout.typeInfo1().x(), layout.typeInfo1().y(), 0xFFEAEAEA);
+    }
+
+    private static void renderInventory(DrawContext context,
+                                        TextRenderer textRenderer,
+                                        MacroHudDataHandler.HudElement selected,
+                                        CustomWidgetAdvancedLayout layout,
+                                        int mouseX,
+                                        int mouseY) {
+        MacroHudDataHandler.InventoryDisplayMode mode = selected.inventoryDisplayMode == null
+                ? MacroHudDataHandler.InventoryDisplayMode.HOTBAR
+                : selected.inventoryDisplayMode;
+        drawModalButton(context, textRenderer, layout.typeWideTop(), "Mode: " + mode.name(), mouseX, mouseY);
+        context.drawTextWithShadow(textRenderer, "Hotbar: 9 slots  |  Inventory: 27 slots  |  Armor: 4 + offhand", layout.typeInfo1().x(), layout.typeInfo1().y(), 0xFFEAEAEA);
+        context.drawTextWithShadow(textRenderer, "Click Mode to cycle and auto-size this widget.", layout.typeInfo2().x(), layout.typeInfo2().y(), 0xFF98B8D8);
     }
 
     private static void renderStateBadge(DrawContext context,

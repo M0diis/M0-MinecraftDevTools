@@ -30,6 +30,18 @@ public final class MacroWorkbenchActionSuggestions {
             }
             return matches;
         }
+        if (selected != null && selected.type == MacroHudDataHandler.ElementType.INVENTORY) {
+            String prefix = StringUtils.safe(actionPrefix).toLowerCase(Locale.ROOT);
+            List<String> modes = List.of("HOTBAR", "INVENTORY", "ARMOR");
+            List<String> matches = new ArrayList<>();
+            for (String mode : modes) {
+                String lower = mode.toLowerCase(Locale.ROOT);
+                if (prefix.isBlank() || lower.startsWith(prefix) || lower.contains(prefix)) {
+                    matches.add(mode);
+                }
+            }
+            return matches;
+        }
         return sourceTokenSuggestions(actionPrefix);
     }
 

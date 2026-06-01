@@ -30,6 +30,7 @@ public final class MacroHudDataHandler {
         BAR,
         VALUE,
         LIST,
+        INVENTORY,
         SHAPE,
         STATE_BADGE
     }
@@ -67,6 +68,12 @@ public final class MacroHudDataHandler {
         TOP,
         CENTER,
         BOTTOM
+    }
+
+    public enum InventoryDisplayMode {
+        HOTBAR,
+        INVENTORY,
+        ARMOR
     }
 
     public enum Anchor {
@@ -136,6 +143,9 @@ public final class MacroHudDataHandler {
         // LIST behavior.
         public int maxLines = 6;
         public int listScroll = 0;
+
+        // INVENTORY behavior.
+        public InventoryDisplayMode inventoryDisplayMode = InventoryDisplayMode.HOTBAR;
 
         // ICON behavior.
         public String iconKind = MacroPlaceholderCatalog.DEFAULT_ICON_KIND; // item|block|entity|entity_model
@@ -363,6 +373,14 @@ public final class MacroHudDataHandler {
             element.horizontalAlign = HorizontalAlign.LEFT;
             element.verticalAlign = VerticalAlign.TOP;
         }
+        if (type == ElementType.INVENTORY) {
+            element.label = "Inventory";
+            element.width = 182;
+            element.height = 22;
+            element.drawBackground = true;
+            element.drawBorder = true;
+            element.inventoryDisplayMode = InventoryDisplayMode.HOTBAR;
+        }
         if (type == ElementType.SHAPE) {
             element.label = "Shape";
             element.width = 120;
@@ -496,6 +514,7 @@ public final class MacroHudDataHandler {
             e.segments = Math.clamp(raw.segments, 1, 120);
             e.maxLines = Math.clamp(raw.maxLines, 1, 200);
             e.listScroll = Math.max(0, raw.listScroll);
+            e.inventoryDisplayMode = raw.inventoryDisplayMode == null ? InventoryDisplayMode.HOTBAR : raw.inventoryDisplayMode;
             e.iconKind = safe(raw.iconKind, MacroPlaceholderCatalog.DEFAULT_ICON_KIND).toLowerCase();
             e.iconId = safe(raw.iconId, MacroPlaceholderCatalog.DEFAULT_ICON_ID);
             if ("entity_model".equals(e.iconKind)
@@ -614,6 +633,7 @@ public final class MacroHudDataHandler {
         cloned.segments = e.segments;
         cloned.maxLines = e.maxLines;
         cloned.listScroll = e.listScroll;
+        cloned.inventoryDisplayMode = e.inventoryDisplayMode;
         cloned.iconKind = e.iconKind;
         cloned.iconId = e.iconId;
         cloned.iconShowCount = e.iconShowCount;

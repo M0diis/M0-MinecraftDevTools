@@ -13,6 +13,7 @@ import net.minecraft.client.gui.screen.ingame.HandledScreen;
 import net.minecraft.client.gui.screen.ingame.InventoryScreen;
 import net.minecraft.client.util.InputUtil;
 import net.minecraft.entity.Entity;
+import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
@@ -63,6 +64,7 @@ public final class MacroHudRuntime {
                 case BAR -> renderBarElement(context, element, x, y);
                 case VALUE -> renderValueElement(context, element, x, y);
                 case LIST -> renderListElement(context, element, x, y);
+                case INVENTORY -> renderInventoryElement(context, element, x, y);
                 case SHAPE -> renderShapeElement(context, element, x, y);
                 case STATE_BADGE -> renderStateBadgeElement(context, element, x, y);
             }
@@ -429,6 +431,79 @@ public final class MacroHudRuntime {
         renderLinesElement(context, element, x, y, visible);
     }
 
+    private static void renderInventoryElement(DrawContext context, MacroHudDataHandler.HudElement element, int x, int y) {
+        if (element.drawBackground) {
+            context.fill(x, y, x + element.width, y + element.height,
+                    effectiveBackgroundColor(element.backgroundColor, element.backgroundOpaque, element.backgroundAlpha));
+        }
+        if (element.drawBorder) {
+            drawBorder(context, x, y, element.width, element.height, element.borderColor, element.borderMode);
+        }
+
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (client.player == null) {
+            return;
+        }
+
+        List<ItemStack> stacks = new ArrayList<>();
+        int cols = 9;
+        int rows = 1;
+        int selectedSlot = -1;
+        MacroHudDataHandler.InventoryDisplayMode mode = element.inventoryDisplayMode == null
+                ? MacroHudDataHandler.InventoryDisplayMode.HOTBAR
+                : element.inventoryDisplayMode;
+        switch (mode) {
+            case HOTBAR -> {
+                cols = 9;
+                rows = 1;
+                for (int i = 0; i < 9; i++) {
+                    stacks.add(client.player.getInventory().getStack(i));
+                }
+                selectedSlot = client.player.getInventory().getSelectedSlot();
+            }
+            case INVENTORY -> {
+                cols = 9;
+                rows = 3;
+                for (int row = 0; row < 3; row++) {
+                    for (int col = 0; col < 9; col++) {
+                        int index = 9 + row * 9 + col;
+                        stacks.add(client.player.getInventory().getStack(index));
+                    }
+                }
+            }
+            case ARMOR -> {
+                cols = 1;
+                rows = 5;
+                stacks.add(client.player.getEquippedStack(EquipmentSlot.HEAD));
+                stacks.add(client.player.getEquippedStack(EquipmentSlot.CHEST));
+                stacks.add(client.player.getEquippedStack(EquipmentSlot.LEGS));
+                stacks.add(client.player.getEquippedStack(EquipmentSlot.FEET));
+                stacks.add(client.player.getOffHandStack());
+            }
+        }
+
+        int padding = 2;
+        int gap = 2;
+        int contentW = Math.max(1, element.width - padding * 2);
+        int contentH = Math.max(1, element.height - padding * 2);
+        int cellW = Math.max(1, (contentW - gap * Math.max(0, cols - 1)) / Math.max(1, cols));
+        int cellH = Math.max(1, (contentH - gap * Math.max(0, rows - 1)) / Math.max(1, rows));
+        int cell = Math.max(8, Math.min(18, Math.min(cellW, cellH)));
+        int gridW = cols * cell + gap * Math.max(0, cols - 1);
+        int gridH = rows * cell + gap * Math.max(0, rows - 1);
+        int startX = x + padding + Math.max(0, (contentW - gridW) / 2);
+        int startY = y + padding + Math.max(0, (contentH - gridH) / 2);
+
+        for (int i = 0; i < stacks.size(); i++) {
+            int col = i % cols;
+            int row = i / cols;
+            int slotX = startX + col * (cell + gap);
+            int slotY = startY + row * (cell + gap);
+            boolean selected = mode == MacroHudDataHandler.InventoryDisplayMode.HOTBAR && i == selectedSlot;
+            drawInventorySlot(context, slotX, slotY, cell, stacks.get(i), selected);
+        }
+    }
+
     private static void renderShapeElement(DrawContext context, MacroHudDataHandler.HudElement element, int x, int y) {
         String shape = Objects.toString(element.shapeType, "rounded_rect").toLowerCase(Locale.ROOT);
         int w = Math.max(1, element.width);
@@ -546,6 +621,37 @@ public final class MacroHudRuntime {
         if (resolved == MacroHudDataHandler.BorderMode.FULL || resolved == MacroHudDataHandler.BorderMode.RIGHT) {
             context.fill(x2 - 1, y, x2, y2, color);
         }
+    }
+
+    private static void drawInventorySlot(DrawContext context, int x, int y, int size, ItemStack stack, boolean selected) {
+        int bg = selected ? 0xA0785A20 : 0xAA1A1A1A;
+        context.fill(x, y, x + size, y + size, bg);
+        context.fill(x, y, x + size, y + 1, 0x50FFFFFF);
+        context.fill(x, y + size - 1, x + size, y + size, 0x50303030);
+        context.fill(x, y, x + 1, y + size, 0x50FFFFFF);
+        context.fill(x + size - 1, y, x + size, y + size, 0x50303030);
+
+        if (stack.isEmpty()) {
+            return;
+        }
+
+        if (size >= 18) {
+            int ix = x + 1;
+            int iy = y + 1;
+            context.drawItem(stack, ix, iy);
+            context.drawStackOverlay(MinecraftClient.getInstance().textRenderer, stack, ix, iy);
+            return;
+        }
+
+        float scale = size / 18.0f;
+        int inner = Math.max(1, Math.round(16 * scale));
+        int ix = x + Math.max(0, (size - inner) / 2);
+        int iy = y + Math.max(0, (size - inner) / 2);
+        context.getMatrices().pushMatrix();
+        context.getMatrices().translate(ix, iy);
+        context.getMatrices().scale(scale, scale);
+        context.drawItem(stack, 0, 0);
+        context.getMatrices().popMatrix();
     }
 
     private static int brighten(int color, int add) {
