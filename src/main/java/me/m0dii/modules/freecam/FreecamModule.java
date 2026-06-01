@@ -29,6 +29,11 @@ public class FreecamModule extends Module {
         }
 
         @Override
+        public List<String> getKnownPlaceholderTokens() {
+            return List.of("freecam.enabled");
+        }
+
+        @Override
         public String resolvePlaceholder(String token, MinecraftClient client, PlayerEntity player, boolean canvasMode) {
             if ("freecam.enabled".equals(token)) {
                 return Boolean.toString(INSTANCE.isEnabled());

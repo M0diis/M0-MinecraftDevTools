@@ -12,6 +12,7 @@ import me.m0dii.modules.entityradar.EntityRadarModule;
 import me.m0dii.modules.hudcanvas.HudCanvasDataHandler;
 import me.m0dii.modules.macros.CommandMacros;
 import me.m0dii.modules.macros.MacroDataHandler;
+import me.m0dii.modules.macros.MacroPlaceholderCatalog;
 import me.m0dii.modules.macros.MacroPlaceholders;
 import me.m0dii.modules.macros.gui.MacroWorkbenchAdvancedLayouts.CustomWidgetAdvancedLayout;
 import me.m0dii.modules.macros.gui.MacroWorkbenchAdvancedLayouts.ProxyAdvancedLayout;
@@ -78,26 +79,6 @@ public class MacroWorkbenchScreen extends Screen {
             0xCC2A2A2A, 0xCC4A2A2A, 0xCC2A4A2A, 0xCC2A2A4A, 0xCC808080,
             0xFFFFFFFF, 0xFFFFAA00, 0xFFFF5555, 0xFF55FF55, 0xFF55FFFF, 0xFF5555FF
     };
-    private static final String[] BAR_VALUE_SOURCE_PRESETS = {
-            "hp", "max_hp", "food", "saturation", "xp", "level", "client.fps", "players.count", "players.nearby.count"
-    };
-    private static final String[] LIST_SOURCE_PRESETS = {
-            "players.nearby.5.with_distance",
-            "players.nearby.8.with_distance.with_direction.nl",
-            "players.nearby.8.with_distance.with_direction_arrow.nl",
-            "players.nearby.16.r96.with_distance.sort=distance.nl",
-            "players.list.other",
-            "players.list.other.nl",
-            "entities.nearby.6.with_distance",
-            "entities.nearby.10.with_distance.with_direction_arrow.nl",
-            "entities.nearby.20.r96.unique.with_distance.with_direction.sort=name",
-            "players.nearby.10.nl"
-    };
-    private static final String[] STATE_SOURCE_PRESETS = {
-            "player.sprinting", "player.sneaking", "player.swimming", "player.on_ground", "world.is_day", "client.server.singleplayer"
-    };
-    private static final String[] ICON_KIND_PRESETS = {"item", "block", "entity", "entity_model"};
-    private static final String[] SHAPE_TYPE_PRESETS = {"rounded_rect", "rect", "circle", "line", "triangle", "cross", "diamond"};
     private static final Set<String> SCRIPT_HIGHLIGHT_KEYWORDS = Set.of(
             "def", "class", "if", "else", "for", "while", "return", "import", "new",
             "true", "false", "null", "fun", "val", "var", "object", "when",
@@ -3105,9 +3086,9 @@ public class MacroWorkbenchScreen extends Screen {
                 generalRow2,
                 forward,
                 selected,
-                BAR_VALUE_SOURCE_PRESETS,
-                LIST_SOURCE_PRESETS,
-                STATE_SOURCE_PRESETS,
+                MacroPlaceholderCatalog.BAR_VALUE_SOURCE_PRESETS,
+                MacroPlaceholderCatalog.LIST_SOURCE_PRESETS,
+                MacroPlaceholderCatalog.STATE_SOURCE_PRESETS,
                 customWidgetAdvancedClickOpsBridge
         );
     }
@@ -3281,10 +3262,10 @@ public class MacroWorkbenchScreen extends Screen {
                 layout,
                 forward,
                 selected,
-                ICON_KIND_PRESETS,
-                LIST_SOURCE_PRESETS,
-                STATE_SOURCE_PRESETS,
-                SHAPE_TYPE_PRESETS,
+                MacroPlaceholderCatalog.ICON_KIND_PRESETS,
+                MacroPlaceholderCatalog.LIST_SOURCE_PRESETS,
+                MacroPlaceholderCatalog.STATE_SOURCE_PRESETS,
+                MacroPlaceholderCatalog.SHAPE_TYPE_PRESETS,
                 new MacroWorkbenchCustomWidgetTypeClickHandler.Ops() {
                     @Override
                     public boolean contains(Click valueClick, UiRect rect) {

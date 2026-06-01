@@ -949,24 +949,22 @@ public final class MacroPlaceholders {
 
     public static List<String> getKnownPlaceholderTokens() {
         LinkedHashSet<String> tokens = new LinkedHashSet<>(REGISTRY.tokens());
-        tokens.addAll(List.of(
-                "player.gamemode", "player.sneaking", "player.sprinting", "player.on_ground", "player.swimming",
-                "player.chunk", "player.chunk.x", "player.chunk.z", "player.vel.x", "player.vel.y", "player.vel.z", "player.speed",
-                "pos.xf", "pos.yf", "pos.zf", "pos.biome", "pos.dim", "pos.light", "pos.facing",
-                "dir.compass", "dir.compass.short", "dir.compass.arrow", "dir.compass.short_arrow",
-                "look.block.x", "look.block.y", "look.block.z", "look.block.xyz", "look.block.id", "look.block.light",
-                "look.entity.name", "look.entity.uuid", "look.entity.id", "look.entity.type", "look.dir.x", "look.dir.y", "look.dir.z",
-                "hand.item", "hand.id", "hand.count", "hand.damage", "hand.max_damage", "hand.durability",
-                "offhand.item", "offhand.id", "offhand.count", "offhand.damage", "offhand.max_damage", "offhand.durability",
-                "armor.helmet.item", "armor.helmet.id", "armor.helmet.count", "armor.helmet.damage", "armor.helmet.max_damage", "armor.helmet.durability",
-                "armor.chestplate.item", "armor.chestplate.id", "armor.chestplate.count", "armor.chestplate.damage", "armor.chestplate.max_damage", "armor.chestplate.durability",
-                "armor.leggings.item", "armor.leggings.id", "armor.leggings.count", "armor.leggings.damage", "armor.leggings.max_damage", "armor.leggings.durability",
-                "armor.boots.item", "armor.boots.id", "armor.boots.count", "armor.boots.damage", "armor.boots.max_damage", "armor.boots.durability",
-                "inventory.count:<item>", "container.count:<item>",
-                "client.fps", "client.screen", "client.screen.width", "client.screen.height", "client.server.singleplayer", "client.server.name", "client.server.address",
-                "world.time", "world.time.ticks", "world.time.day", "world.day", "world.time.day_ticks", "world.time.clock", "world.is_day", "world.is_night",
-                "sel.self", "sel.nearest", "sel.random", "sel.all", "sel.entities", "players.count", "players.count.other", "players.nearby.count"
-        ));
+        tokens.addAll(MacroPlaceholderCatalog.supplementalPlaceholderTokens());
+        for (MacroPlaceholderProvider provider : getProvidersSnapshot()) {
+            try {
+                List<String> providerTokens = provider.getKnownPlaceholderTokens();
+                if (providerTokens == null || providerTokens.isEmpty()) {
+                    continue;
+                }
+                for (String token : providerTokens) {
+                    if (token != null && !token.isBlank()) {
+                        tokens.add(token.trim());
+                    }
+                }
+            } catch (Exception ignored) {
+                // Keep suggestions resilient if a provider fails.
+            }
+        }
         return List.copyOf(tokens);
     }
 

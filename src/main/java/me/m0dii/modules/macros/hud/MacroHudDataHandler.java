@@ -3,6 +3,7 @@ package me.m0dii.modules.macros.hud;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import me.m0dii.M0DevTools;
+import me.m0dii.modules.macros.MacroPlaceholderCatalog;
 import net.fabricmc.loader.api.FabricLoader;
 import org.jetbrains.annotations.NotNull;
 
@@ -137,8 +138,8 @@ public final class MacroHudDataHandler {
         public int listScroll = 0;
 
         // ICON behavior.
-        public String iconKind = "item"; // item|block|entity|entity_model
-        public String iconId = "minecraft:stone";
+        public String iconKind = MacroPlaceholderCatalog.DEFAULT_ICON_KIND; // item|block|entity|entity_model
+        public String iconId = MacroPlaceholderCatalog.DEFAULT_ICON_ID;
         public boolean iconShowCount = true;
         public boolean iconShowDurability = true;
         public boolean iconShowCooldown = true;
@@ -151,7 +152,7 @@ public final class MacroHudDataHandler {
         public boolean modelFollowLook = true;
 
         // SHAPE behavior.
-        public String shapeType = "rounded_rect"; // rect|rounded_rect|circle|line|triangle|cross|diamond
+        public String shapeType = MacroPlaceholderCatalog.DEFAULT_SHAPE_TYPE; // rect|rounded_rect|circle|line|triangle|cross|diamond
         public boolean shapeFilled = true;
         public int shapeRadius = 6;
         public int shapeThickness = 2;
@@ -322,15 +323,15 @@ public final class MacroHudDataHandler {
             element.drawBorder = true;
             element.backgroundColor = 0xAA101010;
             element.borderColor = 0xFFFFFFFF;
-            element.iconKind = "item";
-            element.iconId = "minecraft:stone";
+            element.iconKind = MacroPlaceholderCatalog.DEFAULT_ICON_KIND;
+            element.iconId = MacroPlaceholderCatalog.DEFAULT_ICON_ID;
         }
         if (type == ElementType.BAR) {
             element.label = "Bar";
             element.width = 150;
             element.height = 18;
-            element.sourceToken = "hp";
-            element.sourceTokenMax = "max_hp";
+            element.sourceToken = MacroPlaceholderCatalog.DEFAULT_BAR_SOURCE;
+            element.sourceTokenMax = MacroPlaceholderCatalog.DEFAULT_BAR_MAX_SOURCE;
             element.minValue = 0.0;
             element.maxValue = 20.0;
             element.colorStart = 0xFF44FF44;
@@ -342,7 +343,7 @@ public final class MacroHudDataHandler {
             element.label = "Value";
             element.width = 140;
             element.height = 24;
-            element.sourceToken = "hp";
+            element.sourceToken = MacroPlaceholderCatalog.DEFAULT_BAR_SOURCE;
             element.prefix = "HP: ";
             element.warnThreshold = 10.0;
             element.critThreshold = 5.0;
@@ -355,7 +356,7 @@ public final class MacroHudDataHandler {
             element.label = "List";
             element.width = 220;
             element.height = 96;
-            element.sourceToken = "players.nearby.5.with_distance";
+            element.sourceToken = MacroPlaceholderCatalog.DEFAULT_LIST_SOURCE;
             element.maxLines = 6;
             element.drawBackground = true;
             element.drawBorder = true;
@@ -366,7 +367,7 @@ public final class MacroHudDataHandler {
             element.label = "Shape";
             element.width = 120;
             element.height = 40;
-            element.shapeType = "rounded_rect";
+            element.shapeType = MacroPlaceholderCatalog.DEFAULT_SHAPE_TYPE;
             element.shapeFilled = true;
             element.shapeRadius = 8;
             element.shapeThickness = 2;
@@ -380,7 +381,7 @@ public final class MacroHudDataHandler {
             element.label = "State";
             element.width = 90;
             element.height = 18;
-            element.sourceToken = "player.sprinting";
+            element.sourceToken = MacroPlaceholderCatalog.DEFAULT_STATE_SOURCE;
             element.stateOnText = "ON";
             element.stateOffText = "OFF";
             element.stateShowValue = true;
@@ -495,11 +496,11 @@ public final class MacroHudDataHandler {
             e.segments = Math.clamp(raw.segments, 1, 120);
             e.maxLines = Math.clamp(raw.maxLines, 1, 200);
             e.listScroll = Math.max(0, raw.listScroll);
-            e.iconKind = safe(raw.iconKind, "item").toLowerCase();
-            e.iconId = safe(raw.iconId, "minecraft:stone");
+            e.iconKind = safe(raw.iconKind, MacroPlaceholderCatalog.DEFAULT_ICON_KIND).toLowerCase();
+            e.iconId = safe(raw.iconId, MacroPlaceholderCatalog.DEFAULT_ICON_ID);
             if ("entity_model".equals(e.iconKind)
-                    && (e.iconId.isBlank() || "minecraft:stone".equalsIgnoreCase(e.iconId))) {
-                e.iconId = "minecraft:player";
+                    && (e.iconId.isBlank() || MacroPlaceholderCatalog.DEFAULT_ICON_ID.equalsIgnoreCase(e.iconId))) {
+                e.iconId = MacroPlaceholderCatalog.DEFAULT_ENTITY_MODEL_ICON_ID;
             }
             e.iconShowCount = raw.iconShowCount;
             e.iconShowDurability = raw.iconShowDurability;
@@ -511,7 +512,7 @@ public final class MacroHudDataHandler {
             e.modelOffsetY = Math.clamp(raw.modelOffsetY, -200, 200);
             e.modelAutoFit = raw.modelAutoFit || raw.modelZoom <= 0.0f;
             e.modelFollowLook = raw.modelFollowLook || raw.modelZoom <= 0.0f;
-            e.shapeType = safe(raw.shapeType, "rounded_rect").toLowerCase();
+            e.shapeType = safe(raw.shapeType, MacroPlaceholderCatalog.DEFAULT_SHAPE_TYPE).toLowerCase();
             e.shapeFilled = raw.shapeFilled;
             e.shapeRadius = Math.clamp(raw.shapeRadius, 0, 64);
             e.shapeThickness = Math.clamp(raw.shapeThickness, 1, 24);

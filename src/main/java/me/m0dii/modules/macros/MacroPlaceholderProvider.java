@@ -10,6 +10,10 @@ public interface MacroPlaceholderProvider {
 
     List<String> getPlaceholderDocs();
 
+    default List<String> getKnownPlaceholderTokens() {
+        return List.of();
+    }
+
     String resolvePlaceholder(String token, MinecraftClient client, PlayerEntity player, boolean canvasMode);
 }
 

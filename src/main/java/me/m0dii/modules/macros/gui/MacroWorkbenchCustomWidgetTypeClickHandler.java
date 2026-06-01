@@ -3,6 +3,7 @@ package me.m0dii.modules.macros.gui;
 import me.m0dii.gui.local.FormPanels;
 import me.m0dii.gui.local.UiFlexLayout;
 import me.m0dii.gui.local.UiRect;
+import me.m0dii.modules.macros.MacroPlaceholderCatalog;
 import me.m0dii.modules.macros.gui.MacroWorkbenchAdvancedLayouts.CustomWidgetAdvancedLayout;
 import me.m0dii.modules.macros.hud.MacroHudDataHandler;
 import me.m0dii.utils.StringUtils;
@@ -175,7 +176,7 @@ public final class MacroWorkbenchCustomWidgetTypeClickHandler {
         List<UiRect> row2 = layout.typeRow2();
         List<UiRect> row3 = layout.typeRow3();
         if (ops.contains(click, top.get(0))) {
-            selected.sourceTokenMax = ops.cyclePreset(selected.sourceTokenMax, new String[]{"", "max_hp", "food", "players.count"}, forward);
+            selected.sourceTokenMax = ops.cyclePreset(selected.sourceTokenMax, MacroPlaceholderCatalog.BAR_MAX_SOURCE_PRESETS, forward);
             return true;
         }
         if (ops.contains(click, top.get(1))) {

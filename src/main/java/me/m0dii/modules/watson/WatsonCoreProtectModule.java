@@ -47,8 +47,29 @@ public final class WatsonCoreProtectModule extends Module {
         }
 
         @Override
+        public List<String> getKnownPlaceholderTokens() {
+            return List.of(
+                    "watson.enabled",
+                    "watson.entries.count",
+                    "watson.entries.last.<n>",
+                    "watson.entries.first.loc",
+                    "watson.entries.first.loc.x",
+                    "watson.entries.first.loc.y",
+                    "watson.entries.first.loc.z",
+                    "watson.entries.first.time",
+                    "watson.entries.first.action",
+                    "watson.entries.last.loc",
+                    "watson.entries.last.loc.x",
+                    "watson.entries.last.loc.y",
+                    "watson.entries.last.loc.z",
+                    "watson.entries.last.time",
+                    "watson.entries.last.action"
+            );
+        }
+
+        @Override
         public String resolvePlaceholder(String token, MinecraftClient client, PlayerEntity player, boolean canvasMode) {
-            if (token.startsWith("watson.entries.last")) {
+            if (token != null && token.matches("watson\\.entries\\.last\\.\\d+")) {
                 int amount = 0;
 
                 try {
@@ -76,7 +97,7 @@ public final class WatsonCoreProtectModule extends Module {
 
             return switch (token) {
                 case "watson.enabled" -> String.valueOf(INSTANCE.enabled);
-                case "watson.entries" -> String.valueOf(CoreProtectTracker.size());
+                case "watson.entries.count", "watson.entries" -> String.valueOf(CoreProtectTracker.size());
                 case "watson.entries.first.loc" -> {
                     List<CoreProtectEntry> snapshot = CoreProtectTracker.snapshot();
 
