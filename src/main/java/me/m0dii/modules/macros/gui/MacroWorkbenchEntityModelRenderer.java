@@ -55,7 +55,7 @@ public final class MacroWorkbenchEntityModelRenderer {
     }
 
     private static net.minecraft.entity.Entity resolveCanvasModelTargetEntity(MinecraftClient client,
-                                                                               MacroHudDataHandler.HudElement element) {
+                                                                              MacroHudDataHandler.HudElement element) {
         String id = StringUtils.safe(element == null ? null : element.iconId).toLowerCase(Locale.ROOT);
         if (id.isBlank() || "player".equals(id) || "minecraft:player".equals(id)) {
             if (client.player != null) {
@@ -371,10 +371,10 @@ public final class MacroWorkbenchEntityModelRenderer {
     }
 
     private static boolean matchesFloatXYSizeVecQuatSignature(Class<?>[] p,
-                                                               Class<?> dcClass,
-                                                               Class<?> vectorClass,
-                                                               Class<?> quaternionClass,
-                                                               Class<?> livingEntityClass) {
+                                                              Class<?> dcClass,
+                                                              Class<?> vectorClass,
+                                                              Class<?> quaternionClass,
+                                                              Class<?> livingEntityClass) {
         return p.length == 8
                 && dcClass.isAssignableFrom(p[0])
                 && p[1] == float.class && p[2] == float.class && p[3] == float.class

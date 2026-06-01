@@ -38,11 +38,11 @@ public class MacroPanelScreen extends Screen {
 
         if (!cfg.enabled) {
             this.addDrawableChild(ButtonWidget.builder(Text.literal("Panel disabled (enable in editor)"), btn -> {
-                    if (this.client != null) {
-                        this.client.setScreen(MacroPanelEditorScreen.create(this));
-                    }
-                }).dimensions(this.width / 2 - 90, this.height / 2 - 10, 180, 20)
-                .build());
+                        if (this.client != null) {
+                            this.client.setScreen(MacroPanelEditorScreen.create(this));
+                        }
+                    }).dimensions(this.width / 2 - 90, this.height / 2 - 10, 180, 20)
+                    .build());
             return;
         }
 

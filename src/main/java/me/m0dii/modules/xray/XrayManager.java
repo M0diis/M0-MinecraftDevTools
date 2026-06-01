@@ -109,7 +109,8 @@ public final class XrayManager {
                 if (obj.has("displayRange")) {
                     parsedRange = Math.clamp(obj.get("displayRange").getAsInt(), MIN_DISPLAY_RANGE, MAX_DISPLAY_RANGE);
                 }
-                Map<String, XrayBlockConfig> loaded = GSON.fromJson(obj.get("blocks"), new TypeToken<Map<String, XrayBlockConfig>>() {}.getType());
+                Map<String, XrayBlockConfig> loaded = GSON.fromJson(obj.get("blocks"), new TypeToken<Map<String, XrayBlockConfig>>() {
+                }.getType());
                 if (loaded != null) {
                     for (Map.Entry<String, XrayBlockConfig> entry : loaded.entrySet()) {
                         String id = normalizeBlockId(entry.getKey());
@@ -120,7 +121,8 @@ public final class XrayManager {
                 }
             } else {
                 // Backward compatibility with map-only config format.
-                Map<String, XrayBlockConfig> loaded = GSON.fromJson(root, new TypeToken<Map<String, XrayBlockConfig>>() {}.getType());
+                Map<String, XrayBlockConfig> loaded = GSON.fromJson(root, new TypeToken<Map<String, XrayBlockConfig>>() {
+                }.getType());
                 if (loaded != null) {
                     for (Map.Entry<String, XrayBlockConfig> entry : loaded.entrySet()) {
                         String id = normalizeBlockId(entry.getKey());

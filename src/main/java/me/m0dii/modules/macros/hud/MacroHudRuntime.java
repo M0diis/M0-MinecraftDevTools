@@ -106,7 +106,8 @@ public final class MacroHudRuntime {
             if (element.buttonAction != null && !element.buttonAction.isBlank()) {
                 switch (element.buttonExecutionMode) {
                     case COMMAND -> CommandMacros.runInlineAction(actionName, element.buttonAction);
-                    case GROOVY_SCRIPT, KOTLIN_SCRIPT -> HudButtonScriptExecutor.runScript(actionName, element.buttonAction, element.buttonExecutionMode, element.runScriptsAsync);
+                    case GROOVY_SCRIPT, KOTLIN_SCRIPT ->
+                            HudButtonScriptExecutor.runScript(actionName, element.buttonAction, element.buttonExecutionMode, element.runScriptsAsync);
                 }
                 return true;
             }
@@ -968,10 +969,10 @@ public final class MacroHudRuntime {
     // ── MC 1.21.x low-level 8-param overload ────────────────────────────────────
     // (DrawContext, float x, float y, float size, Vector3f, Quaternionf, @Nullable Quaternionf, LivingEntity)
     private static boolean matchesFloatXYSizeVecQuatSignature(Class<?>[] p,
-                                                               Class<?> drawContextClass,
-                                                               Class<?> vectorClass,
-                                                               Class<?> quaternionClass,
-                                                               Class<?> livingEntityClass) {
+                                                              Class<?> drawContextClass,
+                                                              Class<?> vectorClass,
+                                                              Class<?> quaternionClass,
+                                                              Class<?> livingEntityClass) {
         return p.length == 8
                 && drawContextClass.isAssignableFrom(p[0])
                 && p[1] == float.class && p[2] == float.class && p[3] == float.class
@@ -1031,9 +1032,13 @@ public final class MacroHudRuntime {
         return new EntityOrientationSnapshot(entity.getYaw(), entity.getPitch(), bodyYaw, headYaw, prevHeadYaw);
     }
 
-    /** Sets entity orientation using raw yaw/pitch values (as stored in entity fields). */
+    /**
+     * Sets entity orientation using raw yaw/pitch values (as stored in entity fields).
+     */
     private static void applyEntityOrientation(Entity entity, float yaw, float pitch) {
-        if (entity == null) return;
+        if (entity == null) {
+            return;
+        }
         entity.setYaw(yaw);
         entity.setPitch(pitch);
         if (entity instanceof LivingEntity living) {
@@ -1048,7 +1053,9 @@ public final class MacroHudRuntime {
      * bodyYaw=180 → entity faces the camera; displayYaw should be 180 + user-yaw-offset.
      */
     private static void applyEntityOrientationForScreen(Entity entity, float displayYaw, float pitch) {
-        if (entity == null) return;
+        if (entity == null) {
+            return;
+        }
         entity.setYaw(displayYaw);
         entity.setPitch(pitch);
         if (entity instanceof LivingEntity living) {
@@ -1077,7 +1084,9 @@ public final class MacroHudRuntime {
         }
     }
 
-    /** Reads a float field by name, traversing the class hierarchy. Returns null if not found. */
+    /**
+     * Reads a float field by name, traversing the class hierarchy. Returns null if not found.
+     */
     private static Float getFieldFloat(Class<?> clazz, Object obj, String fieldName) {
         for (Class<?> c = clazz; c != null; c = c.getSuperclass()) {
             try {
@@ -1093,7 +1102,9 @@ public final class MacroHudRuntime {
         return null;
     }
 
-    /** Sets a float field by name, traversing the class hierarchy. Silently ignores failures. */
+    /**
+     * Sets a float field by name, traversing the class hierarchy. Silently ignores failures.
+     */
     private static void setFieldFloat(Class<?> clazz, Object obj, String fieldName, float value) {
         for (Class<?> c = clazz; c != null; c = c.getSuperclass()) {
             try {

@@ -125,9 +125,9 @@ public final class NbtExtractors {
     }
 
     public static net.minecraft.entity.Entity resolveEntityTarget(World world,
-                                                                   net.minecraft.entity.player.PlayerEntity player,
-                                                                   String token,
-                                                                   net.minecraft.entity.Entity lookedEntity) {
+                                                                  net.minecraft.entity.player.PlayerEntity player,
+                                                                  String token,
+                                                                  net.minecraft.entity.Entity lookedEntity) {
         if (world == null || player == null || token == null || token.isBlank()) {
             return null;
         }

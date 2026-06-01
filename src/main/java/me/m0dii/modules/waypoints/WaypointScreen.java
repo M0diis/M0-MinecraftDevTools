@@ -126,7 +126,9 @@ public class WaypointScreen extends Screen {
     }
 
     private void saveEditedWaypoint() {
-        if (editingWaypoint == null) return;
+        if (editingWaypoint == null) {
+            return;
+        }
 
         try {
             String newName = nameField.getText().trim();

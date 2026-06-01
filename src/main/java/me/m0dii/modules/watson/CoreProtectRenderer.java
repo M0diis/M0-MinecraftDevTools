@@ -51,7 +51,7 @@ public final class CoreProtectRenderer {
     @Getter
     private static int vectorColorPresetIndex;
 
-    private static final ColorPreset[] OUTLINE_COLOR_PRESETS = new ColorPreset[] {
+    private static final ColorPreset[] OUTLINE_COLOR_PRESETS = new ColorPreset[]{
             new ColorPreset("Lime", 0.35f, 1.00f, 0.35f),
             new ColorPreset("Cyan", 0.25f, 0.95f, 1.00f),
             new ColorPreset("Gold", 1.00f, 0.85f, 0.25f),
@@ -62,7 +62,7 @@ public final class CoreProtectRenderer {
             new ColorPreset("Olive", 0.65f, 0.70f, 0.25f)
     };
 
-    private static final ColorPreset[] VECTOR_COLOR_PRESETS = new ColorPreset[] {
+    private static final ColorPreset[] VECTOR_COLOR_PRESETS = new ColorPreset[]{
             new ColorPreset("Magenta", 0.85f, 0.35f, 1.00f),
             new ColorPreset("Blue", 0.35f, 0.55f, 1.00f),
             new ColorPreset("Cyan", 0.20f, 0.95f, 0.95f),

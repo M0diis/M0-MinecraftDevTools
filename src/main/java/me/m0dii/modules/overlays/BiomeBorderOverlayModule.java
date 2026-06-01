@@ -122,7 +122,7 @@ public class BiomeBorderOverlayModule extends Module {
                                            int worldZ,
                                            int minY,
                                            int maxY,
-                                            int cell,
+                                           int cell,
                                            float r,
                                            float g,
                                            float b) {

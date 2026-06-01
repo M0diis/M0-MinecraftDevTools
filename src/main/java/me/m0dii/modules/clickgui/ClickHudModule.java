@@ -13,15 +13,15 @@ import net.minecraft.util.Identifier;
 import java.util.ArrayList;
 import java.util.List;
 
-public class ClickGuiModule extends Module {
+public class ClickHudModule extends Module {
 
-    public static final ClickGuiModule INSTANCE = new ClickGuiModule();
+    public static final ClickHudModule INSTANCE = new ClickHudModule();
 
     @Getter
     private ClickGuiRenderer renderer;
 
-    private ClickGuiModule() {
-        super("clickgui", "ClickGUI", true);
+    private ClickHudModule() {
+        super("click_hud", "ClickHUD", true);
     }
 
     @Override
@@ -29,7 +29,7 @@ public class ClickGuiModule extends Module {
         this.renderer = new ClickGuiRenderer();
 
         HudElementRegistry.attachElementBefore(VanillaHudElements.CHAT,
-                Identifier.of(M0DevToolsClient.MOD_ID, "click_gui"),
+                Identifier.of(M0DevToolsClient.MOD_ID, "click_hud"),
                 renderer::onHudRender
         );
 

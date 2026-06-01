@@ -25,6 +25,7 @@ public final class DebugDrawManager {
     private static final Path SELECTION_SAVE_PATH = M0DevToolsClient.SETTINGS_FOLDER.toPath().resolve("debugdraw-selection.json");
     private static final AtomicInteger NEXT_ID = new AtomicInteger(1);
     private static final List<DrawShape> SHAPES = new ArrayList<>();
+
     public enum SelectionShape {
         BOX,
         CIRCLE,
@@ -507,9 +508,12 @@ public final class DebugDrawManager {
             case "box" -> new BoxShape(d.id, expiresAt, rgb,
                     Math.min(d.x1, d.x2), Math.min(d.y1, d.y2), Math.min(d.z1, d.z2),
                     Math.max(d.x1, d.x2), Math.max(d.y1, d.y2), Math.max(d.z1, d.z2));
-            case "circle" -> new CircleShape(d.id, expiresAt, rgb, d.x1, d.y1, d.z1, Math.max(0.05, d.radius), segments);
-            case "cylinder" -> new CylinderShape(d.id, expiresAt, rgb, d.x1, d.y1, d.z1, Math.max(0.05, d.radius), Math.max(0.05, d.height), segments);
-            case "sphere" -> new SphereShape(d.id, expiresAt, rgb, d.x1, d.y1, d.z1, Math.max(0.05, d.radius), segments);
+            case "circle" ->
+                    new CircleShape(d.id, expiresAt, rgb, d.x1, d.y1, d.z1, Math.max(0.05, d.radius), segments);
+            case "cylinder" ->
+                    new CylinderShape(d.id, expiresAt, rgb, d.x1, d.y1, d.z1, Math.max(0.05, d.radius), Math.max(0.05, d.height), segments);
+            case "sphere" ->
+                    new SphereShape(d.id, expiresAt, rgb, d.x1, d.y1, d.z1, Math.max(0.05, d.radius), segments);
             default -> null;
         };
     }

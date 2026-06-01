@@ -137,27 +137,20 @@ public class CameraEntity extends ClientPlayerEntity {
         this.move(MovementType.SELF, this.getVelocity());
     }
 
-    private double prevX;
-    private double prevY;
-    private double prevZ;
-
-    private float prevYaw;
-    private float prevPitch;
-    private float prevHeadYaw;
-
     private void updateLastTickPosition() {
-        this.lastRenderX = this.getX();
-        this.lastRenderY = this.getY();
-        this.lastRenderZ = this.getZ();
+        // Camera interpolation uses lastX/lastY/lastZ and lastYaw/lastPitch.
+        // Keep them in sync before applying this tick's movement.
+        this.lastX = this.getX();
+        this.lastY = this.getY();
+        this.lastZ = this.getZ();
+        this.lastYaw = this.getYaw();
+        this.lastPitch = this.getPitch();
+        this.lastHeadYaw = this.headYaw;
 
-        this.prevX = this.getX();
-        this.prevY = this.getY();
-        this.prevZ = this.getZ();
-
-        this.prevYaw = this.getYaw();
-        this.prevPitch = this.getPitch();
-
-        this.prevHeadYaw = this.headYaw;
+        // Keep render history aligned as well.
+        this.lastRenderX = this.lastX;
+        this.lastRenderY = this.lastY;
+        this.lastRenderZ = this.lastZ;
     }
 
     public void setCameraRotations(float yaw, float pitch) {

@@ -154,13 +154,27 @@ public final class MacroWorkbenchActionSuggestions {
 
     private static String categorizeSuggestion(String token) {
         String t = StringUtils.safe(token).toLowerCase(Locale.ROOT);
-        if (t.startsWith("inventory.") || t.startsWith("hand.") || t.startsWith("offhand.")) return "Inventory";
-        if (t.startsWith("armor.")) return "Armor";
-        if (t.startsWith("container.")) return "Container";
-        if (t.startsWith("world.") || t.startsWith("dim") || t.startsWith("pos.")) return "World";
-        if (t.startsWith("look.") || t.startsWith("sel.") || t.startsWith("entities.")) return "Target";
-        if (t.startsWith("players.") || t.startsWith("player.") || t.equals("hp") || t.equals("food") || t.equals("xp") || t.equals("level")) return "Player";
-        if (t.startsWith("key.") || t.startsWith("cps.")) return "Macro";
+        if (t.startsWith("inventory.") || t.startsWith("hand.") || t.startsWith("offhand.")) {
+            return "Inventory";
+        }
+        if (t.startsWith("armor.")) {
+            return "Armor";
+        }
+        if (t.startsWith("container.")) {
+            return "Container";
+        }
+        if (t.startsWith("world.") || t.startsWith("dim") || t.startsWith("pos.")) {
+            return "World";
+        }
+        if (t.startsWith("look.") || t.startsWith("sel.") || t.startsWith("entities.")) {
+            return "Target";
+        }
+        if (t.startsWith("players.") || t.startsWith("player.") || t.equals("hp") || t.equals("food") || t.equals("xp") || t.equals("level")) {
+            return "Player";
+        }
+        if (t.startsWith("key.") || t.startsWith("cps.")) {
+            return "Macro";
+        }
         return "Variables";
     }
 

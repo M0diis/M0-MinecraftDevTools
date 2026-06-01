@@ -165,7 +165,8 @@ public final class DebugDrawScreen extends Screen {
             case "line" -> DebugDrawManager.addLine(d.x1, d.y1, d.z1, d.x2, d.y2, d.z2, d.rgb, d.seconds);
             case "box" -> DebugDrawManager.addBox(d.x1, d.y1, d.z1, d.x2, d.y2, d.z2, d.rgb, d.seconds);
             case "circle" -> DebugDrawManager.addCircle(d.x1, d.y1, d.z1, d.radius, d.rgb, d.seconds, d.segments);
-            case "cylinder" -> DebugDrawManager.addCylinder(d.x1, d.y1, d.z1, d.radius, d.height, d.rgb, d.seconds, d.segments);
+            case "cylinder" ->
+                    DebugDrawManager.addCylinder(d.x1, d.y1, d.z1, d.radius, d.height, d.rgb, d.seconds, d.segments);
             case "sphere" -> DebugDrawManager.addSphere(d.x1, d.y1, d.z1, d.radius, d.rgb, d.seconds, d.segments);
             default -> -1;
         };

@@ -232,16 +232,20 @@ public class ItemPickupNotifierModule extends Module {
 
     private static int resolvePanelX(HudCanvasDataHandler.HudCanvasElement canvas, int panelW, int screenW) {
         return switch (canvas.anchor) {
-            case TOP_CENTER, MIDDLE_CENTER, BOTTOM_CENTER -> Math.clamp((screenW - panelW) / 2 + canvas.x, 0, Math.max(0, screenW - panelW));
-            case TOP_RIGHT, MIDDLE_RIGHT, BOTTOM_RIGHT -> Math.clamp(screenW - panelW - canvas.x, 0, Math.max(0, screenW - panelW));
+            case TOP_CENTER, MIDDLE_CENTER, BOTTOM_CENTER ->
+                    Math.clamp((screenW - panelW) / 2 + canvas.x, 0, Math.max(0, screenW - panelW));
+            case TOP_RIGHT, MIDDLE_RIGHT, BOTTOM_RIGHT ->
+                    Math.clamp(screenW - panelW - canvas.x, 0, Math.max(0, screenW - panelW));
             default -> Math.clamp(canvas.x, 0, Math.max(0, screenW - panelW));
         };
     }
 
     private static int resolvePanelY(HudCanvasDataHandler.HudCanvasElement canvas, int panelH, int screenH) {
         return switch (canvas.anchor) {
-            case MIDDLE_LEFT, MIDDLE_CENTER, MIDDLE_RIGHT -> Math.clamp((screenH - panelH) / 2 + canvas.y, 0, Math.max(0, screenH - panelH));
-            case BOTTOM_LEFT, BOTTOM_CENTER, BOTTOM_RIGHT -> Math.clamp(screenH - panelH - canvas.y, 0, Math.max(0, screenH - panelH));
+            case MIDDLE_LEFT, MIDDLE_CENTER, MIDDLE_RIGHT ->
+                    Math.clamp((screenH - panelH) / 2 + canvas.y, 0, Math.max(0, screenH - panelH));
+            case BOTTOM_LEFT, BOTTOM_CENTER, BOTTOM_RIGHT ->
+                    Math.clamp(screenH - panelH - canvas.y, 0, Math.max(0, screenH - panelH));
             default -> Math.clamp(canvas.y, 0, Math.max(0, screenH - panelH));
         };
     }
@@ -276,6 +280,7 @@ public class ItemPickupNotifierModule extends Module {
         return keep <= 0 ? ellipsis : text.substring(0, keep) + ellipsis;
     }
 
-    private record PickupPopup(ItemStack stack, int amount, long createdAtMs) {}
+    private record PickupPopup(ItemStack stack, int amount, long createdAtMs) {
+    }
 }
 

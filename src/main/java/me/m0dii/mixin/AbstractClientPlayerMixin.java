@@ -1,5 +1,6 @@
 package me.m0dii.mixin;
 
+import me.m0dii.modules.freecam.CameraEntity;
 import me.m0dii.modules.freecam.FreecamModule;
 import net.minecraft.client.network.AbstractClientPlayerEntity;
 import net.minecraft.world.GameMode;
@@ -13,7 +14,7 @@ public class AbstractClientPlayerMixin {
 
     @Inject(method = "getGameMode", at = @At("HEAD"), cancellable = true)
     private void overrideIsSpectator(CallbackInfoReturnable<GameMode> cir) {
-        if (FreecamModule.INSTANCE.isEnabled()) {
+        if (FreecamModule.INSTANCE.isEnabled() && (Object) this == CameraEntity.getCamera()) {
             cir.setReturnValue(GameMode.SPECTATOR);
         }
     }

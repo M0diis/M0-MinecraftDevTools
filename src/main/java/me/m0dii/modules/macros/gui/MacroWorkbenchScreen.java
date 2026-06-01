@@ -347,7 +347,7 @@ public class MacroWorkbenchScreen extends Screen {
         int canvasControlY = 30;
         int canvasControlH = 20;
         UiRect canvasControlRow = FormPanels.panel(8, canvasControlY, Math.max(320, this.width - 16), canvasControlH);
-        List<UiRect> canvasControlSlots = FormPanels.row(canvasControlRow, 4, UiFlexLayout.Align.START, 
+        List<UiRect> canvasControlSlots = FormPanels.row(canvasControlRow, 4, UiFlexLayout.Align.START,
                 UiFlexLayout.Item.flex(90, 1), // Add Element
                 UiFlexLayout.Item.flex(70, 1),  // Grid
                 UiFlexLayout.Item.flex(26, 1),  // R-
@@ -555,12 +555,18 @@ public class MacroWorkbenchScreen extends Screen {
         addDrawableChild(kbOpenManager);
 
         ButtonWidget clearCmdHistoryButton = ButtonWidget.builder(
-                Text.literal("Clear History"),
-                b -> { CommandHistoryManager.clearHistory(); cmdHistoryItems.clear(); })
+                        Text.literal("Clear History"),
+                        b -> {
+                            CommandHistoryManager.clearHistory();
+                            cmdHistoryItems.clear();
+                        })
                 .dimensions(this.width / 2 + 5, this.height - 30, 110, 20).build();
         ButtonWidget clearMsgHistoryButton = ButtonWidget.builder(
-                Text.literal("Clear History"),
-                b -> { MessageHistoryManager.clearHistory(); msgHistoryItems.clear(); })
+                        Text.literal("Clear History"),
+                        b -> {
+                            MessageHistoryManager.clearHistory();
+                            msgHistoryItems.clear();
+                        })
                 .dimensions(this.width / 2 + 5, this.height - 30, 110, 20).build();
         this.cmdHistoryWidgets.add(clearCmdHistoryButton);
         this.msgHistoryWidgets.add(clearMsgHistoryButton);
@@ -826,13 +832,17 @@ public class MacroWorkbenchScreen extends Screen {
             int maxVisible = Math.min(getHistoryVisibleLines(), cmdHistoryItems.size() - cmdHistoryScroll);
             for (int i = 0; i < maxVisible; i++) {
                 int index = i + cmdHistoryScroll;
-                if (index >= cmdHistoryItems.size()) break;
+                if (index >= cmdHistoryItems.size()) {
+                    break;
+                }
                 String command = cmdHistoryItems.get(index);
                 int y = listY + (i * HISTORY_LINE_HEIGHT);
                 int boxX1 = 20, boxX2 = width - 20;
                 int boxY1 = y - 2, boxY2 = y + HISTORY_LINE_HEIGHT - 2;
                 boolean hovering = mouseX >= boxX1 && mouseX <= boxX2 && mouseY >= boxY1 && mouseY <= boxY2;
-                if (hovering) context.fill(boxX1, boxY1, boxX2, boxY2, 0x80FFFFFF);
+                if (hovering) {
+                    context.fill(boxX1, boxY1, boxX2, boxY2, 0x80FFFFFF);
+                }
                 String displayText = (index + 1) + ". " + command;
                 int textColor = hovering ? 0xFFFFFF00 : 0xFFFFFFFF;
                 int maxWidth = width - 50;
@@ -868,13 +878,17 @@ public class MacroWorkbenchScreen extends Screen {
             int maxVisible = Math.min(getHistoryVisibleLines(), msgHistoryItems.size() - msgHistoryScroll);
             for (int i = 0; i < maxVisible; i++) {
                 int index = i + msgHistoryScroll;
-                if (index >= msgHistoryItems.size()) break;
+                if (index >= msgHistoryItems.size()) {
+                    break;
+                }
                 String message = msgHistoryItems.get(index);
                 int y = listY + (i * HISTORY_LINE_HEIGHT);
                 int boxX1 = 20, boxX2 = width - 20;
                 int boxY1 = y - 2, boxY2 = y + HISTORY_LINE_HEIGHT - 2;
                 boolean hovering = mouseX >= boxX1 && mouseX <= boxX2 && mouseY >= boxY1 && mouseY <= boxY2;
-                if (hovering) context.fill(boxX1, boxY1, boxX2, boxY2, 0x80FFFFFF);
+                if (hovering) {
+                    context.fill(boxX1, boxY1, boxX2, boxY2, 0x80FFFFFF);
+                }
                 String displayText = (index + 1) + ". " + message;
                 int textColor = hovering ? 0xFFFFFF00 : 0xFFFFFFFF;
                 int maxWidth = width - 50;
@@ -966,16 +980,22 @@ public class MacroWorkbenchScreen extends Screen {
     }
 
     private boolean onCommandHistoryClick(double mouseX, double mouseY) {
-        if (cmdHistoryItems.isEmpty()) return false;
+        if (cmdHistoryItems.isEmpty()) {
+            return false;
+        }
         int listY = TOP_BAR_H + 8 + 32;
         int maxVisible = Math.min(getHistoryVisibleLines(), cmdHistoryItems.size() - cmdHistoryScroll);
         for (int i = 0; i < maxVisible; i++) {
             int index = i + cmdHistoryScroll;
-            if (index >= cmdHistoryItems.size()) break;
+            if (index >= cmdHistoryItems.size()) {
+                break;
+            }
             String command = cmdHistoryItems.get(index);
             int y = listY + (i * HISTORY_LINE_HEIGHT);
             if (mouseX >= 20 && mouseX <= width - 20 && mouseY >= y - 2 && mouseY <= y + HISTORY_LINE_HEIGHT - 2) {
-                if (client != null) client.keyboard.setClipboard(command);
+                if (client != null) {
+                    client.keyboard.setClipboard(command);
+                }
                 return true;
             }
         }
@@ -983,16 +1003,22 @@ public class MacroWorkbenchScreen extends Screen {
     }
 
     private boolean onMessageHistoryClick(double mouseX, double mouseY) {
-        if (msgHistoryItems.isEmpty()) return false;
+        if (msgHistoryItems.isEmpty()) {
+            return false;
+        }
         int listY = TOP_BAR_H + 8 + 32;
         int maxVisible = Math.min(getHistoryVisibleLines(), msgHistoryItems.size() - msgHistoryScroll);
         for (int i = 0; i < maxVisible; i++) {
             int index = i + msgHistoryScroll;
-            if (index >= msgHistoryItems.size()) break;
+            if (index >= msgHistoryItems.size()) {
+                break;
+            }
             String message = msgHistoryItems.get(index);
             int y = listY + (i * HISTORY_LINE_HEIGHT);
             if (mouseX >= 20 && mouseX <= width - 20 && mouseY >= y - 2 && mouseY <= y + HISTORY_LINE_HEIGHT - 2) {
-                if (client != null) client.keyboard.setClipboard(message);
+                if (client != null) {
+                    client.keyboard.setClipboard(message);
+                }
                 return true;
             }
         }
@@ -2419,8 +2445,8 @@ public class MacroWorkbenchScreen extends Screen {
             String proxyName = isSecondaryChatProxy(selected)
                     ? "Secondary Chat"
                     : (isMacroKeybindProxy(selected)
-                    ? "Macro Keybinds"
-                    : (isPickupNotifierProxy(selected) ? "Pick-up Notifier" : "NBT Inspector"));
+                       ? "Macro Keybinds"
+                       : (isPickupNotifierProxy(selected) ? "Pick-up Notifier" : "NBT Inspector"));
             quickField.setText(proxyName + " (edit style/pos/size)" + (externalState == ExternalProxyRenderState.MODULE_DISABLED ? " [DISABLED]" : ""));
             macroField.setEditable(false);
             macroField.setText("");
@@ -4275,7 +4301,11 @@ public class MacroWorkbenchScreen extends Screen {
                 int end = selectionEnd(selectionAnchor, cursor);
                 value = value.substring(0, start) + value.substring(end);
                 setAdvancedColorState(background, value, start);
-                if (background) advancedBgSelectionAnchor = -1; else advancedBorderSelectionAnchor = -1;
+                if (background) {
+                    advancedBgSelectionAnchor = -1;
+                } else {
+                    advancedBorderSelectionAnchor = -1;
+                }
                 return true;
             }
             if (cursor > 0) {
@@ -4283,7 +4313,11 @@ public class MacroWorkbenchScreen extends Screen {
                 cursor--;
             }
             setAdvancedColorState(background, value, cursor);
-            if (background) advancedBgSelectionAnchor = -1; else advancedBorderSelectionAnchor = -1;
+            if (background) {
+                advancedBgSelectionAnchor = -1;
+            } else {
+                advancedBorderSelectionAnchor = -1;
+            }
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_DELETE) {
@@ -4292,45 +4326,65 @@ public class MacroWorkbenchScreen extends Screen {
                 int end = selectionEnd(selectionAnchor, cursor);
                 value = value.substring(0, start) + value.substring(end);
                 setAdvancedColorState(background, value, start);
-                if (background) advancedBgSelectionAnchor = -1; else advancedBorderSelectionAnchor = -1;
+                if (background) {
+                    advancedBgSelectionAnchor = -1;
+                } else {
+                    advancedBorderSelectionAnchor = -1;
+                }
                 return true;
             }
             if (cursor < value.length()) {
                 value = value.substring(0, cursor) + value.substring(cursor + 1);
             }
             setAdvancedColorState(background, value, cursor);
-            if (background) advancedBgSelectionAnchor = -1; else advancedBorderSelectionAnchor = -1;
+            if (background) {
+                advancedBgSelectionAnchor = -1;
+            } else {
+                advancedBorderSelectionAnchor = -1;
+            }
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_LEFT) {
             int old = cursor;
             int next = Math.max(0, cursor - 1);
             setAdvancedColorState(background, value, next);
-            if (background) advancedBgSelectionAnchor = updateSelectionAnchor(advancedBgSelectionAnchor, old, next, isShiftDown());
-            else advancedBorderSelectionAnchor = updateSelectionAnchor(advancedBorderSelectionAnchor, old, next, isShiftDown());
+            if (background) {
+                advancedBgSelectionAnchor = updateSelectionAnchor(advancedBgSelectionAnchor, old, next, isShiftDown());
+            } else {
+                advancedBorderSelectionAnchor = updateSelectionAnchor(advancedBorderSelectionAnchor, old, next, isShiftDown());
+            }
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_RIGHT) {
             int old = cursor;
             int next = Math.min(value.length(), cursor + 1);
             setAdvancedColorState(background, value, next);
-            if (background) advancedBgSelectionAnchor = updateSelectionAnchor(advancedBgSelectionAnchor, old, next, isShiftDown());
-            else advancedBorderSelectionAnchor = updateSelectionAnchor(advancedBorderSelectionAnchor, old, next, isShiftDown());
+            if (background) {
+                advancedBgSelectionAnchor = updateSelectionAnchor(advancedBgSelectionAnchor, old, next, isShiftDown());
+            } else {
+                advancedBorderSelectionAnchor = updateSelectionAnchor(advancedBorderSelectionAnchor, old, next, isShiftDown());
+            }
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_HOME) {
             int old = cursor;
             setAdvancedColorState(background, value, 0);
-            if (background) advancedBgSelectionAnchor = updateSelectionAnchor(advancedBgSelectionAnchor, old, 0, isShiftDown());
-            else advancedBorderSelectionAnchor = updateSelectionAnchor(advancedBorderSelectionAnchor, old, 0, isShiftDown());
+            if (background) {
+                advancedBgSelectionAnchor = updateSelectionAnchor(advancedBgSelectionAnchor, old, 0, isShiftDown());
+            } else {
+                advancedBorderSelectionAnchor = updateSelectionAnchor(advancedBorderSelectionAnchor, old, 0, isShiftDown());
+            }
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_END) {
             int old = cursor;
             int next = value.length();
             setAdvancedColorState(background, value, next);
-            if (background) advancedBgSelectionAnchor = updateSelectionAnchor(advancedBgSelectionAnchor, old, next, isShiftDown());
-            else advancedBorderSelectionAnchor = updateSelectionAnchor(advancedBorderSelectionAnchor, old, next, isShiftDown());
+            if (background) {
+                advancedBgSelectionAnchor = updateSelectionAnchor(advancedBgSelectionAnchor, old, next, isShiftDown());
+            } else {
+                advancedBorderSelectionAnchor = updateSelectionAnchor(advancedBorderSelectionAnchor, old, next, isShiftDown());
+            }
             return true;
         }
         if (isCtrlDown() && keyCode == GLFW.GLFW_KEY_V && this.client != null) {
@@ -4359,7 +4413,11 @@ public class MacroWorkbenchScreen extends Screen {
             } else {
                 setAdvancedColorState(background, "", 0);
             }
-            if (background) advancedBgSelectionAnchor = -1; else advancedBorderSelectionAnchor = -1;
+            if (background) {
+                advancedBgSelectionAnchor = -1;
+            } else {
+                advancedBorderSelectionAnchor = -1;
+            }
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
@@ -5384,7 +5442,8 @@ public class MacroWorkbenchScreen extends Screen {
         int canvasHeight = Math.max(1, canvasBottom - CANVAS_CONTENT_TOP);
         return switch (e.anchor) {
             case TOP_LEFT, TOP_CENTER, TOP_RIGHT -> e.y;
-            case MIDDLE_LEFT, MIDDLE_CENTER, MIDDLE_RIGHT, CENTER -> CANVAS_CONTENT_TOP + (canvasHeight - e.height) / 2 + e.y;
+            case MIDDLE_LEFT, MIDDLE_CENTER, MIDDLE_RIGHT, CENTER ->
+                    CANVAS_CONTENT_TOP + (canvasHeight - e.height) / 2 + e.y;
             case BOTTOM_LEFT, BOTTOM_CENTER, BOTTOM_RIGHT -> canvasBottom - e.height - e.y;
         };
     }
@@ -5399,18 +5458,39 @@ public class MacroWorkbenchScreen extends Screen {
         };
         e.y = switch (e.anchor) {
             case TOP_LEFT, TOP_CENTER, TOP_RIGHT -> screenY;
-            case MIDDLE_LEFT, MIDDLE_CENTER, MIDDLE_RIGHT, CENTER -> screenY - (CANVAS_CONTENT_TOP + (canvasHeight - e.height) / 2);
+            case MIDDLE_LEFT, MIDDLE_CENTER, MIDDLE_RIGHT, CENTER ->
+                    screenY - (CANVAS_CONTENT_TOP + (canvasHeight - e.height) / 2);
             case BOTTOM_LEFT, BOTTOM_CENTER, BOTTOM_RIGHT -> canvasBottom - e.height - screenY;
         };
     }
 
-    private static boolean hasSelection(int anchor, int cursor) { return TextSelectionUtils.hasSelection(anchor, cursor); }
-    private static int selectionStart(int anchor, int cursor) { return TextSelectionUtils.selectionStart(anchor, cursor); }
-    private static int selectionEnd(int anchor, int cursor) { return TextSelectionUtils.selectionEnd(anchor, cursor); }
-    private static int clampTextIndex(String text, int index) { return TextSelectionUtils.clampTextIndex(text, index); }
-    private static int[] clampedSelectionRange(String text, int anchor, int cursor) { return TextSelectionUtils.clampedSelectionRange(text, anchor, cursor); }
-    private static String selectedText(String text, int anchor, int cursor) { return TextSelectionUtils.selectedText(text, anchor, cursor); }
-    private static int updateSelectionAnchor(int currentAnchor, int oldCursor, int newCursor, boolean shiftDown) { return TextSelectionUtils.updateSelectionAnchor(currentAnchor, oldCursor, newCursor, shiftDown); }
+    private static boolean hasSelection(int anchor, int cursor) {
+        return TextSelectionUtils.hasSelection(anchor, cursor);
+    }
+
+    private static int selectionStart(int anchor, int cursor) {
+        return TextSelectionUtils.selectionStart(anchor, cursor);
+    }
+
+    private static int selectionEnd(int anchor, int cursor) {
+        return TextSelectionUtils.selectionEnd(anchor, cursor);
+    }
+
+    private static int clampTextIndex(String text, int index) {
+        return TextSelectionUtils.clampTextIndex(text, index);
+    }
+
+    private static int[] clampedSelectionRange(String text, int anchor, int cursor) {
+        return TextSelectionUtils.clampedSelectionRange(text, anchor, cursor);
+    }
+
+    private static String selectedText(String text, int anchor, int cursor) {
+        return TextSelectionUtils.selectedText(text, anchor, cursor);
+    }
+
+    private static int updateSelectionAnchor(int currentAnchor, int oldCursor, int newCursor, boolean shiftDown) {
+        return TextSelectionUtils.updateSelectionAnchor(currentAnchor, oldCursor, newCursor, shiftDown);
+    }
 
     private void beginModalSelectionDrag(ModalDragSelectionField field) {
         this.activeDragSelectionField = field == null ? ModalDragSelectionField.NONE : field;
@@ -5848,6 +5928,7 @@ public class MacroWorkbenchScreen extends Screen {
     private static MacroHudDataHandler.ButtonExecutionMode cycleButtonExecutionMode(MacroHudDataHandler.ButtonExecutionMode mode, boolean forward) {
         return MacroWorkbenchUiOps.cycleButtonExecutionMode(mode, forward);
     }
+
     private static void ensureVisibleBackground(MacroHudDataHandler.HudElement e) {
         MacroWorkbenchUiOps.ensureVisibleBackground(e);
     }
@@ -5855,7 +5936,6 @@ public class MacroWorkbenchScreen extends Screen {
     private static int cycleStyleColor(int current, boolean forward) {
         return MacroWorkbenchUiOps.cycleStyleColor(current, forward, STYLE_COLOR_PALETTE);
     }
-
 
 
     private int modalX() {

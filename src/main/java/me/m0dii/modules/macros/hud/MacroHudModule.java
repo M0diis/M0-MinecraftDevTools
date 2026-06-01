@@ -2,7 +2,6 @@ package me.m0dii.modules.macros.hud;
 
 import me.m0dii.M0DevToolsClient;
 import me.m0dii.modules.Module;
-import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
 import net.minecraft.client.MinecraftClient;
@@ -19,8 +18,6 @@ public class MacroHudModule extends Module {
 
     @Override
     public void register() {
-        HudRenderCallback.EVENT.register(this::onHudRender);
-
         HudElementRegistry.attachElementBefore(VanillaHudElements.CHAT,
                 Identifier.of(M0DevToolsClient.MOD_ID, "macro_hud"),
                 this::onHudRender

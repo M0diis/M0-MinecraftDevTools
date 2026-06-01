@@ -71,7 +71,7 @@ public class ModuleRegistry {
         safeAdd(hud, NBTInfoHudModule.INSTANCE);
         safeAdd(hud, ItemPickupNotifierModule.INSTANCE);
         safeAdd(hud, EntityRadarModule.INSTANCE);
-        safeAdd(hud, ClickGuiModule.INSTANCE);
+        safeAdd(hud, ClickHudModule.INSTANCE);
         categories.add(hud);
 
         ModuleCategory ui = new ModuleCategory("UI");

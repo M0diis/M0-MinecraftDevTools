@@ -4,6 +4,7 @@ import com.mojang.authlib.GameProfile;
 import me.m0dii.modules.freecam.CameraUtils;
 import me.m0dii.modules.freecam.DummyMovementInput;
 import me.m0dii.modules.freecam.FreecamModule;
+import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.input.Input;
 import net.minecraft.client.network.AbstractClientPlayerEntity;
 import net.minecraft.client.network.ClientPlayerEntity;
@@ -31,18 +32,23 @@ public abstract class ClientPlayerEntityMixin extends AbstractClientPlayerEntity
         super(world, profile);
     }
 
+    @Unique
+    private boolean isLocalClientPlayer() {
+        return (Object) this == MinecraftClient.getInstance().player;
+    }
+
     @Inject(method = "isCamera", at = @At("HEAD"), cancellable = true)
     private void allowPlayerMovementInFreeCameraMode(CallbackInfoReturnable<Boolean> cir) {
-        if (FreecamModule.INSTANCE.isEnabled()) {
+        if (FreecamModule.INSTANCE.isEnabled() && this.isLocalClientPlayer()) {
             cir.setReturnValue(true);
         }
     }
 
     @Inject(method = "tick", at = @At("HEAD"))
     private void disableMovementInputsPre(CallbackInfo ci) {
-        if (CameraUtils.shouldPreventPlayerMovement()) {
+        if (CameraUtils.shouldPreventPlayerMovement() && this.isLocalClientPlayer()) {
             if (this.dummyMovementInput == null) {
-                this.dummyMovementInput = new DummyMovementInput(net.minecraft.client.MinecraftClient.getInstance().options);
+                this.dummyMovementInput = new DummyMovementInput(MinecraftClient.getInstance().options);
             }
             this.realInput = this.input;
             this.input = this.dummyMovementInput;
@@ -59,7 +65,7 @@ public abstract class ClientPlayerEntityMixin extends AbstractClientPlayerEntity
 
     @Inject(method = "swingHand", at = @At("HEAD"), cancellable = true)
     private void preventHandSwing(Hand hand, CallbackInfo ci) {
-        if (CameraUtils.shouldPreventPlayerInputs()) {
+        if (CameraUtils.shouldPreventPlayerInputs() && this.isLocalClientPlayer()) {
             ci.cancel();
         }
     }

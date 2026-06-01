@@ -48,7 +48,7 @@ public final class WatsonCoreProtectModule extends Module {
 
         @Override
         public String resolvePlaceholder(String token, MinecraftClient client, PlayerEntity player, boolean canvasMode) {
-            if(token.startsWith("watson.entries.last")) {
+            if (token.startsWith("watson.entries.last")) {
                 int amount = 0;
 
                 try {
@@ -60,7 +60,7 @@ public final class WatsonCoreProtectModule extends Module {
 
                 List<CoreProtectEntry> snapshot = CoreProtectTracker.snapshot();
 
-                if(snapshot.isEmpty()) {
+                if (snapshot.isEmpty()) {
                     return "N/A";
                 }
 
@@ -82,7 +82,7 @@ public final class WatsonCoreProtectModule extends Module {
 
                     yield snapshot.isEmpty() ? "N/A" : snapshot.getFirst().pos().toShortString();
                 }
-                case  "watson.entries.first.loc.x" -> {
+                case "watson.entries.first.loc.x" -> {
                     List<CoreProtectEntry> snapshot = CoreProtectTracker.snapshot();
 
                     yield snapshot.isEmpty() ? "N/A" : String.valueOf(snapshot.getFirst().pos().getX());

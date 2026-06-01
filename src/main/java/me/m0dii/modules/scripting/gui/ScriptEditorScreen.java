@@ -56,11 +56,15 @@ public class ScriptEditorScreen extends Screen {
         return t;
     });
 
-    private enum UiTab { MAIN, DOCS, SCRIPTS }
-    private enum Language { GROOVY, KOTLIN }
-    private enum SortMode { NAME_ASC, NAME_DESC, LANGUAGE }
-    private enum FilterMode { ALL, GROOVY, KOTLIN }
-    private enum SuggestionKind { VARIABLE, PROPERTY, METHOD, KEYWORD, SNIPPET }
+    private enum UiTab {MAIN, DOCS, SCRIPTS}
+
+    private enum Language {GROOVY, KOTLIN}
+
+    private enum SortMode {NAME_ASC, NAME_DESC, LANGUAGE}
+
+    private enum FilterMode {ALL, GROOVY, KOTLIN}
+
+    private enum SuggestionKind {VARIABLE, PROPERTY, METHOD, KEYWORD, SNIPPET}
 
     private record Rect(int x, int y, int w, int h) {
         private boolean contains(double mx, double my) {
@@ -68,15 +72,22 @@ public class ScriptEditorScreen extends Screen {
         }
     }
 
-    private record Suggestion(String category, String token, String insertText, SuggestionKind kind, String detail, int score) {}
+    private record Suggestion(String category, String token, String insertText, SuggestionKind kind, String detail,
+                              int score) {
+    }
 
-    private record PlaceholderCtx(int replaceStart, String prefix) {}
+    private record PlaceholderCtx(int replaceStart, String prefix) {
+    }
 
-    private record CodeCompletionContext(String qualifier, String prefix, int replaceStart, int replaceEnd) {}
+    private record CodeCompletionContext(String qualifier, String prefix, int replaceStart, int replaceEnd) {
+    }
 
-    private record CompletionItem(String label, String insertText, String nextType, SuggestionKind kind, String detail) {}
+    private record CompletionItem(String label, String insertText, String nextType, SuggestionKind kind,
+                                  String detail) {
+    }
 
-    private record DisplaySuggestion(Suggestion suggestion, boolean groupHeader, String groupKey, int hiddenOverloads) {}
+    private record DisplaySuggestion(Suggestion suggestion, boolean groupHeader, String groupKey, int hiddenOverloads) {
+    }
 
     private record Diagnostic(String severity, String file, int line, int column, String message) {
         private String rowText() {
@@ -85,7 +96,8 @@ public class ScriptEditorScreen extends Screen {
         }
     }
 
-    private record Snapshot(String text, int cursor, int anchor, int scrollLine, int viewLeft) {}
+    private record Snapshot(String text, int cursor, int anchor, int scrollLine, int viewLeft) {
+    }
 
     private static final class EditorState {
         private String text = "";
@@ -204,21 +216,47 @@ public class ScriptEditorScreen extends Screen {
                     return true;
                 }
             }
-            if (scriptsBtnCreate().contains(click.x(), click.y())) return createScript();
-            if (scriptsBtnRename().contains(click.x(), click.y())) return renameScript();
-            if (scriptsBtnDuplicate().contains(click.x(), click.y())) return duplicateScript();
-            if (scriptsBtnDelete().contains(click.x(), click.y())) return deleteScript();
-            if (scriptsBtnSort().contains(click.x(), click.y())) return cycleSort();
-            if (scriptsBtnFilter().contains(click.x(), click.y())) return cycleFilter();
-            if (scriptsBtnSave().contains(click.x(), click.y())) return saveScript();
-            if (scriptsBtnRun().contains(click.x(), click.y())) return runScript();
-            if (scriptsBtnAsync().contains(click.x(), click.y())) return toggleScriptAsync();
+            if (scriptsBtnCreate().contains(click.x(), click.y())) {
+                return createScript();
+            }
+            if (scriptsBtnRename().contains(click.x(), click.y())) {
+                return renameScript();
+            }
+            if (scriptsBtnDuplicate().contains(click.x(), click.y())) {
+                return duplicateScript();
+            }
+            if (scriptsBtnDelete().contains(click.x(), click.y())) {
+                return deleteScript();
+            }
+            if (scriptsBtnSort().contains(click.x(), click.y())) {
+                return cycleSort();
+            }
+            if (scriptsBtnFilter().contains(click.x(), click.y())) {
+                return cycleFilter();
+            }
+            if (scriptsBtnSave().contains(click.x(), click.y())) {
+                return saveScript();
+            }
+            if (scriptsBtnRun().contains(click.x(), click.y())) {
+                return runScript();
+            }
+            if (scriptsBtnAsync().contains(click.x(), click.y())) {
+                return toggleScriptAsync();
+            }
         } else {
             scriptsSearchFocused = false;
-            if (mainBtnSave().contains(click.x(), click.y())) return saveScript();
-            if (mainBtnRun().contains(click.x(), click.y())) return runScript();
-            if (mainBtnValidate().contains(click.x(), click.y())) return validateNow();
-            if (mainBtnAsync().contains(click.x(), click.y())) return toggleScriptAsync();
+            if (mainBtnSave().contains(click.x(), click.y())) {
+                return saveScript();
+            }
+            if (mainBtnRun().contains(click.x(), click.y())) {
+                return runScript();
+            }
+            if (mainBtnValidate().contains(click.x(), click.y())) {
+                return validateNow();
+            }
+            if (mainBtnAsync().contains(click.x(), click.y())) {
+                return toggleScriptAsync();
+            }
         }
 
         if (diagnosticsRect().contains(click.x(), click.y())) {
@@ -366,9 +404,15 @@ public class ScriptEditorScreen extends Screen {
             return false;
         }
 
-        if (ctrl && key == GLFW.GLFW_KEY_Z && shift) return redoEdit();
-        if (ctrl && key == GLFW.GLFW_KEY_Y) return redoEdit();
-        if (ctrl && key == GLFW.GLFW_KEY_Z) return undoEdit();
+        if (ctrl && key == GLFW.GLFW_KEY_Z && shift) {
+            return redoEdit();
+        }
+        if (ctrl && key == GLFW.GLFW_KEY_Y) {
+            return redoEdit();
+        }
+        if (ctrl && key == GLFW.GLFW_KEY_Z) {
+            return undoEdit();
+        }
 
         if (suggestionsVisible) {
             if (key == GLFW.GLFW_KEY_UP) {
@@ -415,8 +459,12 @@ public class ScriptEditorScreen extends Screen {
             refreshSuggestions();
             return true;
         }
-        if (ctrl && key == GLFW.GLFW_KEY_S) return saveScript();
-        if (ctrl && key == GLFW.GLFW_KEY_R) return runScript();
+        if (ctrl && key == GLFW.GLFW_KEY_S) {
+            return saveScript();
+        }
+        if (ctrl && key == GLFW.GLFW_KEY_R) {
+            return runScript();
+        }
 
         if (key == GLFW.GLFW_KEY_TAB) {
             if (shift) {
@@ -459,12 +507,36 @@ public class ScriptEditorScreen extends Screen {
             return true;
         }
 
-        if (key == GLFW.GLFW_KEY_LEFT) { moveCursor(editor.cursor - 1, shift); refreshSuggestions(); return true; }
-        if (key == GLFW.GLFW_KEY_RIGHT) { moveCursor(editor.cursor + 1, shift); refreshSuggestions(); return true; }
-        if (key == GLFW.GLFW_KEY_HOME) { moveCursor(lineStart(editor.cursor), shift); refreshSuggestions(); return true; }
-        if (key == GLFW.GLFW_KEY_END) { moveCursor(lineEnd(editor.cursor), shift); refreshSuggestions(); return true; }
-        if (key == GLFW.GLFW_KEY_UP) { moveCursor(verticalMove(editor.cursor, -1), shift); refreshSuggestions(); return true; }
-        if (key == GLFW.GLFW_KEY_DOWN) { moveCursor(verticalMove(editor.cursor, 1), shift); refreshSuggestions(); return true; }
+        if (key == GLFW.GLFW_KEY_LEFT) {
+            moveCursor(editor.cursor - 1, shift);
+            refreshSuggestions();
+            return true;
+        }
+        if (key == GLFW.GLFW_KEY_RIGHT) {
+            moveCursor(editor.cursor + 1, shift);
+            refreshSuggestions();
+            return true;
+        }
+        if (key == GLFW.GLFW_KEY_HOME) {
+            moveCursor(lineStart(editor.cursor), shift);
+            refreshSuggestions();
+            return true;
+        }
+        if (key == GLFW.GLFW_KEY_END) {
+            moveCursor(lineEnd(editor.cursor), shift);
+            refreshSuggestions();
+            return true;
+        }
+        if (key == GLFW.GLFW_KEY_UP) {
+            moveCursor(verticalMove(editor.cursor, -1), shift);
+            refreshSuggestions();
+            return true;
+        }
+        if (key == GLFW.GLFW_KEY_DOWN) {
+            moveCursor(verticalMove(editor.cursor, 1), shift);
+            refreshSuggestions();
+            return true;
+        }
 
         return false;
     }
@@ -541,7 +613,9 @@ public class ScriptEditorScreen extends Screen {
 
         for (int i = 0; i < visible; i++) {
             int idx = scriptsScroll + i;
-            if (idx >= visibleScripts.size()) break;
+            if (idx >= visibleScripts.size()) {
+                break;
+            }
             int y = body.y + i * SCRIPT_ROW_H;
             String name = visibleScripts.get(idx);
             boolean selected = idx == selectedScriptIndex;
@@ -583,7 +657,9 @@ public class ScriptEditorScreen extends Screen {
 
         int y = code.y + 3;
         for (int lineIdx = editor.scrollLine; lineIdx < lines.size(); lineIdx++) {
-            if (y > code.y + code.h - CODE_LINE_H) break;
+            if (y > code.y + code.h - CODE_LINE_H) {
+                break;
+            }
             String line = lines.get(lineIdx);
             String n = Integer.toString(lineIdx + 1);
             context.drawText(textRenderer, n, gutter.x + gutter.w - 4 - textRenderer.getWidth(n), y, 0xFF888888, false);
@@ -625,7 +701,9 @@ public class ScriptEditorScreen extends Screen {
         diagnosticsScroll = Math.clamp(diagnosticsScroll, 0, maxScroll);
         for (int i = 0; i < rows; i++) {
             int idx = diagnosticsScroll + i;
-            if (idx >= diagnostics.size()) break;
+            if (idx >= diagnostics.size()) {
+                break;
+            }
             int y = panel.y + 16 + i * DIAG_ROW_H;
             Diagnostic diagnostic = diagnostics.get(idx);
             boolean hover = panel.contains(mouseX, mouseY) && mouseY >= y && mouseY < y + DIAG_ROW_H;
@@ -646,7 +724,9 @@ public class ScriptEditorScreen extends Screen {
 
         int y = body.y + 4;
         for (int i = docsScroll; i < docsLines.size(); i++) {
-            if (y > body.y + body.h - CODE_LINE_H) break;
+            if (y > body.y + body.h - CODE_LINE_H) {
+                break;
+            }
             String line = docsLines.get(i);
             int color = line.startsWith("[") ? 0xFF9FC8FF : 0xFFE0E0E0;
             context.drawText(textRenderer, line, body.x + 8, y, color, false);
@@ -666,7 +746,9 @@ public class ScriptEditorScreen extends Screen {
 
         for (int i = 0; i < visible; i++) {
             int idx = suggestionScroll + i;
-            if (idx >= visibleSuggestions.size()) break;
+            if (idx >= visibleSuggestions.size()) {
+                break;
+            }
             int y = drop.y + breadcrumbH + i * SUGGESTION_ROW_H;
             if (idx == suggestionSelected) {
                 context.fill(drop.x + 1, y, drop.x + drop.w - 1, y + SUGGESTION_ROW_H, 0x804A7CC7);
@@ -926,7 +1008,9 @@ public class ScriptEditorScreen extends Screen {
 
         for (int i = 0; i < text.length(); i++) {
             char c = text.charAt(i);
-            if (c == '\n') line++;
+            if (c == '\n') {
+                line++;
+            }
             if (inString) {
                 if (quote == '"' && i + 1 < text.length() && c == '$' && text.charAt(i + 1) == '{'
                         && (language == Language.KOTLIN || language == Language.GROOVY)) {
@@ -950,12 +1034,19 @@ public class ScriptEditorScreen extends Screen {
                 stringLine = line;
                 continue;
             }
-            if (c == '(') round++;
-            else if (c == ')') round--;
-            else if (c == '{') curly++;
-            else if (c == '}') curly--;
-            else if (c == '[') square++;
-            else if (c == ']') square--;
+            if (c == '(') {
+                round++;
+            } else if (c == ')') {
+                round--;
+            } else if (c == '{') {
+                curly++;
+            } else if (c == '}') {
+                curly--;
+            } else if (c == '[') {
+                square++;
+            } else if (c == ']') {
+                square--;
+            }
 
             if (round < 0 || curly < 0 || square < 0) {
                 out.add(new Diagnostic("ERROR", "", line, 1, "Unexpected closing bracket."));
@@ -964,14 +1055,23 @@ public class ScriptEditorScreen extends Screen {
                 square = Math.max(0, square);
             }
         }
-        if (inString) out.add(new Diagnostic("ERROR", "", stringLine, 1, "Unclosed string literal."));
-        if (round > 0) out.add(new Diagnostic("ERROR", "", line, 1, "Unclosed '()' group."));
-        if (curly > 0) out.add(new Diagnostic("ERROR", "", line, 1, "Unclosed '{}' block."));
-        if (square > 0) out.add(new Diagnostic("ERROR", "", line, 1, "Unclosed '[]' group."));
+        if (inString) {
+            out.add(new Diagnostic("ERROR", "", stringLine, 1, "Unclosed string literal."));
+        }
+        if (round > 0) {
+            out.add(new Diagnostic("ERROR", "", line, 1, "Unclosed '()' group."));
+        }
+        if (curly > 0) {
+            out.add(new Diagnostic("ERROR", "", line, 1, "Unclosed '{}' block."));
+        }
+        if (square > 0) {
+            out.add(new Diagnostic("ERROR", "", line, 1, "Unclosed '[]' group."));
+        }
         return out;
     }
 
-    private record InterpolationScan(int endIndex, int line, boolean unclosed) {}
+    private record InterpolationScan(int endIndex, int line, boolean unclosed) {
+    }
 
     private static InterpolationScan scanInterpolationExpression(String text, int startIndex, int line) {
         int depth = 1;
@@ -986,7 +1086,9 @@ public class ScriptEditorScreen extends Screen {
                 i++;
                 while (i < text.length()) {
                     char qc = text.charAt(i);
-                    if (qc == '\n') line++;
+                    if (qc == '\n') {
+                        line++;
+                    }
                     if (qc == q && text.charAt(i - 1) != '\\') {
                         break;
                     }
@@ -1015,10 +1117,14 @@ public class ScriptEditorScreen extends Screen {
     }
 
     private static int parseIntAfter(String key, String message, int fallback) {
-        if (message == null) return fallback;
+        if (message == null) {
+            return fallback;
+        }
         String lower = message.toLowerCase(Locale.ROOT);
         int idx = lower.indexOf(key.toLowerCase(Locale.ROOT));
-        if (idx < 0) return fallback;
+        if (idx < 0) {
+            return fallback;
+        }
         int i = idx + key.length();
         while (i < lower.length() && !Character.isDigit(lower.charAt(i))) i++;
         int j = i;
@@ -1054,8 +1160,12 @@ public class ScriptEditorScreen extends Screen {
         allScripts.addAll(ScriptStorage.listScripts());
         visibleScripts.clear();
         for (String script : allScripts) {
-            if (!matchesFilter(script)) continue;
-            if (!scriptSearch.isBlank() && !script.toLowerCase(Locale.ROOT).contains(scriptSearch.toLowerCase(Locale.ROOT))) continue;
+            if (!matchesFilter(script)) {
+                continue;
+            }
+            if (!scriptSearch.isBlank() && !script.toLowerCase(Locale.ROOT).contains(scriptSearch.toLowerCase(Locale.ROOT))) {
+                continue;
+            }
             visibleScripts.add(script);
         }
         applySort();
@@ -1068,8 +1178,12 @@ public class ScriptEditorScreen extends Screen {
     }
 
     private boolean matchesFilter(String script) {
-        if (filterMode == FilterMode.ALL) return true;
-        if (filterMode == FilterMode.GROOVY) return script.toLowerCase(Locale.ROOT).endsWith(GROOVY_EXT);
+        if (filterMode == FilterMode.ALL) {
+            return true;
+        }
+        if (filterMode == FilterMode.GROOVY) {
+            return script.toLowerCase(Locale.ROOT).endsWith(GROOVY_EXT);
+        }
         return script.toLowerCase(Locale.ROOT).endsWith(KOTLIN_EXT);
     }
 
@@ -1077,7 +1191,8 @@ public class ScriptEditorScreen extends Screen {
         Comparator<String> comp = switch (sortMode) {
             case NAME_ASC -> Comparator.naturalOrder();
             case NAME_DESC -> Comparator.<String>naturalOrder().reversed();
-            case LANGUAGE -> Comparator.comparing((String s) -> inferLanguage(s).name()).thenComparing(Comparator.naturalOrder());
+            case LANGUAGE ->
+                    Comparator.comparing((String s) -> inferLanguage(s).name()).thenComparing(Comparator.naturalOrder());
         };
         visibleScripts.sort(comp);
     }
@@ -1107,7 +1222,9 @@ public class ScriptEditorScreen extends Screen {
     }
 
     private void openScriptByVisibleIndex(int idx, boolean keepOutput) {
-        if (idx < 0 || idx >= visibleScripts.size()) return;
+        if (idx < 0 || idx >= visibleScripts.size()) {
+            return;
+        }
         selectedScriptIndex = idx;
         currentScriptName = visibleScripts.get(idx);
         try {
@@ -1198,8 +1315,12 @@ public class ScriptEditorScreen extends Screen {
 
     private static String normalizeScriptName(String raw) {
         String name = raw == null ? "" : raw.trim();
-        if (name.isEmpty()) return DEFAULT_SCRIPT_NAME;
-        if (name.endsWith(GROOVY_EXT) || name.endsWith(KOTLIN_EXT)) return name;
+        if (name.isEmpty()) {
+            return DEFAULT_SCRIPT_NAME;
+        }
+        if (name.endsWith(GROOVY_EXT) || name.endsWith(KOTLIN_EXT)) {
+            return name;
+        }
         return name + KOTLIN_EXT;
     }
 
@@ -1223,7 +1344,9 @@ public class ScriptEditorScreen extends Screen {
         long now = System.currentTimeMillis();
         if (cursorIdx == editor.lastClickCursor && (now - editor.lastClickAt) < 320L) {
             editor.clickCount++;
-            if (editor.clickCount > 3) editor.clickCount = 1;
+            if (editor.clickCount > 3) {
+                editor.clickCount = 1;
+            }
         } else {
             editor.clickCount = 1;
         }
@@ -1257,15 +1380,21 @@ public class ScriptEditorScreen extends Screen {
     }
 
     private String selectedTextOrAll() {
-        if (!hasSelection()) return editor.text;
+        if (!hasSelection()) {
+            return editor.text;
+        }
         int start = Math.min(editor.selectionAnchor, editor.cursor);
         int end = Math.max(editor.selectionAnchor, editor.cursor);
         return editor.text.substring(start, end);
     }
 
     private void replaceSelectionOrInsert(String insert, boolean saveHistory) {
-        if (insert == null || insert.isEmpty()) return;
-        if (saveHistory) saveUndo();
+        if (insert == null || insert.isEmpty()) {
+            return;
+        }
+        if (saveHistory) {
+            saveUndo();
+        }
         String value = normalize(insert);
         if (hasSelection()) {
             int start = Math.min(editor.selectionAnchor, editor.cursor);
@@ -1282,8 +1411,12 @@ public class ScriptEditorScreen extends Screen {
     }
 
     private void deleteSelection(boolean saveHistory) {
-        if (!hasSelection()) return;
-        if (saveHistory) saveUndo();
+        if (!hasSelection()) {
+            return;
+        }
+        if (saveHistory) {
+            saveUndo();
+        }
         int start = Math.min(editor.selectionAnchor, editor.cursor);
         int end = Math.max(editor.selectionAnchor, editor.cursor);
         editor.text = editor.text.substring(0, start) + editor.text.substring(end);
@@ -1334,8 +1467,11 @@ public class ScriptEditorScreen extends Screen {
         String block = editor.text.substring(blockStart, blockEnd);
         String[] lines = block.split("\\n", -1);
         for (int i = 0; i < lines.length; i++) {
-            if (lines[i].startsWith("    ")) lines[i] = lines[i].substring(4);
-            else if (lines[i].startsWith("\t")) lines[i] = lines[i].substring(1);
+            if (lines[i].startsWith("    ")) {
+                lines[i] = lines[i].substring(4);
+            } else if (lines[i].startsWith("\t")) {
+                lines[i] = lines[i].substring(1);
+            }
         }
         String joined = String.join("\n", lines);
         editor.text = editor.text.substring(0, blockStart) + joined + editor.text.substring(blockEnd);
@@ -1346,7 +1482,9 @@ public class ScriptEditorScreen extends Screen {
     }
 
     private static String leadingIndent(String line) {
-        if (line == null || line.isEmpty()) return "";
+        if (line == null || line.isEmpty()) {
+            return "";
+        }
         int i = 0;
         while (i < line.length() && (line.charAt(i) == ' ' || line.charAt(i) == '\t')) i++;
         return line.substring(0, i);
@@ -1355,8 +1493,11 @@ public class ScriptEditorScreen extends Screen {
     private void moveCursor(int next, boolean shift) {
         int old = editor.cursor;
         editor.cursor = Math.clamp(next, 0, editor.text.length());
-        if (shift) editor.selectionAnchor = editor.selectionAnchor < 0 ? old : editor.selectionAnchor;
-        else editor.selectionAnchor = -1;
+        if (shift) {
+            editor.selectionAnchor = editor.selectionAnchor < 0 ? old : editor.selectionAnchor;
+        } else {
+            editor.selectionAnchor = -1;
+        }
         clampEditor();
     }
 
@@ -1387,7 +1528,9 @@ public class ScriptEditorScreen extends Screen {
             remain -= len + 1;
             line = i + 1;
         }
-        if (editor.preferredColumn < 0) editor.preferredColumn = col;
+        if (editor.preferredColumn < 0) {
+            editor.preferredColumn = col;
+        }
         int targetLine = Math.clamp(line + direction, 0, lines.size() - 1);
         int targetCol = Math.min(lines.get(targetLine).length(), editor.preferredColumn);
         int out = 0;
@@ -1397,8 +1540,12 @@ public class ScriptEditorScreen extends Screen {
 
     private void clampEditor() {
         editor.cursor = Math.clamp(editor.cursor, 0, editor.text.length());
-        if (editor.selectionAnchor > editor.text.length()) editor.selectionAnchor = editor.text.length();
-        if (editor.selectionAnchor < -1) editor.selectionAnchor = -1;
+        if (editor.selectionAnchor > editor.text.length()) {
+            editor.selectionAnchor = editor.text.length();
+        }
+        if (editor.selectionAnchor < -1) {
+            editor.selectionAnchor = -1;
+        }
         ensureCursorVisible();
     }
 
@@ -1414,8 +1561,11 @@ public class ScriptEditorScreen extends Screen {
         }
         int left = code.x + 4;
         int right = code.x + code.w - 6;
-        if (pixel[0] < left) editor.viewLeft = Math.max(0, editor.viewLeft - (left - pixel[0]));
-        else if (pixel[0] > right) editor.viewLeft += (pixel[0] - right);
+        if (pixel[0] < left) {
+            editor.viewLeft = Math.max(0, editor.viewLeft - (left - pixel[0]));
+        } else if (pixel[0] > right) {
+            editor.viewLeft += (pixel[0] - right);
+        }
     }
 
     private int indexFromMouse(int mouseX, int mouseY, Rect code) {
@@ -1455,7 +1605,9 @@ public class ScriptEditorScreen extends Screen {
     }
 
     private void drawSelection(DrawContext context, Rect code, List<String> lines) {
-        if (!hasSelection()) return;
+        if (!hasSelection()) {
+            return;
+        }
         int start = Math.min(editor.selectionAnchor, editor.cursor);
         int end = Math.max(editor.selectionAnchor, editor.cursor);
         int y = code.y + 3;
@@ -1465,7 +1617,9 @@ public class ScriptEditorScreen extends Screen {
             int lineStart = offset;
             int lineEnd = lineStart + line.length();
             if (i >= editor.scrollLine) {
-                if (y > code.y + code.h - CODE_LINE_H) break;
+                if (y > code.y + code.h - CODE_LINE_H) {
+                    break;
+                }
                 int s = Math.max(start, lineStart);
                 int e = Math.min(end, lineEnd);
                 if (e > s) {
@@ -1490,7 +1644,9 @@ public class ScriptEditorScreen extends Screen {
     private int lineNumberOfCursor() {
         int line = 0;
         for (int i = 0; i < Math.min(editor.cursor, editor.text.length()); i++) {
-            if (editor.text.charAt(i) == '\n') line++;
+            if (editor.text.charAt(i) == '\n') {
+                line++;
+            }
         }
         return line;
     }
@@ -1500,7 +1656,9 @@ public class ScriptEditorScreen extends Screen {
             int line = Math.max(1, d.line) - 1;
             int col = Math.max(1, d.column) - 1;
             int y = code.y + 3 + (line - editor.scrollLine) * CODE_LINE_H;
-            if (y < code.y || y > code.y + code.h - CODE_LINE_H) continue;
+            if (y < code.y || y > code.y + code.h - CODE_LINE_H) {
+                continue;
+            }
             context.fill(code.x + 1, y + 8, code.x + code.w - 1, y + 9, 0x90FF5555);
             String lineText = lineTextAt(line);
             int x1 = code.x + 4 + textRenderer.getWidth(lineText.substring(0, Math.min(col, lineText.length()))) - editor.viewLeft;
@@ -1511,16 +1669,22 @@ public class ScriptEditorScreen extends Screen {
 
     private String lineTextAt(int zeroBased) {
         List<String> lines = splitLines(editor.text);
-        if (zeroBased < 0 || zeroBased >= lines.size()) return "";
+        if (zeroBased < 0 || zeroBased >= lines.size()) {
+            return "";
+        }
         return lines.get(zeroBased);
     }
 
     private void highlightMatchingBracket(DrawContext context, Rect code) {
         int leftIdx = editor.cursor > 0 ? editor.cursor - 1 : -1;
-        if (leftIdx < 0 || leftIdx >= editor.text.length()) return;
+        if (leftIdx < 0 || leftIdx >= editor.text.length()) {
+            return;
+        }
         char c = editor.text.charAt(leftIdx);
         int match = findMatchingBracket(leftIdx, c);
-        if (match < 0) return;
+        if (match < 0) {
+            return;
+        }
         drawBracketMarker(context, code, leftIdx, 0xFF8FD7FF);
         drawBracketMarker(context, code, match, 0xFF8FD7FF);
     }
@@ -1529,27 +1693,55 @@ public class ScriptEditorScreen extends Screen {
         char open;
         char close;
         int dir;
-        if (c == '(') { open = '('; close = ')'; dir = 1; }
-        else if (c == '{') { open = '{'; close = '}'; dir = 1; }
-        else if (c == '[') { open = '['; close = ']'; dir = 1; }
-        else if (c == ')') { open = '('; close = ')'; dir = -1; }
-        else if (c == '}') { open = '{'; close = '}'; dir = -1; }
-        else if (c == ']') { open = '['; close = ']'; dir = -1; }
-        else return -1;
+        if (c == '(') {
+            open = '(';
+            close = ')';
+            dir = 1;
+        } else if (c == '{') {
+            open = '{';
+            close = '}';
+            dir = 1;
+        } else if (c == '[') {
+            open = '[';
+            close = ']';
+            dir = 1;
+        } else if (c == ')') {
+            open = '(';
+            close = ')';
+            dir = -1;
+        } else if (c == '}') {
+            open = '{';
+            close = '}';
+            dir = -1;
+        } else if (c == ']') {
+            open = '[';
+            close = ']';
+            dir = -1;
+        } else {
+            return -1;
+        }
 
         int depth = 0;
         for (int i = pos; i >= 0 && i < editor.text.length(); i += dir) {
             char v = editor.text.charAt(i);
-            if (v == open) depth += dir > 0 ? 1 : -1;
-            if (v == close) depth += dir > 0 ? -1 : 1;
-            if (depth == 0) return i;
+            if (v == open) {
+                depth += dir > 0 ? 1 : -1;
+            }
+            if (v == close) {
+                depth += dir > 0 ? -1 : 1;
+            }
+            if (depth == 0) {
+                return i;
+            }
         }
         return -1;
     }
 
     private void drawBracketMarker(DrawContext context, Rect code, int idx, int color) {
         int[] p = cursorPixel(code, idx);
-        if (p[1] < code.y || p[1] > code.y + code.h - CODE_LINE_H) return;
+        if (p[1] < code.y || p[1] > code.y + code.h - CODE_LINE_H) {
+            return;
+        }
         int charW = textRenderer.getWidth("(");
         context.fill(p[0], p[1], p[0] + Math.max(2, charW), p[1] + 1, color);
         context.fill(p[0], p[1] + 8, p[0] + Math.max(2, charW), p[1] + 9, color);
@@ -1559,18 +1751,23 @@ public class ScriptEditorScreen extends Screen {
         List<TokenSpan> spans = tokenize(line, language);
         int drawX = x;
         for (TokenSpan span : spans) {
-            if (span.end <= span.start || span.start < 0 || span.end > line.length()) continue;
+            if (span.end <= span.start || span.start < 0 || span.end > line.length()) {
+                continue;
+            }
             String part = line.substring(span.start, span.end);
             context.drawText(textRenderer, part, drawX, y, span.color, false);
             drawX += textRenderer.getWidth(part);
         }
     }
 
-    private record TokenSpan(int start, int end, int color) {}
+    private record TokenSpan(int start, int end, int color) {
+    }
 
     private static List<TokenSpan> tokenize(String line, Language language) {
         List<TokenSpan> out = new ArrayList<>();
-        if (line == null || line.isEmpty()) return out;
+        if (line == null || line.isEmpty()) {
+            return out;
+        }
         List<String> words = language == Language.GROOVY
                 ? List.of("def", "class", "if", "else", "for", "while", "return", "import", "new", "true", "false", "null")
                 : List.of("fun", "val", "var", "class", "if", "else", "for", "while", "return", "import", "object", "true", "false", "null", "when");
@@ -1584,7 +1781,10 @@ public class ScriptEditorScreen extends Screen {
             if (c == '"' || c == '\'') {
                 int j = i + 1;
                 while (j < line.length()) {
-                    if (line.charAt(j) == c && line.charAt(j - 1) != '\\') { j++; break; }
+                    if (line.charAt(j) == c && line.charAt(j - 1) != '\\') {
+                        j++;
+                        break;
+                    }
                     j++;
                 }
                 out.add(new TokenSpan(i, Math.min(j, line.length()), 0xFFE6C07B));
@@ -1658,7 +1858,9 @@ public class ScriptEditorScreen extends Screen {
     }
 
     private void acceptSuggestion() {
-        if (!suggestionsVisible || suggestionSelected < 0 || suggestionSelected >= visibleSuggestions.size()) return;
+        if (!suggestionsVisible || suggestionSelected < 0 || suggestionSelected >= visibleSuggestions.size()) {
+            return;
+        }
         DisplaySuggestion ds = visibleSuggestions.get(suggestionSelected);
         Suggestion s = ds.suggestion();
         if (ds.groupHeader() && ds.hiddenOverloads() > 0) {
@@ -2230,13 +2432,27 @@ public class ScriptEditorScreen extends Screen {
 
     private static String suggestionCategory(String token) {
         String t = token == null ? "" : token.toLowerCase(Locale.ROOT);
-        if (t.startsWith("player") || t.equals("hp") || t.equals("food") || t.equals("xp") || t.equals("level")) return "Player";
-        if (t.startsWith("inventory") || t.startsWith("hand") || t.startsWith("offhand")) return "Inventory";
-        if (t.startsWith("armor")) return "Armor";
-        if (t.startsWith("container")) return "Container";
-        if (t.startsWith("world") || t.startsWith("pos") || t.startsWith("dim") || t.startsWith("dir")) return "World";
-        if (t.startsWith("look") || t.startsWith("entities") || t.startsWith("players") || t.startsWith("sel")) return "Target";
-        if (t.startsWith("script")) return "Script";
+        if (t.startsWith("player") || t.equals("hp") || t.equals("food") || t.equals("xp") || t.equals("level")) {
+            return "Player";
+        }
+        if (t.startsWith("inventory") || t.startsWith("hand") || t.startsWith("offhand")) {
+            return "Inventory";
+        }
+        if (t.startsWith("armor")) {
+            return "Armor";
+        }
+        if (t.startsWith("container")) {
+            return "Container";
+        }
+        if (t.startsWith("world") || t.startsWith("pos") || t.startsWith("dim") || t.startsWith("dir")) {
+            return "World";
+        }
+        if (t.startsWith("look") || t.startsWith("entities") || t.startsWith("players") || t.startsWith("sel")) {
+            return "Target";
+        }
+        if (t.startsWith("script")) {
+            return "Script";
+        }
         return "Other";
     }
 
@@ -2249,7 +2465,9 @@ public class ScriptEditorScreen extends Screen {
     }
 
     private boolean undoEdit() {
-        if (undo.isEmpty()) return false;
+        if (undo.isEmpty()) {
+            return false;
+        }
         redo.push(snapshot());
         restore(undo.pop());
         markEdited();
@@ -2257,7 +2475,9 @@ public class ScriptEditorScreen extends Screen {
     }
 
     private boolean redoEdit() {
-        if (redo.isEmpty()) return false;
+        if (redo.isEmpty()) {
+            return false;
+        }
         undo.push(snapshot());
         restore(redo.pop());
         markEdited();
@@ -2286,7 +2506,9 @@ public class ScriptEditorScreen extends Screen {
     }
 
     private static String normalize(String raw) {
-        if (raw == null || raw.isEmpty()) return "";
+        if (raw == null || raw.isEmpty()) {
+            return "";
+        }
         return raw.replace("\r\n", "\n").replace('\r', '\n');
     }
 
@@ -2338,7 +2560,9 @@ public class ScriptEditorScreen extends Screen {
         String[] parts = normalize(source).split("\\n", -1);
         List<String> out = new ArrayList<>(parts.length);
         out.addAll(Arrays.asList(parts));
-        if (out.isEmpty()) out.add("");
+        if (out.isEmpty()) {
+            out.add("");
+        }
         return out;
     }
 
@@ -2347,32 +2571,56 @@ public class ScriptEditorScreen extends Screen {
     }
 
     private boolean isCtrlDown() {
-        if (client == null) return false;
+        if (client == null) {
+            return false;
+        }
         var w = client.getWindow();
         return InputUtil.isKeyPressed(w, GLFW.GLFW_KEY_LEFT_CONTROL) || InputUtil.isKeyPressed(w, GLFW.GLFW_KEY_RIGHT_CONTROL);
     }
 
     private boolean isShiftDown() {
-        if (client == null) return false;
+        if (client == null) {
+            return false;
+        }
         var w = client.getWindow();
         return InputUtil.isKeyPressed(w, GLFW.GLFW_KEY_LEFT_SHIFT) || InputUtil.isKeyPressed(w, GLFW.GLFW_KEY_RIGHT_SHIFT);
     }
 
     private int mouseX() {
-        if (client == null) return 0;
+        if (client == null) {
+            return 0;
+        }
         return (int) Math.round(client.mouse.getX() * (double) this.width / Math.max(1, client.getWindow().getWidth()));
     }
 
     private int mouseY() {
-        if (client == null) return 0;
+        if (client == null) {
+            return 0;
+        }
         return (int) Math.round(client.mouse.getY() * (double) this.height / Math.max(1, client.getWindow().getHeight()));
     }
 
-    private Rect tabsArea() { return new Rect(PAD, PAD, TAB_W * 3, TAB_H); }
-    private Rect mainHeaderRect() { return new Rect(PAD, PAD + TAB_H + 4, width - PAD * 2, 22); }
-    private Rect docsRect() { return new Rect(PAD, PAD + TAB_H + 4, width - PAD * 2, height - (PAD * 2 + TAB_H + 4)); }
-    private Rect scriptsPaneRect() { return new Rect(PAD, PAD + TAB_H + 4, Math.max(220, width / 3), height - (PAD + TAB_H + 4) - PAD); }
-    private Rect scriptsSearchRect() { Rect p = scriptsPaneRect(); return new Rect(p.x + 4, p.y + 16, p.w - 8, 16); }
+    private Rect tabsArea() {
+        return new Rect(PAD, PAD, TAB_W * 3, TAB_H);
+    }
+
+    private Rect mainHeaderRect() {
+        return new Rect(PAD, PAD + TAB_H + 4, width - PAD * 2, 22);
+    }
+
+    private Rect docsRect() {
+        return new Rect(PAD, PAD + TAB_H + 4, width - PAD * 2, height - (PAD * 2 + TAB_H + 4));
+    }
+
+    private Rect scriptsPaneRect() {
+        return new Rect(PAD, PAD + TAB_H + 4, Math.max(220, width / 3), height - (PAD + TAB_H + 4) - PAD);
+    }
+
+    private Rect scriptsSearchRect() {
+        Rect p = scriptsPaneRect();
+        return new Rect(p.x + 4, p.y + 16, p.w - 8, 16);
+    }
+
     private Rect scriptsBodyRect() {
         Rect p = scriptsPaneRect();
         int top = p.y + SCRIPT_HEADER_H + 16;
@@ -2385,7 +2633,9 @@ public class ScriptEditorScreen extends Screen {
         int bottom = diagnosticsRect().y - 6;
         int left = editorColumnLeft();
         int right = editorColumnRight();
-        if (tab == UiTab.MAIN) top += 24;
+        if (tab == UiTab.MAIN) {
+            top += 24;
+        }
         return new Rect(left, top, Math.max(120, right - left), Math.max(90, bottom - top));
     }
 
@@ -2421,20 +2671,70 @@ public class ScriptEditorScreen extends Screen {
         return new Rect(left, panel.y, textW, panel.h);
     }
 
-    private Rect scriptsBtnCreate() { Rect p = scriptsPaneRect(); return new Rect(p.x + 4, p.y + p.h - 78, 62, 18); }
-    private Rect scriptsBtnRename() { Rect p = scriptsPaneRect(); return new Rect(p.x + 70, p.y + p.h - 78, 62, 18); }
-    private Rect scriptsBtnDuplicate() { Rect p = scriptsPaneRect(); return new Rect(p.x + 136, p.y + p.h - 78, 76, 18); }
-    private Rect scriptsBtnDelete() { Rect p = scriptsPaneRect(); return new Rect(p.x + 4, p.y + p.h - 56, 62, 18); }
-    private Rect scriptsBtnSort() { Rect p = scriptsPaneRect(); return new Rect(p.x + 70, p.y + p.h - 56, 102, 18); }
-    private Rect scriptsBtnFilter() { Rect p = scriptsPaneRect(); return new Rect(p.x + 176, p.y + p.h - 56, 102, 18); }
-    private Rect scriptsBtnSave() { Rect p = scriptsPaneRect(); return new Rect(p.x + 4, p.y + p.h - 34, 70, 18); }
-    private Rect scriptsBtnRun() { Rect p = scriptsPaneRect(); return new Rect(p.x + 78, p.y + p.h - 34, 70, 18); }
-    private Rect scriptsBtnAsync() { Rect p = scriptsPaneRect(); return new Rect(p.x + 152, p.y + p.h - 34, 120, 18); }
+    private Rect scriptsBtnCreate() {
+        Rect p = scriptsPaneRect();
+        return new Rect(p.x + 4, p.y + p.h - 78, 62, 18);
+    }
 
-    private Rect mainBtnSave() { Rect h = mainHeaderRect(); return new Rect(h.x + h.w - 274, h.y + 2, 58, 18); }
-    private Rect mainBtnRun() { Rect h = mainHeaderRect(); return new Rect(h.x + h.w - 212, h.y + 2, 58, 18); }
-    private Rect mainBtnValidate() { Rect h = mainHeaderRect(); return new Rect(h.x + h.w - 148, h.y + 2, 58, 18); }
-    private Rect mainBtnAsync() { Rect h = mainHeaderRect(); return new Rect(h.x + h.w - 86, h.y + 2, 82, 18); }
+    private Rect scriptsBtnRename() {
+        Rect p = scriptsPaneRect();
+        return new Rect(p.x + 70, p.y + p.h - 78, 62, 18);
+    }
+
+    private Rect scriptsBtnDuplicate() {
+        Rect p = scriptsPaneRect();
+        return new Rect(p.x + 136, p.y + p.h - 78, 76, 18);
+    }
+
+    private Rect scriptsBtnDelete() {
+        Rect p = scriptsPaneRect();
+        return new Rect(p.x + 4, p.y + p.h - 56, 62, 18);
+    }
+
+    private Rect scriptsBtnSort() {
+        Rect p = scriptsPaneRect();
+        return new Rect(p.x + 70, p.y + p.h - 56, 102, 18);
+    }
+
+    private Rect scriptsBtnFilter() {
+        Rect p = scriptsPaneRect();
+        return new Rect(p.x + 176, p.y + p.h - 56, 102, 18);
+    }
+
+    private Rect scriptsBtnSave() {
+        Rect p = scriptsPaneRect();
+        return new Rect(p.x + 4, p.y + p.h - 34, 70, 18);
+    }
+
+    private Rect scriptsBtnRun() {
+        Rect p = scriptsPaneRect();
+        return new Rect(p.x + 78, p.y + p.h - 34, 70, 18);
+    }
+
+    private Rect scriptsBtnAsync() {
+        Rect p = scriptsPaneRect();
+        return new Rect(p.x + 152, p.y + p.h - 34, 120, 18);
+    }
+
+    private Rect mainBtnSave() {
+        Rect h = mainHeaderRect();
+        return new Rect(h.x + h.w - 274, h.y + 2, 58, 18);
+    }
+
+    private Rect mainBtnRun() {
+        Rect h = mainHeaderRect();
+        return new Rect(h.x + h.w - 212, h.y + 2, 58, 18);
+    }
+
+    private Rect mainBtnValidate() {
+        Rect h = mainHeaderRect();
+        return new Rect(h.x + h.w - 148, h.y + 2, 58, 18);
+    }
+
+    private Rect mainBtnAsync() {
+        Rect h = mainHeaderRect();
+        return new Rect(h.x + h.w - 86, h.y + 2, 82, 18);
+    }
 
     private Rect suggestionsRect() {
         int[] p = cursorPixel(codeTextRect(), editor.cursor);
@@ -2449,7 +2749,9 @@ public class ScriptEditorScreen extends Screen {
 
     @Override
     public void close() {
-        if (client != null) client.setScreen(null);
+        if (client != null) {
+            client.setScreen(null);
+        }
     }
 
     @Override

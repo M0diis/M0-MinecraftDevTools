@@ -2,7 +2,7 @@ package me.m0dii;
 
 import eu.midnightdust.lib.config.MidnightConfig;
 import me.m0dii.modules.chat.SecondaryChatModule;
-import me.m0dii.modules.clickgui.ClickGuiModule;
+import me.m0dii.modules.clickgui.ClickHudModule;
 import me.m0dii.modules.clickgui.ModuleRegistry;
 import me.m0dii.modules.commandhistory.CommandHistoryModule;
 import me.m0dii.modules.debugdraw.DebugDrawManager;
@@ -72,7 +72,7 @@ public class M0DevToolsClient implements ClientModInitializer {
         FullbrightModule.INSTANCE.register();
         HeldLightModule.INSTANCE.register();
         InventoryMoveModule.INSTANCE.register();
-        ClickGuiModule.INSTANCE.register();
+        ClickHudModule.INSTANCE.register();
         CommandBlockOverlayModule.INSTANCE.register();
         BlockAttributeOverlayRenderer.register();
         WatsonCoreProtectModule.INSTANCE.register();
@@ -84,7 +84,7 @@ public class M0DevToolsClient implements ClientModInitializer {
 
         KeybindManager.registerPressedKeybind(KeybindCatalog.OPEN_MODULES_SCREEN.translationKey(),
                 InputUtil.Type.KEYSYM, KeybindCatalog.OPEN_MODULES_SCREEN.defaultKey(),
-                client -> ClickGuiModule.INSTANCE.getRenderer().toggle());
+                client -> ClickHudModule.INSTANCE.getRenderer().toggle());
 
         ClientCommandRunScript.register();
         GetDataClientCommand.register();

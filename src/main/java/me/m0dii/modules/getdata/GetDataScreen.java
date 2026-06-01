@@ -411,12 +411,24 @@ public class GetDataScreen extends Screen {
         }
 
         int prev = this.cursor;
-        if (keyCode == GLFW.GLFW_KEY_LEFT) this.cursor = Math.max(0, this.cursor - 1);
-        if (keyCode == GLFW.GLFW_KEY_RIGHT) this.cursor = Math.min(this.editorText.length(), this.cursor + 1);
-        if (keyCode == GLFW.GLFW_KEY_HOME) this.cursor = lineStart(this.cursor);
-        if (keyCode == GLFW.GLFW_KEY_END) this.cursor = lineEnd(this.cursor);
-        if (keyCode == GLFW.GLFW_KEY_UP) this.cursor = moveVertical(this.cursor, -1);
-        if (keyCode == GLFW.GLFW_KEY_DOWN) this.cursor = moveVertical(this.cursor, 1);
+        if (keyCode == GLFW.GLFW_KEY_LEFT) {
+            this.cursor = Math.max(0, this.cursor - 1);
+        }
+        if (keyCode == GLFW.GLFW_KEY_RIGHT) {
+            this.cursor = Math.min(this.editorText.length(), this.cursor + 1);
+        }
+        if (keyCode == GLFW.GLFW_KEY_HOME) {
+            this.cursor = lineStart(this.cursor);
+        }
+        if (keyCode == GLFW.GLFW_KEY_END) {
+            this.cursor = lineEnd(this.cursor);
+        }
+        if (keyCode == GLFW.GLFW_KEY_UP) {
+            this.cursor = moveVertical(this.cursor, -1);
+        }
+        if (keyCode == GLFW.GLFW_KEY_DOWN) {
+            this.cursor = moveVertical(this.cursor, 1);
+        }
 
         if (this.cursor != prev) {
             if (shift) {

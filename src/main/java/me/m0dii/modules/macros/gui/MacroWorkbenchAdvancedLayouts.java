@@ -15,7 +15,7 @@ public final class MacroWorkbenchAdvancedLayouts {
 
     public static StandardAdvancedLayout standard(int boxX, int boxY, int modalW, int modalH) {
         UiRect content = FormPanels.panel(boxX + 12, boxY + 34, modalW - 24, modalH - 60);
-        List<UiRect> col = FormPanels.column(content, 8, UiFlexLayout.Align.STRETCH, 
+        List<UiRect> col = FormPanels.column(content, 8, UiFlexLayout.Align.STRETCH,
                 UiFlexLayout.Item.fixed(122),
                 UiFlexLayout.Item.fixed(20),
                 UiFlexLayout.Item.fixed(20),
@@ -28,25 +28,25 @@ public final class MacroWorkbenchAdvancedLayouts {
         UiRect textArea = col.get(0);
         UiRect actionField = col.get(1);
 
-        List<UiRect> row3 = FormPanels.row(col.get(2), 4, UiFlexLayout.Align.STRETCH, 
+        List<UiRect> row3 = FormPanels.row(col.get(2), 4, UiFlexLayout.Align.STRETCH,
                 UiFlexLayout.Item.fixed(90), UiFlexLayout.Item.fixed(90), UiFlexLayout.Item.fixed(100),
                 UiFlexLayout.Item.fixed(100), UiFlexLayout.Item.fixed(100), UiFlexLayout.Item.flex(100, -1, 1, 124)
         );
 
-        List<UiRect> row4 = FormPanels.row(col.get(3), 4, UiFlexLayout.Align.STRETCH, 
+        List<UiRect> row4 = FormPanels.row(col.get(3), 4, UiFlexLayout.Align.STRETCH,
                 UiFlexLayout.Item.fixed(56), UiFlexLayout.Item.fixed(56),
                 UiFlexLayout.Item.fixed(56), UiFlexLayout.Item.fixed(56),
                 UiFlexLayout.Item.fixed(100), UiFlexLayout.Item.fixed(152), UiFlexLayout.Item.flex(92, -1, 1, 120)
         );
 
-        List<UiRect> row5 = FormPanels.row(col.get(4), 4, UiFlexLayout.Align.STRETCH, 
+        List<UiRect> row5 = FormPanels.row(col.get(4), 4, UiFlexLayout.Align.STRETCH,
                 UiFlexLayout.Item.fixed(66), UiFlexLayout.Item.fixed(66),
                 UiFlexLayout.Item.fixed(92), UiFlexLayout.Item.fixed(92),
                 UiFlexLayout.Item.fixed(66), UiFlexLayout.Item.fixed(66),
                 UiFlexLayout.Item.flex(120, 1)
         );
 
-        List<UiRect> row6 = FormPanels.row(col.get(5), 4, UiFlexLayout.Align.STRETCH, 
+        List<UiRect> row6 = FormPanels.row(col.get(5), 4, UiFlexLayout.Align.STRETCH,
                 UiFlexLayout.Item.fixed(170),
                 UiFlexLayout.Item.fixed(170),
                 UiFlexLayout.Item.flex(120, 1)
@@ -89,7 +89,7 @@ public final class MacroWorkbenchAdvancedLayouts {
                 UiFlexLayout.Item.fixed(44)
         );
         UiRect linePlus = new UiRect(settingsRow.get(4).x(), row3.y(), settingsRow.get(4).width(), settingsRow.get(4).height());
-        List<UiRect> statButtons = FormPanels.row(statsButtons, 4, UiFlexLayout.Align.START, 
+        List<UiRect> statButtons = FormPanels.row(statsButtons, 4, UiFlexLayout.Align.START,
                 UiFlexLayout.Item.fixed(48),
                 UiFlexLayout.Item.fixed(48),
                 UiFlexLayout.Item.fixed(48),
@@ -97,17 +97,17 @@ public final class MacroWorkbenchAdvancedLayouts {
                 UiFlexLayout.Item.fixed(48),
                 UiFlexLayout.Item.fixed(48)
         );
-        List<UiRect> colors = FormPanels.row(colorButtons, 4, UiFlexLayout.Align.START, 
+        List<UiRect> colors = FormPanels.row(colorButtons, 4, UiFlexLayout.Align.START,
                 UiFlexLayout.Item.fixed(64),
                 UiFlexLayout.Item.fixed(64),
                 UiFlexLayout.Item.fixed(84),
                 UiFlexLayout.Item.fixed(84)
         );
-        List<UiRect> hexes = FormPanels.row(colorHex, 4, UiFlexLayout.Align.START, 
+        List<UiRect> hexes = FormPanels.row(colorHex, 4, UiFlexLayout.Align.START,
                 UiFlexLayout.Item.fixed(64),
                 UiFlexLayout.Item.fixed(64)
         );
-        List<UiRect> actionButtons = FormPanels.row(actions, 4, UiFlexLayout.Align.START, 
+        List<UiRect> actionButtons = FormPanels.row(actions, 4, UiFlexLayout.Align.START,
                 UiFlexLayout.Item.fixed(60),
                 UiFlexLayout.Item.fixed(58)
         );
@@ -137,19 +137,19 @@ public final class MacroWorkbenchAdvancedLayouts {
         UiRect rowPickupInfo = FormPanels.panel(boxX + 12, boxY + 220, modalW - 24, 18);
         UiRect rowActions = FormPanels.panel(boxX + modalW - 134, boxY + modalH - 24, 122, 18);
 
-        List<UiRect> scale = FormPanels.row(rowScale, 4, UiFlexLayout.Align.START, 
+        List<UiRect> scale = FormPanels.row(rowScale, 4, UiFlexLayout.Align.START,
                 UiFlexLayout.Item.fixed(64),
                 UiFlexLayout.Item.fixed(64),
                 UiFlexLayout.Item.fixed(64),
                 UiFlexLayout.Item.fixed(64),
                 UiFlexLayout.Item.flex(80, 1)
         );
-        List<UiRect> toggles = FormPanels.row(rowToggles, 4, UiFlexLayout.Align.START, 
+        List<UiRect> toggles = FormPanels.row(rowToggles, 4, UiFlexLayout.Align.START,
                 UiFlexLayout.Item.fixed(120),
                 UiFlexLayout.Item.fixed(120),
                 UiFlexLayout.Item.flex(120, 1)
         );
-        List<UiRect> colorButtons = FormPanels.row(rowColorButtons, 4, UiFlexLayout.Align.START, 
+        List<UiRect> colorButtons = FormPanels.row(rowColorButtons, 4, UiFlexLayout.Align.START,
                 UiFlexLayout.Item.fixed(64),
                 UiFlexLayout.Item.fixed(64),
                 UiFlexLayout.Item.fixed(64),
@@ -157,22 +157,22 @@ public final class MacroWorkbenchAdvancedLayouts {
                 UiFlexLayout.Item.fixed(84),
                 UiFlexLayout.Item.fixed(84)
         );
-        List<UiRect> colorInputs = FormPanels.row(rowColorInputs, 4, UiFlexLayout.Align.START, 
+        List<UiRect> colorInputs = FormPanels.row(rowColorInputs, 4, UiFlexLayout.Align.START,
                 UiFlexLayout.Item.fixed(140),
                 UiFlexLayout.Item.fixed(140)
         );
-        List<UiRect> align = FormPanels.row(rowAlign, 4, UiFlexLayout.Align.START, 
+        List<UiRect> align = FormPanels.row(rowAlign, 4, UiFlexLayout.Align.START,
                 UiFlexLayout.Item.fixed(120),
                 UiFlexLayout.Item.fixed(120),
                 UiFlexLayout.Item.flex(120, 1)
         );
-        List<UiRect> pickupButtons = FormPanels.row(rowPickupButtons, 4, UiFlexLayout.Align.START, 
+        List<UiRect> pickupButtons = FormPanels.row(rowPickupButtons, 4, UiFlexLayout.Align.START,
                 UiFlexLayout.Item.flex(90, 1),
                 UiFlexLayout.Item.flex(90, 1),
                 UiFlexLayout.Item.flex(90, 1),
                 UiFlexLayout.Item.flex(90, 1)
         );
-        List<UiRect> actions = FormPanels.row(rowActions, 4, UiFlexLayout.Align.START, 
+        List<UiRect> actions = FormPanels.row(rowActions, 4, UiFlexLayout.Align.START,
                 UiFlexLayout.Item.fixed(60),
                 UiFlexLayout.Item.fixed(58)
         );
@@ -195,14 +195,14 @@ public final class MacroWorkbenchAdvancedLayouts {
 
     public static CustomWidgetAdvancedLayout custom(int boxX, int boxY, int modalW, int modalH) {
         UiRect content = FormPanels.panel(boxX + 12, boxY + 34, modalW - 24, modalH - 60);
-        List<UiRect> rootRows = FormPanels.column(content, 8, UiFlexLayout.Align.STRETCH, 
+        List<UiRect> rootRows = FormPanels.column(content, 8, UiFlexLayout.Align.STRETCH,
                 UiFlexLayout.Item.flex(220, 1),
                 UiFlexLayout.Item.fixed(18),
                 UiFlexLayout.Item.fixed(18)
         );
 
         UiRect top = rootRows.get(0);
-        List<UiRect> topColumns = FormPanels.row(top, 8, UiFlexLayout.Align.STRETCH, 
+        List<UiRect> topColumns = FormPanels.row(top, 8, UiFlexLayout.Align.STRETCH,
                 UiFlexLayout.Item.fixed(220),
                 UiFlexLayout.Item.flex(220, 1)
         );
@@ -210,13 +210,13 @@ public final class MacroWorkbenchAdvancedLayouts {
         UiRect left = topColumns.get(0);
         UiRect right = topColumns.get(1);
 
-        List<UiRect> leftRows = FormPanels.column(left, 8, UiFlexLayout.Align.STRETCH, 
+        List<UiRect> leftRows = FormPanels.column(left, 8, UiFlexLayout.Align.STRETCH,
                 UiFlexLayout.Item.fixed(18),
                 UiFlexLayout.Item.fixed(18),
                 UiFlexLayout.Item.flex(30, 1)
         );
 
-        List<UiRect> rightRows = FormPanels.column(right, 6, UiFlexLayout.Align.STRETCH, 
+        List<UiRect> rightRows = FormPanels.column(right, 6, UiFlexLayout.Align.STRETCH,
                 UiFlexLayout.Item.fixed(18),
                 UiFlexLayout.Item.fixed(18),
                 UiFlexLayout.Item.fixed(9),
@@ -230,32 +230,32 @@ public final class MacroWorkbenchAdvancedLayouts {
                 UiFlexLayout.Item.fixed(9)
         );
 
-        List<UiRect> generalRow1 = FormPanels.row(rightRows.get(0), 4, UiFlexLayout.Align.STRETCH, 
+        List<UiRect> generalRow1 = FormPanels.row(rightRows.get(0), 4, UiFlexLayout.Align.STRETCH,
                 UiFlexLayout.Item.flex(40, 1), UiFlexLayout.Item.flex(40, 1), UiFlexLayout.Item.flex(40, 1), UiFlexLayout.Item.flex(40, 1)
         );
-        List<UiRect> generalRow2 = FormPanels.row(rightRows.get(1), 4, UiFlexLayout.Align.STRETCH, 
+        List<UiRect> generalRow2 = FormPanels.row(rightRows.get(1), 4, UiFlexLayout.Align.STRETCH,
                 UiFlexLayout.Item.flex(40, 1), UiFlexLayout.Item.flex(40, 1), UiFlexLayout.Item.flex(80, 2)
         );
 
-        List<UiRect> typeRow1 = FormPanels.row(rightRows.get(5), 4, UiFlexLayout.Align.STRETCH, 
+        List<UiRect> typeRow1 = FormPanels.row(rightRows.get(5), 4, UiFlexLayout.Align.STRETCH,
                 UiFlexLayout.Item.flex(40, 1), UiFlexLayout.Item.flex(40, 1), UiFlexLayout.Item.flex(40, 1), UiFlexLayout.Item.flex(40, 1)
         );
-        List<UiRect> typeRow2 = FormPanels.row(rightRows.get(6), 4, UiFlexLayout.Align.STRETCH, 
+        List<UiRect> typeRow2 = FormPanels.row(rightRows.get(6), 4, UiFlexLayout.Align.STRETCH,
                 UiFlexLayout.Item.flex(40, 1), UiFlexLayout.Item.flex(40, 1), UiFlexLayout.Item.flex(40, 1), UiFlexLayout.Item.flex(40, 1)
         );
-        List<UiRect> typeRow3 = FormPanels.row(rightRows.get(7), 4, UiFlexLayout.Align.STRETCH, 
+        List<UiRect> typeRow3 = FormPanels.row(rightRows.get(7), 4, UiFlexLayout.Align.STRETCH,
                 UiFlexLayout.Item.flex(40, 1), UiFlexLayout.Item.flex(40, 1), UiFlexLayout.Item.flex(40, 1), UiFlexLayout.Item.flex(40, 1)
         );
-        List<UiRect> typeInputs = FormPanels.row(rightRows.get(8), 4, UiFlexLayout.Align.STRETCH, 
+        List<UiRect> typeInputs = FormPanels.row(rightRows.get(8), 4, UiFlexLayout.Align.STRETCH,
                 UiFlexLayout.Item.flex(60, 1), UiFlexLayout.Item.flex(60, 1)
         );
 
-        List<UiRect> baseRow = FormPanels.row(rootRows.get(1), 4, UiFlexLayout.Align.STRETCH, 
+        List<UiRect> baseRow = FormPanels.row(rootRows.get(1), 4, UiFlexLayout.Align.STRETCH,
                 UiFlexLayout.Item.flex(72, 1), UiFlexLayout.Item.flex(72, 1), UiFlexLayout.Item.flex(90, 1),
                 UiFlexLayout.Item.flex(72, 1), UiFlexLayout.Item.flex(72, 1)
         );
 
-        List<UiRect> actions = FormPanels.row(rootRows.get(2), 4, UiFlexLayout.Align.END, 
+        List<UiRect> actions = FormPanels.row(rootRows.get(2), 4, UiFlexLayout.Align.END,
                 UiFlexLayout.Item.fixed(60), UiFlexLayout.Item.fixed(58)
         );
 

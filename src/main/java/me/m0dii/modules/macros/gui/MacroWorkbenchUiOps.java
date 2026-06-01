@@ -8,9 +8,12 @@ public final class MacroWorkbenchUiOps {
 
     public static MacroHudDataHandler.HorizontalAlign cycleHorizontalAlign(MacroHudDataHandler.HorizontalAlign current, boolean forward) {
         return switch (current) {
-            case LEFT -> forward ? MacroHudDataHandler.HorizontalAlign.CENTER : MacroHudDataHandler.HorizontalAlign.RIGHT;
-            case CENTER -> forward ? MacroHudDataHandler.HorizontalAlign.RIGHT : MacroHudDataHandler.HorizontalAlign.LEFT;
-            case RIGHT -> forward ? MacroHudDataHandler.HorizontalAlign.LEFT : MacroHudDataHandler.HorizontalAlign.CENTER;
+            case LEFT ->
+                    forward ? MacroHudDataHandler.HorizontalAlign.CENTER : MacroHudDataHandler.HorizontalAlign.RIGHT;
+            case CENTER ->
+                    forward ? MacroHudDataHandler.HorizontalAlign.RIGHT : MacroHudDataHandler.HorizontalAlign.LEFT;
+            case RIGHT ->
+                    forward ? MacroHudDataHandler.HorizontalAlign.LEFT : MacroHudDataHandler.HorizontalAlign.CENTER;
         };
     }
 

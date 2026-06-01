@@ -105,7 +105,7 @@ public final class HudCanvasDataHandler {
     }
 
     public static synchronized @NotNull HudCanvasElement getMutableElement(@NotNull String id,
-                                                                            @NotNull Supplier<HudCanvasElement> defaultFactory) {
+                                                                           @NotNull Supplier<HudCanvasElement> defaultFactory) {
         ensureLoaded();
         HudCanvasElement existing = config.elements.get(id);
         if (existing != null) {

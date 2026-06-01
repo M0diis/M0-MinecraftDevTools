@@ -71,7 +71,7 @@ public class ClickGuiRenderer implements Toggleable {
         boolean rightNow = InputUtil.isKeyPressed(window, GLFW.GLFW_KEY_RIGHT);
         boolean enterNow = InputUtil.isKeyPressed(window, GLFW.GLFW_KEY_ENTER);
 
-        if(wasdNavigation) {
+        if (wasdNavigation) {
             upNow = upNow || InputUtil.isKeyPressed(window, GLFW.GLFW_KEY_W);
             downNow = downNow || InputUtil.isKeyPressed(window, GLFW.GLFW_KEY_S);
             leftNow = leftNow || InputUtil.isKeyPressed(window, GLFW.GLFW_KEY_A);
