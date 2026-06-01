@@ -76,6 +76,9 @@ public class ModConfig extends MidnightConfig {
     @MidnightConfig.Entry(name = "Fast Block Placement", category = CATEGORY_TWEAKS)
     public static boolean tweaksFastBlockPlacement = false;
 
+    @MidnightConfig.Entry(name = "Fast Block Placement Enabled", category = CATEGORY_TWEAKS)
+    public static boolean fastBlockPlacementEnabled = false;
+
     @MidnightConfig.Entry(name = "Angel Block", category = CATEGORY_TWEAKS)
     public static boolean tweaksAngelBlock = false;
 
@@ -90,6 +93,29 @@ public class ModConfig extends MidnightConfig {
 
     @MidnightConfig.Entry(name = "Disable View Bobbing", category = CATEGORY_TWEAKS)
     public static boolean tweaksDisableViewBobbing = false;
+
+    @MidnightConfig.Entry(name = "Disable Render Distance Fog", category = CATEGORY_TWEAKS)
+    public static boolean tweaksDisableRenderDistanceFog = false;
+
+    public static final String CATEGORY_REACH = "Reach";
+
+    @MidnightConfig.Entry(name = "Reach Module Enabled", category = CATEGORY_REACH)
+    public static boolean reachModuleEnabled = false;
+
+    @MidnightConfig.Entry(name = "Block Reach Distance", category = CATEGORY_REACH, isSlider = true, min = 1, max = 16)
+    public static double reachBlockDistance = 4.5;
+
+    @MidnightConfig.Entry(name = "Entity Reach Distance", category = CATEGORY_REACH, isSlider = true, min = 1, max = 16)
+    public static double reachEntityDistance = 3.0;
+
+    @MidnightConfig.Entry(name = "Safe Multiplayer Clamp", category = CATEGORY_REACH)
+    public static boolean reachSafeMultiplayerClamp = true;
+
+    @MidnightConfig.Entry(name = "Multiplayer Block Reach Extra", category = CATEGORY_REACH, isSlider = true, min = 0, max = 4)
+    public static double reachMultiplayerBlockExtra = 1.0;
+
+    @MidnightConfig.Entry(name = "Multiplayer Entity Reach Extra", category = CATEGORY_REACH, isSlider = true, min = 0, max = 4)
+    public static double reachMultiplayerEntityExtra = 1.0;
 
 
     public static final String CATEGORY_OVERLAY = "Overlay";

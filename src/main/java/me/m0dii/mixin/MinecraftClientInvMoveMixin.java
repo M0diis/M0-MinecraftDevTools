@@ -1,5 +1,6 @@
 package me.m0dii.mixin;
 
+import me.m0dii.modules.fastblockplacement.FastBlockPlacementModule;
 import me.m0dii.modules.inventorymove.InventoryMoveModule;
 import me.m0dii.modules.tweaks.TweaksModule;
 import net.minecraft.block.BlockState;
@@ -23,6 +24,9 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
+import java.util.LinkedHashSet;
+import java.util.Set;
+
 import static net.minecraft.client.util.InputUtil.*;
 
 @Mixin(MinecraftClient.class)
@@ -40,9 +44,18 @@ public class MinecraftClientInvMoveMixin {
     @Inject(method = "tick", at = @At("TAIL"))
     private void onClientTick(CallbackInfo ci) {
         MinecraftClient client = MinecraftClient.getInstance();
-        if (client.player == null || !InventoryMoveModule.INSTANCE.isEnabled()) {
+        if (client.player == null) {
             return;
         }
+
+        if (FastBlockPlacementModule.INSTANCE.isEnabled()) {
+            this.itemUseCooldown = 0;
+        }
+
+        if (!InventoryMoveModule.INSTANCE.isEnabled()) {
+            return;
+        }
+
         Screen screen = client.currentScreen;
 
         if (screen instanceof HandledScreen) {
@@ -57,10 +70,6 @@ public class MinecraftClientInvMoveMixin {
 
     @Inject(method = "doItemUse", at = @At("HEAD"), cancellable = true)
     private void applyPlacementTweaks(CallbackInfo ci) {
-        if (TweaksModule.INSTANCE.fastBlockPlacement()) {
-            this.itemUseCooldown = 0;
-        }
-
         if (!TweaksModule.INSTANCE.angelBlock()) {
             return;
         }
@@ -83,13 +92,7 @@ public class MinecraftClientInvMoveMixin {
             return;
         }
 
-        BlockPos placePos = BlockPos.ofFloored(client.player.getX(), client.player.getY() - 1.0, client.player.getZ());
-        BlockState placeState = client.world.getBlockState(placePos);
-        if (!placeState.isAir() && !placeState.isReplaceable()) {
-            return;
-        }
-
-        BlockHitResult hitResult = findPlacementHit(client, placePos);
+        BlockHitResult hitResult = findAngelPlacementHit(client);
         if (hitResult == null) {
             return;
         }
@@ -117,6 +120,50 @@ public class MinecraftClientInvMoveMixin {
     }
 
     @Unique
+    private static BlockHitResult findAngelPlacementHit(MinecraftClient client) {
+        if (client.player == null || client.world == null) {
+            return null;
+        }
+
+        Vec3d look = client.player.getRotationVec(1.0f);
+        Set<BlockPos> candidates = new LinkedHashSet<>();
+
+        BlockPos center = BlockPos.ofFloored(client.player.getX(), client.player.getY() - 1.0, client.player.getZ());
+        BlockPos forward = BlockPos.ofFloored(client.player.getX() + look.x, client.player.getY() - 1.0, client.player.getZ() + look.z);
+        BlockPos forwardFar = BlockPos.ofFloored(client.player.getX() + (look.x * 2.0), client.player.getY() - 1.0, client.player.getZ() + (look.z * 2.0));
+
+        candidates.add(forward);
+        candidates.add(forwardFar);
+        candidates.add(center);
+
+        addNearbyCandidates(candidates, center);
+        addNearbyCandidates(candidates, forward);
+
+        for (BlockPos placePos : candidates) {
+            BlockState placeState = client.world.getBlockState(placePos);
+            if (!placeState.isAir() && !placeState.isReplaceable()) {
+                continue;
+            }
+
+            BlockHitResult hit = findPlacementHit(client, placePos);
+            if (hit != null) {
+                return hit;
+            }
+        }
+
+        return null;
+    }
+
+    @Unique
+    private static void addNearbyCandidates(Set<BlockPos> candidates, BlockPos origin) {
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dz = -1; dz <= 1; dz++) {
+                candidates.add(origin.add(dx, 0, dz));
+            }
+        }
+    }
+
+    @Unique
     private static BlockHitResult findPlacementHit(MinecraftClient client, BlockPos placePos) {
         Direction[] priority = new Direction[]{
                 Direction.DOWN, Direction.NORTH, Direction.SOUTH, Direction.WEST, Direction.EAST
@@ -137,4 +184,3 @@ public class MinecraftClientInvMoveMixin {
         return null;
     }
 }
-

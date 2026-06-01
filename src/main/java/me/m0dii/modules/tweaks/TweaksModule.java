@@ -56,10 +56,6 @@ public class TweaksModule extends Module {
         return isEnabled() && ModConfig.tweaksDisableWallUnsprint;
     }
 
-    public boolean fastBlockPlacement() {
-        return isEnabled() && ModConfig.tweaksFastBlockPlacement;
-    }
-
     public boolean angelBlock() {
         return isEnabled() && ModConfig.tweaksAngelBlock;
     }
@@ -80,6 +76,10 @@ public class TweaksModule extends Module {
         return isEnabled() && ModConfig.tweaksDisableViewBobbing;
     }
 
+    public boolean disableRenderDistanceFog() {
+        return isEnabled() && ModConfig.tweaksDisableRenderDistanceFog;
+    }
+
     @Override
     public List<String> getSettingsDisplay() {
         List<String> settings = new ArrayList<>();
@@ -92,12 +92,12 @@ public class TweaksModule extends Module {
         settings.add("Disable Rain Effects: " + onOff(ModConfig.tweaksDisableRainEffects));
         settings.add("Disable Sounds: " + onOff(ModConfig.tweaksDisableSounds));
         settings.add("Disable Wall Unsprint: " + onOff(ModConfig.tweaksDisableWallUnsprint));
-        settings.add("Fast Block Placement: " + onOff(ModConfig.tweaksFastBlockPlacement));
         settings.add("Angel Block: " + onOff(ModConfig.tweaksAngelBlock));
         settings.add("PermanentSneak: " + onOff(ModConfig.tweaksPermanentSneak));
         settings.add("PermanentSprint: " + onOff(ModConfig.tweaksPermanentSprint));
         settings.add("Disable Hurt Camera: " + onOff(ModConfig.tweaksDisableHurtCamera));
         settings.add("Disable View Bobbing: " + onOff(ModConfig.tweaksDisableViewBobbing));
+        settings.add("Disable Render Distance Fog: " + onOff(ModConfig.tweaksDisableRenderDistanceFog));
         return settings;
     }
 
@@ -113,12 +113,12 @@ public class TweaksModule extends Module {
             case 6 -> ModConfig.updateAndSave(() -> ModConfig.tweaksDisableRainEffects = !ModConfig.tweaksDisableRainEffects);
             case 7 -> ModConfig.updateAndSave(() -> ModConfig.tweaksDisableSounds = !ModConfig.tweaksDisableSounds);
             case 8 -> ModConfig.updateAndSave(() -> ModConfig.tweaksDisableWallUnsprint = !ModConfig.tweaksDisableWallUnsprint);
-            case 9 -> ModConfig.updateAndSave(() -> ModConfig.tweaksFastBlockPlacement = !ModConfig.tweaksFastBlockPlacement);
-            case 10 -> ModConfig.updateAndSave(() -> ModConfig.tweaksAngelBlock = !ModConfig.tweaksAngelBlock);
-            case 11 -> ModConfig.updateAndSave(() -> ModConfig.tweaksPermanentSneak = !ModConfig.tweaksPermanentSneak);
-            case 12 -> ModConfig.updateAndSave(() -> ModConfig.tweaksPermanentSprint = !ModConfig.tweaksPermanentSprint);
-            case 13 -> ModConfig.updateAndSave(() -> ModConfig.tweaksDisableHurtCamera = !ModConfig.tweaksDisableHurtCamera);
-            case 14 -> ModConfig.updateAndSave(() -> ModConfig.tweaksDisableViewBobbing = !ModConfig.tweaksDisableViewBobbing);
+            case 9 -> ModConfig.updateAndSave(() -> ModConfig.tweaksAngelBlock = !ModConfig.tweaksAngelBlock);
+            case 10 -> ModConfig.updateAndSave(() -> ModConfig.tweaksPermanentSneak = !ModConfig.tweaksPermanentSneak);
+            case 11 -> ModConfig.updateAndSave(() -> ModConfig.tweaksPermanentSprint = !ModConfig.tweaksPermanentSprint);
+            case 12 -> ModConfig.updateAndSave(() -> ModConfig.tweaksDisableHurtCamera = !ModConfig.tweaksDisableHurtCamera);
+            case 13 -> ModConfig.updateAndSave(() -> ModConfig.tweaksDisableViewBobbing = !ModConfig.tweaksDisableViewBobbing);
+            case 14 -> ModConfig.updateAndSave(() -> ModConfig.tweaksDisableRenderDistanceFog = !ModConfig.tweaksDisableRenderDistanceFog);
             default -> {
             }
         }

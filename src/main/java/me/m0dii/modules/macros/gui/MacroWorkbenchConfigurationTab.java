@@ -2,6 +2,7 @@ package me.m0dii.modules.macros.gui;
 
 import me.m0dii.modules.chat.SecondaryChatModule;
 import me.m0dii.modules.chat.SecondaryChatSettings;
+import me.m0dii.modules.fastblockplacement.FastBlockPlacementModule;
 import me.m0dii.modules.freecam.FreecamModule;
 import me.m0dii.modules.fullbright.FullbrightModule;
 import me.m0dii.modules.heldlight.HeldLightModule;
@@ -13,6 +14,8 @@ import me.m0dii.modules.nbttooltip.ShulkerTooltipModule;
 import me.m0dii.modules.overlays.*;
 import me.m0dii.modules.pickup.ItemPickupNotifierModule;
 import me.m0dii.modules.pickup.PickupFeedSettings;
+import me.m0dii.modules.reach.ReachModule;
+import me.m0dii.modules.tweaks.TweaksModule;
 import me.m0dii.modules.waypoints.WaypointModule;
 import me.m0dii.utils.ModConfig;
 import net.minecraft.client.gui.DrawContext;
@@ -38,7 +41,8 @@ final class MacroWorkbenchConfigurationTab {
         MODULES("Modules"),
         SECONDARY_CHAT("Secondary Chat"),
         PICKUP_FEED("Pickup Feed"),
-        BLOCK_ATTRIBUTES("Block Attributes");
+        BLOCK_ATTRIBUTES("Block Attributes"),
+        TWEAKS("Tweaks");
 
         private final String label;
 
@@ -60,6 +64,7 @@ final class MacroWorkbenchConfigurationTab {
     private ButtonWidget secondaryChatCategoryButton;
     private ButtonWidget pickupFeedCategoryButton;
     private ButtonWidget blockAttributesCategoryButton;
+    private ButtonWidget tweaksCategoryButton;
 
     private ButtonWidget macroOverlayToggleButton;
     private ButtonWidget nbtHudToggleButton;
@@ -84,6 +89,7 @@ final class MacroWorkbenchConfigurationTab {
     private ButtonWidget heldLightToggleButton;
     private ButtonWidget inventoryMoveToggleButton;
     private ButtonWidget instantBreakToggleButton;
+    private ButtonWidget fastBlockPlacementToggleButton;
     private ButtonWidget waypointsToggleButton;
     private ButtonWidget nbtTooltipToggleButton;
     private ButtonWidget shulkerTooltipToggleButton;
@@ -100,6 +106,28 @@ final class MacroWorkbenchConfigurationTab {
     private ButtonWidget preventInteractionsToggleButton;
     private ButtonWidget solidFluidHitboxesToggleButton;
     private ButtonWidget barrierBlocksToggleButton;
+
+    private ButtonWidget tweaksModuleToggleButton;
+    private ButtonWidget hideOwnEffectsToggleButton;
+    private ButtonWidget hideOffhandItemToggleButton;
+    private ButtonWidget disableBlockBreakParticlesToggleButton;
+    private ButtonWidget disableEntityRenderingToggleButton;
+    private ButtonWidget disableNetherFogToggleButton;
+    private ButtonWidget disableRenderDistanceFogToggleButton;
+    private ButtonWidget disableRainEffectsToggleButton;
+    private ButtonWidget disableSoundsToggleButton;
+    private ButtonWidget disableWallUnsprintToggleButton;
+    private ButtonWidget angelBlockToggleButton;
+    private ButtonWidget permanentSneakToggleButton;
+    private ButtonWidget permanentSprintToggleButton;
+    private ButtonWidget disableHurtCameraToggleButton;
+    private ButtonWidget disableViewBobbingToggleButton;
+    private ButtonWidget reachToggleButton;
+    private ButtonWidget reachSafeClampToggleButton;
+    private ButtonWidget reachBlockDistanceButton;
+    private ButtonWidget reachEntityDistanceButton;
+    private ButtonWidget reachMpBlockExtraButton;
+    private ButtonWidget reachMpEntityExtraButton;
 
     private TextFieldWidget secondaryRegexInputField;
     private TextFieldWidget secondaryOutgoingRegexField;
@@ -130,6 +158,7 @@ final class MacroWorkbenchConfigurationTab {
         this.secondaryChatCategoryButton = button(Category.SECONDARY_CHAT.label, b -> setCategory(Category.SECONDARY_CHAT), listX, listY + ROW_GAP * 3, categoryW, ROW_H);
         this.pickupFeedCategoryButton = button(Category.PICKUP_FEED.label, b -> setCategory(Category.PICKUP_FEED), listX, listY + ROW_GAP * 4, categoryW, ROW_H);
         this.blockAttributesCategoryButton = button(Category.BLOCK_ATTRIBUTES.label, b -> setCategory(Category.BLOCK_ATTRIBUTES), listX, listY + ROW_GAP * 5, categoryW, ROW_H);
+        this.tweaksCategoryButton = button(Category.TWEAKS.label, b -> setCategory(Category.TWEAKS), listX, listY + ROW_GAP * 6, categoryW, ROW_H);
 
         this.macroOverlayToggleButton = button("Macro Keybind HUD", b -> {
             ModConfig.updateAndSave(() -> ModConfig.showMacroKeybindOverlay = !ModConfig.showMacroKeybindOverlay);
@@ -267,20 +296,25 @@ final class MacroWorkbenchConfigurationTab {
             syncControls();
         }, rightX, rowY(4), settingW, ROW_H);
 
+        this.fastBlockPlacementToggleButton = button("Fast Place", b -> {
+            FastBlockPlacementModule.INSTANCE.setEnabled(!FastBlockPlacementModule.INSTANCE.isEnabled());
+            syncControls();
+        }, rightX, rowY(5), settingW, ROW_H);
+
         this.waypointsToggleButton = button("Waypoints", b -> {
             WaypointModule.INSTANCE.setEnabled(!WaypointModule.INSTANCE.isEnabled());
             syncControls();
-        }, rightX, rowY(5), settingW, ROW_H);
+        }, rightX, rowY(6), settingW, ROW_H);
 
         this.nbtTooltipToggleButton = button("NBT Tooltip", b -> {
             NBTTooltipModule.INSTANCE.setEnabled(!NBTTooltipModule.INSTANCE.isEnabled());
             syncControls();
-        }, rightX, rowY(6), settingW, ROW_H);
+        }, rightX, rowY(7), settingW, ROW_H);
 
         this.shulkerTooltipToggleButton = button("Shulker Preview Tooltip", b -> {
             ShulkerTooltipModule.INSTANCE.setEnabled(!ShulkerTooltipModule.INSTANCE.isEnabled());
             syncControls();
-        }, rightX, rowY(7), settingW, ROW_H);
+        }, rightX, rowY(8), settingW, ROW_H);
 
         this.biomeBorderToggleButton = button("Biome Border Overlay", b -> {
             BiomeBorderOverlayModule.INSTANCE.setEnabled(!BiomeBorderOverlayModule.INSTANCE.isEnabled());
@@ -337,9 +371,115 @@ final class MacroWorkbenchConfigurationTab {
             syncControls();
         }, rightX, rowY(4), settingW, ROW_H);
 
+        this.tweaksModuleToggleButton = button("Tweaks Module", b -> {
+            TweaksModule.INSTANCE.setEnabled(!TweaksModule.INSTANCE.isEnabled());
+            syncControls();
+        }, rightX, rowY(0), settingW, ROW_H);
+
+        this.hideOwnEffectsToggleButton = button("Hide Own Effect Particles", b -> {
+            ModConfig.updateAndSave(() -> ModConfig.tweaksHideOwnEffectParticles = !ModConfig.tweaksHideOwnEffectParticles);
+            syncControls();
+        }, rightX, rowY(1), settingW, ROW_H);
+
+        this.hideOffhandItemToggleButton = button("Hide Offhand Item", b -> {
+            ModConfig.updateAndSave(() -> ModConfig.tweaksHideOffhandItem = !ModConfig.tweaksHideOffhandItem);
+            syncControls();
+        }, rightX, rowY(2), settingW, ROW_H);
+
+        this.disableBlockBreakParticlesToggleButton = button("Disable Block Breaking Particles", b -> {
+            ModConfig.updateAndSave(() -> ModConfig.tweaksDisableBlockBreakingParticles = !ModConfig.tweaksDisableBlockBreakingParticles);
+            syncControls();
+        }, rightX, rowY(3), settingW, ROW_H);
+
+        this.disableEntityRenderingToggleButton = button("Disable Entity Rendering", b -> {
+            ModConfig.updateAndSave(() -> ModConfig.tweaksDisableEntityRendering = !ModConfig.tweaksDisableEntityRendering);
+            syncControls();
+        }, rightX, rowY(4), settingW, ROW_H);
+
+        this.disableNetherFogToggleButton = button("Disable Nether Fog", b -> {
+            ModConfig.updateAndSave(() -> ModConfig.tweaksDisableNetherFog = !ModConfig.tweaksDisableNetherFog);
+            syncControls();
+        }, rightX, rowY(5), settingW, ROW_H);
+
+        this.disableRenderDistanceFogToggleButton = button("Disable Render-Distance Fog", b -> {
+            ModConfig.updateAndSave(() -> ModConfig.tweaksDisableRenderDistanceFog = !ModConfig.tweaksDisableRenderDistanceFog);
+            syncControls();
+        }, rightX, rowY(6), settingW, ROW_H);
+
+        this.disableRainEffectsToggleButton = button("Disable Rain Effects", b -> {
+            ModConfig.updateAndSave(() -> ModConfig.tweaksDisableRainEffects = !ModConfig.tweaksDisableRainEffects);
+            syncControls();
+        }, rightX, rowY(7), settingW, ROW_H);
+
+        this.disableSoundsToggleButton = button("Disable Sounds", b -> {
+            ModConfig.updateAndSave(() -> ModConfig.tweaksDisableSounds = !ModConfig.tweaksDisableSounds);
+            syncControls();
+        }, rightX, rowY(8), settingW, ROW_H);
+
+        this.disableWallUnsprintToggleButton = button("Disable Wall Unsprint", b -> {
+            ModConfig.updateAndSave(() -> ModConfig.tweaksDisableWallUnsprint = !ModConfig.tweaksDisableWallUnsprint);
+            syncControls();
+        }, rightX, rowY(9), settingW, ROW_H);
+
+        this.angelBlockToggleButton = button("Angel Block", b -> {
+            ModConfig.updateAndSave(() -> ModConfig.tweaksAngelBlock = !ModConfig.tweaksAngelBlock);
+            syncControls();
+        }, rightX, rowY(10), settingW, ROW_H);
+
+        this.permanentSneakToggleButton = button("Permanent Sneak", b -> {
+            ModConfig.updateAndSave(() -> ModConfig.tweaksPermanentSneak = !ModConfig.tweaksPermanentSneak);
+            syncControls();
+        }, rightX, rowY(11), settingW, ROW_H);
+
+        this.permanentSprintToggleButton = button("Permanent Sprint", b -> {
+            ModConfig.updateAndSave(() -> ModConfig.tweaksPermanentSprint = !ModConfig.tweaksPermanentSprint);
+            syncControls();
+        }, rightX, rowY(12), settingW, ROW_H);
+
+        this.disableHurtCameraToggleButton = button("Disable Hurt Camera", b -> {
+            ModConfig.updateAndSave(() -> ModConfig.tweaksDisableHurtCamera = !ModConfig.tweaksDisableHurtCamera);
+            syncControls();
+        }, rightX, rowY(13), settingW, ROW_H);
+
+        this.disableViewBobbingToggleButton = button("Disable View Bobbing", b -> {
+            ModConfig.updateAndSave(() -> ModConfig.tweaksDisableViewBobbing = !ModConfig.tweaksDisableViewBobbing);
+            syncControls();
+        }, rightX, rowY(14), settingW, ROW_H);
+
+        this.reachToggleButton = button("Reach", b -> {
+            ReachModule.INSTANCE.setEnabled(!ReachModule.INSTANCE.isEnabled());
+            syncControls();
+        }, rightX, rowY(15), settingW, ROW_H);
+
+        this.reachSafeClampToggleButton = button("Reach Safe Multiplayer Clamp", b -> {
+            ModConfig.updateAndSave(() -> ModConfig.reachSafeMultiplayerClamp = !ModConfig.reachSafeMultiplayerClamp);
+            syncControls();
+        }, rightX, rowY(16), settingW, ROW_H);
+
+        this.reachBlockDistanceButton = button("Reach Block Distance", b -> {
+            adjustReachBlockDistance(1);
+            syncControls();
+        }, rightX, rowY(17), settingW, ROW_H);
+
+        this.reachEntityDistanceButton = button("Reach Entity Distance", b -> {
+            adjustReachEntityDistance(1);
+            syncControls();
+        }, rightX, rowY(18), settingW, ROW_H);
+
+        this.reachMpBlockExtraButton = button("Reach MP Block Extra", b -> {
+            adjustReachMpBlockExtra(1);
+            syncControls();
+        }, rightX, rowY(19), settingW, ROW_H);
+
+        this.reachMpEntityExtraButton = button("Reach MP Entity Extra", b -> {
+            adjustReachMpEntityExtra(1);
+            syncControls();
+        }, rightX, rowY(20), settingW, ROW_H);
+
         register(
                 this.hudCategoryButton, this.overlaysCategoryButton, this.modulesCategoryButton,
                 this.secondaryChatCategoryButton, this.pickupFeedCategoryButton, this.blockAttributesCategoryButton,
+                this.tweaksCategoryButton,
                 this.macroOverlayToggleButton, this.nbtHudToggleButton,
                 this.secondaryEnabledToggleButton, this.secondaryOverlayToggleButton, this.secondaryInterceptModeButton,
                 this.secondaryRegexAddButton, this.secondaryRegexApplyButton, this.secondaryRegexRemoveButton,
@@ -347,12 +487,19 @@ final class MacroWorkbenchConfigurationTab {
                 this.pickupEnabledButton, this.pickupDurationButton, this.pickupLinesButton,
                 this.pickupIconScaleButton, this.pickupDirectionButton,
                 this.freecamToggleButton, this.fullbrightToggleButton, this.heldLightToggleButton,
-                this.inventoryMoveToggleButton, this.instantBreakToggleButton, this.waypointsToggleButton,
+                this.inventoryMoveToggleButton, this.instantBreakToggleButton, this.fastBlockPlacementToggleButton, this.waypointsToggleButton,
                 this.nbtTooltipToggleButton, this.shulkerTooltipToggleButton,
                 this.biomeBorderToggleButton, this.chunkBorderToggleButton, this.slimeChunksToggleButton,
                 this.structureBoundsToggleButton, this.commandBlockOverlayToggleButton, this.lightOverlayToggleButton,
                 this.collisionMeshToggleButton, this.lightBlocksToggleButton, this.preventInteractionsToggleButton,
                 this.solidFluidHitboxesToggleButton, this.barrierBlocksToggleButton,
+                this.tweaksModuleToggleButton, this.hideOwnEffectsToggleButton, this.hideOffhandItemToggleButton,
+                this.disableBlockBreakParticlesToggleButton, this.disableEntityRenderingToggleButton,
+                this.disableNetherFogToggleButton, this.disableRenderDistanceFogToggleButton, this.disableRainEffectsToggleButton,
+                this.disableSoundsToggleButton, this.disableWallUnsprintToggleButton, this.angelBlockToggleButton,
+                this.permanentSneakToggleButton, this.permanentSprintToggleButton, this.disableHurtCameraToggleButton,
+                this.disableViewBobbingToggleButton, this.reachToggleButton, this.reachSafeClampToggleButton,
+                this.reachBlockDistanceButton, this.reachEntityDistanceButton, this.reachMpBlockExtraButton, this.reachMpEntityExtraButton,
                 this.secondaryRegexInputField, this.secondaryOutgoingRegexField
         );
 
@@ -370,6 +517,7 @@ final class MacroWorkbenchConfigurationTab {
         this.secondaryChatCategoryButton.setMessage(Text.literal((this.category == Category.SECONDARY_CHAT ? "> " : "") + Category.SECONDARY_CHAT.label));
         this.pickupFeedCategoryButton.setMessage(Text.literal((this.category == Category.PICKUP_FEED ? "> " : "") + Category.PICKUP_FEED.label));
         this.blockAttributesCategoryButton.setMessage(Text.literal((this.category == Category.BLOCK_ATTRIBUTES ? "> " : "") + Category.BLOCK_ATTRIBUTES.label));
+        this.tweaksCategoryButton.setMessage(Text.literal((this.category == Category.TWEAKS ? "> " : "") + Category.TWEAKS.label));
 
         SecondaryChatSettings.Data secondary = SecondaryChatSettings.get();
         ensureRegexSelectionInBounds();
@@ -392,6 +540,7 @@ final class MacroWorkbenchConfigurationTab {
         this.heldLightToggleButton.setMessage(Text.literal("Held Light: " + (HeldLightModule.INSTANCE.isEnabled() ? "ON" : "OFF")));
         this.inventoryMoveToggleButton.setMessage(Text.literal("Inventory Move: " + (InventoryMoveModule.INSTANCE.isEnabled() ? "ON" : "OFF")));
         this.instantBreakToggleButton.setMessage(Text.literal("Instant Break: " + (InstantBreakModule.INSTANCE.isEnabled() ? "ON" : "OFF")));
+        this.fastBlockPlacementToggleButton.setMessage(Text.literal("Fast Place: " + (FastBlockPlacementModule.INSTANCE.isEnabled() ? "ON" : "OFF")));
         this.waypointsToggleButton.setMessage(Text.literal("Waypoints: " + (WaypointModule.INSTANCE.isEnabled() ? "ON" : "OFF")));
         this.nbtTooltipToggleButton.setMessage(Text.literal("NBT Tooltip: " + (NBTTooltipModule.INSTANCE.isEnabled() ? "ON" : "OFF")));
         this.shulkerTooltipToggleButton.setMessage(Text.literal("Shulker Preview Tooltip: " + (ShulkerTooltipModule.INSTANCE.isEnabled() ? "ON" : "OFF")));
@@ -408,6 +557,28 @@ final class MacroWorkbenchConfigurationTab {
         this.preventInteractionsToggleButton.setMessage(Text.literal("Prevent Interactions: " + (ModConfig.blockAttributesPreventInteractions ? "ON" : "OFF")));
         this.solidFluidHitboxesToggleButton.setMessage(Text.literal("Solid Fluid Hitboxes: " + (ModConfig.blockAttributesSolidFluidHitboxes ? "ON" : "OFF")));
         this.barrierBlocksToggleButton.setMessage(Text.literal("Show Barrier Blocks: " + (ModConfig.blockAttributesShowBarrierBlocks ? "ON" : "OFF")));
+
+        this.tweaksModuleToggleButton.setMessage(Text.literal("Tweaks Module: " + (TweaksModule.INSTANCE.isEnabled() ? "ON" : "OFF")));
+        this.hideOwnEffectsToggleButton.setMessage(Text.literal("Hide Own Effect Particles: " + (ModConfig.tweaksHideOwnEffectParticles ? "ON" : "OFF")));
+        this.hideOffhandItemToggleButton.setMessage(Text.literal("Hide Offhand Item: " + (ModConfig.tweaksHideOffhandItem ? "ON" : "OFF")));
+        this.disableBlockBreakParticlesToggleButton.setMessage(Text.literal("Disable Block Breaking Particles: " + (ModConfig.tweaksDisableBlockBreakingParticles ? "ON" : "OFF")));
+        this.disableEntityRenderingToggleButton.setMessage(Text.literal("Disable Entity Rendering: " + (ModConfig.tweaksDisableEntityRendering ? "ON" : "OFF")));
+        this.disableNetherFogToggleButton.setMessage(Text.literal("Disable Nether Fog: " + (ModConfig.tweaksDisableNetherFog ? "ON" : "OFF")));
+        this.disableRenderDistanceFogToggleButton.setMessage(Text.literal("Disable Render-Distance Fog: " + (ModConfig.tweaksDisableRenderDistanceFog ? "ON" : "OFF")));
+        this.disableRainEffectsToggleButton.setMessage(Text.literal("Disable Rain Effects: " + (ModConfig.tweaksDisableRainEffects ? "ON" : "OFF")));
+        this.disableSoundsToggleButton.setMessage(Text.literal("Disable Sounds: " + (ModConfig.tweaksDisableSounds ? "ON" : "OFF")));
+        this.disableWallUnsprintToggleButton.setMessage(Text.literal("Disable Wall Unsprint: " + (ModConfig.tweaksDisableWallUnsprint ? "ON" : "OFF")));
+        this.angelBlockToggleButton.setMessage(Text.literal("Angel Block: " + (ModConfig.tweaksAngelBlock ? "ON" : "OFF")));
+        this.permanentSneakToggleButton.setMessage(Text.literal("Permanent Sneak: " + (ModConfig.tweaksPermanentSneak ? "ON" : "OFF")));
+        this.permanentSprintToggleButton.setMessage(Text.literal("Permanent Sprint: " + (ModConfig.tweaksPermanentSprint ? "ON" : "OFF")));
+        this.disableHurtCameraToggleButton.setMessage(Text.literal("Disable Hurt Camera: " + (ModConfig.tweaksDisableHurtCamera ? "ON" : "OFF")));
+        this.disableViewBobbingToggleButton.setMessage(Text.literal("Disable View Bobbing: " + (ModConfig.tweaksDisableViewBobbing ? "ON" : "OFF")));
+        this.reachToggleButton.setMessage(Text.literal("Reach: " + (ReachModule.INSTANCE.isEnabled() ? "ON" : "OFF")));
+        this.reachSafeClampToggleButton.setMessage(Text.literal("Reach Safe Multiplayer Clamp: " + (ModConfig.reachSafeMultiplayerClamp ? "ON" : "OFF")));
+        this.reachBlockDistanceButton.setMessage(Text.literal("Reach Block Distance: " + String.format(Locale.ROOT, "%.2f", ModConfig.reachBlockDistance)));
+        this.reachEntityDistanceButton.setMessage(Text.literal("Reach Entity Distance: " + String.format(Locale.ROOT, "%.2f", ModConfig.reachEntityDistance)));
+        this.reachMpBlockExtraButton.setMessage(Text.literal("Reach MP Block Extra: " + String.format(Locale.ROOT, "%.2f", ModConfig.reachMultiplayerBlockExtra)));
+        this.reachMpEntityExtraButton.setMessage(Text.literal("Reach MP Entity Extra: " + String.format(Locale.ROOT, "%.2f", ModConfig.reachMultiplayerEntityExtra)));
 
         if (!this.secondaryOutgoingRegexField.isFocused()) {
             this.secondaryOutgoingRegexField.setText(secondary.outgoingRegex == null ? "" : secondary.outgoingRegex);
@@ -450,6 +621,7 @@ final class MacroWorkbenchConfigurationTab {
         setVisible(this.heldLightToggleButton, modules);
         setVisible(this.inventoryMoveToggleButton, modules);
         setVisible(this.instantBreakToggleButton, modules);
+        setVisible(this.fastBlockPlacementToggleButton, modules);
         setVisible(this.waypointsToggleButton, modules);
         setVisible(this.nbtTooltipToggleButton, modules);
         setVisible(this.shulkerTooltipToggleButton, modules);
@@ -460,6 +632,29 @@ final class MacroWorkbenchConfigurationTab {
         setVisible(this.preventInteractionsToggleButton, blockAttributes);
         setVisible(this.solidFluidHitboxesToggleButton, blockAttributes);
         setVisible(this.barrierBlocksToggleButton, blockAttributes);
+
+        boolean tweaks = this.category == Category.TWEAKS;
+        setVisible(this.tweaksModuleToggleButton, tweaks);
+        setVisible(this.hideOwnEffectsToggleButton, tweaks);
+        setVisible(this.hideOffhandItemToggleButton, tweaks);
+        setVisible(this.disableBlockBreakParticlesToggleButton, tweaks);
+        setVisible(this.disableEntityRenderingToggleButton, tweaks);
+        setVisible(this.disableNetherFogToggleButton, tweaks);
+        setVisible(this.disableRenderDistanceFogToggleButton, tweaks);
+        setVisible(this.disableRainEffectsToggleButton, tweaks);
+        setVisible(this.disableSoundsToggleButton, tweaks);
+        setVisible(this.disableWallUnsprintToggleButton, tweaks);
+        setVisible(this.angelBlockToggleButton, tweaks);
+        setVisible(this.permanentSneakToggleButton, tweaks);
+        setVisible(this.permanentSprintToggleButton, tweaks);
+        setVisible(this.disableHurtCameraToggleButton, tweaks);
+        setVisible(this.disableViewBobbingToggleButton, tweaks);
+        setVisible(this.reachToggleButton, tweaks);
+        setVisible(this.reachSafeClampToggleButton, tweaks);
+        setVisible(this.reachBlockDistanceButton, tweaks);
+        setVisible(this.reachEntityDistanceButton, tweaks);
+        setVisible(this.reachMpBlockExtraButton, tweaks);
+        setVisible(this.reachMpEntityExtraButton, tweaks);
     }
 
     void render(DrawContext context) {
@@ -482,6 +677,7 @@ final class MacroWorkbenchConfigurationTab {
             case MODULES -> "General gameplay modules and tooltip behaviors.";
             case PICKUP_FEED -> "Pick-up feed module toggle and behavior settings.";
             case BLOCK_ATTRIBUTES -> "Block interaction and hitbox behavior overrides.";
+            case TWEAKS -> "Visual and gameplay tweaks, plus reach controls.";
             default -> "";
         };
         context.drawTextWithShadow(this.owner.workbenchTextRenderer(), description, splitX + 12, rowY(8), 0xFFA8CFCF);
@@ -507,6 +703,30 @@ final class MacroWorkbenchConfigurationTab {
             }
             if (contains(mouseX, mouseY, this.pickupDirectionButton)) {
                 cyclePickupDirection(direction > 0);
+                syncControls();
+                return true;
+            }
+            return false;
+        }
+
+        if (this.category == Category.TWEAKS && button == 1) {
+            if (contains(mouseX, mouseY, this.reachBlockDistanceButton)) {
+                adjustReachBlockDistance(-1);
+                syncControls();
+                return true;
+            }
+            if (contains(mouseX, mouseY, this.reachEntityDistanceButton)) {
+                adjustReachEntityDistance(-1);
+                syncControls();
+                return true;
+            }
+            if (contains(mouseX, mouseY, this.reachMpBlockExtraButton)) {
+                adjustReachMpBlockExtra(-1);
+                syncControls();
+                return true;
+            }
+            if (contains(mouseX, mouseY, this.reachMpEntityExtraButton)) {
+                adjustReachMpEntityExtra(-1);
                 syncControls();
                 return true;
             }
@@ -686,6 +906,34 @@ final class MacroWorkbenchConfigurationTab {
                         ? PickupFeedSettings.Direction.UP
                         : PickupFeedSettings.Direction.DOWN;
             }
+        });
+    }
+
+    private void adjustReachBlockDistance(int direction) {
+        ModConfig.updateAndSave(() -> {
+            double step = this.shiftDown.getAsBoolean() ? 0.5 : 0.25;
+            ModConfig.reachBlockDistance = Math.clamp(ModConfig.reachBlockDistance + (direction * step), 1.0, 16.0);
+        });
+    }
+
+    private void adjustReachEntityDistance(int direction) {
+        ModConfig.updateAndSave(() -> {
+            double step = this.shiftDown.getAsBoolean() ? 0.5 : 0.25;
+            ModConfig.reachEntityDistance = Math.clamp(ModConfig.reachEntityDistance + (direction * step), 1.0, 16.0);
+        });
+    }
+
+    private void adjustReachMpBlockExtra(int direction) {
+        ModConfig.updateAndSave(() -> {
+            double step = this.shiftDown.getAsBoolean() ? 0.5 : 0.25;
+            ModConfig.reachMultiplayerBlockExtra = Math.clamp(ModConfig.reachMultiplayerBlockExtra + (direction * step), 0.0, 4.0);
+        });
+    }
+
+    private void adjustReachMpEntityExtra(int direction) {
+        ModConfig.updateAndSave(() -> {
+            double step = this.shiftDown.getAsBoolean() ? 0.5 : 0.25;
+            ModConfig.reachMultiplayerEntityExtra = Math.clamp(ModConfig.reachMultiplayerEntityExtra + (direction * step), 0.0, 4.0);
         });
     }
 }

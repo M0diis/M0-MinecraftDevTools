@@ -29,6 +29,7 @@
     "MouseMixin",
     "MouseSecondaryChatMixin",
     "MultiplayerServerListWidgetMixin",
+    "PlayerReachMixin",
     "SimpleOptionMixin",
     "WorldRendererHeldLightMixin",
     "WorldRendererMixin",

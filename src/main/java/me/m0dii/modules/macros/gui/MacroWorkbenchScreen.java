@@ -37,6 +37,7 @@ import net.minecraft.client.input.KeyInput;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
 import net.minecraft.entity.Entity;
+import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.mob.HostileEntity;
 import net.minecraft.entity.passive.PassiveEntity;
 import net.minecraft.item.ItemStack;
@@ -58,6 +59,7 @@ public class MacroWorkbenchScreen extends Screen {
         ENTITY_RADAR,
         COMMAND_HISTORY,
         MESSAGE_HISTORY,
+        INVENTORY,
         CONFIGURATION
     }
 
@@ -299,11 +301,12 @@ public class MacroWorkbenchScreen extends Screen {
                 Tab.ENTITY_RADAR,
                 Tab.COMMAND_HISTORY,
                 Tab.MESSAGE_HISTORY,
+                Tab.INVENTORY,
                 Tab.CONFIGURATION
         );
-        List<String> labels = List.of("Canvas", "Keyboard", "Placeholders", "Entity Radar", "Cmd Hist", "Msg Hist", "Configuration");
-        List<String> compactLabels = List.of("Canvas", "Keys", "Place", "Radar", "Cmd", "Msg", "Config");
-        List<String> tinyLabels = List.of("CV", "KB", "PH", "ER", "CH", "MH", "CF");
+        List<String> labels = List.of("Canvas", "Keyboard", "Placeholders", "Entity Radar", "Cmd Hist", "Msg Hist", "Inventory", "Configuration");
+        List<String> compactLabels = List.of("Canvas", "Keys", "Place", "Radar", "Cmd", "Msg", "Inv", "Config");
+        List<String> tinyLabels = List.of("CV", "KB", "PH", "ER", "CH", "MH", "IV", "CF");
         int tabGap = 4;
         int tabsStartX = 8;
         int tabsEndX = saveX - 8;
@@ -608,6 +611,11 @@ public class MacroWorkbenchScreen extends Screen {
             dragging = false;
             msgHistoryItems = new ArrayList<>(MessageHistoryManager.getHistory());
             msgHistoryScroll = 0;
+        } else if (next == Tab.INVENTORY) {
+            applyQuickEdit();
+            closeAdvancedModal();
+            closeKeyboardCommandsModal();
+            dragging = false;
         } else if (next == Tab.CONFIGURATION) {
             applyQuickEdit();
             closeAdvancedModal();
@@ -658,6 +666,8 @@ public class MacroWorkbenchScreen extends Screen {
             renderCommandHistoryTab(context, mouseX, mouseY);
         } else if (this.tab == Tab.MESSAGE_HISTORY) {
             renderMessageHistoryTab(context, mouseX, mouseY);
+        } else if (this.tab == Tab.INVENTORY) {
+            renderInventoryTab(context);
         } else if (this.tab == Tab.CONFIGURATION) {
             renderConfigurationTab(context);
         } else {
@@ -960,6 +970,66 @@ public class MacroWorkbenchScreen extends Screen {
         }
     }
 
+    private void renderInventoryTab(DrawContext context) {
+        int top = TOP_BAR_H + 8;
+        context.drawCenteredTextWithShadow(this.textRenderer, Text.literal("Inventory"), this.width / 2, top, 0xFFFFFFFF);
+
+        if (this.client == null || this.client.player == null) {
+            context.drawCenteredTextWithShadow(this.textRenderer, Text.literal("Inventory unavailable."), this.width / 2, top + 18, 0xFFAAAAAA);
+            return;
+        }
+
+        var inventory = this.client.player.getInventory();
+        int cell = 20;
+        int slot = 18;
+        int gridWidth = cell * 9;
+        int gridX = (this.width - gridWidth) / 2;
+        int mainY = top + 34;
+
+        context.drawTextWithShadow(this.textRenderer, "Main", gridX, mainY - 12, 0xFFB8D8D8);
+        for (int row = 0; row < 3; row++) {
+            for (int col = 0; col < 9; col++) {
+                int index = 9 + (row * 9) + col;
+                int x = gridX + (col * cell);
+                int y = mainY + (row * cell);
+                drawInventorySlot(context, x, y, slot, inventory.getStack(index), false);
+            }
+        }
+
+        int hotbarY = mainY + (cell * 3) + 12;
+        context.drawTextWithShadow(this.textRenderer, "Hotbar", gridX, hotbarY - 12, 0xFFB8D8D8);
+        int selectedSlot = inventory.getSelectedSlot();
+        for (int col = 0; col < 9; col++) {
+            int x = gridX + (col * cell);
+            drawInventorySlot(context, x, hotbarY, slot, inventory.getStack(col), col == selectedSlot);
+        }
+
+        int equipX = gridX + gridWidth + 24;
+        int equipY = mainY;
+        context.drawTextWithShadow(this.textRenderer, "Equipment", equipX, equipY - 12, 0xFFB8D8D8);
+        drawInventorySlot(context, equipX, equipY, slot, this.client.player.getEquippedStack(EquipmentSlot.HEAD), false);
+        drawInventorySlot(context, equipX, equipY + cell, slot, this.client.player.getEquippedStack(EquipmentSlot.CHEST), false);
+        drawInventorySlot(context, equipX, equipY + (cell * 2), slot, this.client.player.getEquippedStack(EquipmentSlot.LEGS), false);
+        drawInventorySlot(context, equipX, equipY + (cell * 3), slot, this.client.player.getEquippedStack(EquipmentSlot.FEET), false);
+        drawInventorySlot(context, equipX, equipY + (cell * 4) + 8, slot, this.client.player.getOffHandStack(), false);
+    }
+
+    private void drawInventorySlot(DrawContext context, int x, int y, int size, ItemStack stack, boolean selected) {
+        int bg = selected ? 0xA0785A20 : 0xAA1A1A1A;
+        context.fill(x, y, x + size, y + size, bg);
+        context.fill(x, y, x + size, y + 1, 0x50FFFFFF);
+        context.fill(x, y + size - 1, x + size, y + size, 0x50303030);
+        context.fill(x, y, x + 1, y + size, 0x50FFFFFF);
+        context.fill(x + size - 1, y, x + size, y + size, 0x50303030);
+
+        if (!stack.isEmpty()) {
+            int ix = x + 1;
+            int iy = y + 1;
+            context.drawItem(stack, ix, iy);
+            context.drawStackOverlay(this.textRenderer, stack, ix, iy);
+        }
+    }
+
     private boolean onCommandHistoryClick(double mouseX, double mouseY) {
         if (cmdHistoryItems.isEmpty()) {
             return false;
@@ -1121,6 +1191,9 @@ public class MacroWorkbenchScreen extends Screen {
             return onKeyboardClick(click.x(), click.y());
         }
         if (this.tab == Tab.ENTITY_RADAR) {
+            return false;
+        }
+        if (this.tab == Tab.INVENTORY) {
             return false;
         }
         if (this.tab == Tab.COMMAND_HISTORY) {

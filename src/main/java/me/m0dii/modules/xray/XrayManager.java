@@ -23,8 +23,8 @@ public final class XrayManager {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
     public static final int MIN_DISPLAY_RANGE = 8;
-    public static final int MAX_DISPLAY_RANGE = 96;
-    public static final int DEFAULT_DISPLAY_RANGE = 24;
+    public static final int MAX_DISPLAY_RANGE = 256;
+    public static final int DEFAULT_DISPLAY_RANGE = 128;
 
     @Getter
     private static Map<String, XrayBlockConfig> xrayBlocks = new LinkedHashMap<>();
@@ -34,7 +34,6 @@ public final class XrayManager {
     public static class XrayBlockConfig {
         public boolean enabled = true;
         public int color = 0x55FF55;
-        public boolean outline = true;
     }
 
     private XrayManager() {

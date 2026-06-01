@@ -16,24 +16,28 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public class AtmosphericFogModifierMixin {
 
     @Inject(method = "applyStartEndModifier", at = @At("RETURN"))
-    private void disableNetherFog(FogData fogData,
-                                  Camera camera,
-                                  ClientWorld world,
-                                  float viewDistance,
-                                  RenderTickCounter tickCounter,
-                                  CallbackInfo ci) {
-        if (!TweaksModule.INSTANCE.disableNetherFog()) {
-            return;
-        }
-
-        if (world.getRegistryKey() != World.NETHER) {
+    private void applyFogTweaks(FogData fogData,
+                                Camera camera,
+                                ClientWorld world,
+                                float viewDistance,
+                                RenderTickCounter tickCounter,
+                                CallbackInfo ci) {
+        boolean disableRenderDistanceFog = TweaksModule.INSTANCE.disableRenderDistanceFog();
+        boolean disableNetherFog = TweaksModule.INSTANCE.disableNetherFog() && world.getRegistryKey() == World.NETHER;
+        if (!disableRenderDistanceFog && !disableNetherFog) {
             return;
         }
 
         float far = Math.max(viewDistance, fogData.renderDistanceEnd) + 1024.0f;
-        fogData.environmentalStart = far - 64.0f;
-        fogData.environmentalEnd = far;
-        fogData.skyEnd = far;
-        fogData.cloudEnd = far;
+        if (disableRenderDistanceFog) {
+            fogData.renderDistanceStart = far - 64.0f;
+            fogData.renderDistanceEnd = far;
+        }
+        if (disableNetherFog) {
+            fogData.environmentalStart = far - 64.0f;
+            fogData.environmentalEnd = far;
+            fogData.skyEnd = far;
+            fogData.cloudEnd = far;
+        }
     }
 }

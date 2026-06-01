@@ -7,6 +7,7 @@ import me.m0dii.modules.Toggleable;
 import me.m0dii.utils.ModConfig;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.render.RenderTickCounter;
 import net.minecraft.client.util.InputUtil;
@@ -197,6 +198,7 @@ public class ClickGuiRenderer implements Toggleable {
             return;
         }
 
+        int screenWidth = client.getWindow().getScaledWidth();
         int screenHeight = client.getWindow().getScaledHeight();
 
         // Apply text scaling
@@ -212,29 +214,58 @@ public class ClickGuiRenderer implements Toggleable {
         // Convert screen coordinates to scaled coordinates
         int scaledStartX = Math.round(START_X / scale);
         int scaledStartY = Math.round(START_Y / scale);
+        int scaledScreenWidth = Math.round(screenWidth / scale);
+        int scaledScreenHeight = Math.round(screenHeight / scale);
 
-        renderCategories(context, scaledStartX, scaledStartY);
+        int categoryWidth = CATEGORY_WIDTH;
+        int moduleWidth = MODULE_WIDTH;
+        int settingsWidth = SETTINGS_WIDTH;
+
+        int neededWidth = categoryWidth + MODULE_WIDTH + 10;
+        if (inSettingsView && currentSettingsModule != null) {
+            neededWidth += settingsWidth + 10;
+        }
+        int availableWidth = Math.max(220, scaledScreenWidth - scaledStartX - 8);
+
+        if (neededWidth > availableWidth) {
+            int deficit = neededWidth - availableWidth;
+
+            if (inSettingsView && currentSettingsModule != null) {
+                int minSettings = 140;
+                int reduce = Math.min(deficit, settingsWidth - minSettings);
+                settingsWidth -= reduce;
+                deficit -= reduce;
+            }
+
+            int minModule = 110;
+            int reduceModule = Math.min(deficit, moduleWidth - minModule);
+            moduleWidth -= reduceModule;
+            deficit -= reduceModule;
+
+            int minCategory = 80;
+            int reduceCategory = Math.min(deficit, categoryWidth - minCategory);
+            categoryWidth -= reduceCategory;
+        }
+
+        renderCategories(context, scaledStartX, scaledStartY, categoryWidth);
 
         if (categories.length > 0 && selectedCategoryIndex < categories.length) {
             ModuleCategory category = categories[selectedCategoryIndex];
-            // Keep the gap constant in scaled space (10 pixels in scaled coordinates)
-            int modulesX = scaledStartX + CATEGORY_WIDTH + 10;
-            renderModules(context, modulesX, scaledStartY, category);
+            int modulesX = scaledStartX + categoryWidth + 10;
+            renderModules(context, modulesX, scaledStartY, moduleWidth, category);
 
             if (inSettingsView && currentSettingsModule != null) {
-                // Keep the gap constant in scaled space (10 pixels in scaled coordinates)
-                int settingsX = scaledStartX + CATEGORY_WIDTH + MODULE_WIDTH + 20;
-                renderSettings(context, settingsX, scaledStartY);
+                int settingsX = modulesX + moduleWidth + 10;
+                renderSettings(context, settingsX, scaledStartY, settingsWidth);
             }
         }
 
-        int scaledScreenHeight = Math.round(screenHeight / scale);
-        renderInstructions(context, scaledScreenHeight);
+        renderInstructions(context, scaledStartX, scaledScreenHeight, scaledScreenWidth);
 
         context.getMatrices().popMatrix();
     }
 
-    private void renderCategories(DrawContext context, int x, int y) {
+    private void renderCategories(DrawContext context, int x, int y, int width) {
         MinecraftClient client = MinecraftClient.getInstance();
         int currentY = y;
 
@@ -244,27 +275,19 @@ public class ClickGuiRenderer implements Toggleable {
             boolean categoryFocused = selected && !inModuleList;
 
             int bgColor = categoryFocused ? COLOR_SELECTED : (selected ? 0x80404040 : COLOR_BACKGROUND);
-            context.fill(x, currentY, x + CATEGORY_WIDTH, currentY + ITEM_HEIGHT, bgColor);
-            context.fill(x, currentY, x + CATEGORY_WIDTH, currentY + 1, COLOR_BORDER);
-            context.fill(x, currentY + ITEM_HEIGHT, x + CATEGORY_WIDTH, currentY + ITEM_HEIGHT + 1, COLOR_BORDER);
+            context.fill(x, currentY, x + width, currentY + ITEM_HEIGHT, bgColor);
+            context.fill(x, currentY, x + width, currentY + 1, COLOR_BORDER);
+            context.fill(x, currentY + ITEM_HEIGHT, x + width, currentY + ITEM_HEIGHT + 1, COLOR_BORDER);
 
             String count = "(" + category.getModules().size() + ")";
             int countWidth = client.textRenderer.getWidth(count);
-            int countX = x + CATEGORY_WIDTH - countWidth - 4;
+            int countX = x + width - countWidth - 4;
 
             int textX = x + PADDING + 2;
             int textY = currentY + (ITEM_HEIGHT - 8) / 2;
             int availableWidth = countX - textX - 4;
 
-            String text = category.getName();
-            int textWidth = client.textRenderer.getWidth(text);
-            if (textWidth > availableWidth) {
-                while (textWidth > availableWidth - client.textRenderer.getWidth("...") && !text.isEmpty()) {
-                    text = text.substring(0, text.length() - 1);
-                    textWidth = client.textRenderer.getWidth(text);
-                }
-                text = text + "...";
-            }
+            String text = fitText(client.textRenderer, category.getName(), availableWidth);
 
             context.drawText(client.textRenderer, text, textX, textY, COLOR_TEXT, false);
             context.drawText(client.textRenderer, count, countX, textY, COLOR_TEXT, false);
@@ -273,7 +296,7 @@ public class ClickGuiRenderer implements Toggleable {
         }
     }
 
-    private void renderModules(DrawContext context, int x, int y, ModuleCategory category) {
+    private void renderModules(DrawContext context, int x, int y, int width, ModuleCategory category) {
         MinecraftClient client = MinecraftClient.getInstance();
         List<Module> modules = category.getModules()
                 .stream()
@@ -289,9 +312,9 @@ public class ClickGuiRenderer implements Toggleable {
             boolean hasSettings = module.hasSettings();
 
             int bgColor = selected ? COLOR_SELECTED : COLOR_BACKGROUND;
-            context.fill(x, currentY, x + MODULE_WIDTH, currentY + ITEM_HEIGHT, bgColor);
-            context.fill(x, currentY, x + MODULE_WIDTH, currentY + 1, COLOR_BORDER);
-            context.fill(x, currentY + ITEM_HEIGHT, x + MODULE_WIDTH, currentY + ITEM_HEIGHT + 1, COLOR_BORDER);
+            context.fill(x, currentY, x + width, currentY + ITEM_HEIGHT, bgColor);
+            context.fill(x, currentY, x + width, currentY + 1, COLOR_BORDER);
+            context.fill(x, currentY + ITEM_HEIGHT, x + width, currentY + ITEM_HEIGHT + 1, COLOR_BORDER);
 
             int indicatorColor = enabled ? COLOR_ENABLED : COLOR_DISABLED;
             context.fill(x + 2, currentY + 4, x + 6, currentY + ITEM_HEIGHT - 4, indicatorColor);
@@ -300,21 +323,13 @@ public class ClickGuiRenderer implements Toggleable {
             String settingsIndicator = hasSettings ? " >" : "";
             String rightText = status + settingsIndicator;
             int rightTextWidth = client.textRenderer.getWidth(rightText);
-            int statusX = x + MODULE_WIDTH - rightTextWidth - 4;
+            int statusX = x + width - rightTextWidth - 4;
 
             int textX = x + 10;
             int textY = currentY + (ITEM_HEIGHT - 8) / 2;
             int availableWidth = statusX - textX - 4;
 
-            String text = module.getDisplayName();
-            int textWidth = client.textRenderer.getWidth(text);
-            if (textWidth > availableWidth) {
-                while (textWidth > availableWidth - client.textRenderer.getWidth("...") && !text.isEmpty()) {
-                    text = text.substring(0, text.length() - 1);
-                    textWidth = client.textRenderer.getWidth(text);
-                }
-                text = text + "...";
-            }
+            String text = fitText(client.textRenderer, module.getDisplayName(), availableWidth);
 
             context.drawText(client.textRenderer, text, textX, textY, COLOR_TEXT, false);
 
@@ -330,7 +345,7 @@ public class ClickGuiRenderer implements Toggleable {
         }
     }
 
-    private void renderSettings(DrawContext context, int x, int y) {
+    private void renderSettings(DrawContext context, int x, int y, int width) {
         if (currentSettingsModule == null) {
             return;
         }
@@ -339,13 +354,13 @@ public class ClickGuiRenderer implements Toggleable {
         List<String> settings = currentSettingsModule.getSettingsDisplay();
         int currentY = y;
 
-        context.fill(x, currentY, x + SETTINGS_WIDTH, currentY + ITEM_HEIGHT, 0xFF303030);
-        context.fill(x, currentY, x + SETTINGS_WIDTH, currentY + 1, COLOR_BORDER);
-        context.fill(x, currentY + ITEM_HEIGHT, x + SETTINGS_WIDTH, currentY + ITEM_HEIGHT + 1, COLOR_BORDER);
+        context.fill(x, currentY, x + width, currentY + ITEM_HEIGHT, 0xFF303030);
+        context.fill(x, currentY, x + width, currentY + 1, COLOR_BORDER);
+        context.fill(x, currentY + ITEM_HEIGHT, x + width, currentY + ITEM_HEIGHT + 1, COLOR_BORDER);
 
-        String title = currentSettingsModule.getDisplayName() + " Settings";
+        String title = fitText(client.textRenderer, currentSettingsModule.getDisplayName() + " Settings", width - 8);
         int titleWidth = client.textRenderer.getWidth(title);
-        int titleX = x + (SETTINGS_WIDTH - titleWidth) / 2;
+        int titleX = x + (width - titleWidth) / 2;
         int titleY = currentY + (ITEM_HEIGHT - 8) / 2;
         context.drawText(client.textRenderer, title, titleX, titleY, COLOR_TEXT, false);
 
@@ -356,23 +371,15 @@ public class ClickGuiRenderer implements Toggleable {
             boolean selected = (i == selectedSettingIndex);
 
             int bgColor = selected ? COLOR_SELECTED : COLOR_BACKGROUND;
-            context.fill(x, currentY, x + SETTINGS_WIDTH, currentY + ITEM_HEIGHT, bgColor);
-            context.fill(x, currentY, x + SETTINGS_WIDTH, currentY + 1, COLOR_BORDER);
-            context.fill(x, currentY + ITEM_HEIGHT, x + SETTINGS_WIDTH, currentY + ITEM_HEIGHT + 1, COLOR_BORDER);
+            context.fill(x, currentY, x + width, currentY + ITEM_HEIGHT, bgColor);
+            context.fill(x, currentY, x + width, currentY + 1, COLOR_BORDER);
+            context.fill(x, currentY + ITEM_HEIGHT, x + width, currentY + ITEM_HEIGHT + 1, COLOR_BORDER);
 
             int textX = x + PADDING + 2;
             int textY = currentY + (ITEM_HEIGHT - 8) / 2;
-            int availableWidth = SETTINGS_WIDTH - (PADDING + 4);
+            int availableWidth = width - (PADDING + 6);
 
-            String displayText = setting;
-            int textWidth = client.textRenderer.getWidth(displayText);
-            if (textWidth > availableWidth) {
-                while (textWidth > availableWidth - client.textRenderer.getWidth("...") && !displayText.isEmpty()) {
-                    displayText = displayText.substring(0, displayText.length() - 1);
-                    textWidth = client.textRenderer.getWidth(displayText);
-                }
-                displayText = displayText + "...";
-            }
+            String displayText = fitText(client.textRenderer, setting, availableWidth);
 
             context.drawText(client.textRenderer, displayText, textX, textY, COLOR_TEXT, false);
 
@@ -380,19 +387,19 @@ public class ClickGuiRenderer implements Toggleable {
         }
 
         if (settings.isEmpty()) {
-            context.fill(x, currentY, x + SETTINGS_WIDTH, currentY + ITEM_HEIGHT, COLOR_BACKGROUND);
-            context.fill(x, currentY, x + SETTINGS_WIDTH, currentY + 1, COLOR_BORDER);
-            context.fill(x, currentY + ITEM_HEIGHT, x + SETTINGS_WIDTH, currentY + ITEM_HEIGHT + 1, COLOR_BORDER);
+            context.fill(x, currentY, x + width, currentY + ITEM_HEIGHT, COLOR_BACKGROUND);
+            context.fill(x, currentY, x + width, currentY + 1, COLOR_BORDER);
+            context.fill(x, currentY + ITEM_HEIGHT, x + width, currentY + ITEM_HEIGHT + 1, COLOR_BORDER);
 
-            String noSettings = "No settings available";
+            String noSettings = fitText(client.textRenderer, "No settings available", width - 8);
             int noSettingsWidth = client.textRenderer.getWidth(noSettings);
-            int noSettingsX = x + (SETTINGS_WIDTH - noSettingsWidth) / 2;
+            int noSettingsX = x + (width - noSettingsWidth) / 2;
             int noSettingsY = currentY + (ITEM_HEIGHT - 8) / 2;
             context.drawText(client.textRenderer, noSettings, noSettingsX, noSettingsY, 0xFF888888, false);
         }
     }
 
-    private void renderInstructions(DrawContext context, int screenHeight) {
+    private void renderInstructions(DrawContext context, int x, int screenHeight, int screenWidth) {
         MinecraftClient client = MinecraftClient.getInstance();
         String[] instructions = {
                 "Up/Down: Navigate | Right: Enter Modules | Left: Back to Categories",
@@ -400,12 +407,36 @@ public class ClickGuiRenderer implements Toggleable {
         };
 
         int y = screenHeight - 30;
-        int x = 10;
+        int maxWidth = Math.max(100, screenWidth - x - 8);
 
         for (String instruction : instructions) {
-            context.drawText(client.textRenderer, instruction, x, y, 0xFF808080, false);
+            context.drawText(client.textRenderer, fitText(client.textRenderer, instruction, maxWidth), x, y, 0xFF808080, false);
             y += 10;
         }
+    }
+
+    private static String fitText(TextRenderer textRenderer, String text, int maxWidth) {
+        if (text == null || text.isEmpty()) {
+            return "";
+        }
+        if (maxWidth <= 0) {
+            return "";
+        }
+        if (textRenderer.getWidth(text) <= maxWidth) {
+            return text;
+        }
+
+        final String ellipsis = "...";
+        int ellipsisWidth = textRenderer.getWidth(ellipsis);
+        if (ellipsisWidth >= maxWidth) {
+            return "";
+        }
+
+        String result = text;
+        while (!result.isEmpty() && textRenderer.getWidth(result) + ellipsisWidth > maxWidth) {
+            result = result.substring(0, result.length() - 1);
+        }
+        return result.isEmpty() ? "" : result + ellipsis;
     }
 }
 
