@@ -5,6 +5,7 @@ import net.minecraft.client.option.KeyBinding;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 public final class ReflectionUtils {
@@ -14,9 +15,7 @@ public final class ReflectionUtils {
     public static List<Field> declaredFieldsInHierarchy(Class<?> type) {
         List<Field> fields = new ArrayList<>();
         for (Class<?> c = type; c != null; c = c.getSuperclass()) {
-            for (Field f : c.getDeclaredFields()) {
-                fields.add(f);
-            }
+            Collections.addAll(fields, c.getDeclaredFields());
         }
         return fields;
     }

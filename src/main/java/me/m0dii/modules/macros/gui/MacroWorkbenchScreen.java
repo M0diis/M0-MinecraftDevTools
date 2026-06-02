@@ -781,7 +781,7 @@ public class MacroWorkbenchScreen extends Screen {
     }
 
     private void initConfigurationWidgets() {
-        this.configurationTabController = new MacroWorkbenchConfigurationTab(this, this.configWidgets, this::isShiftDown, this::isControlPressed);
+        this.configurationTabController = new MacroWorkbenchConfigurationTab(this, this.configWidgets, this::isShiftDown);
         this.configurationTabController.initWidgets();
     }
 
@@ -1929,15 +1929,13 @@ public class MacroWorkbenchScreen extends Screen {
             beginModalSelectionDrag(ModalDragSelectionField.ADVANCED_BORDER);
             return true;
         }
-        if (MacroWorkbenchAdvancedClickSupport.handleApplyCancel(
+        MacroWorkbenchAdvancedClickSupport.handleApplyCancel(
                 click,
                 layout.apply(),
                 layout.cancel(),
                 clickOps,
                 this::applyAdvancedAndClose,
-                this::closeAdvancedModal)) {
-            return true;
-        }
+                this::closeAdvancedModal);
         return true;
     }
 
@@ -3495,18 +3493,13 @@ public class MacroWorkbenchScreen extends Screen {
             if (focusAdvancedTypeInputField(click, rangeInput, ModalDragSelectionField.ADVANCED_BG, false)) {
                 return true;
             }
-            if (focusAdvancedTypeInputField(click, segInput, ModalDragSelectionField.ADVANCED_BORDER, false)) {
-                return true;
-            }
-            return false;
+            return focusAdvancedTypeInputField(click, segInput, ModalDragSelectionField.ADVANCED_BORDER, false);
         }
         if (selected.type == MacroHudDataHandler.ElementType.VALUE || selected.type == MacroHudDataHandler.ElementType.STATE_BADGE) {
             if (focusAdvancedTypeInputField(click, layout.typeInputLeft(), ModalDragSelectionField.ADVANCED_BG, true)) {
                 return true;
             }
-            if (focusAdvancedTypeInputField(click, layout.typeInputRight(), ModalDragSelectionField.ADVANCED_BORDER, true)) {
-                return true;
-            }
+            return focusAdvancedTypeInputField(click, layout.typeInputRight(), ModalDragSelectionField.ADVANCED_BORDER, true);
         }
         return false;
     }
@@ -5514,7 +5507,7 @@ public class MacroWorkbenchScreen extends Screen {
         for (MacroHudDataHandler.HudElement e : pasted) {
             selectedElementIds.add(e.id);
         }
-        selected = pasted.get(pasted.size() - 1);
+        selected = pasted.getLast();
         syncCanvasFields();
     }
 

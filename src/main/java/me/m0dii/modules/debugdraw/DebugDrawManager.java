@@ -37,7 +37,6 @@ public final class DebugDrawManager {
     private static BlockPos selectionPos1;
     private static BlockPos selectionPos2;
     private static SelectionShape selectionShape = SelectionShape.BOX;
-    private static boolean loadedFromDisk = false;
 
     public record ShapeDescriptor(int id,
                                   String type,
@@ -337,32 +336,31 @@ public final class DebugDrawManager {
         List<String> out = new ArrayList<>();
         for (DrawShape shape : SHAPES) {
             double remaining = Math.max(0.0, (shape.expiresAtMillis - now) / 1000.0);
-            if (shape instanceof LineShape line) {
-                out.add(String.format("#%d line (%.2f %.2f %.2f -> %.2f %.2f %.2f) %s %.1fs",
+            switch (shape) {
+                case LineShape line -> out.add(String.format("#%d line (%.2f %.2f %.2f -> %.2f %.2f %.2f) %s %.1fs",
                         line.id,
                         line.x1, line.y1, line.z1,
                         line.x2, line.y2, line.z2,
                         formatColor(line.rgb),
                         remaining));
-            } else if (shape instanceof BoxShape box) {
-                out.add(String.format("#%d box (%.2f %.2f %.2f -> %.2f %.2f %.2f) %s %.1fs",
+                case BoxShape box -> out.add(String.format("#%d box (%.2f %.2f %.2f -> %.2f %.2f %.2f) %s %.1fs",
                         box.id,
                         box.minX, box.minY, box.minZ,
                         box.maxX, box.maxY, box.maxZ,
                         formatColor(box.rgb),
                         remaining));
-            } else if (shape instanceof CircleShape circle) {
-                out.add(String.format("#%d circle (%.2f %.2f %.2f r=%.2f s=%d) %s %.1fs",
+                case CircleShape circle -> out.add(String.format("#%d circle (%.2f %.2f %.2f r=%.2f s=%d) %s %.1fs",
                         circle.id, circle.centerX, circle.centerY, circle.centerZ,
                         circle.radius, circle.segments, formatColor(circle.rgb), remaining));
-            } else if (shape instanceof CylinderShape cylinder) {
-                out.add(String.format("#%d cylinder (%.2f %.2f %.2f r=%.2f h=%.2f s=%d) %s %.1fs",
-                        cylinder.id, cylinder.centerX, cylinder.baseY, cylinder.centerZ,
-                        cylinder.radius, cylinder.height, cylinder.segments, formatColor(cylinder.rgb), remaining));
-            } else if (shape instanceof SphereShape sphere) {
-                out.add(String.format("#%d sphere (%.2f %.2f %.2f r=%.2f s=%d) %s %.1fs",
+                case CylinderShape cylinder ->
+                        out.add(String.format("#%d cylinder (%.2f %.2f %.2f r=%.2f h=%.2f s=%d) %s %.1fs",
+                                cylinder.id, cylinder.centerX, cylinder.baseY, cylinder.centerZ,
+                                cylinder.radius, cylinder.height, cylinder.segments, formatColor(cylinder.rgb), remaining));
+                case SphereShape sphere -> out.add(String.format("#%d sphere (%.2f %.2f %.2f r=%.2f s=%d) %s %.1fs",
                         sphere.id, sphere.centerX, sphere.centerY, sphere.centerZ,
                         sphere.radius, sphere.segments, formatColor(sphere.rgb), remaining));
+                default -> {
+                }
             }
         }
         return out;
@@ -433,7 +431,6 @@ public final class DebugDrawManager {
     }
 
     public static synchronized int loadFromDisk() {
-        loadedFromDisk = true;
         try {
             if (!Files.exists(SAVE_PATH)) {
                 SHAPES.clear();

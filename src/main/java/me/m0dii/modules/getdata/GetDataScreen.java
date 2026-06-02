@@ -606,34 +606,18 @@ public class GetDataScreen extends Screen {
     }
 
     private static String typeName(NbtElement element) {
-        if (element == null) {
-            return "null";
-        }
-        if (element instanceof NbtString) {
-            return "string";
-        }
-        if (element instanceof NbtCompound) {
-            return "compound";
-        }
-        if (element instanceof NbtByte) {
-            return "byte/boolean";
-        }
-        if (element instanceof NbtShort) {
-            return "short";
-        }
-        if (element instanceof NbtInt) {
-            return "int";
-        }
-        if (element instanceof NbtLong) {
-            return "long";
-        }
-        if (element instanceof NbtFloat) {
-            return "float";
-        }
-        if (element instanceof NbtDouble) {
-            return "double";
-        }
-        return element.getClass().getSimpleName();
+        return switch (element) {
+            case null -> "null";
+            case NbtString nbtString -> "string";
+            case NbtCompound nbtCompound -> "compound";
+            case NbtByte nbtByte -> "byte/boolean";
+            case NbtShort nbtShort -> "short";
+            case NbtInt nbtInt -> "int";
+            case NbtLong nbtLong -> "long";
+            case NbtFloat nbtFloat -> "float";
+            case NbtDouble nbtDouble -> "double";
+            default -> element.getClass().getSimpleName();
+        };
     }
 
     private void rebuildPathSuggestions() {

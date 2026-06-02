@@ -40,7 +40,7 @@ public final class GuiTextEditingUtils {
         String safeText = text == null ? "" : text;
         List<String> lines = StringUtils.splitLinesRaw(safeText.substring(0, Math.clamp(cursorIndex, 0, safeText.length())));
         int row = Math.max(0, lines.size() - 1);
-        String last = lines.isEmpty() ? "" : lines.get(lines.size() - 1);
+        String last = lines.isEmpty() ? "" : lines.getLast();
         return new int[]{x + textRenderer.getWidth(last), y + row * 9};
     }
 

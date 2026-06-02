@@ -212,7 +212,7 @@ public final class MacroWorkbenchAdvancedLayouts {
                 UiFlexLayout.Item.fixed(18)
         );
 
-        UiRect top = rootRows.get(0);
+        UiRect top = rootRows.getFirst();
         List<UiRect> topColumns = FormPanels.row(top, 8, UiFlexLayout.Align.STRETCH,
                 UiFlexLayout.Item.fixed(220),
                 UiFlexLayout.Item.flex(220, 1)

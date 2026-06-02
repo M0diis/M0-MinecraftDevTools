@@ -31,17 +31,6 @@ public abstract class GameRendererMixin {
         }
     }
 
-    // ????
-//    @Redirect(method = "updateCrosshairTarget", at = @At(value = "INVOKE",
-//            target = "Lnet/minecraft/client/MinecraftClient;getCameraEntity()Lnet/minecraft/entity/Entity;"))
-//    private Entity overrideCameraEntityForRayTrace(MinecraftClient mc) {
-//        if (FreecamModule.INSTANCE.isEnabled() && true && mc.player != null) {
-//            return mc.player;
-//        }
-//
-//        return mc.getCameraEntity();
-//    }
-
     @Inject(method = "renderHand", at = @At("HEAD"), cancellable = true)
     private void removeHandRendering(CallbackInfo ci) {
         if (FreecamModule.INSTANCE.isEnabled()) {

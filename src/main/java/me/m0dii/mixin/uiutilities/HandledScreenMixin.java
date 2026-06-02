@@ -5,10 +5,7 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.screen.ingame.HandledScreen;
 import net.minecraft.client.gui.widget.TextFieldWidget;
-import net.minecraft.screen.slot.Slot;
-import net.minecraft.screen.slot.SlotActionType;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -21,21 +18,15 @@ public abstract class HandledScreenMixin extends Screen {
         super(null);
     }
 
-    @Shadow
-    protected abstract void onMouseClick(Slot slot, int slotId, int button, SlotActionType actionType);
-
     @Unique
     private static final MinecraftClient mc = MinecraftClient.getInstance();
-
-    @Unique
-    private TextFieldWidget inputField;
 
     @Inject(at = @At("TAIL"), method = "init")
     public void init(CallbackInfo ci) {
         if (UiUtilitiesModule.INSTANCE.isEnabled()) {
             UiUtilitiesModule.INSTANCE.createUtilityButtons(mc, this);
-            this.inputField = UiUtilitiesModule.createInputField(this.textRenderer, mc);
-            this.addDrawableChild(this.inputField);
+            TextFieldWidget inputField = UiUtilitiesModule.createInputField(this.textRenderer, mc);
+            this.addDrawableChild(inputField);
         }
     }
 

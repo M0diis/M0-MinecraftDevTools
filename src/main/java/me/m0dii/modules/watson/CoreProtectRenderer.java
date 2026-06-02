@@ -226,7 +226,7 @@ public final class CoreProtectRenderer {
 
         List<BlockPos> ordered = new ArrayList<>(uniquePos);
 
-        BlockPos prev = ordered.get(0);
+        BlockPos prev = ordered.getFirst();
         for (int i = 1; i < ordered.size(); i++) {
             BlockPos next = ordered.get(i);
 

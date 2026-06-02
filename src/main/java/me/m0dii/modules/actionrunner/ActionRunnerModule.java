@@ -188,7 +188,7 @@ public class ActionRunnerModule {
                 info += ", Command/Param: " + command;
             }
             if (!params.isEmpty()) {
-                info += ", Params: " + params.toString();
+                info += ", Params: " + params;
             }
             return info;
         }

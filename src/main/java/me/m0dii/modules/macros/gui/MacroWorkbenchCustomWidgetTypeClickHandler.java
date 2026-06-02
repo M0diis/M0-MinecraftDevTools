@@ -90,7 +90,7 @@ public final class MacroWorkbenchCustomWidgetTypeClickHandler {
             return true;
         }
         List<UiRect> row1 = layout.typeRow1();
-        if (ops.contains(click, row1.get(0))) {
+        if (ops.contains(click, row1.getFirst())) {
             selected.inventoryShowCount = selected.inventoryShowCount == null || !selected.inventoryShowCount;
             return true;
         }

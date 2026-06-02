@@ -11,7 +11,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(WorldRenderer.BrightnessGetter.class)
-public abstract interface WorldRendererHeldLightMixin {
+public interface WorldRendererHeldLightMixin {
 
     @Inject(method = "method_68890", at = @At("TAIL"), cancellable = true, require = 0, remap = false)
     private static void injectHeldLight(BlockRenderView world, BlockPos pos, CallbackInfoReturnable<Integer> cir) {

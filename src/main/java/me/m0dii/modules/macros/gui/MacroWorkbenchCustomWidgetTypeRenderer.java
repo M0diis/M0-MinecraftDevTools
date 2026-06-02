@@ -274,7 +274,7 @@ public final class MacroWorkbenchCustomWidgetTypeRenderer {
                 : selected.inventoryDisplayMode;
         List<UiRect> row1 = layout.typeRow1();
         drawModalButton(context, textRenderer, layout.typeWideTop(), "Mode: " + mode.name(), mouseX, mouseY);
-        drawModalButton(context, textRenderer, row1.get(0), "Count: " + ((selected.inventoryShowCount == null || selected.inventoryShowCount) ? "ON" : "OFF"), mouseX, mouseY);
+        drawModalButton(context, textRenderer, row1.getFirst(), "Count: " + ((selected.inventoryShowCount == null || selected.inventoryShowCount) ? "ON" : "OFF"), mouseX, mouseY);
         context.drawTextWithShadow(textRenderer, "Hotbar: 9 slots  |  Inventory: 27 slots  |  Armor: 4 + offhand", layout.typeInfo1().x(), layout.typeInfo1().y(), 0xFFEAEAEA);
         context.drawTextWithShadow(textRenderer, "Mode auto-sizes. Count text scales from slot size.", layout.typeInfo2().x(), layout.typeInfo2().y(), 0xFF98B8D8);
     }

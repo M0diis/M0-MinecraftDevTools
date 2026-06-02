@@ -54,7 +54,6 @@ final class MacroWorkbenchConfigurationTab {
     private final MacroWorkbenchScreen owner;
     private final List<ClickableWidget> configWidgets;
     private final BooleanSupplier shiftDown;
-    private final BooleanSupplier controlDown;
 
     private Category category = Category.HUD;
 
@@ -137,12 +136,10 @@ final class MacroWorkbenchConfigurationTab {
 
     MacroWorkbenchConfigurationTab(MacroWorkbenchScreen owner,
                                    List<ClickableWidget> configWidgets,
-                                   BooleanSupplier shiftDown,
-                                   BooleanSupplier controlDown) {
+                                   BooleanSupplier shiftDown) {
         this.owner = owner;
         this.configWidgets = configWidgets;
         this.shiftDown = shiftDown;
-        this.controlDown = controlDown;
     }
 
     void initWidgets() {

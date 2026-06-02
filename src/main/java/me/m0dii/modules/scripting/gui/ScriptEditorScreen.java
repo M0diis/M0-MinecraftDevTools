@@ -1144,10 +1144,10 @@ public class ScriptEditorScreen extends Screen {
         int line = Math.max(1, d.line);
         int col = Math.max(1, d.column);
         List<String> lines = splitLines(editor.text);
-        int targetLine = Math.clamp(line - 1, 0, Math.max(0, lines.size() - 1));
+        int targetLine = Math.clamp(line - 1L, 0, Math.max(0, lines.size() - 1));
         int index = 0;
         for (int i = 0; i < targetLine; i++) index += lines.get(i).length() + 1;
-        int inLine = Math.clamp(col - 1, 0, lines.get(targetLine).length());
+        int inLine = Math.clamp(col - 1L, 0, lines.get(targetLine).length());
         editor.cursor = index + inLine;
         editor.selectionAnchor = -1;
         editor.focused = true;
@@ -1901,7 +1901,7 @@ public class ScriptEditorScreen extends Screen {
             String key = entry.getKey();
             List<Suggestion> methods = entry.getValue();
             methods.sort(Comparator.comparingInt(Suggestion::score).thenComparing(Suggestion::token));
-            Suggestion best = methods.get(0);
+            Suggestion best = methods.getFirst();
             int hidden = Math.max(0, methods.size() - 1);
             boolean expanded = Boolean.TRUE.equals(expandedMethodGroups.get(key));
             visibleSuggestions.add(new DisplaySuggestion(best, true, key, hidden));
@@ -1985,8 +1985,7 @@ public class ScriptEditorScreen extends Screen {
             }
         }
 
-        out.sort(Comparator
-                .comparingInt((Suggestion s) -> s.score())
+        out.sort(Comparator.comparingInt(Suggestion::score)
                 .thenComparing(s -> s.category)
                 .thenComparing(s -> s.token));
         return out;
@@ -2057,8 +2056,7 @@ public class ScriptEditorScreen extends Screen {
                 out.add(new Suggestion(category, item.label(), item.insertText(), item.kind(), item.detail(), rank));
             }
         }
-        out.sort(Comparator
-                .comparingInt((Suggestion s) -> s.score())
+        out.sort(Comparator.comparingInt(Suggestion::score)
                 .thenComparing(s -> s.token().toLowerCase(Locale.ROOT)));
         return out;
     }
@@ -2552,7 +2550,7 @@ public class ScriptEditorScreen extends Screen {
             lines.add(i, directiveLine);
             return String.join("\n", lines);
         }
-        lines.add(0, directiveLine);
+        lines.addFirst(directiveLine);
         return String.join("\n", lines);
     }
 
@@ -2584,20 +2582,6 @@ public class ScriptEditorScreen extends Screen {
         }
         var w = client.getWindow();
         return InputUtil.isKeyPressed(w, GLFW.GLFW_KEY_LEFT_SHIFT) || InputUtil.isKeyPressed(w, GLFW.GLFW_KEY_RIGHT_SHIFT);
-    }
-
-    private int mouseX() {
-        if (client == null) {
-            return 0;
-        }
-        return (int) Math.round(client.mouse.getX() * (double) this.width / Math.max(1, client.getWindow().getWidth()));
-    }
-
-    private int mouseY() {
-        if (client == null) {
-            return 0;
-        }
-        return (int) Math.round(client.mouse.getY() * (double) this.height / Math.max(1, client.getWindow().getHeight()));
     }
 
     private Rect tabsArea() {
@@ -2759,22 +2743,6 @@ public class ScriptEditorScreen extends Screen {
         return false;
     }
 
-    // Compatibility hooks for existing callers.
-    public void setScriptBoxText(String text) {
-        editor.text = normalize(text);
-        editor.cursor = editor.text.length();
-        editor.selectionAnchor = -1;
-        clampEditor();
-        markEdited();
-    }
-
-    public void setFileNameBoxText(String text) {
-        currentScriptName = normalizeScriptName(text);
-    }
-
-    public void setOutputBoxText(String text) {
-        outputText = Objects.toString(text, "");
-    }
 }
 
 

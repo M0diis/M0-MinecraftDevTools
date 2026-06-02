@@ -21,10 +21,10 @@ public class ShulkerTooltipModule extends Module {
     @Override
     public void register() {
         TooltipComponentCallback.EVENT.register(data -> {
-            if (!isEnabled() || !(data instanceof ShulkerPreviewTooltipData shulkerData)) {
+            if (!isEnabled() || !(data instanceof ShulkerPreviewTooltipData(List<ItemStack> stacks))) {
                 return null;
             }
-            return new ShulkerPreviewTooltipComponent(shulkerData.stacks());
+            return new ShulkerPreviewTooltipComponent(stacks);
         });
     }
 
