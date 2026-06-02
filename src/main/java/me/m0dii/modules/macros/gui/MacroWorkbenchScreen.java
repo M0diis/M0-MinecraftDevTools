@@ -715,7 +715,7 @@ public class MacroWorkbenchScreen extends Screen {
         context.drawTextWithShadow(this.textRenderer,
                 "Ctrl+Click multi-select, Ctrl+C/V copy/paste element, Ctrl+Shift+C/V dimensions, Ctrl+Z undo move",
                 8, TOP_BAR_H + 16, 0xFF9FBFBF);
-        int canvasHeight = Math.max(1, this.height - BOTTOM_BAR_H - CANVAS_CONTENT_TOP);
+        int canvasHeight = canvasHeightBound();
         int cellW = Math.max(1, Math.round(this.width / (float) Math.max(1, gridCols)));
         int cellH = Math.max(1, Math.round(canvasHeight / (float) Math.max(1, gridRows)));
         context.drawTextWithShadow(this.textRenderer,
@@ -1316,7 +1316,7 @@ public class MacroWorkbenchScreen extends Screen {
     }
 
     private boolean onCanvasClick(double mouseX, double mouseY) {
-        if (mouseY > this.height - BOTTOM_BAR_H || mouseY < CANVAS_CONTENT_TOP) {
+        if (mouseY < canvasTopBound()) {
             dragging = false;
             resizing = false;
             return false;
@@ -1983,16 +1983,16 @@ public class MacroWorkbenchScreen extends Screen {
             selected.height = nextHeight;
 
             int clampedX = Math.clamp(resolveElementX(selected), 0, Math.max(0, this.width - selected.width));
-            int clampedY = Math.clamp(resolveElementY(selected), CANVAS_CONTENT_TOP,
-                    Math.max(CANVAS_CONTENT_TOP, this.height - BOTTOM_BAR_H - selected.height));
+            int clampedY = Math.clamp(resolveElementY(selected), canvasTopBound(),
+                    Math.max(canvasTopBound(), canvasBottomBound() - selected.height));
             setElementScreenPosition(selected, clampedX, clampedY);
             return;
         }
 
         int maxX = this.width - selected.width;
-        int maxY = this.height - BOTTOM_BAR_H - selected.height;
+        int maxY = canvasBottomBound() - selected.height;
         int screenX = Math.clamp(mouseX - dragOffsetX, 0, Math.max(0, maxX));
-        int screenY = Math.clamp(mouseY - dragOffsetY, CANVAS_CONTENT_TOP, Math.max(CANVAS_CONTENT_TOP, maxY));
+        int screenY = Math.clamp(mouseY - dragOffsetY, canvasTopBound(), Math.max(canvasTopBound(), maxY));
 
         if (gridEnabled) {
             int[] snapped = snapToGrid(screenX, screenY);
@@ -2029,7 +2029,7 @@ public class MacroWorkbenchScreen extends Screen {
 
         int boundedDx = dx;
         int boundedDy = dy;
-        int canvasBottom = this.height - BOTTOM_BAR_H;
+        int canvasBottom = canvasBottomBound();
         for (MacroHudDataHandler.HudElement e : getSelectedElements()) {
             int[] start = dragStartScreenPositions.get(e.id);
             if (start == null) {
@@ -2037,7 +2037,7 @@ public class MacroWorkbenchScreen extends Screen {
             }
             int minDx = -start[0];
             int maxDx = this.width - e.width - start[0];
-            int minDy = CANVAS_CONTENT_TOP - start[1];
+            int minDy = canvasTopBound() - start[1];
             int maxDy = canvasBottom - e.height - start[1];
             boundedDx = Math.clamp(boundedDx, minDx, maxDx);
             boundedDy = Math.clamp(boundedDy, minDy, maxDy);
@@ -2054,7 +2054,7 @@ public class MacroWorkbenchScreen extends Screen {
 
     private int[] snapToGrid(int x, int y) {
         int canvasW = this.width;
-        int canvasH = Math.max(1, this.height - BOTTOM_BAR_H - CANVAS_CONTENT_TOP);
+        int canvasH = canvasHeightBound();
         int cols = Math.max(1, gridCols);
         int rows = Math.max(1, gridRows);
         double cellW = canvasW / (double) cols;
@@ -2070,7 +2070,7 @@ public class MacroWorkbenchScreen extends Screen {
 
         snappedX = Math.clamp(snappedX, 0, Math.max(0, canvasW - snappedW));
         snappedY = Math.clamp(snappedY, 0, Math.max(0, canvasH - snappedH));
-        return new int[]{snappedX, snappedY + CANVAS_CONTENT_TOP, snappedW, snappedH};
+        return new int[]{snappedX, snappedY + canvasTopBound(), snappedW, snappedH};
     }
 
     private int[] snapElementToNeighbors(MacroHudDataHandler.HudElement moving, int screenX, int screenY, Set<String> excludedIds) {
@@ -2083,8 +2083,8 @@ public class MacroWorkbenchScreen extends Screen {
                 this::resolveElementX,
                 this::resolveElementY,
                 this.width,
-                CANVAS_CONTENT_TOP,
-                this.height - BOTTOM_BAR_H
+                canvasTopBound(),
+                canvasBottomBound()
         );
         snapGuideX = snapped[2];
         snapGuideY = snapped[3];
@@ -2102,7 +2102,7 @@ public class MacroWorkbenchScreen extends Screen {
                 this::resolveElementX,
                 this::resolveElementY,
                 this.width,
-                this.height - BOTTOM_BAR_H
+                canvasBottomBound()
         );
     }
 
@@ -2110,9 +2110,9 @@ public class MacroWorkbenchScreen extends Screen {
         if (!(dragging && isShiftDown()) && !(resizing && isShiftDown())) {
             return;
         }
-        int canvasBottom = Math.max(CANVAS_CONTENT_TOP + 1, this.height - BOTTOM_BAR_H);
+        int canvasBottom = Math.max(canvasTopBound() + 1, canvasBottomBound());
         if (snapGuideX != Integer.MIN_VALUE) {
-            context.fill(snapGuideX, CANVAS_CONTENT_TOP, snapGuideX + 1, canvasBottom, 0x90FFD75A);
+            context.fill(snapGuideX, canvasTopBound(), snapGuideX + 1, canvasBottom, 0x90FFD75A);
         }
         if (snapGuideY != Integer.MIN_VALUE) {
             context.fill(0, snapGuideY, this.width, snapGuideY + 1, 0x90FFD75A);
@@ -2120,8 +2120,8 @@ public class MacroWorkbenchScreen extends Screen {
     }
 
     private void drawGridOverlay(DrawContext context) {
-        int canvasTop = CANVAS_CONTENT_TOP;
-        int canvasBottom = Math.max(canvasTop + 1, this.height - BOTTOM_BAR_H);
+        int canvasTop = canvasTopBound();
+        int canvasBottom = Math.max(canvasTop + 1, canvasBottomBound());
         int canvasRight = this.width;
 
         for (int c = 1; c < Math.max(1, gridCols); c++) {
@@ -2135,8 +2135,8 @@ public class MacroWorkbenchScreen extends Screen {
     }
 
     private void drawCenterLinesOverlay(DrawContext context) {
-        int canvasTop = CANVAS_CONTENT_TOP;
-        int canvasBottom = Math.max(canvasTop + 1, this.height - BOTTOM_BAR_H);
+        int canvasTop = canvasTopBound();
+        int canvasBottom = Math.max(canvasTop + 1, canvasBottomBound());
         int centerX = this.width / 2;
         int centerY = canvasTop + (canvasBottom - canvasTop) / 2;
         context.fill(centerX, canvasTop, centerX + 1, canvasBottom, 0x80FFCC66);
@@ -3885,7 +3885,7 @@ public class MacroWorkbenchScreen extends Screen {
         MacroHudDataHandler.HudElement e = MacroHudDataHandler.createElement(type);
         e.zIndex = nextAvailableZIndex();
         int centerX = Math.max(0, (this.width - e.width) / 2);
-        int centerY = Math.max(CANVAS_CONTENT_TOP, ((this.height - BOTTOM_BAR_H) - e.height) / 2);
+        int centerY = canvasTopBound() + Math.max(0, (canvasHeightBound() - e.height) / 2);
         setElementScreenPosition(e, centerX, centerY);
         if (type == MacroHudDataHandler.ElementType.BUTTON) {
             e.label = "Macro";
@@ -5399,9 +5399,9 @@ public class MacroWorkbenchScreen extends Screen {
             return;
         }
         proxy.width = Math.clamp(proxy.width, 40, Math.max(40, this.width));
-        proxy.height = Math.clamp(proxy.height, 20, Math.max(20, this.height - BOTTOM_BAR_H - CANVAS_CONTENT_TOP));
+        proxy.height = Math.clamp(proxy.height, 20, Math.max(20, canvasHeightBound()));
         proxy.x = Math.clamp(proxy.x, 0, Math.max(0, this.width - proxy.width));
-        proxy.y = Math.clamp(proxy.y, CANVAS_CONTENT_TOP, Math.max(CANVAS_CONTENT_TOP, (this.height - BOTTOM_BAR_H) - proxy.height));
+        proxy.y = Math.clamp(proxy.y, canvasTopBound(), Math.max(canvasTopBound(), canvasBottomBound() - proxy.height));
     }
 
     private void clampElementToCanvas(MacroHudDataHandler.HudElement element) {
@@ -5409,10 +5409,10 @@ public class MacroWorkbenchScreen extends Screen {
             return;
         }
         element.width = Math.clamp(element.width, 1, Math.max(1, this.width));
-        element.height = Math.clamp(element.height, 1, Math.max(1, this.height - BOTTOM_BAR_H - CANVAS_CONTENT_TOP));
+        element.height = Math.clamp(element.height, 1, Math.max(1, canvasHeightBound()));
         int screenX = Math.clamp(resolveElementX(element), 0, Math.max(0, this.width - element.width));
-        int screenY = Math.clamp(resolveElementY(element), CANVAS_CONTENT_TOP,
-                Math.max(CANVAS_CONTENT_TOP, (this.height - BOTTOM_BAR_H) - element.height));
+        int screenY = Math.clamp(resolveElementY(element), canvasTopBound(),
+                Math.max(canvasTopBound(), canvasBottomBound() - element.height));
         setElementScreenPosition(element, screenX, screenY);
     }
 
@@ -5611,19 +5611,19 @@ public class MacroWorkbenchScreen extends Screen {
     }
 
     private int resolveElementY(MacroHudDataHandler.HudElement e) {
-        int canvasBottom = this.height - BOTTOM_BAR_H;
-        int canvasHeight = Math.max(1, canvasBottom - CANVAS_CONTENT_TOP);
+        int canvasBottom = canvasBottomBound();
+        int canvasHeight = canvasHeightBound();
         return switch (e.anchor) {
             case TOP_LEFT, TOP_CENTER, TOP_RIGHT -> e.y;
             case MIDDLE_LEFT, MIDDLE_CENTER, MIDDLE_RIGHT, CENTER ->
-                    CANVAS_CONTENT_TOP + (canvasHeight - e.height) / 2 + e.y;
+                    canvasTopBound() + (canvasHeight - e.height) / 2 + e.y;
             case BOTTOM_LEFT, BOTTOM_CENTER, BOTTOM_RIGHT -> canvasBottom - e.height - e.y;
         };
     }
 
     private void setElementScreenPosition(MacroHudDataHandler.HudElement e, int screenX, int screenY) {
-        int canvasBottom = this.height - BOTTOM_BAR_H;
-        int canvasHeight = Math.max(1, canvasBottom - CANVAS_CONTENT_TOP);
+        int canvasBottom = canvasBottomBound();
+        int canvasHeight = canvasHeightBound();
         e.x = switch (e.anchor) {
             case TOP_LEFT, MIDDLE_LEFT, BOTTOM_LEFT -> screenX;
             case TOP_RIGHT, MIDDLE_RIGHT, BOTTOM_RIGHT -> this.width - e.width - screenX;
@@ -5632,9 +5632,21 @@ public class MacroWorkbenchScreen extends Screen {
         e.y = switch (e.anchor) {
             case TOP_LEFT, TOP_CENTER, TOP_RIGHT -> screenY;
             case MIDDLE_LEFT, MIDDLE_CENTER, MIDDLE_RIGHT, CENTER ->
-                    screenY - (CANVAS_CONTENT_TOP + (canvasHeight - e.height) / 2);
+                    screenY - (canvasTopBound() + (canvasHeight - e.height) / 2);
             case BOTTOM_LEFT, BOTTOM_CENTER, BOTTOM_RIGHT -> canvasBottom - e.height - screenY;
         };
+    }
+
+    private int canvasTopBound() {
+        return CANVAS_CONTENT_TOP;
+    }
+
+    private int canvasBottomBound() {
+        return this.height;
+    }
+
+    private int canvasHeightBound() {
+        return Math.max(1, canvasBottomBound() - canvasTopBound());
     }
 
     private static boolean hasSelection(int anchor, int cursor) {
