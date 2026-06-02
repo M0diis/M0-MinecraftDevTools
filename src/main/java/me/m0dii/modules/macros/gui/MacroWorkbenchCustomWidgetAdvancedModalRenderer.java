@@ -205,10 +205,12 @@ public final class MacroWorkbenchCustomWidgetAdvancedModalRenderer {
         drawModalButton(context, textRenderer, slot(generalRow1, 3), "BR+", mouseX, mouseY);
         drawModalButton(context, textRenderer, slot(generalRow2, 0), "FS-", mouseX, mouseY);
         drawModalButton(context, textRenderer, slot(generalRow2, 1), "FS+", mouseX, mouseY);
-        drawModalButton(context, textRenderer, slot(generalRow2, 2), "Pick Src", mouseX, mouseY);
+        drawModalButton(context, textRenderer, slot(generalRow2, 2), "Z-", mouseX, mouseY);
+        drawModalButton(context, textRenderer, slot(generalRow2, 3), "Z+", mouseX, mouseY);
+        drawModalButton(context, textRenderer, slot(generalRow2, 4), "Pick Src", mouseX, mouseY);
         int bgPct = Math.round((Math.clamp(selected.backgroundAlpha, 0, 255) / 255.0f) * 100.0f);
         context.drawTextWithShadow(textRenderer,
-                "Scale: " + String.format(Locale.ROOT, "%.2f", selected.fontScale) + "  BG Alpha: " + bgPct + "%",
+                "Scale: " + String.format(Locale.ROOT, "%.2f", selected.fontScale) + "  BG Alpha: " + bgPct + "%  Z: " + selected.zIndex,
                 layout.metricsText().x(), layout.metricsText().y(), 0xFFEAEAEA);
     }
 

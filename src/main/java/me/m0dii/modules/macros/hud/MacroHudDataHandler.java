@@ -108,6 +108,7 @@ public final class MacroHudDataHandler {
         public int height = 20;
         public int lineHeight = 9;
         public float fontScale = 1.0f;
+        public int zIndex = 0;
         public int backgroundColor = 0xAA101010;
         public int backgroundAlpha = 0xAA;
         public int borderColor = 0xFFFFFFFF;
@@ -146,6 +147,7 @@ public final class MacroHudDataHandler {
 
         // INVENTORY behavior.
         public InventoryDisplayMode inventoryDisplayMode = InventoryDisplayMode.HOTBAR;
+        public Boolean inventoryShowCount = true;
 
         // ICON behavior.
         public String iconKind = MacroPlaceholderCatalog.DEFAULT_ICON_KIND; // item|block|entity|entity_model
@@ -295,6 +297,10 @@ public final class MacroHudDataHandler {
     public static void setConfig(@NotNull HudConfig next) {
         config = sanitize(next);
         save();
+    }
+
+    public static @NotNull HudElement copyElement(@NotNull HudElement element) {
+        return cloneElement(element);
     }
 
     public static @NotNull HudElement createElement(ElementType type) {
@@ -479,6 +485,7 @@ public final class MacroHudDataHandler {
             e.height = Math.clamp(raw.height, 1, 1200);
             e.lineHeight = Math.clamp(raw.lineHeight, 6, 24);
             e.fontScale = Math.clamp(raw.fontScale, 0.5f, 4.0f);
+            e.zIndex = Math.clamp(raw.zIndex, -9999, 9999);
             e.backgroundColor = raw.backgroundColor;
             int alphaFromColor = (raw.backgroundColor >>> 24) & 0xFF;
             e.backgroundAlpha = Math.clamp(raw.backgroundAlpha <= 0 ? alphaFromColor : raw.backgroundAlpha, 0, 255);
@@ -515,6 +522,7 @@ public final class MacroHudDataHandler {
             e.maxLines = Math.clamp(raw.maxLines, 1, 200);
             e.listScroll = Math.max(0, raw.listScroll);
             e.inventoryDisplayMode = raw.inventoryDisplayMode == null ? InventoryDisplayMode.HOTBAR : raw.inventoryDisplayMode;
+            e.inventoryShowCount = raw.inventoryShowCount == null || raw.inventoryShowCount;
             e.iconKind = safe(raw.iconKind, MacroPlaceholderCatalog.DEFAULT_ICON_KIND).toLowerCase();
             e.iconId = safe(raw.iconId, MacroPlaceholderCatalog.DEFAULT_ICON_ID);
             if ("entity_model".equals(e.iconKind)
@@ -604,6 +612,7 @@ public final class MacroHudDataHandler {
         cloned.height = e.height;
         cloned.lineHeight = e.lineHeight;
         cloned.fontScale = e.fontScale;
+        cloned.zIndex = e.zIndex;
         cloned.backgroundColor = e.backgroundColor;
         cloned.backgroundAlpha = e.backgroundAlpha;
         cloned.borderColor = e.borderColor;
@@ -634,6 +643,7 @@ public final class MacroHudDataHandler {
         cloned.maxLines = e.maxLines;
         cloned.listScroll = e.listScroll;
         cloned.inventoryDisplayMode = e.inventoryDisplayMode;
+        cloned.inventoryShowCount = e.inventoryShowCount;
         cloned.iconKind = e.iconKind;
         cloned.iconId = e.iconId;
         cloned.iconShowCount = e.iconShowCount;

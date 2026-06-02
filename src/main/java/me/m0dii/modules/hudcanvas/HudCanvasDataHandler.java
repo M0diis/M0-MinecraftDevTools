@@ -61,6 +61,7 @@ public final class HudCanvasDataHandler {
         public int padding = 4;
         public int lineHeight = 9;
         public float fontScale = 1.0f;
+        public int zIndex = 0;
         public int backgroundColor = 0x88000000;
         public int textColor = 0xFFE0E0E0;
         public int borderColor = 0xFFFFFFFF;
@@ -153,6 +154,7 @@ public final class HudCanvasDataHandler {
         e.padding = Math.clamp(raw.padding, 0, 60);
         e.lineHeight = Math.clamp(raw.lineHeight, 6, 40);
         e.fontScale = Math.clamp(raw.fontScale, 0.25f, 5.0f);
+        e.zIndex = Math.clamp(raw.zIndex, -9999, 9999);
         e.backgroundColor = raw.backgroundColor;
         e.textColor = raw.textColor;
         e.borderColor = (raw.borderColor >>> 24) == 0 ? 0xFFFFFFFF : raw.borderColor;

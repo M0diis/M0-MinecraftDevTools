@@ -80,16 +80,21 @@ public final class MacroWorkbenchCustomWidgetTypeClickHandler {
                                                 boolean forward,
                                                 MacroHudDataHandler.HudElement selected,
                                                 Ops ops) {
-        if (!layout.typeWideTop().contains(click.x(), click.y())) {
-            return false;
+        if (layout.typeWideTop().contains(click.x(), click.y())) {
+            selected.inventoryDisplayMode = cycleInventoryDisplayMode(selected.inventoryDisplayMode, forward);
+            applyInventoryDefaultSize(selected);
+            String mode = selected.inventoryDisplayMode.name();
+            ops.setAdvancedAction(mode);
+            ops.setAdvancedActionCursor(mode.length());
+            ops.setAdvancedActionSuggestionScroll(0);
+            return true;
         }
-        selected.inventoryDisplayMode = cycleInventoryDisplayMode(selected.inventoryDisplayMode, forward);
-        applyInventoryDefaultSize(selected);
-        String mode = selected.inventoryDisplayMode.name();
-        ops.setAdvancedAction(mode);
-        ops.setAdvancedActionCursor(mode.length());
-        ops.setAdvancedActionSuggestionScroll(0);
-        return true;
+        List<UiRect> row1 = layout.typeRow1();
+        if (ops.contains(click, row1.get(0))) {
+            selected.inventoryShowCount = selected.inventoryShowCount == null || !selected.inventoryShowCount;
+            return true;
+        }
+        return false;
     }
 
     private static MacroHudDataHandler.InventoryDisplayMode cycleInventoryDisplayMode(

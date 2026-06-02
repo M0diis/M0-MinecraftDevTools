@@ -23,6 +23,8 @@ public final class MacroWorkbenchCustomWidgetAdvancedClickHandler {
 
         void adjustBackgroundAlpha(MacroHudDataHandler.HudElement element, int delta);
 
+        void adjustZIndex(MacroHudDataHandler.HudElement element, int delta);
+
         String cyclePreset(String current, String[] presets, boolean forward);
 
         String[] iconIdSuggestionsForKind(String kind);
@@ -131,6 +133,14 @@ public final class MacroWorkbenchCustomWidgetAdvancedClickHandler {
             return true;
         }
         if (ops.contains(click, slot(generalRow2, 2))) {
+            ops.adjustZIndex(selected, -Math.max(1, ops.stepInt(1)));
+            return true;
+        }
+        if (ops.contains(click, slot(generalRow2, 3))) {
+            ops.adjustZIndex(selected, Math.max(1, ops.stepInt(1)));
+            return true;
+        }
+        if (ops.contains(click, slot(generalRow2, 4))) {
             String[] presets = switch (selected.type) {
                 case LIST -> listSourcePresets;
                 case STATE_BADGE -> stateSourcePresets;

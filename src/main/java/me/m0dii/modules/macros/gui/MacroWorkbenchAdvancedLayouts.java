@@ -51,6 +51,11 @@ public final class MacroWorkbenchAdvancedLayouts {
                 UiFlexLayout.Item.fixed(170),
                 UiFlexLayout.Item.flex(120, 1)
         );
+        List<UiRect> row6Right = FormPanels.row(row6.get(2), 4, UiFlexLayout.Align.STRETCH,
+                UiFlexLayout.Item.fixed(48),
+                UiFlexLayout.Item.fixed(48),
+                UiFlexLayout.Item.flex(60, 1)
+        );
 
         UiRect apply = FormPanels.panel(boxX + modalW - 134, boxY + modalH - 24, 60, 18);
         UiRect cancel = FormPanels.panel(boxX + modalW - 70, boxY + modalH - 24, 58, 18);
@@ -60,7 +65,8 @@ public final class MacroWorkbenchAdvancedLayouts {
                 actionField,
                 row3.get(0), row3.get(1), row3.get(2), row3.get(3), row3.get(4), row3.get(5),
                 row4.get(0), row4.get(1), row4.get(2), row4.get(3), row4.get(4), row4.get(5), row4.get(6),
-                row5.get(0), row5.get(1), row5.get(2), row5.get(3), row5.get(4), row5.get(5), row6.get(0), row6.get(1), row6.get(2),
+                row5.get(0), row5.get(1), row5.get(2), row5.get(3), row5.get(4), row5.get(5),
+                row6.get(0), row6.get(1), row6Right.get(0), row6Right.get(1), row6Right.get(2),
                 apply, cancel
         );
     }
@@ -89,6 +95,8 @@ public final class MacroWorkbenchAdvancedLayouts {
                 UiFlexLayout.Item.fixed(44)
         );
         UiRect linePlus = new UiRect(settingsRow.get(4).x(), row3.y(), settingsRow.get(4).width(), settingsRow.get(4).height());
+        UiRect zMinus = new UiRect(linePlus.right() + 4, row3.y(), 44, linePlus.height());
+        UiRect zPlus = new UiRect(zMinus.right() + 4, row3.y(), 44, linePlus.height());
         List<UiRect> statButtons = FormPanels.row(statsButtons, 4, UiFlexLayout.Align.START,
                 UiFlexLayout.Item.fixed(48),
                 UiFlexLayout.Item.fixed(48),
@@ -123,6 +131,7 @@ public final class MacroWorkbenchAdvancedLayouts {
                 colors.get(0), colors.get(1), colors.get(2), colors.get(3),
                 hexes.get(0), hexes.get(1),
                 new UiRect(settingsRow.get(2).x(), row3.y() + 4, 152, 9),
+                zMinus, zPlus,
                 actionButtons.get(0), actionButtons.get(1)
         );
     }
@@ -162,9 +171,11 @@ public final class MacroWorkbenchAdvancedLayouts {
                 UiFlexLayout.Item.fixed(140)
         );
         List<UiRect> align = FormPanels.row(rowAlign, 4, UiFlexLayout.Align.START,
-                UiFlexLayout.Item.fixed(120),
-                UiFlexLayout.Item.fixed(120),
-                UiFlexLayout.Item.flex(120, 1)
+                UiFlexLayout.Item.fixed(88),
+                UiFlexLayout.Item.fixed(88),
+                UiFlexLayout.Item.flex(80, 1),
+                UiFlexLayout.Item.fixed(48),
+                UiFlexLayout.Item.fixed(48)
         );
         List<UiRect> pickupButtons = FormPanels.row(rowPickupButtons, 4, UiFlexLayout.Align.START,
                 UiFlexLayout.Item.flex(90, 1),
@@ -183,7 +194,7 @@ public final class MacroWorkbenchAdvancedLayouts {
                 toggles.get(0), toggles.get(1), toggles.get(2),
                 colorButtons.get(0), colorButtons.get(1), colorButtons.get(2), colorButtons.get(3), colorButtons.get(4), colorButtons.get(5),
                 colorInputs.get(0), colorInputs.get(1),
-                align.get(0), align.get(1), align.get(2),
+                align.get(0), align.get(1), align.get(2), align.get(3), align.get(4),
                 pickup ? pickupButtons.get(0) : empty,
                 pickup ? pickupButtons.get(1) : empty,
                 pickup ? pickupButtons.get(2) : empty,
@@ -234,7 +245,11 @@ public final class MacroWorkbenchAdvancedLayouts {
                 UiFlexLayout.Item.flex(40, 1), UiFlexLayout.Item.flex(40, 1), UiFlexLayout.Item.flex(40, 1), UiFlexLayout.Item.flex(40, 1)
         );
         List<UiRect> generalRow2 = FormPanels.row(rightRows.get(1), 4, UiFlexLayout.Align.STRETCH,
-                UiFlexLayout.Item.flex(40, 1), UiFlexLayout.Item.flex(40, 1), UiFlexLayout.Item.flex(80, 2)
+                UiFlexLayout.Item.flex(40, 1),
+                UiFlexLayout.Item.flex(40, 1),
+                UiFlexLayout.Item.flex(40, 1),
+                UiFlexLayout.Item.flex(40, 1),
+                UiFlexLayout.Item.flex(80, 2)
         );
 
         List<UiRect> typeRow1 = FormPanels.row(rightRows.get(5), 4, UiFlexLayout.Align.STRETCH,
@@ -301,6 +316,8 @@ public final class MacroWorkbenchAdvancedLayouts {
             UiRect alignH,
             UiRect alignV,
             UiRect anchor,
+            UiRect zMinus,
+            UiRect zPlus,
             UiRect pickupDuration,
             UiRect pickupLines,
             UiRect pickupIcon,
@@ -337,6 +354,8 @@ public final class MacroWorkbenchAdvancedLayouts {
             UiRect bgHex,
             UiRect txHex,
             UiRect metricsText,
+            UiRect zMinus,
+            UiRect zPlus,
             UiRect apply,
             UiRect cancel
     ) {
@@ -366,6 +385,8 @@ public final class MacroWorkbenchAdvancedLayouts {
             UiRect borderPlus,
             UiRect bgHex,
             UiRect borderHex,
+            UiRect zMinus,
+            UiRect zPlus,
             UiRect visibilityType,
             UiRect apply,
             UiRect cancel

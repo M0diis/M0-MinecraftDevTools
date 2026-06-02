@@ -64,8 +64,10 @@ public final class MacroWorkbenchProxyAdvancedModalRenderer {
         drawModalButton(context, textRenderer, layout.scalePlus(), "S+", mouseX, mouseY);
         drawModalButton(context, textRenderer, layout.lineMinus(), "LH-", mouseX, mouseY);
         drawModalButton(context, textRenderer, layout.linePlus(), "LH+", mouseX, mouseY);
+        drawModalButton(context, textRenderer, layout.zMinus(), "Z-", mouseX, mouseY);
+        drawModalButton(context, textRenderer, layout.zPlus(), "Z+", mouseX, mouseY);
         context.drawTextWithShadow(textRenderer,
-                "Scale: " + String.format("%.2f", scale) + "  Line: " + lineHeight,
+                "Scale: " + String.format("%.2f", scale) + "  Line: " + lineHeight + "  Z: " + (selected == null ? 0 : selected.zIndex),
                 layout.metricsText().x(), layout.metricsText().y(), 0xFFEAEAEA);
 
         int regexX = layout.regexInput().x();
@@ -179,7 +181,8 @@ public final class MacroWorkbenchProxyAdvancedModalRenderer {
         context.drawTextWithShadow(textRenderer,
                 "Scale: " + String.format("%.2f", selected == null ? 1.0f : selected.fontScale) +
                         "  Line: " + (selected == null ? 9 : selected.lineHeight)
-                        + "  BG: " + (selected == null ? 0 : Math.round((Math.clamp(selected.backgroundAlpha, 0, 255) / 255.0f) * 100.0f)) + "%",
+                        + "  BG: " + (selected == null ? 0 : Math.round((Math.clamp(selected.backgroundAlpha, 0, 255) / 255.0f) * 100.0f)) + "%"
+                        + "  Z: " + (selected == null ? 0 : selected.zIndex),
                 layout.metrics().x(), layout.metrics().y() + 4, 0xFFEAEAEA);
 
         drawModalButton(context, textRenderer, layout.toggleBg(), backgroundLabel, mouseX, mouseY);
@@ -197,6 +200,8 @@ public final class MacroWorkbenchProxyAdvancedModalRenderer {
         drawModalButton(context, textRenderer, layout.alignV(), "V: " + (selected == null ? "-" : selected.verticalAlign.name()), mouseX, mouseY);
         drawModalButton(context, textRenderer, layout.anchor(),
                 "Anchor: " + (selected == null ? "-" : MacroWorkbenchCanvasUtils.shortAnchor(selected.anchor)), mouseX, mouseY);
+        drawModalButton(context, textRenderer, layout.zMinus(), "Z-", mouseX, mouseY);
+        drawModalButton(context, textRenderer, layout.zPlus(), "Z+", mouseX, mouseY);
 
         int bgInputX = layout.bgInput().x();
         int bgInputY = layout.bgInput().y();

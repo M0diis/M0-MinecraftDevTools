@@ -732,7 +732,7 @@ public class MacroWorkbenchScreen extends Screen {
             drawCenterLinesOverlay(context);
         }
 
-        for (MacroHudDataHandler.HudElement element : this.working.elements) {
+        for (MacroHudDataHandler.HudElement element : HudElementUtils.sortedByLayer(this.working.elements)) {
             if (element.visible) {
                 drawCanvasElement(context, element);
             }
@@ -740,7 +740,7 @@ public class MacroWorkbenchScreen extends Screen {
         drawSnapGuides(context);
 
         int y = this.height - BOTTOM_BAR_H;
-        context.fill(0, y, this.width, this.height, 0xA0000000);
+//        context.fill(0, y, this.width, this.height, 0xA0000000);
         context.drawTextWithShadow(this.textRenderer, "Quick Edit (first line)", 8, y - 10, 0xFFAAAAAA);
         if (this.macroField.visible) {
             context.drawTextWithShadow(this.textRenderer, "Macro Id (optional)", 292, y - 10, 0xFFAAAAAA);
@@ -1324,8 +1324,9 @@ public class MacroWorkbenchScreen extends Screen {
 
         boolean ctrl = isCtrlDown();
 
-        for (int i = this.working.elements.size() - 1; i >= 0; i--) {
-            MacroHudDataHandler.HudElement e = this.working.elements.get(i);
+        List<MacroHudDataHandler.HudElement> layeredElements = HudElementUtils.sortedByLayer(this.working.elements);
+        for (int i = layeredElements.size() - 1; i >= 0; i--) {
+            MacroHudDataHandler.HudElement e = layeredElements.get(i);
             int ex = resolveElementX(e);
             int ey = resolveElementY(e);
             if (contains(ex, ey, e, mouseX, mouseY)) {
@@ -1511,6 +1512,14 @@ public class MacroWorkbenchScreen extends Screen {
             selected.fontScale = Math.clamp((float) (selected.fontScale + stepDouble(0.1)), 0.5f, 4.0f);
             return true;
         }
+        if (containsBox(click.x(), click.y(), layout.zMinus())) {
+            selected.zIndex = Math.clamp(selected.zIndex - Math.max(1, stepInt(1)), -9999, 9999);
+            return true;
+        }
+        if (containsBox(click.x(), click.y(), layout.zPlus())) {
+            selected.zIndex = Math.clamp(selected.zIndex + Math.max(1, stepInt(1)), -9999, 9999);
+            return true;
+        }
         if (MacroWorkbenchAdvancedClickSupport.handleBackgroundColorButtons(
                 click,
                 forward,
@@ -1667,6 +1676,14 @@ public class MacroWorkbenchScreen extends Screen {
         }
         if (containsBox(click.x(), click.y(), layout.linePlus())) {
             advancedSecondaryLineHeight = Math.min(30, advancedSecondaryLineHeight + stepInt(1));
+            return true;
+        }
+        if (containsBox(click.x(), click.y(), layout.zMinus())) {
+            selected.zIndex = Math.clamp(selected.zIndex - Math.max(1, stepInt(1)), -9999, 9999);
+            return true;
+        }
+        if (containsBox(click.x(), click.y(), layout.zPlus())) {
+            selected.zIndex = Math.clamp(selected.zIndex + Math.max(1, stepInt(1)), -9999, 9999);
             return true;
         }
         if (containsBox(click.x(), click.y(), layout.fadeMinus())) {
@@ -1850,6 +1867,14 @@ public class MacroWorkbenchScreen extends Screen {
             selected.anchor = cycleAnchor(selected.anchor, forward);
             setElementScreenPosition(selected, oldScreenX, oldScreenY);
             clampElementToCanvas(selected);
+            return true;
+        }
+        if (containsBox(click.x(), click.y(), layout.zMinus())) {
+            selected.zIndex = Math.clamp(selected.zIndex - Math.max(1, stepInt(1)), -9999, 9999);
+            return true;
+        }
+        if (containsBox(click.x(), click.y(), layout.zPlus())) {
+            selected.zIndex = Math.clamp(selected.zIndex + Math.max(1, stepInt(1)), -9999, 9999);
             return true;
         }
         if (isPickupNotifierProxy(selected)) {
@@ -2352,11 +2377,12 @@ public class MacroWorkbenchScreen extends Screen {
         int contentH = Math.max(1, e.height - padding * 2);
         int cellW = Math.max(1, (contentW - gap * Math.max(0, cols - 1)) / Math.max(1, cols));
         int cellH = Math.max(1, (contentH - gap * Math.max(0, rows - 1)) / Math.max(1, rows));
-        int cell = Math.max(8, Math.min(18, Math.min(cellW, cellH)));
+        int cell = Math.max(1, Math.min(cellW, cellH));
         int gridW = cols * cell + gap * Math.max(0, cols - 1);
         int gridH = rows * cell + gap * Math.max(0, rows - 1);
         int startX = x1 + padding + Math.max(0, (contentW - gridW) / 2);
         int startY = y1 + padding + Math.max(0, (contentH - gridH) / 2);
+        boolean showCount = inventoryCountVisible(e);
 
         for (int i = 0; i < stacks.size(); i++) {
             int col = i % cols;
@@ -2364,38 +2390,58 @@ public class MacroWorkbenchScreen extends Screen {
             int slotX = startX + col * (cell + gap);
             int slotY = startY + row * (cell + gap);
             boolean selectedSlotCell = mode == MacroHudDataHandler.InventoryDisplayMode.HOTBAR && i == selectedSlot;
-            drawCanvasInventorySlot(context, slotX, slotY, cell, stacks.get(i), selectedSlotCell);
+            drawCanvasInventorySlot(context, slotX, slotY, cell, stacks.get(i), selectedSlotCell, showCount);
         }
     }
 
-    private void drawCanvasInventorySlot(DrawContext context, int x, int y, int size, ItemStack stack, boolean selectedSlot) {
+    private boolean inventoryCountVisible(MacroHudDataHandler.HudElement element) {
+        return element.inventoryShowCount == null || element.inventoryShowCount;
+    }
+
+    private void drawCanvasInventorySlot(DrawContext context,
+                                         int x,
+                                         int y,
+                                         int size,
+                                         ItemStack stack,
+                                         boolean selectedSlot,
+                                         boolean showCount) {
         int bg = selectedSlot ? 0xA0785A20 : 0xAA1A1A1A;
+        int edge = Math.max(1, Math.round(size / 18.0f));
         context.fill(x, y, x + size, y + size, bg);
-        context.fill(x, y, x + size, y + 1, 0x50FFFFFF);
-        context.fill(x, y + size - 1, x + size, y + size, 0x50303030);
-        context.fill(x, y, x + 1, y + size, 0x50FFFFFF);
-        context.fill(x + size - 1, y, x + size, y + size, 0x50303030);
+        context.fill(x, y, x + size, y + edge, 0x50FFFFFF);
+        context.fill(x, y + size - edge, x + size, y + size, 0x50303030);
+        context.fill(x, y, x + edge, y + size, 0x50FFFFFF);
+        context.fill(x + size - edge, y, x + size, y + size, 0x50303030);
 
         if (stack.isEmpty()) {
             return;
         }
 
-        if (size >= 18) {
-            int ix = x + 1;
-            int iy = y + 1;
-            context.drawItem(stack, ix, iy);
-            context.drawStackOverlay(this.textRenderer, stack, ix, iy);
-            return;
-        }
-
-        float scale = size / 18.0f;
-        int inner = Math.max(1, Math.round(16 * scale));
+        int inner = Math.max(1, size - edge * 2);
+        float scale = inner / 16.0f;
         int ix = x + Math.max(0, (size - inner) / 2);
         int iy = y + Math.max(0, (size - inner) / 2);
         context.getMatrices().pushMatrix();
         context.getMatrices().translate(ix, iy);
         context.getMatrices().scale(scale, scale);
         context.drawItem(stack, 0, 0);
+        context.getMatrices().popMatrix();
+
+        if (showCount && stack.getCount() > 1) {
+            drawScaledInventoryCount(context, stack.getCount(), x, y, size, edge);
+        }
+    }
+
+    private void drawScaledInventoryCount(DrawContext context, int count, int x, int y, int size, int padding) {
+        String text = Integer.toString(count);
+        float scale = Math.clamp(size / 18.0f, 0.35f, 4.0f);
+        int textWidth = Math.max(1, Math.round(this.textRenderer.getWidth(text) * scale));
+        int textHeight = Math.max(1, Math.round(9 * scale));
+        int screenX = x + Math.max(padding, size - textWidth - padding);
+        int screenY = y + Math.max(padding, size - textHeight - padding);
+        context.getMatrices().pushMatrix();
+        context.getMatrices().scale(scale, scale);
+        context.drawTextWithShadow(this.textRenderer, text, Math.round(screenX / scale), Math.round(screenY / scale), 0xFFFFFFFF);
         context.getMatrices().popMatrix();
     }
 
@@ -2930,9 +2976,11 @@ public class MacroWorkbenchScreen extends Screen {
         drawModalButton(context, layout.alphaPlus().x(), layout.alphaPlus().y(), layout.alphaPlus().width(), layout.alphaPlus().height(), "Opacity+", layout.alphaPlus().contains(mouseX, mouseY));
         drawModalButton(context, layout.borderMinus().x(), layout.borderMinus().y(), layout.borderMinus().width(), layout.borderMinus().height(), "BR-", layout.borderMinus().contains(mouseX, mouseY));
         drawModalButton(context, layout.borderPlus().x(), layout.borderPlus().y(), layout.borderPlus().width(), layout.borderPlus().height(), "BR+", layout.borderPlus().contains(mouseX, mouseY));
+        drawModalButton(context, layout.zMinus().x(), layout.zMinus().y(), layout.zMinus().width(), layout.zMinus().height(), "Z-", layout.zMinus().contains(mouseX, mouseY));
+        drawModalButton(context, layout.zPlus().x(), layout.zPlus().y(), layout.zPlus().width(), layout.zPlus().height(), "Z+", layout.zPlus().contains(mouseX, mouseY));
         int bgPct = selected == null ? 0 : Math.round((Math.clamp(selected.backgroundAlpha, 0, 255) / 255.0f) * 100.0f);
         context.drawTextWithShadow(this.textRenderer,
-                "Line: " + (selected != null ? selected.lineHeight : 9) + "   Scale: " + (selected != null ? String.format("%.1f", selected.fontScale) : "1.0") + "   BG: " + bgPct + "%",
+                "Line: " + (selected != null ? selected.lineHeight : 9) + "   Scale: " + (selected != null ? String.format("%.1f", selected.fontScale) : "1.0") + "   BG: " + bgPct + "%   Z: " + (selected != null ? selected.zIndex : 0),
                 layout.bgHex().x(), layout.bgHex().y() - 10, 0xFFEAEAEA);
         context.drawTextWithShadow(this.textRenderer, "BG", layout.bgHex().x() - 26, layout.bgHex().y() + 4, 0xFFEAEAEA);
         context.drawTextWithShadow(this.textRenderer, "BR", layout.borderHex().x() - 26, layout.borderHex().y() + 4, 0xFFEAEAEA);
@@ -3257,6 +3305,10 @@ public class MacroWorkbenchScreen extends Screen {
 
     void cwAdjustBackgroundAlpha(MacroHudDataHandler.HudElement element, int delta) {
         adjustBackgroundAlpha(element, delta);
+    }
+
+    void cwAdjustZIndex(MacroHudDataHandler.HudElement element, int delta) {
+        element.zIndex = Math.clamp(element.zIndex + delta, -9999, 9999);
     }
 
     String cwCyclePreset(String current, String[] presets, boolean forward) {
@@ -3831,6 +3883,7 @@ public class MacroWorkbenchScreen extends Screen {
 
     private void createCanvasElement(MacroHudDataHandler.ElementType type) {
         MacroHudDataHandler.HudElement e = MacroHudDataHandler.createElement(type);
+        e.zIndex = nextAvailableZIndex();
         int centerX = Math.max(0, (this.width - e.width) / 2);
         int centerY = Math.max(CANVAS_CONTENT_TOP, ((this.height - BOTTOM_BAR_H) - e.height) / 2);
         setElementScreenPosition(e, centerX, centerY);
@@ -3846,6 +3899,14 @@ public class MacroWorkbenchScreen extends Screen {
         this.selectedElementIds.add(e.id);
         clampElementToCanvas(e);
         syncCanvasFields();
+    }
+
+    private int nextAvailableZIndex() {
+        return this.working.elements.stream()
+                .filter(Objects::nonNull)
+                .mapToInt(element -> element.zIndex)
+                .max()
+                .orElse(-1) + 1;
     }
 
     private boolean handleKeyboardCommandsKey(int keyCode) {
@@ -5199,6 +5260,7 @@ public class MacroWorkbenchScreen extends Screen {
             proxy = MacroHudDataHandler.createElement(MacroHudDataHandler.ElementType.TEXT);
             proxy.id = proxyId;
             proxy.type = MacroHudDataHandler.ElementType.TEXT;
+            proxy.zIndex = nextAvailableZIndex();
             this.working.elements.add(proxy);
         }
 
@@ -5223,6 +5285,7 @@ public class MacroWorkbenchScreen extends Screen {
         proxy.height = external.height;
         proxy.lineHeight = external.lineHeight;
         proxy.fontScale = external.fontScale;
+        proxy.zIndex = external.zIndex;
         proxy.backgroundColor = external.backgroundColor;
         proxy.textColor = external.textColor;
         proxy.borderColor = external.borderColor;
@@ -5258,6 +5321,7 @@ public class MacroWorkbenchScreen extends Screen {
         external.height = proxy.height;
         external.lineHeight = proxy.lineHeight;
         external.fontScale = proxy.fontScale;
+        external.zIndex = proxy.zIndex;
         external.backgroundColor = proxy.backgroundColor;
         external.textColor = proxy.textColor;
         external.borderColor = proxy.borderColor;

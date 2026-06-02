@@ -43,8 +43,10 @@ public final class MacroHudRuntime {
         MinecraftClient client = MinecraftClient.getInstance();
         int screenW = client.getWindow().getScaledWidth();
         int screenH = client.getWindow().getScaledHeight();
+        List<MacroHudDataHandler.HudElement> layeredElements = HudElementUtils.sortedByLayer(cfg.elements);
+        String hoveredButtonId = interactiveMode ? resolveHoveredButtonId(layeredElements, client, screenW, screenH) : null;
 
-        for (MacroHudDataHandler.HudElement element : cfg.elements) {
+        for (MacroHudDataHandler.HudElement element : layeredElements) {
             if (!element.visible) {
                 continue;
             }
@@ -58,7 +60,7 @@ public final class MacroHudRuntime {
 
             switch (element.type) {
                 case TEXT -> renderTextElement(context, element, x, y);
-                case BUTTON -> renderButtonElement(context, element, x, y, interactiveMode);
+                case BUTTON -> renderButtonElement(context, element, x, y, interactiveMode, element.id.equals(hoveredButtonId));
                 case MACRO_KEYBINDS -> renderMacroKeybindElement(context, element, x, y);
                 case ICON -> renderIconElement(context, element, x, y);
                 case BAR -> renderBarElement(context, element, x, y);
@@ -89,9 +91,9 @@ public final class MacroHudRuntime {
         int screenW = client.getWindow().getScaledWidth();
         int screenH = client.getWindow().getScaledHeight();
 
-        List<MacroHudDataHandler.HudElement> reverse = new ArrayList<>(cfg.elements);
-        for (int i = reverse.size() - 1; i >= 0; i--) {
-            MacroHudDataHandler.HudElement element = reverse.get(i);
+        List<MacroHudDataHandler.HudElement> layeredElements = HudElementUtils.sortedByLayer(cfg.elements);
+        for (int i = layeredElements.size() - 1; i >= 0; i--) {
+            MacroHudDataHandler.HudElement element = layeredElements.get(i);
             if (!element.visible || element.type != MacroHudDataHandler.ElementType.BUTTON) {
                 continue;
             }
@@ -159,6 +161,29 @@ public final class MacroHudRuntime {
         return simple.contains(needle) || fqcn.contains(needle);
     }
 
+    private static String resolveHoveredButtonId(List<MacroHudDataHandler.HudElement> layeredElements,
+                                                 MinecraftClient client,
+                                                 int screenW,
+                                                 int screenH) {
+        int mx = (int) Math.round(client.mouse.getX() * (double) screenW / Math.max(1, client.getWindow().getWidth()));
+        int my = (int) Math.round(client.mouse.getY() * (double) screenH / Math.max(1, client.getWindow().getHeight()));
+        for (int i = layeredElements.size() - 1; i >= 0; i--) {
+            MacroHudDataHandler.HudElement element = layeredElements.get(i);
+            if (!element.visible || element.type != MacroHudDataHandler.ElementType.BUTTON) {
+                continue;
+            }
+            if (!matchesVisibility(element, client.currentScreen)) {
+                continue;
+            }
+            int x = resolveX(element, screenW);
+            int y = resolveY(element, screenH);
+            if (contains(x, y, element, mx, my)) {
+                return element.id;
+            }
+        }
+        return null;
+    }
+
     private static void renderTextElement(DrawContext context, MacroHudDataHandler.HudElement element, int x, int y) {
         List<String> lines = splitLines(expanded(element.text));
         if (element.drawBackground) {
@@ -183,22 +208,17 @@ public final class MacroHudRuntime {
         }
     }
 
-    private static void renderButtonElement(DrawContext context, MacroHudDataHandler.HudElement element, int x, int y, boolean interactiveMode) {
+    private static void renderButtonElement(DrawContext context,
+                                            MacroHudDataHandler.HudElement element,
+                                            int x,
+                                            int y,
+                                            boolean interactiveMode,
+                                            boolean hovered) {
         int x1 = x;
         int y1 = y;
         int x2 = x + element.width;
         int y2 = y + element.height;
         List<String> lines = splitLines(expanded(element.label));
-
-        MinecraftClient client = MinecraftClient.getInstance();
-        boolean hovered = false;
-        if (interactiveMode) {
-            int screenW = client.getWindow().getScaledWidth();
-            int screenH = client.getWindow().getScaledHeight();
-            int mx = (int) Math.round(client.mouse.getX() * (double) screenW / Math.max(1, client.getWindow().getWidth()));
-            int my = (int) Math.round(client.mouse.getY() * (double) screenH / Math.max(1, client.getWindow().getHeight()));
-            hovered = contains(x, y, element, mx, my);
-        }
 
         if (element.drawBackground) {
             int bg = interactiveMode ? brighten(element.backgroundColor, hovered ? 0x30303030 : 0x10101010) : element.backgroundColor;
@@ -488,11 +508,12 @@ public final class MacroHudRuntime {
         int contentH = Math.max(1, element.height - padding * 2);
         int cellW = Math.max(1, (contentW - gap * Math.max(0, cols - 1)) / Math.max(1, cols));
         int cellH = Math.max(1, (contentH - gap * Math.max(0, rows - 1)) / Math.max(1, rows));
-        int cell = Math.max(8, Math.min(18, Math.min(cellW, cellH)));
+        int cell = Math.max(1, Math.min(cellW, cellH));
         int gridW = cols * cell + gap * Math.max(0, cols - 1);
         int gridH = rows * cell + gap * Math.max(0, rows - 1);
         int startX = x + padding + Math.max(0, (contentW - gridW) / 2);
         int startY = y + padding + Math.max(0, (contentH - gridH) / 2);
+        boolean showCount = inventoryCountVisible(element);
 
         for (int i = 0; i < stacks.size(); i++) {
             int col = i % cols;
@@ -500,7 +521,7 @@ public final class MacroHudRuntime {
             int slotX = startX + col * (cell + gap);
             int slotY = startY + row * (cell + gap);
             boolean selected = mode == MacroHudDataHandler.InventoryDisplayMode.HOTBAR && i == selectedSlot;
-            drawInventorySlot(context, slotX, slotY, cell, stacks.get(i), selected);
+            drawInventorySlot(context, slotX, slotY, cell, stacks.get(i), selected, showCount);
         }
     }
 
@@ -623,34 +644,55 @@ public final class MacroHudRuntime {
         }
     }
 
-    private static void drawInventorySlot(DrawContext context, int x, int y, int size, ItemStack stack, boolean selected) {
+    private static boolean inventoryCountVisible(MacroHudDataHandler.HudElement element) {
+        return element.inventoryShowCount == null || element.inventoryShowCount;
+    }
+
+    private static void drawInventorySlot(DrawContext context,
+                                          int x,
+                                          int y,
+                                          int size,
+                                          ItemStack stack,
+                                          boolean selected,
+                                          boolean showCount) {
         int bg = selected ? 0xA0785A20 : 0xAA1A1A1A;
+        int edge = Math.max(1, Math.round(size / 18.0f));
         context.fill(x, y, x + size, y + size, bg);
-        context.fill(x, y, x + size, y + 1, 0x50FFFFFF);
-        context.fill(x, y + size - 1, x + size, y + size, 0x50303030);
-        context.fill(x, y, x + 1, y + size, 0x50FFFFFF);
-        context.fill(x + size - 1, y, x + size, y + size, 0x50303030);
+        context.fill(x, y, x + size, y + edge, 0x50FFFFFF);
+        context.fill(x, y + size - edge, x + size, y + size, 0x50303030);
+        context.fill(x, y, x + edge, y + size, 0x50FFFFFF);
+        context.fill(x + size - edge, y, x + size, y + size, 0x50303030);
 
         if (stack.isEmpty()) {
             return;
         }
 
-        if (size >= 18) {
-            int ix = x + 1;
-            int iy = y + 1;
-            context.drawItem(stack, ix, iy);
-            context.drawStackOverlay(MinecraftClient.getInstance().textRenderer, stack, ix, iy);
-            return;
-        }
-
-        float scale = size / 18.0f;
-        int inner = Math.max(1, Math.round(16 * scale));
+        int inner = Math.max(1, size - edge * 2);
+        float scale = inner / 16.0f;
         int ix = x + Math.max(0, (size - inner) / 2);
         int iy = y + Math.max(0, (size - inner) / 2);
         context.getMatrices().pushMatrix();
         context.getMatrices().translate(ix, iy);
         context.getMatrices().scale(scale, scale);
         context.drawItem(stack, 0, 0);
+        context.getMatrices().popMatrix();
+
+        if (showCount && stack.getCount() > 1) {
+            drawScaledCountText(context, stack.getCount(), x, y, size, edge);
+        }
+    }
+
+    private static void drawScaledCountText(DrawContext context, int count, int x, int y, int size, int padding) {
+        String text = Integer.toString(count);
+        var textRenderer = MinecraftClient.getInstance().textRenderer;
+        float scale = Math.clamp(size / 18.0f, 0.35f, 4.0f);
+        int textWidth = Math.max(1, Math.round(textRenderer.getWidth(text) * scale));
+        int textHeight = Math.max(1, Math.round(9 * scale));
+        int screenX = x + Math.max(padding, size - textWidth - padding);
+        int screenY = y + Math.max(padding, size - textHeight - padding);
+        context.getMatrices().pushMatrix();
+        context.getMatrices().scale(scale, scale);
+        context.drawTextWithShadow(textRenderer, text, Math.round(screenX / scale), Math.round(screenY / scale), 0xFFFFFFFF);
         context.getMatrices().popMatrix();
     }
 

@@ -1,6 +1,7 @@
 package me.m0dii.modules.macros.gui;
 
 import me.m0dii.gui.local.UiRect;
+import me.m0dii.modules.macros.hud.MacroHudDataHandler;
 import net.minecraft.client.gui.Click;
 
 final class MacroWorkbenchCustomWidgetAdvancedClickOpsBridge implements MacroWorkbenchCustomWidgetAdvancedClickHandler.Ops {
@@ -41,8 +42,13 @@ final class MacroWorkbenchCustomWidgetAdvancedClickOpsBridge implements MacroWor
     }
 
     @Override
-    public void adjustBackgroundAlpha(me.m0dii.modules.macros.hud.MacroHudDataHandler.HudElement element, int delta) {
+    public void adjustBackgroundAlpha(MacroHudDataHandler.HudElement element, int delta) {
         screen.cwAdjustBackgroundAlpha(element, delta);
+    }
+
+    @Override
+    public void adjustZIndex(MacroHudDataHandler.HudElement element, int delta) {
+        screen.cwAdjustZIndex(element, delta);
     }
 
     @Override
@@ -81,47 +87,47 @@ final class MacroWorkbenchCustomWidgetAdvancedClickOpsBridge implements MacroWor
     }
 
     @Override
-    public me.m0dii.modules.macros.hud.MacroHudDataHandler.HorizontalAlign cycleHorizontalAlign(me.m0dii.modules.macros.hud.MacroHudDataHandler.HorizontalAlign current, boolean forward) {
+    public MacroHudDataHandler.HorizontalAlign cycleHorizontalAlign(MacroHudDataHandler.HorizontalAlign current, boolean forward) {
         return screen.cwCycleHorizontalAlign(current, forward);
     }
 
     @Override
-    public me.m0dii.modules.macros.hud.MacroHudDataHandler.VerticalAlign cycleVerticalAlign(me.m0dii.modules.macros.hud.MacroHudDataHandler.VerticalAlign current, boolean forward) {
+    public MacroHudDataHandler.VerticalAlign cycleVerticalAlign(MacroHudDataHandler.VerticalAlign current, boolean forward) {
         return screen.cwCycleVerticalAlign(current, forward);
     }
 
     @Override
-    public me.m0dii.modules.macros.hud.MacroHudDataHandler.Anchor cycleAnchor(me.m0dii.modules.macros.hud.MacroHudDataHandler.Anchor current, boolean forward) {
+    public MacroHudDataHandler.Anchor cycleAnchor(MacroHudDataHandler.Anchor current, boolean forward) {
         return screen.cwCycleAnchor(current, forward);
     }
 
     @Override
-    public void cycleBorderSetting(me.m0dii.modules.macros.hud.MacroHudDataHandler.HudElement element, boolean forward) {
+    public void cycleBorderSetting(MacroHudDataHandler.HudElement element, boolean forward) {
         screen.cwCycleBorderSetting(element, forward);
     }
 
     @Override
-    public void ensureVisibleBackground(me.m0dii.modules.macros.hud.MacroHudDataHandler.HudElement element) {
+    public void ensureVisibleBackground(MacroHudDataHandler.HudElement element) {
         screen.cwEnsureVisibleBackground(element);
     }
 
     @Override
-    public int resolveElementX(me.m0dii.modules.macros.hud.MacroHudDataHandler.HudElement element) {
+    public int resolveElementX(MacroHudDataHandler.HudElement element) {
         return screen.cwResolveElementX(element);
     }
 
     @Override
-    public int resolveElementY(me.m0dii.modules.macros.hud.MacroHudDataHandler.HudElement element) {
+    public int resolveElementY(MacroHudDataHandler.HudElement element) {
         return screen.cwResolveElementY(element);
     }
 
     @Override
-    public void setElementScreenPosition(me.m0dii.modules.macros.hud.MacroHudDataHandler.HudElement element, int screenX, int screenY) {
+    public void setElementScreenPosition(MacroHudDataHandler.HudElement element, int screenX, int screenY) {
         screen.cwSetElementScreenPosition(element, screenX, screenY);
     }
 
     @Override
-    public void clampElementToCanvas(me.m0dii.modules.macros.hud.MacroHudDataHandler.HudElement element) {
+    public void clampElementToCanvas(MacroHudDataHandler.HudElement element) {
         screen.cwClampElementToCanvas(element);
     }
 
