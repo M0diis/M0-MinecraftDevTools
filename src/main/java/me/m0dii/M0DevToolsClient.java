@@ -44,7 +44,7 @@ import java.io.File;
 
 public class M0DevToolsClient implements ClientModInitializer {
     public static final String MOD_ID = "m0-dev-tools";
-    public static final File SETTINGS_FOLDER = new File("m0-dev-tools");
+    public static final File SETTINGS_FOLDER = new File(MOD_ID);
 
     @Override
     public void onInitializeClient() {

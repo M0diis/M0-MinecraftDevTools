@@ -9,10 +9,10 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 public class M0DevTools implements ModInitializer {
-    public static final Logger LOGGER = LogManager.getLogger("m0-dev-tools");
+    public static final Logger LOGGER = LogManager.getLogger(M0DevToolsClient.MOD_ID);
 
     public void onInitialize() {
-        MidnightConfig.init("m0-dev-tools", ModConfig.class);
+        MidnightConfig.init(M0DevToolsClient.MOD_ID, ModConfig.class);
         GetDataSyncPayloads.registerPayloadTypes();
         GetDataSyncServer.registerReceivers();
     }

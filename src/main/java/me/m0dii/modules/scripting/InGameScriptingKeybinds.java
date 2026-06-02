@@ -3,6 +3,7 @@ package me.m0dii.modules.scripting;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import me.m0dii.M0DevTools;
+import me.m0dii.M0DevToolsClient;
 import me.m0dii.modules.scripting.gui.ScriptEditorScreen;
 import me.m0dii.utils.KeybindCatalog;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
@@ -23,7 +24,7 @@ public class InGameScriptingKeybinds {
     private static final KeyBinding OPEN_SCRIPT_EDITOR = KeyBindingHelper.registerKeyBinding(new KeyBinding(
             KeybindCatalog.OPEN_SCRIPT_EDITOR.translationKey(),
             KeybindCatalog.OPEN_SCRIPT_EDITOR.defaultKey(),
-            KeyBinding.Category.create(Identifier.of("m0-dev-tools", "scripting"))
+            KeyBinding.Category.create(Identifier.of(M0DevToolsClient.MOD_ID, "scripting"))
     ));
     private static final Path KEYBINDS_FILE = Paths.get("config/m0-dev-tools/script_keybinds.json");
     private static final Gson GSON = new Gson();

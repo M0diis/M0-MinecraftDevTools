@@ -1,5 +1,6 @@
 package me.m0dii.modules.getdata;
 
+import me.m0dii.M0DevToolsClient;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.network.RegistryByteBuf;
@@ -18,7 +19,8 @@ public final class GetDataSyncPayloads {
     }
 
     public record BlockNbtRequestPayload(long requestId, BlockPos pos) implements CustomPayload {
-        public static final CustomPayload.Id<BlockNbtRequestPayload> ID = new CustomPayload.Id<>(Identifier.of("m0-dev-tools", "getdata/request_block"));
+        public static final CustomPayload.Id<BlockNbtRequestPayload> ID = new CustomPayload.Id<>(
+                Identifier.of(M0DevToolsClient.MOD_ID, "getdata/request_block"));
         public static final PacketCodec<RegistryByteBuf, BlockNbtRequestPayload> CODEC = PacketCodec.of(
                 (value, buf) -> {
                     buf.writeLong(value.requestId);
@@ -34,7 +36,8 @@ public final class GetDataSyncPayloads {
     }
 
     public record BlockNbtResponsePayload(long requestId, BlockPos pos, NbtCompound nbt) implements CustomPayload {
-        public static final CustomPayload.Id<BlockNbtResponsePayload> ID = new CustomPayload.Id<>(Identifier.of("m0-dev-tools", "getdata/response_block"));
+        public static final CustomPayload.Id<BlockNbtResponsePayload> ID = new CustomPayload.Id<>(
+                Identifier.of(M0DevToolsClient.MOD_ID, "getdata/response_block"));
         public static final PacketCodec<RegistryByteBuf, BlockNbtResponsePayload> CODEC = PacketCodec.of(
                 (value, buf) -> {
                     buf.writeLong(value.requestId);

@@ -2,6 +2,7 @@ package me.m0dii.utils;
 
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
+import me.m0dii.M0DevToolsClient;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.minecraft.client.MinecraftClient;
@@ -19,9 +20,10 @@ public final class KeybindManager {
     private KeybindManager() {
     }
 
-    private static final Logger LOGGER = LoggerFactory.getLogger("m0-dev-tools");
+    private static final Logger LOGGER = LoggerFactory.getLogger(M0DevToolsClient.MOD_ID);
 
-    public static final KeyBinding.Category KEY_CATEGORY = KeyBinding.Category.create(Identifier.of("m0-dev-tools", "keybinds"));
+    public static final KeyBinding.Category KEY_CATEGORY = KeyBinding.Category.create(
+            Identifier.of(M0DevToolsClient.MOD_ID, "keybinds"));;
 
     @Getter
     @RequiredArgsConstructor
