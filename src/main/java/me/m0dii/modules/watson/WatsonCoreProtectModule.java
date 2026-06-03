@@ -3,10 +3,10 @@ package me.m0dii.modules.watson;
 import me.m0dii.modules.Module;
 import me.m0dii.modules.macros.MacroPlaceholderProvider;
 import me.m0dii.modules.macros.MacroPlaceholders;
+import me.m0dii.utils.KeybindCatalog;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.util.InputUtil;
 import net.minecraft.entity.player.PlayerEntity;
-import org.lwjgl.glfw.GLFW;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -175,9 +175,9 @@ public final class WatsonCoreProtectModule extends Module {
         MacroPlaceholders.registerProvider(PLACEHOLDER_PROVIDER);
 
         registerPressedKeybind(
-                "key.m0-dev-tools.toggle_watson_cp",
+                KeybindCatalog.WATSON_COREPROTECT_TOGGLE.translationKey(),
                 InputUtil.Type.KEYSYM,
-                GLFW.GLFW_KEY_PERIOD,
+                KeybindCatalog.WATSON_COREPROTECT_TOGGLE.defaultKey(),
                 client -> toggleEnabled()
         );
     }

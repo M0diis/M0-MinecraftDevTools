@@ -2,6 +2,7 @@ package me.m0dii.modules.overlays;
 
 import me.m0dii.modules.Module;
 import me.m0dii.utils.DrawUtil;
+import me.m0dii.utils.KeybindCatalog;
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext;
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
 import net.minecraft.client.render.RenderLayers;
@@ -12,8 +13,6 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.biome.Biome;
-import org.lwjgl.glfw.GLFW;
-
 import java.util.ArrayList;
 import java.util.List;
 
@@ -33,9 +32,9 @@ public class BiomeBorderOverlayModule extends Module {
     public void register() {
         WorldRenderEvents.AFTER_ENTITIES.register(this::renderBiomeBorders);
         registerPressedKeybind(
-                "key.m0-dev-tools.toggle_biome_border_overlay",
+                KeybindCatalog.BIOME_BORDER_OVERLAY_TOGGLE.translationKey(),
                 InputUtil.Type.KEYSYM,
-                GLFW.GLFW_KEY_UNKNOWN,
+                KeybindCatalog.BIOME_BORDER_OVERLAY_TOGGLE.defaultKey(),
                 client -> toggleEnabled()
         );
     }

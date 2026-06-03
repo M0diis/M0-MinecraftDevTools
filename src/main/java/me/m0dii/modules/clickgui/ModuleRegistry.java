@@ -97,19 +97,10 @@ public class ModuleRegistry {
         safeAdd(utilities, HeldLightModule.INSTANCE);
         safeAdd(utilities, TweaksModule.INSTANCE);
         safeAdd(utilities, WatsonCoreProtectModule.INSTANCE);
+        safeAdd(utilities, MouseTweaksModule.INSTANCE);
+        safeAdd(utilities, HungerTweaksModule.INSTANCE);
+        safeAdd(utilities, BridgingTweaksModule.INSTANCE);
         categories.add(utilities);
-
-        ModuleCategory mouseTweaks = new ModuleCategory("Mouse Tweaks");
-        safeAdd(mouseTweaks, MouseTweaksModule.INSTANCE);
-        categories.add(mouseTweaks);
-
-        ModuleCategory hungerTweaks = new ModuleCategory("Hunger Tweaks");
-        safeAdd(hungerTweaks, HungerTweaksModule.INSTANCE);
-        categories.add(hungerTweaks);
-
-        ModuleCategory bridgingTweaks = new ModuleCategory("Bridging Tweaks");
-        safeAdd(bridgingTweaks, BridgingTweaksModule.INSTANCE);
-        categories.add(bridgingTweaks);
 
         ModuleCategory movement = new ModuleCategory("Movement");
         safeAdd(movement, InventoryMoveModule.INSTANCE);

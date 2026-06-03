@@ -24,22 +24,24 @@ public final class KeybindCatalog {
     public static final KeybindSpec FULLBRIGHT_TOGGLE = new KeybindSpec("key.m0-dev-tools.fullbright", GLFW.GLFW_KEY_J);
     public static final KeybindSpec ZOOM_HOLD = new KeybindSpec("key.m0-dev-tools.zoom", GLFW.GLFW_KEY_C);
 
-    public static final KeybindSpec QUICK_TP_UP = new KeybindSpec("key.m0-dev-tools.teleport_up", GLFW.GLFW_KEY_KP_8);
-    public static final KeybindSpec QUICK_TP_DOWN = new KeybindSpec("key.m0-dev-tools.teleport_down", GLFW.GLFW_KEY_KP_2);
-    public static final KeybindSpec QUICK_TP_FORWARD = new KeybindSpec("key.m0-dev-tools.teleport_forward", GLFW.GLFW_KEY_KP_5);
-    public static final KeybindSpec QUICK_TP_LEFT = new KeybindSpec("key.m0-dev-tools.teleport_left", GLFW.GLFW_KEY_KP_4);
-    public static final KeybindSpec QUICK_TP_RIGHT = new KeybindSpec("key.m0-dev-tools.teleport_right", GLFW.GLFW_KEY_KP_6);
+    public static final KeybindSpec QUICK_TP_UP = new KeybindSpec("key.m0-dev-tools.teleport_up", GLFW.GLFW_KEY_UNKNOWN);
+    public static final KeybindSpec QUICK_TP_DOWN = new KeybindSpec("key.m0-dev-tools.teleport_down", GLFW.GLFW_KEY_UNKNOWN);
+    public static final KeybindSpec QUICK_TP_FORWARD = new KeybindSpec("key.m0-dev-tools.teleport_forward", GLFW.GLFW_KEY_UNKNOWN);
+    public static final KeybindSpec QUICK_TP_LEFT = new KeybindSpec("key.m0-dev-tools.teleport_left", GLFW.GLFW_KEY_UNKNOWN);
+    public static final KeybindSpec QUICK_TP_RIGHT = new KeybindSpec("key.m0-dev-tools.teleport_right", GLFW.GLFW_KEY_UNKNOWN);
 
-    public static final KeybindSpec WAYPOINT_ADD = new KeybindSpec("key.m0-dev-tools.add_waypoint", GLFW.GLFW_KEY_KP_ADD);
-    public static final KeybindSpec WAYPOINT_LIST = new KeybindSpec("key.m0-dev-tools.list_waypoints", GLFW.GLFW_KEY_KP_MULTIPLY);
-    public static final KeybindSpec WAYPOINT_GUI = new KeybindSpec("key.m0-dev-tools.open_waypoint_gui", GLFW.GLFW_KEY_KP_DIVIDE);
-    public static final KeybindSpec WAYPOINT_RENDER_TOGGLE = new KeybindSpec("key.m0-dev-tools.toggle_waypoint_render", GLFW.GLFW_KEY_KP_SUBTRACT);
+    public static final KeybindSpec WAYPOINT_ADD = new KeybindSpec("key.m0-dev-tools.add_waypoint", GLFW.GLFW_KEY_UNKNOWN);
+    public static final KeybindSpec WAYPOINT_LIST = new KeybindSpec("key.m0-dev-tools.list_waypoints", GLFW.GLFW_KEY_UNKNOWN);
+    public static final KeybindSpec WAYPOINT_GUI = new KeybindSpec("key.m0-dev-tools.open_waypoint_gui", GLFW.GLFW_KEY_UNKNOWN);
+    public static final KeybindSpec WAYPOINT_RENDER_TOGGLE = new KeybindSpec("key.m0-dev-tools.toggle_waypoint_render", GLFW.GLFW_KEY_UNKNOWN);
 
-    public static final KeybindSpec LIGHT_OVERLAY_TOGGLE = new KeybindSpec("key.m0-dev-tools.toggle_light_overlay", GLFW.GLFW_KEY_F9);
-    public static final KeybindSpec REDSTONE_OVERLAY_TOGGLE = new KeybindSpec("key.m0-dev-tools.toggle_redstone_overlay", GLFW.GLFW_KEY_F7);
-    public static final KeybindSpec SLIME_OVERLAY_TOGGLE = new KeybindSpec("key.m0-dev-tools.toggle_slime_overlay", GLFW.GLFW_KEY_F9);
-    public static final KeybindSpec COMMAND_BLOCK_OVERLAY_TOGGLE = new KeybindSpec("key.m0-dev-tools.command_block_overlay", GLFW.GLFW_KEY_X);
-    public static final KeybindSpec REDSTONE_BUD_TOGGLE = new KeybindSpec("key.m0-dev-tools.toggle_redstone_bud", GLFW.GLFW_KEY_B);
+    public static final KeybindSpec LIGHT_OVERLAY_TOGGLE = new KeybindSpec("key.m0-dev-tools.toggle_light_overlay", GLFW.GLFW_KEY_UNKNOWN);
+    public static final KeybindSpec REDSTONE_OVERLAY_TOGGLE = new KeybindSpec("key.m0-dev-tools.toggle_redstone_overlay", GLFW.GLFW_KEY_UNKNOWN);
+    public static final KeybindSpec SLIME_OVERLAY_TOGGLE = new KeybindSpec("key.m0-dev-tools.toggle_slime_overlay", GLFW.GLFW_KEY_UNKNOWN);
+    public static final KeybindSpec COMMAND_BLOCK_OVERLAY_TOGGLE = new KeybindSpec("key.m0-dev-tools.command_block_overlay", GLFW.GLFW_KEY_UNKNOWN);
+    public static final KeybindSpec REDSTONE_BUD_TOGGLE = new KeybindSpec("key.m0-dev-tools.toggle_redstone_bud", GLFW.GLFW_KEY_UNKNOWN);
+    public static final KeybindSpec BIOME_BORDER_OVERLAY_TOGGLE = new KeybindSpec("key.m0-dev-tools.toggle_biome_border_overlay", GLFW.GLFW_KEY_UNKNOWN);
+    public static final KeybindSpec WATSON_COREPROTECT_TOGGLE = new KeybindSpec("key.m0-dev-tools.toggle_watson_cp", GLFW.GLFW_KEY_PERIOD);
 
     public static final KeybindSpec OPEN_MACRO_GUI = new KeybindSpec("key.m0-dev-tools.open_macro_gui", GLFW.GLFW_KEY_M);
     public static final KeybindSpec OPEN_MACRO_HUD_EDITOR = new KeybindSpec("key.m0-dev-tools.open_macro_hud_editor", GLFW.GLFW_KEY_K);
@@ -75,6 +77,8 @@ public final class KeybindCatalog {
                 SLIME_OVERLAY_TOGGLE,
                 COMMAND_BLOCK_OVERLAY_TOGGLE,
                 REDSTONE_BUD_TOGGLE,
+                BIOME_BORDER_OVERLAY_TOGGLE,
+                WATSON_COREPROTECT_TOGGLE,
                 OPEN_MACRO_GUI,
                 OPEN_MACRO_HUD_EDITOR,
                 OPEN_MACRO_KEYBOARD_LAYOUT,

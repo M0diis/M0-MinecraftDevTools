@@ -1,19 +1,21 @@
 {
   "key.m0-dev-tools.openscripteditor": "Open Groovy Script Editor",
-  "category.m0-dev-tools.scripting": "M0-Dev Tools Scripting",
+  "key.category.m0-dev-tools.scripting": "M0-Dev Tools Scripting",
 
-  "category.m0-dev-tools": "M0-Dev Tools",
+  "key.category.m0-dev-tools.keybinds": "M0-Dev Tools",
 
   "key.m0-dev-tools.toggle_light_overlay": "Toggle Light Overlay",
   "key.m0-dev-tools.toggle_redstone_overlay": "Toggle Redstone Overlay",
   "key.m0-dev-tools.toggle_redstone_bud": "Toggle Redstone BUD Order Display",
   "key.m0-dev-tools.clear_redstone_bud": "Clear Redstone BUD Order",
   "key.m0-dev-tools.toggle_slime_overlay": "Toggle Slime Chunk Overlay",
+  "key.m0-dev-tools.toggle_biome_border_overlay": "Toggle Biome Border Overlay",
+  "key.m0-dev-tools.xray_toggle": "Toggle Xray",
+  "key.m0-dev-tools.xray_menu": "Open Xray Menu",
+  "key.m0-dev-tools.command_block_overlay": "Toggle Command Block Overlay",
   "key.m0-dev-tools.open_nbt_editor": "Open NBT Editor",
   "key.m0-dev-tools.toggle_block_inspector": "Toggle Block Inspector",
   "key.m0-dev-tools.open_macro_gui": "Open Macro Manager",
-  "key.m0-dev-tools.open_macro_panel": "Open Macro Workbench (Canvas)",
-  "key.m0-dev-tools.open_macro_panel_editor": "Open Macro Workbench (Canvas)",
   "key.m0-dev-tools.open_macro_hud_editor": "Open Macro Workbench (Canvas)",
   "key.m0-dev-tools.open_macro_keyboard_layout": "Open Macro Workbench (Keyboard)",
 
@@ -46,9 +48,15 @@
 
   "m0-dev-tools.midnightconfig.title": "M0-Dev Tools Config",
   "m0-dev-tools.midnightconfig.category.General": "General",
+  "m0-dev-tools.midnightconfig.category.Performance": "Performance",
+  "m0-dev-tools.midnightconfig.category.Tweaks": "Tweaks",
+  "m0-dev-tools.midnightconfig.category.Bridging Tweaks": "Bridging Tweaks",
+  "m0-dev-tools.midnightconfig.category.Mouse Tweaks": "Mouse Tweaks",
   "m0-dev-tools.midnightconfig.category.Overlay": "Overlay",
   "m0-dev-tools.midnightconfig.category.Hud": "Hud",
   "m0-dev-tools.midnightconfig.category.Hunger Tweaks": "Hunger Tweaks",
+  "m0-dev-tools.midnightconfig.category.Reach": "Reach",
+  "m0-dev-tools.midnightconfig.category.Block Attributes": "Block Attributes",
   "m0-dev-tools.midnightconfig.category.Secondary Chat": "Secondary Chat"
 }
 
