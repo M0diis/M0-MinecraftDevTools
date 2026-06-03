@@ -3,6 +3,7 @@ package me.m0dii.modules.clickgui;
 import me.m0dii.M0DevTools;
 import me.m0dii.modules.Module;
 import me.m0dii.modules.chat.SecondaryChatModule;
+import me.m0dii.modules.commandblockui.BetterCommandBlockUiModule;
 import me.m0dii.modules.commandhistory.CommandHistoryModule;
 import me.m0dii.modules.entityradar.EntityRadarModule;
 import me.m0dii.modules.fastblockplacement.FastBlockPlacementModule;
@@ -79,6 +80,7 @@ public class ModuleRegistry {
 
         ModuleCategory ui = new ModuleCategory("UI");
         safeAdd(ui, UiUtilitiesModule.INSTANCE);
+        safeAdd(ui, BetterCommandBlockUiModule.INSTANCE);
         categories.add(ui);
 
         ModuleCategory utilities = new ModuleCategory("Utilities");

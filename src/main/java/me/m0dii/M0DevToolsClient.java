@@ -4,6 +4,7 @@ import eu.midnightdust.lib.config.MidnightConfig;
 import me.m0dii.modules.chat.SecondaryChatModule;
 import me.m0dii.modules.clickgui.ClickHudModule;
 import me.m0dii.modules.clickgui.ModuleRegistry;
+import me.m0dii.modules.commandblockui.BetterCommandBlockUiModule;
 import me.m0dii.modules.commandhistory.CommandHistoryModule;
 import me.m0dii.modules.debugdraw.DebugDrawManager;
 import me.m0dii.modules.debugdraw.DrawClientCommand;
@@ -79,6 +80,7 @@ public class M0DevToolsClient implements ClientModInitializer {
         DynamicFpsModule.INSTANCE.register();
         FastBlockPlacementModule.INSTANCE.register();
         ReachModule.INSTANCE.register();
+        BetterCommandBlockUiModule.INSTANCE.register();
         TweaksModule.INSTANCE.register();
         ClickHudModule.INSTANCE.register();
         CommandBlockOverlayModule.INSTANCE.register();

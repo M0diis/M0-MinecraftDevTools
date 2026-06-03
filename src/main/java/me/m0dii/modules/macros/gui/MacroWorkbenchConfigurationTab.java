@@ -2,6 +2,7 @@ package me.m0dii.modules.macros.gui;
 
 import me.m0dii.modules.chat.SecondaryChatModule;
 import me.m0dii.modules.chat.SecondaryChatSettings;
+import me.m0dii.modules.commandblockui.BetterCommandBlockUiModule;
 import me.m0dii.modules.fastblockplacement.FastBlockPlacementModule;
 import me.m0dii.modules.freecam.FreecamModule;
 import me.m0dii.modules.fullbright.FullbrightModule;
@@ -89,6 +90,7 @@ final class MacroWorkbenchConfigurationTab {
     private ButtonWidget inventoryMoveToggleButton;
     private ButtonWidget instantBreakToggleButton;
     private ButtonWidget fastBlockPlacementToggleButton;
+    private ButtonWidget betterCommandBlockUiToggleButton;
     private ButtonWidget waypointsToggleButton;
     private ButtonWidget nbtTooltipToggleButton;
     private ButtonWidget shulkerTooltipToggleButton;
@@ -298,20 +300,25 @@ final class MacroWorkbenchConfigurationTab {
             syncControls();
         }, rightX, rowY(5), settingW, ROW_H);
 
+        this.betterCommandBlockUiToggleButton = button("Better Command Block UI", b -> {
+            BetterCommandBlockUiModule.INSTANCE.setEnabled(!BetterCommandBlockUiModule.INSTANCE.isEnabled());
+            syncControls();
+        }, rightX, rowY(6), settingW, ROW_H);
+
         this.waypointsToggleButton = button("Waypoints", b -> {
             WaypointModule.INSTANCE.setEnabled(!WaypointModule.INSTANCE.isEnabled());
             syncControls();
-        }, rightX, rowY(6), settingW, ROW_H);
+        }, rightX, rowY(7), settingW, ROW_H);
 
         this.nbtTooltipToggleButton = button("NBT Tooltip", b -> {
             NBTTooltipModule.INSTANCE.setEnabled(!NBTTooltipModule.INSTANCE.isEnabled());
             syncControls();
-        }, rightX, rowY(7), settingW, ROW_H);
+        }, rightX, rowY(8), settingW, ROW_H);
 
         this.shulkerTooltipToggleButton = button("Shulker Preview Tooltip", b -> {
             ShulkerTooltipModule.INSTANCE.setEnabled(!ShulkerTooltipModule.INSTANCE.isEnabled());
             syncControls();
-        }, rightX, rowY(8), settingW, ROW_H);
+        }, rightX, rowY(9), settingW, ROW_H);
 
         this.biomeBorderToggleButton = button("Biome Border Overlay", b -> {
             BiomeBorderOverlayModule.INSTANCE.setEnabled(!BiomeBorderOverlayModule.INSTANCE.isEnabled());
@@ -484,7 +491,8 @@ final class MacroWorkbenchConfigurationTab {
                 this.pickupEnabledButton, this.pickupDurationButton, this.pickupLinesButton,
                 this.pickupIconScaleButton, this.pickupDirectionButton,
                 this.freecamToggleButton, this.fullbrightToggleButton, this.heldLightToggleButton,
-                this.inventoryMoveToggleButton, this.instantBreakToggleButton, this.fastBlockPlacementToggleButton, this.waypointsToggleButton,
+                this.inventoryMoveToggleButton, this.instantBreakToggleButton, this.fastBlockPlacementToggleButton,
+                this.betterCommandBlockUiToggleButton, this.waypointsToggleButton,
                 this.nbtTooltipToggleButton, this.shulkerTooltipToggleButton,
                 this.biomeBorderToggleButton, this.chunkBorderToggleButton, this.slimeChunksToggleButton,
                 this.structureBoundsToggleButton, this.commandBlockOverlayToggleButton, this.lightOverlayToggleButton,
@@ -538,6 +546,7 @@ final class MacroWorkbenchConfigurationTab {
         this.inventoryMoveToggleButton.setMessage(Text.literal("Inventory Move: " + (InventoryMoveModule.INSTANCE.isEnabled() ? "ON" : "OFF")));
         this.instantBreakToggleButton.setMessage(Text.literal("Instant Break: " + (InstantBreakModule.INSTANCE.isEnabled() ? "ON" : "OFF")));
         this.fastBlockPlacementToggleButton.setMessage(Text.literal("Fast Place: " + (FastBlockPlacementModule.INSTANCE.isEnabled() ? "ON" : "OFF")));
+        this.betterCommandBlockUiToggleButton.setMessage(Text.literal("Better Command Block UI: " + (BetterCommandBlockUiModule.INSTANCE.isEnabled() ? "ON" : "OFF")));
         this.waypointsToggleButton.setMessage(Text.literal("Waypoints: " + (WaypointModule.INSTANCE.isEnabled() ? "ON" : "OFF")));
         this.nbtTooltipToggleButton.setMessage(Text.literal("NBT Tooltip: " + (NBTTooltipModule.INSTANCE.isEnabled() ? "ON" : "OFF")));
         this.shulkerTooltipToggleButton.setMessage(Text.literal("Shulker Preview Tooltip: " + (ShulkerTooltipModule.INSTANCE.isEnabled() ? "ON" : "OFF")));
@@ -619,6 +628,7 @@ final class MacroWorkbenchConfigurationTab {
         setVisible(this.inventoryMoveToggleButton, modules);
         setVisible(this.instantBreakToggleButton, modules);
         setVisible(this.fastBlockPlacementToggleButton, modules);
+        setVisible(this.betterCommandBlockUiToggleButton, modules);
         setVisible(this.waypointsToggleButton, modules);
         setVisible(this.nbtTooltipToggleButton, modules);
         setVisible(this.shulkerTooltipToggleButton, modules);

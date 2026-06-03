@@ -18,14 +18,16 @@
       "me.m0dii.M0DevTools"
     ],
     "client": [
-      "me.m0dii.M0DevToolsClient"
+      "me.m0dii.M0DevToolsClient",
+      "bettercommandblockui.main.BetterCommandBlockUI"
     ]
   },
 
   "accessWidener": "m0dev.accesswidener",
 
   "mixins": [
-    "m0dev.mixins.json"
+    "m0dev.mixins.json",
+    "bettercommandblockui.mixins.json"
   ],
 
   "depends": {
