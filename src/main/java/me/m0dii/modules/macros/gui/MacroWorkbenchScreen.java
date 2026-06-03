@@ -2855,6 +2855,7 @@ public class MacroWorkbenchScreen extends Screen {
                 this.advancedBorderCursor = this.advancedBorderColor.length();
             }
         }
+        normalizeAdvancedModalInputState();
         ensureVisibleBackground(selected);
     }
 
@@ -4601,6 +4602,7 @@ public class MacroWorkbenchScreen extends Screen {
     }
 
     private void insertAtCursor(String s) {
+        normalizeAdvancedModalInputState();
         String normalizedInput = normalizeMultilineInput(s);
         if (normalizedInput.isEmpty()) {
             return;
@@ -4619,6 +4621,7 @@ public class MacroWorkbenchScreen extends Screen {
     }
 
     private void insertAtAdvancedActionCursor(String s) {
+        normalizeAdvancedModalInputState();
         String normalizedInput = normalizeSingleLineInput(s);
         if (normalizedInput.isEmpty()) {
             return;
@@ -4637,6 +4640,7 @@ public class MacroWorkbenchScreen extends Screen {
     }
 
     private void insertAtAdvancedBgCursor(String s) {
+        normalizeAdvancedModalInputState();
         if (s == null || s.isEmpty()) {
             return;
         }
@@ -4652,6 +4656,7 @@ public class MacroWorkbenchScreen extends Screen {
     }
 
     private void insertAtAdvancedBorderCursor(String s) {
+        normalizeAdvancedModalInputState();
         if (s == null || s.isEmpty()) {
             return;
         }
@@ -4667,6 +4672,7 @@ public class MacroWorkbenchScreen extends Screen {
     }
 
     private void insertAtAdvancedVisibilityScreenTypeCursor(String s) {
+        normalizeAdvancedModalInputState();
         String normalizedInput = normalizeSingleLineInput(s);
         if (normalizedInput.isEmpty()) {
             return;
@@ -4682,6 +4688,26 @@ public class MacroWorkbenchScreen extends Screen {
                 + advancedVisibilityScreenType.substring(advancedVisibilityScreenTypeCursor);
         this.advancedVisibilityScreenTypeCursor += normalizedInput.length();
         this.advancedVisibilityScreenTypeSelectionAnchor = -1;
+    }
+
+    private void normalizeAdvancedModalInputState() {
+        this.advancedText = StringUtils.safe(this.advancedText);
+        this.advancedAction = StringUtils.safe(this.advancedAction);
+        this.advancedBgColor = StringUtils.safe(this.advancedBgColor);
+        this.advancedBorderColor = StringUtils.safe(this.advancedBorderColor);
+        this.advancedVisibilityScreenType = StringUtils.safe(this.advancedVisibilityScreenType);
+
+        this.advancedCursor = clampTextIndex(this.advancedText, this.advancedCursor);
+        this.advancedActionCursor = clampTextIndex(this.advancedAction, this.advancedActionCursor);
+        this.advancedBgCursor = clampTextIndex(this.advancedBgColor, this.advancedBgCursor);
+        this.advancedBorderCursor = clampTextIndex(this.advancedBorderColor, this.advancedBorderCursor);
+        this.advancedVisibilityScreenTypeCursor = clampTextIndex(this.advancedVisibilityScreenType, this.advancedVisibilityScreenTypeCursor);
+
+        this.advancedSelectionAnchor = clampSelectionAnchor(this.advancedText, this.advancedSelectionAnchor);
+        this.advancedActionSelectionAnchor = clampSelectionAnchor(this.advancedAction, this.advancedActionSelectionAnchor);
+        this.advancedBgSelectionAnchor = clampSelectionAnchor(this.advancedBgColor, this.advancedBgSelectionAnchor);
+        this.advancedBorderSelectionAnchor = clampSelectionAnchor(this.advancedBorderColor, this.advancedBorderSelectionAnchor);
+        this.advancedVisibilityScreenTypeSelectionAnchor = clampSelectionAnchor(this.advancedVisibilityScreenType, this.advancedVisibilityScreenTypeSelectionAnchor);
     }
 
     private void applyAdvancedColorFieldsToSelection() {
@@ -5656,6 +5682,10 @@ public class MacroWorkbenchScreen extends Screen {
 
     private static int clampTextIndex(String text, int index) {
         return TextSelectionUtils.clampTextIndex(text, index);
+    }
+
+    private static int clampSelectionAnchor(String text, int anchor) {
+        return anchor < 0 ? -1 : clampTextIndex(text, anchor);
     }
 
     private static int[] clampedSelectionRange(String text, int anchor, int cursor) {

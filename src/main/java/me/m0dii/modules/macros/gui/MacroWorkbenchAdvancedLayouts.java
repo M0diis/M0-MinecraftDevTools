@@ -72,66 +72,83 @@ public final class MacroWorkbenchAdvancedLayouts {
     }
 
     public static SecondaryAdvancedLayout secondary(int boxX, int boxY, int modalW, int modalH) {
-        UiRect row1 = FormPanels.panel(boxX + 12, boxY + 44, modalW - 24, 18);
-        UiRect row2 = FormPanels.panel(boxX + 12, boxY + 68, modalW - 24, 18);
-        UiRect row3 = FormPanels.panel(boxX + 12, boxY + 92, modalW - 24, 18);
-        UiRect regexInput = FormPanels.panel(boxX + 12, boxY + 112, modalW - 24, 86);
-        UiRect outgoingInput = FormPanels.panel(boxX + 12, boxY + 206, 244, 18);
-        UiRect statsButtons = FormPanels.panel(boxX + 12, boxY + 236, 308, 18);
-        UiRect colorButtons = FormPanels.panel(boxX + 324, boxY + 236, 132, 18);
-        UiRect colorHex = FormPanels.panel(boxX + 324, boxY + 274, 132, 18);
-        UiRect actions = FormPanels.panel(boxX + modalW - 134, boxY + modalH - 24, 122, 18);
+        UiRect content = FormPanels.panel(boxX + 12, boxY + 44, modalW - 24, modalH - 68);
+        List<UiRect> rows = FormPanels.column(content, 6, UiFlexLayout.Align.STRETCH,
+                UiFlexLayout.Item.fixed(18),
+                UiFlexLayout.Item.fixed(18),
+                UiFlexLayout.Item.fixed(18),
+                UiFlexLayout.Item.flex(120, -1, 1, 132),
+                UiFlexLayout.Item.fixed(18),
+                UiFlexLayout.Item.fixed(18),
+                UiFlexLayout.Item.fixed(9),
+                UiFlexLayout.Item.fixed(18),
+                UiFlexLayout.Item.fixed(18),
+                UiFlexLayout.Item.fixed(18)
+        );
 
-        List<UiRect> toggleRow = FormPanels.row(row1, 4, UiFlexLayout.Align.START,
-                UiFlexLayout.Item.fixed(150),
-                UiFlexLayout.Item.fixed(150),
-                UiFlexLayout.Item.flex(120, 1)
+        UiRect row1 = rows.get(0);
+        UiRect row2 = rows.get(1);
+        UiRect row3 = rows.get(2);
+        UiRect regexInput = rows.get(3);
+        UiRect outgoingInput = rows.get(4);
+        UiRect statsButtons = rows.get(5);
+        UiRect statsText = rows.get(6);
+        UiRect colorButtons = rows.get(7);
+        UiRect colorHex = rows.get(8);
+        UiRect actions = rows.get(9);
+
+        List<UiRect> toggleRow = FormPanels.row(row1, 4, UiFlexLayout.Align.STRETCH,
+                UiFlexLayout.Item.flex(160, 1),
+                UiFlexLayout.Item.flex(140, 1),
+                UiFlexLayout.Item.flex(180, 1)
         );
-        List<UiRect> settingsRow = FormPanels.row(row2, 4, UiFlexLayout.Align.START,
-                UiFlexLayout.Item.flex(170, 1),
-                UiFlexLayout.Item.fixed(80),
-                UiFlexLayout.Item.fixed(44),
-                UiFlexLayout.Item.fixed(44),
-                UiFlexLayout.Item.fixed(44)
+        List<UiRect> settingsRow = FormPanels.row(row2, 4, UiFlexLayout.Align.STRETCH,
+                UiFlexLayout.Item.flex(220, 1),
+                UiFlexLayout.Item.fixed(82),
+                UiFlexLayout.Item.fixed(46),
+                UiFlexLayout.Item.fixed(46),
+                UiFlexLayout.Item.fixed(52),
+                UiFlexLayout.Item.fixed(52)
         );
-        UiRect linePlus = new UiRect(settingsRow.get(4).x(), row3.y(), settingsRow.get(4).width(), settingsRow.get(4).height());
-        UiRect zMinus = new UiRect(linePlus.right() + 4, row3.y(), 44, linePlus.height());
-        UiRect zPlus = new UiRect(zMinus.right() + 4, row3.y(), 44, linePlus.height());
-        List<UiRect> statButtons = FormPanels.row(statsButtons, 4, UiFlexLayout.Align.START,
-                UiFlexLayout.Item.fixed(48),
-                UiFlexLayout.Item.fixed(48),
-                UiFlexLayout.Item.fixed(48),
-                UiFlexLayout.Item.fixed(48),
-                UiFlexLayout.Item.fixed(48),
-                UiFlexLayout.Item.fixed(48)
+        List<UiRect> metricsRow = FormPanels.row(row3, 4, UiFlexLayout.Align.STRETCH,
+                UiFlexLayout.Item.flex(240, 1),
+                UiFlexLayout.Item.fixed(46),
+                UiFlexLayout.Item.fixed(46)
         );
-        List<UiRect> colors = FormPanels.row(colorButtons, 4, UiFlexLayout.Align.START,
-                UiFlexLayout.Item.fixed(64),
-                UiFlexLayout.Item.fixed(64),
-                UiFlexLayout.Item.fixed(84),
-                UiFlexLayout.Item.fixed(84)
+        List<UiRect> statButtons = FormPanels.row(statsButtons, 4, UiFlexLayout.Align.STRETCH,
+                UiFlexLayout.Item.flex(48, 1),
+                UiFlexLayout.Item.flex(48, 1),
+                UiFlexLayout.Item.flex(48, 1),
+                UiFlexLayout.Item.flex(48, 1),
+                UiFlexLayout.Item.flex(48, 1),
+                UiFlexLayout.Item.flex(48, 1)
         );
-        List<UiRect> hexes = FormPanels.row(colorHex, 4, UiFlexLayout.Align.START,
-                UiFlexLayout.Item.fixed(64),
-                UiFlexLayout.Item.fixed(64)
+        List<UiRect> colors = FormPanels.row(colorButtons, 4, UiFlexLayout.Align.STRETCH,
+                UiFlexLayout.Item.flex(64, 1),
+                UiFlexLayout.Item.flex(64, 1),
+                UiFlexLayout.Item.flex(84, 1),
+                UiFlexLayout.Item.flex(84, 1)
         );
-        List<UiRect> actionButtons = FormPanels.row(actions, 4, UiFlexLayout.Align.START,
+        List<UiRect> hexes = FormPanels.row(colorHex, 8, UiFlexLayout.Align.START,
+                UiFlexLayout.Item.fixed(140),
+                UiFlexLayout.Item.fixed(140)
+        );
+        List<UiRect> actionButtons = FormPanels.row(actions, 4, UiFlexLayout.Align.END,
                 UiFlexLayout.Item.fixed(60),
                 UiFlexLayout.Item.fixed(58)
         );
 
         return new SecondaryAdvancedLayout(
                 toggleRow.get(0), toggleRow.get(1), toggleRow.get(2),
-                settingsRow.get(0), settingsRow.get(1), settingsRow.get(2), settingsRow.get(3), settingsRow.get(4),
-                linePlus,
+                settingsRow.get(0), settingsRow.get(1), settingsRow.get(2), settingsRow.get(3), settingsRow.get(4), settingsRow.get(5),
                 regexInput,
                 outgoingInput,
                 statButtons.get(0), statButtons.get(1), statButtons.get(2), statButtons.get(3), statButtons.get(4), statButtons.get(5),
-                new UiRect(statButtons.get(0).x(), statsButtons.y() + 24, statsButtons.width(), 9),
+                statsText,
                 colors.get(0), colors.get(1), colors.get(2), colors.get(3),
                 hexes.get(0), hexes.get(1),
-                new UiRect(settingsRow.get(2).x(), row3.y() + 4, 152, 9),
-                zMinus, zPlus,
+                new UiRect(metricsRow.get(0).x(), metricsRow.get(0).y() + 4, metricsRow.get(0).width(), 9),
+                metricsRow.get(1), metricsRow.get(2),
                 actionButtons.get(0), actionButtons.get(1)
         );
     }

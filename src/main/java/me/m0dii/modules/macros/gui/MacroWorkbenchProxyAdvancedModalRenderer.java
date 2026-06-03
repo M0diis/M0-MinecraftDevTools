@@ -119,8 +119,10 @@ public final class MacroWorkbenchProxyAdvancedModalRenderer {
 
         int secondaryBgHexX = layout.bgHex().x();
         int secondaryBgHexY = layout.bgHex().y();
+        int secondaryBgHexW = layout.bgHex().width();
         int secondaryTxHexX = layout.txHex().x();
         int secondaryTxHexY = layout.txHex().y();
+        int secondaryTxHexW = layout.txHex().width();
         drawModalButton(context, textRenderer, layout.bgMinus(), "BG-", mouseX, mouseY);
         drawModalButton(context, textRenderer, layout.bgPlus(), "BG+", mouseX, mouseY);
         drawModalButton(context, textRenderer, layout.bgAlphaMinus(), "Opacity-", mouseX, mouseY);
@@ -128,13 +130,13 @@ public final class MacroWorkbenchProxyAdvancedModalRenderer {
         context.drawTextWithShadow(textRenderer, "BG", secondaryBgHexX, secondaryBgHexY - 10, 0xFFEAEAEA);
         context.drawTextWithShadow(textRenderer, "TX", secondaryTxHexX, secondaryTxHexY - 10, 0xFFEAEAEA);
         int bgInputBg = advancedBgColorFocused ? 0xFF0F0F0F : 0xFF161616;
-        context.fill(secondaryBgHexX, secondaryBgHexY, secondaryBgHexX + 64, secondaryBgHexY + 18, bgInputBg);
-        context.fill(secondaryBgHexX, secondaryBgHexY, secondaryBgHexX + 64, secondaryBgHexY + 1, 0x60FFFFFF);
+        context.fill(secondaryBgHexX, secondaryBgHexY, secondaryBgHexX + secondaryBgHexW, secondaryBgHexY + 18, bgInputBg);
+        context.fill(secondaryBgHexX, secondaryBgHexY, secondaryBgHexX + secondaryBgHexW, secondaryBgHexY + 1, 0x60FFFFFF);
         GuiTextEditingUtils.drawSingleLineSelection(context, textRenderer, secondaryBgHexX + 4, secondaryBgHexY + 5, advancedBgColor, advancedBgSelectionAnchor, advancedBgCursor);
         context.drawTextWithShadow(textRenderer, advancedBgColor, secondaryBgHexX + 4, secondaryBgHexY + 5, 0xFFEAEAEA);
         int txInputBg = advancedBorderColorFocused ? 0xFF0F0F0F : 0xFF161616;
-        context.fill(secondaryTxHexX, secondaryTxHexY, secondaryTxHexX + 64, secondaryTxHexY + 18, txInputBg);
-        context.fill(secondaryTxHexX, secondaryTxHexY, secondaryTxHexX + 64, secondaryTxHexY + 1, 0x60FFFFFF);
+        context.fill(secondaryTxHexX, secondaryTxHexY, secondaryTxHexX + secondaryTxHexW, secondaryTxHexY + 18, txInputBg);
+        context.fill(secondaryTxHexX, secondaryTxHexY, secondaryTxHexX + secondaryTxHexW, secondaryTxHexY + 1, 0x60FFFFFF);
         GuiTextEditingUtils.drawSingleLineSelection(context, textRenderer, secondaryTxHexX + 4, secondaryTxHexY + 5, advancedBorderColor, advancedBorderSelectionAnchor, advancedBorderCursor);
         context.drawTextWithShadow(textRenderer, advancedBorderColor, secondaryTxHexX + 4, secondaryTxHexY + 5, 0xFFEAEAEA);
 
