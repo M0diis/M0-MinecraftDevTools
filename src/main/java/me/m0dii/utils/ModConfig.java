@@ -126,6 +126,41 @@ public class ModConfig extends MidnightConfig {
     @MidnightConfig.Entry(name = "Scroll Item Scaling", category = CATEGORY_MOUSE_TWEAKS)
     public static MouseTweaksScrollItemScaling mouseTweaksScrollItemScaling = MouseTweaksScrollItemScaling.PROPORTIONAL;
 
+    public static final String CATEGORY_HUNGER_TWEAKS = "Hunger Tweaks";
+
+    @MidnightConfig.Entry(name = "Hunger Tweaks Module Enabled", category = CATEGORY_HUNGER_TWEAKS)
+    public static boolean hungerTweaksModuleEnabled = true;
+
+    @MidnightConfig.Entry(name = "Show Food Values In Tooltip", category = CATEGORY_HUNGER_TWEAKS)
+    public static boolean hungerTweaksShowFoodValuesInTooltip = true;
+
+    @MidnightConfig.Entry(name = "Always Show Food Values In Tooltip", category = CATEGORY_HUNGER_TWEAKS)
+    public static boolean hungerTweaksShowFoodValuesInTooltipAlways = true;
+
+    @MidnightConfig.Entry(name = "Show Saturation HUD Overlay", category = CATEGORY_HUNGER_TWEAKS)
+    public static boolean hungerTweaksShowSaturationHudOverlay = true;
+
+    @MidnightConfig.Entry(name = "Show Food Values HUD Overlay", category = CATEGORY_HUNGER_TWEAKS)
+    public static boolean hungerTweaksShowFoodValuesHudOverlay = true;
+
+    @MidnightConfig.Entry(name = "Show Food Values HUD Overlay When Offhand", category = CATEGORY_HUNGER_TWEAKS)
+    public static boolean hungerTweaksShowFoodValuesHudOverlayWhenOffhand = true;
+
+    @MidnightConfig.Entry(name = "Show Food Exhaustion HUD Underlay", category = CATEGORY_HUNGER_TWEAKS)
+    public static boolean hungerTweaksShowFoodExhaustionHudUnderlay = true;
+
+    @MidnightConfig.Entry(name = "Show Food Health HUD Overlay", category = CATEGORY_HUNGER_TWEAKS)
+    public static boolean hungerTweaksShowFoodHealthHudOverlay = true;
+
+    @MidnightConfig.Entry(name = "Show Food Debug Info", category = CATEGORY_HUNGER_TWEAKS)
+    public static boolean hungerTweaksShowFoodDebugInfo = true;
+
+    @MidnightConfig.Entry(name = "Show Vanilla Animations Overlay", category = CATEGORY_HUNGER_TWEAKS)
+    public static boolean hungerTweaksShowVanillaAnimationsOverlay = true;
+
+    @MidnightConfig.Entry(name = "Max HUD Overlay Flash Alpha", category = CATEGORY_HUNGER_TWEAKS, isSlider = true, min = 0, max = 1)
+    public static float hungerTweaksMaxHudOverlayFlashAlpha = 0.65f;
+
     public static final String CATEGORY_REACH = "Reach";
 
     @MidnightConfig.Entry(name = "Reach Module Enabled", category = CATEGORY_REACH)

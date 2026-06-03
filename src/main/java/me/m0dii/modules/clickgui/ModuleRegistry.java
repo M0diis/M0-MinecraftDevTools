@@ -10,6 +10,7 @@ import me.m0dii.modules.fastblockplacement.FastBlockPlacementModule;
 import me.m0dii.modules.freecam.FreecamModule;
 import me.m0dii.modules.fullbright.FullbrightModule;
 import me.m0dii.modules.heldlight.HeldLightModule;
+import me.m0dii.modules.hungertweaks.HungerTweaksModule;
 import me.m0dii.modules.instantbreak.InstantBreakModule;
 import me.m0dii.modules.inventorymove.InventoryMoveModule;
 import me.m0dii.modules.macros.gui.MacroKeybindHudModule;
@@ -100,6 +101,10 @@ public class ModuleRegistry {
         ModuleCategory mouseTweaks = new ModuleCategory("Mouse Tweaks");
         safeAdd(mouseTweaks, MouseTweaksModule.INSTANCE);
         categories.add(mouseTweaks);
+
+        ModuleCategory hungerTweaks = new ModuleCategory("Hunger Tweaks");
+        safeAdd(hungerTweaks, HungerTweaksModule.INSTANCE);
+        categories.add(hungerTweaks);
 
         ModuleCategory movement = new ModuleCategory("Movement");
         safeAdd(movement, InventoryMoveModule.INSTANCE);

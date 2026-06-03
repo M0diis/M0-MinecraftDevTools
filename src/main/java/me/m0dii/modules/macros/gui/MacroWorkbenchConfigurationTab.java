@@ -7,6 +7,7 @@ import me.m0dii.modules.fastblockplacement.FastBlockPlacementModule;
 import me.m0dii.modules.freecam.FreecamModule;
 import me.m0dii.modules.fullbright.FullbrightModule;
 import me.m0dii.modules.heldlight.HeldLightModule;
+import me.m0dii.modules.hungertweaks.HungerTweaksModule;
 import me.m0dii.modules.instantbreak.InstantBreakModule;
 import me.m0dii.modules.inventorymove.InventoryMoveModule;
 import me.m0dii.modules.mousetweaks.MouseTweaksModule;
@@ -48,7 +49,8 @@ final class MacroWorkbenchConfigurationTab {
         PICKUP_FEED("Pickup Feed"),
         BLOCK_ATTRIBUTES("Block Attributes"),
         TWEAKS("Tweaks"),
-        MOUSE_TWEAKS("Mouse Tweaks");
+        MOUSE_TWEAKS("Mouse Tweaks"),
+        HUNGER_TWEAKS("Hunger Tweaks");
 
         private final String label;
 
@@ -71,6 +73,7 @@ final class MacroWorkbenchConfigurationTab {
     private ButtonWidget blockAttributesCategoryButton;
     private ButtonWidget tweaksCategoryButton;
     private ButtonWidget mouseTweaksCategoryButton;
+    private ButtonWidget hungerTweaksCategoryButton;
 
     private ButtonWidget macroOverlayToggleButton;
     private ButtonWidget nbtHudToggleButton;
@@ -143,6 +146,17 @@ final class MacroWorkbenchConfigurationTab {
     private ButtonWidget mouseTweaksWheelSearchOrderButton;
     private ButtonWidget mouseTweaksWheelScrollDirectionButton;
     private ButtonWidget mouseTweaksScrollScalingButton;
+    private ButtonWidget hungerTweaksModuleToggleButton;
+    private ButtonWidget hungerTooltipToggleButton;
+    private ButtonWidget hungerTooltipAlwaysToggleButton;
+    private ButtonWidget hungerSaturationOverlayToggleButton;
+    private ButtonWidget hungerFoodValuesOverlayToggleButton;
+    private ButtonWidget hungerOffhandOverlayToggleButton;
+    private ButtonWidget hungerExhaustionUnderlayToggleButton;
+    private ButtonWidget hungerHealthOverlayToggleButton;
+    private ButtonWidget hungerDebugInfoToggleButton;
+    private ButtonWidget hungerVanillaAnimationToggleButton;
+    private ButtonWidget hungerMaxFlashAlphaButton;
 
     private TextFieldWidget secondaryRegexInputField;
     private TextFieldWidget secondaryOutgoingRegexField;
@@ -173,6 +187,7 @@ final class MacroWorkbenchConfigurationTab {
         this.blockAttributesCategoryButton = button(Category.BLOCK_ATTRIBUTES.label, b -> setCategory(Category.BLOCK_ATTRIBUTES), listX, listY + ROW_GAP * 5, categoryW, ROW_H);
         this.tweaksCategoryButton = button(Category.TWEAKS.label, b -> setCategory(Category.TWEAKS), listX, listY + ROW_GAP * 6, categoryW, ROW_H);
         this.mouseTweaksCategoryButton = button(Category.MOUSE_TWEAKS.label, b -> setCategory(Category.MOUSE_TWEAKS), listX, listY + ROW_GAP * 7, categoryW, ROW_H);
+        this.hungerTweaksCategoryButton = button(Category.HUNGER_TWEAKS.label, b -> setCategory(Category.HUNGER_TWEAKS), listX, listY + ROW_GAP * 8, categoryW, ROW_H);
 
         this.macroOverlayToggleButton = button("Macro Keybind HUD", b -> {
             ModConfig.updateAndSave(() -> ModConfig.showMacroKeybindOverlay = !ModConfig.showMacroKeybindOverlay);
@@ -535,10 +550,65 @@ final class MacroWorkbenchConfigurationTab {
             syncControls();
         }, rightX, rowY(7), settingW, ROW_H);
 
+        this.hungerTweaksModuleToggleButton = button("Hunger Tweaks Module", b -> {
+            HungerTweaksModule.INSTANCE.setEnabled(!HungerTweaksModule.INSTANCE.isEnabled());
+            syncControls();
+        }, rightX, rowY(0), settingW, ROW_H);
+
+        this.hungerTooltipToggleButton = button("Tooltip Food Values", b -> {
+            ModConfig.updateAndSave(() -> ModConfig.hungerTweaksShowFoodValuesInTooltip = !ModConfig.hungerTweaksShowFoodValuesInTooltip);
+            syncControls();
+        }, rightX, rowY(1), settingW, ROW_H);
+
+        this.hungerTooltipAlwaysToggleButton = button("Tooltip Always Visible", b -> {
+            ModConfig.updateAndSave(() -> ModConfig.hungerTweaksShowFoodValuesInTooltipAlways = !ModConfig.hungerTweaksShowFoodValuesInTooltipAlways);
+            syncControls();
+        }, rightX, rowY(2), settingW, ROW_H);
+
+        this.hungerSaturationOverlayToggleButton = button("Saturation Overlay", b -> {
+            ModConfig.updateAndSave(() -> ModConfig.hungerTweaksShowSaturationHudOverlay = !ModConfig.hungerTweaksShowSaturationHudOverlay);
+            syncControls();
+        }, rightX, rowY(3), settingW, ROW_H);
+
+        this.hungerFoodValuesOverlayToggleButton = button("Held Food Overlay", b -> {
+            ModConfig.updateAndSave(() -> ModConfig.hungerTweaksShowFoodValuesHudOverlay = !ModConfig.hungerTweaksShowFoodValuesHudOverlay);
+            syncControls();
+        }, rightX, rowY(4), settingW, ROW_H);
+
+        this.hungerOffhandOverlayToggleButton = button("Offhand Overlay", b -> {
+            ModConfig.updateAndSave(() -> ModConfig.hungerTweaksShowFoodValuesHudOverlayWhenOffhand = !ModConfig.hungerTweaksShowFoodValuesHudOverlayWhenOffhand);
+            syncControls();
+        }, rightX, rowY(5), settingW, ROW_H);
+
+        this.hungerExhaustionUnderlayToggleButton = button("Exhaustion Underlay", b -> {
+            ModConfig.updateAndSave(() -> ModConfig.hungerTweaksShowFoodExhaustionHudUnderlay = !ModConfig.hungerTweaksShowFoodExhaustionHudUnderlay);
+            syncControls();
+        }, rightX, rowY(6), settingW, ROW_H);
+
+        this.hungerHealthOverlayToggleButton = button("Estimated Health Overlay", b -> {
+            ModConfig.updateAndSave(() -> ModConfig.hungerTweaksShowFoodHealthHudOverlay = !ModConfig.hungerTweaksShowFoodHealthHudOverlay);
+            syncControls();
+        }, rightX, rowY(7), settingW, ROW_H);
+
+        this.hungerDebugInfoToggleButton = button("Debug HUD Food Info", b -> {
+            ModConfig.updateAndSave(() -> ModConfig.hungerTweaksShowFoodDebugInfo = !ModConfig.hungerTweaksShowFoodDebugInfo);
+            syncControls();
+        }, rightX, rowY(8), settingW, ROW_H);
+
+        this.hungerVanillaAnimationToggleButton = button("Match Vanilla Animation", b -> {
+            ModConfig.updateAndSave(() -> ModConfig.hungerTweaksShowVanillaAnimationsOverlay = !ModConfig.hungerTweaksShowVanillaAnimationsOverlay);
+            syncControls();
+        }, rightX, rowY(9), settingW, ROW_H);
+
+        this.hungerMaxFlashAlphaButton = button("Max Flash Alpha", b -> {
+            adjustHungerMaxFlashAlpha(1);
+            syncControls();
+        }, rightX, rowY(10), settingW, ROW_H);
+
         register(
                 this.hudCategoryButton, this.overlaysCategoryButton, this.modulesCategoryButton,
                 this.secondaryChatCategoryButton, this.pickupFeedCategoryButton, this.blockAttributesCategoryButton,
-                this.tweaksCategoryButton, this.mouseTweaksCategoryButton,
+                this.tweaksCategoryButton, this.mouseTweaksCategoryButton, this.hungerTweaksCategoryButton,
                 this.macroOverlayToggleButton, this.nbtHudToggleButton,
                 this.secondaryEnabledToggleButton, this.secondaryOverlayToggleButton, this.secondaryInterceptModeButton,
                 this.secondaryRegexAddButton, this.secondaryRegexApplyButton, this.secondaryRegexRemoveButton,
@@ -563,6 +633,10 @@ final class MacroWorkbenchConfigurationTab {
                 this.mouseTweaksModuleToggleButton, this.mouseTweaksRmbToggleButton, this.mouseTweaksLmbWithItemToggleButton,
                 this.mouseTweaksLmbWithoutItemToggleButton, this.mouseTweaksWheelToggleButton, this.mouseTweaksWheelSearchOrderButton,
                 this.mouseTweaksWheelScrollDirectionButton, this.mouseTweaksScrollScalingButton,
+                this.hungerTweaksModuleToggleButton, this.hungerTooltipToggleButton, this.hungerTooltipAlwaysToggleButton,
+                this.hungerSaturationOverlayToggleButton, this.hungerFoodValuesOverlayToggleButton, this.hungerOffhandOverlayToggleButton,
+                this.hungerExhaustionUnderlayToggleButton, this.hungerHealthOverlayToggleButton, this.hungerDebugInfoToggleButton,
+                this.hungerVanillaAnimationToggleButton, this.hungerMaxFlashAlphaButton,
                 this.secondaryRegexInputField, this.secondaryOutgoingRegexField
         );
 
@@ -582,6 +656,7 @@ final class MacroWorkbenchConfigurationTab {
         this.blockAttributesCategoryButton.setMessage(Text.literal((this.category == Category.BLOCK_ATTRIBUTES ? "> " : "") + Category.BLOCK_ATTRIBUTES.label));
         this.tweaksCategoryButton.setMessage(Text.literal((this.category == Category.TWEAKS ? "> " : "") + Category.TWEAKS.label));
         this.mouseTweaksCategoryButton.setMessage(Text.literal((this.category == Category.MOUSE_TWEAKS ? "> " : "") + Category.MOUSE_TWEAKS.label));
+        this.hungerTweaksCategoryButton.setMessage(Text.literal((this.category == Category.HUNGER_TWEAKS ? "> " : "") + Category.HUNGER_TWEAKS.label));
 
         SecondaryChatSettings.Data secondary = SecondaryChatSettings.get();
         ensureRegexSelectionInBounds();
@@ -652,6 +727,17 @@ final class MacroWorkbenchConfigurationTab {
         this.mouseTweaksWheelSearchOrderButton.setMessage(Text.literal("Wheel Search Order: " + ModConfig.mouseTweaksWheelSearchOrder));
         this.mouseTweaksWheelScrollDirectionButton.setMessage(Text.literal("Wheel Scroll Direction: " + ModConfig.mouseTweaksWheelScrollDirection));
         this.mouseTweaksScrollScalingButton.setMessage(Text.literal("Scroll Item Scaling: " + ModConfig.mouseTweaksScrollItemScaling));
+        this.hungerTweaksModuleToggleButton.setMessage(Text.literal("Hunger Tweaks Module: " + (HungerTweaksModule.INSTANCE.isEnabled() ? "ON" : "OFF")));
+        this.hungerTooltipToggleButton.setMessage(Text.literal("Tooltip Food Values: " + (ModConfig.hungerTweaksShowFoodValuesInTooltip ? "ON" : "OFF")));
+        this.hungerTooltipAlwaysToggleButton.setMessage(Text.literal("Tooltip Always Visible: " + (ModConfig.hungerTweaksShowFoodValuesInTooltipAlways ? "ON" : "OFF")));
+        this.hungerSaturationOverlayToggleButton.setMessage(Text.literal("Saturation Overlay: " + (ModConfig.hungerTweaksShowSaturationHudOverlay ? "ON" : "OFF")));
+        this.hungerFoodValuesOverlayToggleButton.setMessage(Text.literal("Held Food Overlay: " + (ModConfig.hungerTweaksShowFoodValuesHudOverlay ? "ON" : "OFF")));
+        this.hungerOffhandOverlayToggleButton.setMessage(Text.literal("Offhand Overlay: " + (ModConfig.hungerTweaksShowFoodValuesHudOverlayWhenOffhand ? "ON" : "OFF")));
+        this.hungerExhaustionUnderlayToggleButton.setMessage(Text.literal("Exhaustion Underlay: " + (ModConfig.hungerTweaksShowFoodExhaustionHudUnderlay ? "ON" : "OFF")));
+        this.hungerHealthOverlayToggleButton.setMessage(Text.literal("Estimated Health Overlay: " + (ModConfig.hungerTweaksShowFoodHealthHudOverlay ? "ON" : "OFF")));
+        this.hungerDebugInfoToggleButton.setMessage(Text.literal("Debug HUD Food Info: " + (ModConfig.hungerTweaksShowFoodDebugInfo ? "ON" : "OFF")));
+        this.hungerVanillaAnimationToggleButton.setMessage(Text.literal("Match Vanilla Animation: " + (ModConfig.hungerTweaksShowVanillaAnimationsOverlay ? "ON" : "OFF")));
+        this.hungerMaxFlashAlphaButton.setMessage(Text.literal("Max Flash Alpha: " + HungerTweaksModule.formatFlashAlpha(ModConfig.hungerTweaksMaxHudOverlayFlashAlpha)));
 
         if (!this.secondaryOutgoingRegexField.isFocused()) {
             this.secondaryOutgoingRegexField.setText(secondary.outgoingRegex == null ? "" : secondary.outgoingRegex);
@@ -739,6 +825,19 @@ final class MacroWorkbenchConfigurationTab {
         setVisible(this.mouseTweaksWheelSearchOrderButton, mouseTweaks);
         setVisible(this.mouseTweaksWheelScrollDirectionButton, mouseTweaks);
         setVisible(this.mouseTweaksScrollScalingButton, mouseTweaks);
+
+        boolean hungerTweaks = this.category == Category.HUNGER_TWEAKS;
+        setVisible(this.hungerTweaksModuleToggleButton, hungerTweaks);
+        setVisible(this.hungerTooltipToggleButton, hungerTweaks);
+        setVisible(this.hungerTooltipAlwaysToggleButton, hungerTweaks);
+        setVisible(this.hungerSaturationOverlayToggleButton, hungerTweaks);
+        setVisible(this.hungerFoodValuesOverlayToggleButton, hungerTweaks);
+        setVisible(this.hungerOffhandOverlayToggleButton, hungerTweaks);
+        setVisible(this.hungerExhaustionUnderlayToggleButton, hungerTweaks);
+        setVisible(this.hungerHealthOverlayToggleButton, hungerTweaks);
+        setVisible(this.hungerDebugInfoToggleButton, hungerTweaks);
+        setVisible(this.hungerVanillaAnimationToggleButton, hungerTweaks);
+        setVisible(this.hungerMaxFlashAlphaButton, hungerTweaks);
     }
 
     void render(DrawContext context) {
@@ -763,6 +862,7 @@ final class MacroWorkbenchConfigurationTab {
             case BLOCK_ATTRIBUTES -> "Block interaction and hitbox behavior overrides.";
             case TWEAKS -> "Visual and gameplay tweaks, plus reach controls.";
             case MOUSE_TWEAKS -> "Inventory mouse drag and wheel-transfer tweaks.";
+            case HUNGER_TWEAKS -> "Food tooltip, saturation, exhaustion, and healing prediction overlays.";
             default -> "";
         };
         context.drawTextWithShadow(this.owner.workbenchTextRenderer(), description, splitX + 12, rowY(8), 0xFFA8CFCF);
@@ -812,6 +912,16 @@ final class MacroWorkbenchConfigurationTab {
             }
             if (contains(mouseX, mouseY, this.reachMpEntityExtraButton)) {
                 adjustReachMpEntityExtra(-1);
+                syncControls();
+                return true;
+            }
+            return false;
+        }
+
+        if (this.category == Category.HUNGER_TWEAKS && (button == 0 || button == 1)) {
+            int direction = button == 0 ? 1 : -1;
+            if (contains(mouseX, mouseY, this.hungerMaxFlashAlphaButton)) {
+                adjustHungerMaxFlashAlpha(direction);
                 syncControls();
                 return true;
             }
@@ -1019,6 +1129,15 @@ final class MacroWorkbenchConfigurationTab {
         ModConfig.updateAndSave(() -> {
             double step = this.shiftDown.getAsBoolean() ? 0.5 : 0.25;
             ModConfig.reachMultiplayerEntityExtra = Math.clamp(ModConfig.reachMultiplayerEntityExtra + (direction * step), 0.0, 4.0);
+        });
+    }
+
+    private void adjustHungerMaxFlashAlpha(int direction) {
+        ModConfig.updateAndSave(() -> {
+            float step = this.shiftDown.getAsBoolean() ? 0.01f : 0.05f;
+            ModConfig.hungerTweaksMaxHudOverlayFlashAlpha = HungerTweaksModule.clampFlashAlpha(
+                    ModConfig.hungerTweaksMaxHudOverlayFlashAlpha + (direction * step)
+            );
         });
     }
 

@@ -15,6 +15,7 @@ import me.m0dii.modules.fullbright.FullbrightModule;
 import me.m0dii.modules.getdata.GetDataClientCommand;
 import me.m0dii.modules.getdata.GetDataSyncClient;
 import me.m0dii.modules.heldlight.HeldLightModule;
+import me.m0dii.modules.hungertweaks.HungerTweaksModule;
 import me.m0dii.modules.instantbreak.InstantBreakModule;
 import me.m0dii.modules.inventorymove.InventoryMoveModule;
 import me.m0dii.modules.macros.MacrosModule;
@@ -77,6 +78,7 @@ public class M0DevToolsClient implements ClientModInitializer {
         ItemPickupNotifierModule.INSTANCE.register();
         FullbrightModule.INSTANCE.register();
         HeldLightModule.INSTANCE.register();
+        HungerTweaksModule.INSTANCE.register();
         InventoryMoveModule.INSTANCE.register();
         DynamicFpsModule.INSTANCE.register();
         FastBlockPlacementModule.INSTANCE.register();
