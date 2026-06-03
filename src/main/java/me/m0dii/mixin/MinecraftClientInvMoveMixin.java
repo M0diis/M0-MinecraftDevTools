@@ -1,5 +1,8 @@
 package me.m0dii.mixin;
 
+import me.m0dii.modules.bridging.BridgingTweaksLogic;
+import me.m0dii.modules.bridging.BridgingTweaksModule;
+import me.m0dii.modules.bridging.BridgingTweaksState;
 import me.m0dii.modules.fastblockplacement.FastBlockPlacementModule;
 import me.m0dii.modules.inventorymove.InventoryMoveModule;
 import me.m0dii.modules.tweaks.TweaksModule;
@@ -52,6 +55,8 @@ public class MinecraftClientInvMoveMixin {
             this.itemUseCooldown = 0;
         }
 
+        BridgingTweaksState.tick(client);
+
         if (!InventoryMoveModule.INSTANCE.isEnabled()) {
             return;
         }
@@ -70,6 +75,12 @@ public class MinecraftClientInvMoveMixin {
 
     @Inject(method = "doItemUse", at = @At("HEAD"), cancellable = true)
     private void applyPlacementTweaks(CallbackInfo ci) {
+        if (BridgingTweaksLogic.tryBridgePlacement(MinecraftClient.getInstance(), this.interactionManager)) {
+            this.itemUseCooldown = BridgingTweaksModule.INSTANCE.delayPostBridging();
+            ci.cancel();
+            return;
+        }
+
         if (!TweaksModule.INSTANCE.angelBlock()) {
             return;
         }

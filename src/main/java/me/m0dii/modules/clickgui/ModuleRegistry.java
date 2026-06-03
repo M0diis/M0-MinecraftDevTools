@@ -2,6 +2,7 @@ package me.m0dii.modules.clickgui;
 
 import me.m0dii.M0DevTools;
 import me.m0dii.modules.Module;
+import me.m0dii.modules.bridging.BridgingTweaksModule;
 import me.m0dii.modules.chat.SecondaryChatModule;
 import me.m0dii.modules.commandblockui.BetterCommandBlockUiModule;
 import me.m0dii.modules.commandhistory.CommandHistoryModule;
@@ -105,6 +106,10 @@ public class ModuleRegistry {
         ModuleCategory hungerTweaks = new ModuleCategory("Hunger Tweaks");
         safeAdd(hungerTweaks, HungerTweaksModule.INSTANCE);
         categories.add(hungerTweaks);
+
+        ModuleCategory bridgingTweaks = new ModuleCategory("Bridging Tweaks");
+        safeAdd(bridgingTweaks, BridgingTweaksModule.INSTANCE);
+        categories.add(bridgingTweaks);
 
         ModuleCategory movement = new ModuleCategory("Movement");
         safeAdd(movement, InventoryMoveModule.INSTANCE);

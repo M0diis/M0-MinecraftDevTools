@@ -1,6 +1,7 @@
 package me.m0dii;
 
 import eu.midnightdust.lib.config.MidnightConfig;
+import me.m0dii.modules.bridging.BridgingTweaksModule;
 import me.m0dii.modules.chat.SecondaryChatModule;
 import me.m0dii.modules.clickgui.ClickHudModule;
 import me.m0dii.modules.clickgui.ModuleRegistry;
@@ -79,6 +80,7 @@ public class M0DevToolsClient implements ClientModInitializer {
         FullbrightModule.INSTANCE.register();
         HeldLightModule.INSTANCE.register();
         HungerTweaksModule.INSTANCE.register();
+        BridgingTweaksModule.INSTANCE.register();
         InventoryMoveModule.INSTANCE.register();
         DynamicFpsModule.INSTANCE.register();
         FastBlockPlacementModule.INSTANCE.register();

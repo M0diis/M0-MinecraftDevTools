@@ -1,5 +1,6 @@
 package me.m0dii.modules.macros.gui;
 
+import me.m0dii.modules.bridging.BridgingTweaksModule;
 import me.m0dii.modules.chat.SecondaryChatModule;
 import me.m0dii.modules.chat.SecondaryChatSettings;
 import me.m0dii.modules.commandblockui.BetterCommandBlockUiModule;
@@ -50,7 +51,8 @@ final class MacroWorkbenchConfigurationTab {
         BLOCK_ATTRIBUTES("Block Attributes"),
         TWEAKS("Tweaks"),
         MOUSE_TWEAKS("Mouse Tweaks"),
-        HUNGER_TWEAKS("Hunger Tweaks");
+        HUNGER_TWEAKS("Hunger Tweaks"),
+        BRIDGING_TWEAKS("Bridging Tweaks");
 
         private final String label;
 
@@ -74,6 +76,7 @@ final class MacroWorkbenchConfigurationTab {
     private ButtonWidget tweaksCategoryButton;
     private ButtonWidget mouseTweaksCategoryButton;
     private ButtonWidget hungerTweaksCategoryButton;
+    private ButtonWidget bridgingTweaksCategoryButton;
 
     private ButtonWidget macroOverlayToggleButton;
     private ButtonWidget nbtHudToggleButton;
@@ -160,6 +163,7 @@ final class MacroWorkbenchConfigurationTab {
 
     private TextFieldWidget secondaryRegexInputField;
     private TextFieldWidget secondaryOutgoingRegexField;
+    private final List<ButtonWidget> bridgingButtons = new ArrayList<>();
 
     private int selectedRegexIndex = -1;
     private int regexScroll = 0;
@@ -188,6 +192,7 @@ final class MacroWorkbenchConfigurationTab {
         this.tweaksCategoryButton = button(Category.TWEAKS.label, b -> setCategory(Category.TWEAKS), listX, listY + ROW_GAP * 6, categoryW, ROW_H);
         this.mouseTweaksCategoryButton = button(Category.MOUSE_TWEAKS.label, b -> setCategory(Category.MOUSE_TWEAKS), listX, listY + ROW_GAP * 7, categoryW, ROW_H);
         this.hungerTweaksCategoryButton = button(Category.HUNGER_TWEAKS.label, b -> setCategory(Category.HUNGER_TWEAKS), listX, listY + ROW_GAP * 8, categoryW, ROW_H);
+        this.bridgingTweaksCategoryButton = button(Category.BRIDGING_TWEAKS.label, b -> setCategory(Category.BRIDGING_TWEAKS), listX, listY + ROW_GAP * 9, categoryW, ROW_H);
 
         this.macroOverlayToggleButton = button("Macro Keybind HUD", b -> {
             ModConfig.updateAndSave(() -> ModConfig.showMacroKeybindOverlay = !ModConfig.showMacroKeybindOverlay);
@@ -605,10 +610,12 @@ final class MacroWorkbenchConfigurationTab {
             syncControls();
         }, rightX, rowY(10), settingW, ROW_H);
 
+        createBridgingButtons(rightX, settingW);
+
         register(
                 this.hudCategoryButton, this.overlaysCategoryButton, this.modulesCategoryButton,
                 this.secondaryChatCategoryButton, this.pickupFeedCategoryButton, this.blockAttributesCategoryButton,
-                this.tweaksCategoryButton, this.mouseTweaksCategoryButton, this.hungerTweaksCategoryButton,
+                this.tweaksCategoryButton, this.mouseTweaksCategoryButton, this.hungerTweaksCategoryButton, this.bridgingTweaksCategoryButton,
                 this.macroOverlayToggleButton, this.nbtHudToggleButton,
                 this.secondaryEnabledToggleButton, this.secondaryOverlayToggleButton, this.secondaryInterceptModeButton,
                 this.secondaryRegexAddButton, this.secondaryRegexApplyButton, this.secondaryRegexRemoveButton,
@@ -639,6 +646,7 @@ final class MacroWorkbenchConfigurationTab {
                 this.hungerVanillaAnimationToggleButton, this.hungerMaxFlashAlphaButton,
                 this.secondaryRegexInputField, this.secondaryOutgoingRegexField
         );
+        register(this.bridgingButtons.toArray(new ClickableWidget[0]));
 
         syncControls();
     }
@@ -657,6 +665,7 @@ final class MacroWorkbenchConfigurationTab {
         this.tweaksCategoryButton.setMessage(Text.literal((this.category == Category.TWEAKS ? "> " : "") + Category.TWEAKS.label));
         this.mouseTweaksCategoryButton.setMessage(Text.literal((this.category == Category.MOUSE_TWEAKS ? "> " : "") + Category.MOUSE_TWEAKS.label));
         this.hungerTweaksCategoryButton.setMessage(Text.literal((this.category == Category.HUNGER_TWEAKS ? "> " : "") + Category.HUNGER_TWEAKS.label));
+        this.bridgingTweaksCategoryButton.setMessage(Text.literal((this.category == Category.BRIDGING_TWEAKS ? "> " : "") + Category.BRIDGING_TWEAKS.label));
 
         SecondaryChatSettings.Data secondary = SecondaryChatSettings.get();
         ensureRegexSelectionInBounds();
@@ -738,6 +747,7 @@ final class MacroWorkbenchConfigurationTab {
         this.hungerDebugInfoToggleButton.setMessage(Text.literal("Debug HUD Food Info: " + (ModConfig.hungerTweaksShowFoodDebugInfo ? "ON" : "OFF")));
         this.hungerVanillaAnimationToggleButton.setMessage(Text.literal("Match Vanilla Animation: " + (ModConfig.hungerTweaksShowVanillaAnimationsOverlay ? "ON" : "OFF")));
         this.hungerMaxFlashAlphaButton.setMessage(Text.literal("Max Flash Alpha: " + HungerTweaksModule.formatFlashAlpha(ModConfig.hungerTweaksMaxHudOverlayFlashAlpha)));
+        syncBridgingButtons();
 
         if (!this.secondaryOutgoingRegexField.isFocused()) {
             this.secondaryOutgoingRegexField.setText(secondary.outgoingRegex == null ? "" : secondary.outgoingRegex);
@@ -838,6 +848,11 @@ final class MacroWorkbenchConfigurationTab {
         setVisible(this.hungerDebugInfoToggleButton, hungerTweaks);
         setVisible(this.hungerVanillaAnimationToggleButton, hungerTweaks);
         setVisible(this.hungerMaxFlashAlphaButton, hungerTweaks);
+
+        boolean bridgingTweaks = this.category == Category.BRIDGING_TWEAKS;
+        for (ButtonWidget button : this.bridgingButtons) {
+            setVisible(button, bridgingTweaks);
+        }
     }
 
     void render(DrawContext context) {
@@ -863,6 +878,7 @@ final class MacroWorkbenchConfigurationTab {
             case TWEAKS -> "Visual and gameplay tweaks, plus reach controls.";
             case MOUSE_TWEAKS -> "Inventory mouse drag and wheel-transfer tweaks.";
             case HUNGER_TWEAKS -> "Food tooltip, saturation, exhaustion, and healing prediction overlays.";
+            case BRIDGING_TWEAKS -> "Reacharound block placement, outline, crosshair, and targeting rules.";
             default -> "";
         };
         context.drawTextWithShadow(this.owner.workbenchTextRenderer(), description, splitX + 12, rowY(8), 0xFFA8CFCF);
@@ -924,6 +940,18 @@ final class MacroWorkbenchConfigurationTab {
                 adjustHungerMaxFlashAlpha(direction);
                 syncControls();
                 return true;
+            }
+            return false;
+        }
+
+        if (this.category == Category.BRIDGING_TWEAKS && (button == 0 || button == 1)) {
+            int direction = button == 0 ? 1 : -1;
+            for (int i = 0; i < this.bridgingButtons.size(); i++) {
+                if (contains(mouseX, mouseY, this.bridgingButtons.get(i))) {
+                    adjustBridgingSetting(i, direction);
+                    syncControls();
+                    return true;
+                }
             }
             return false;
         }
@@ -1139,6 +1167,107 @@ final class MacroWorkbenchConfigurationTab {
                     ModConfig.hungerTweaksMaxHudOverlayFlashAlpha + (direction * step)
             );
         });
+    }
+
+    private void createBridgingButtons(int rightX, int settingW) {
+        this.bridgingButtons.clear();
+        for (int i = 0; i < 20; i++) {
+            final int index = i;
+            this.bridgingButtons.add(button("Bridging Setting " + i, b -> {
+                adjustBridgingSetting(index, 1);
+                syncControls();
+            }, rightX, rowY(i), settingW, ROW_H));
+        }
+    }
+
+    private void syncBridgingButtons() {
+        if (this.bridgingButtons.size() < 20) {
+            return;
+        }
+        this.bridgingButtons.get(0).setMessage(Text.literal("Bridging Tweaks: " + (BridgingTweaksModule.INSTANCE.isEnabled() ? "ON" : "OFF")));
+        this.bridgingButtons.get(1).setMessage(Text.literal("Minimum Distance: " + String.format(Locale.ROOT, "%.1f%%", ModConfig.bridgingMinBridgeDistance)));
+        this.bridgingButtons.get(2).setMessage(Text.literal("Only When Crouched: " + (ModConfig.bridgingOnlyWhenCrouched ? "ON" : "OFF")));
+        this.bridgingButtons.get(3).setMessage(Text.literal("Bridge Axes: " + ModConfig.bridgingSupportedAxes));
+        this.bridgingButtons.get(4).setMessage(Text.literal("Crouched Axes: " + ModConfig.bridgingSupportedAxesWhenCrouched));
+        this.bridgingButtons.get(5).setMessage(Text.literal("Post Delay: " + ModConfig.bridgingDelayPostBridging + " ticks"));
+        this.bridgingButtons.get(6).setMessage(Text.literal("Show Crosshair: " + (ModConfig.bridgingShowCrosshair ? "ON" : "OFF")));
+        this.bridgingButtons.get(7).setMessage(Text.literal("Show Outline: " + (ModConfig.bridgingShowOutline ? "ON" : "OFF")));
+        this.bridgingButtons.get(8).setMessage(Text.literal("Outline When Not Bridging: " + (ModConfig.bridgingShowOutlineWhenNotBridging ? "ON" : "OFF")));
+        this.bridgingButtons.get(9).setMessage(Text.literal("Outline Respects Crouch: " + (ModConfig.bridgingNonBridgeRespectsCrouchRules ? "ON" : "OFF")));
+        this.bridgingButtons.get(10).setMessage(Text.literal("Outline Color: " + String.format(Locale.ROOT, "#%08X", ModConfig.bridgingOutlineColor)));
+        this.bridgingButtons.get(11).setMessage(Text.literal("Skip Torch Blocks: " + (ModConfig.bridgingSkipTorchBridging ? "ON" : "OFF")));
+        this.bridgingButtons.get(12).setMessage(Text.literal("Slab Assist: " + (ModConfig.bridgingEnableSlabAssist ? "ON" : "OFF")));
+        this.bridgingButtons.get(13).setMessage(Text.literal("Replaceable Targets: " + (ModConfig.bridgingEnableNonSolidReplace ? "ON" : "OFF")));
+        this.bridgingButtons.get(14).setMessage(Text.literal("Snap Strength: " + String.format(Locale.ROOT, "%.2f", ModConfig.bridgingSnapStrength)));
+        this.bridgingButtons.get(15).setMessage(Text.literal("Adjacency: " + ModConfig.bridgingAdjacency));
+        this.bridgingButtons.get(16).setMessage(Text.literal("Perspective Lock: " + ModConfig.bridgingPerspectiveLock));
+        this.bridgingButtons.get(17).setMessage(Text.literal("Debug Highlight: " + (ModConfig.bridgingShowDebugHighlight ? "ON" : "OFF")));
+        this.bridgingButtons.get(18).setMessage(Text.literal("Debug Non-Bridging: " + (ModConfig.bridgingShowDebugNonBridgingHighlight ? "ON" : "OFF")));
+        this.bridgingButtons.get(19).setMessage(Text.literal("Debug Trace: " + (ModConfig.bridgingShowDebugTrace ? "ON" : "OFF")));
+    }
+
+    private void adjustBridgingSetting(int index, int direction) {
+        if (index == 0) {
+            BridgingTweaksModule.INSTANCE.setEnabled(!BridgingTweaksModule.INSTANCE.isEnabled());
+            return;
+        }
+
+        ModConfig.updateAndSave(() -> {
+            switch (index) {
+                case 1 -> {
+                    float step = this.shiftDown.getAsBoolean() ? 1.0f : 5.0f;
+                    ModConfig.bridgingMinBridgeDistance = Math.clamp(ModConfig.bridgingMinBridgeDistance + (direction * step), 0.0f, 100.0f);
+                }
+                case 2 -> ModConfig.bridgingOnlyWhenCrouched = !ModConfig.bridgingOnlyWhenCrouched;
+                case 3 -> ModConfig.bridgingSupportedAxes = cycleEnum(ModConfig.bridgingSupportedAxes, direction);
+                case 4 -> ModConfig.bridgingSupportedAxesWhenCrouched = cycleEnum(ModConfig.bridgingSupportedAxesWhenCrouched, direction);
+                case 5 -> ModConfig.bridgingDelayPostBridging = Math.clamp(ModConfig.bridgingDelayPostBridging + direction, 0, 20);
+                case 6 -> ModConfig.bridgingShowCrosshair = !ModConfig.bridgingShowCrosshair;
+                case 7 -> ModConfig.bridgingShowOutline = !ModConfig.bridgingShowOutline;
+                case 8 -> ModConfig.bridgingShowOutlineWhenNotBridging = !ModConfig.bridgingShowOutlineWhenNotBridging;
+                case 9 -> ModConfig.bridgingNonBridgeRespectsCrouchRules = !ModConfig.bridgingNonBridgeRespectsCrouchRules;
+                case 10 -> ModConfig.bridgingOutlineColor = cycleBridgingOutlineColor(ModConfig.bridgingOutlineColor, direction > 0);
+                case 11 -> ModConfig.bridgingSkipTorchBridging = !ModConfig.bridgingSkipTorchBridging;
+                case 12 -> ModConfig.bridgingEnableSlabAssist = !ModConfig.bridgingEnableSlabAssist;
+                case 13 -> ModConfig.bridgingEnableNonSolidReplace = !ModConfig.bridgingEnableNonSolidReplace;
+                case 14 -> {
+                    float step = this.shiftDown.getAsBoolean() ? 0.01f : 0.05f;
+                    ModConfig.bridgingSnapStrength = Math.clamp(ModConfig.bridgingSnapStrength + (direction * step), 0.0f, 1.0f);
+                }
+                case 15 -> ModConfig.bridgingAdjacency = cycleEnum(ModConfig.bridgingAdjacency, direction);
+                case 16 -> ModConfig.bridgingPerspectiveLock = cycleEnum(ModConfig.bridgingPerspectiveLock, direction);
+                case 17 -> ModConfig.bridgingShowDebugHighlight = !ModConfig.bridgingShowDebugHighlight;
+                case 18 -> ModConfig.bridgingShowDebugNonBridgingHighlight = !ModConfig.bridgingShowDebugNonBridgingHighlight;
+                case 19 -> ModConfig.bridgingShowDebugTrace = !ModConfig.bridgingShowDebugTrace;
+                default -> {
+                }
+            }
+        });
+    }
+
+    private static int cycleBridgingOutlineColor(int current, boolean forward) {
+        int[] colors = new int[]{0x66000000, 0x6699E2FF, 0x66FFCC33, 0x66FF6B6B, 0x66FFFFFF, 0x6691FF8A};
+        int index = 0;
+        for (int i = 0; i < colors.length; i++) {
+            if (colors[i] == current) {
+                index = i;
+                break;
+            }
+        }
+        int next = forward ? index + 1 : index - 1;
+        if (next < 0) {
+            next = colors.length - 1;
+        }
+        if (next >= colors.length) {
+            next = 0;
+        }
+        return colors[next];
+    }
+
+    private static <T extends Enum<T>> T cycleEnum(T current, int direction) {
+        T[] values = current.getDeclaringClass().getEnumConstants();
+        int next = (current.ordinal() + (direction > 0 ? 1 : -1) + values.length) % values.length;
+        return values[next];
     }
 
     private static MouseTweaksWheelSearchOrder nextWheelSearchOrder(MouseTweaksWheelSearchOrder current) {

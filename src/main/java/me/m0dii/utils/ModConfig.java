@@ -3,6 +3,10 @@ package me.m0dii.utils;
 
 import eu.midnightdust.lib.config.MidnightConfig;
 import me.m0dii.M0DevToolsClient;
+import me.m0dii.modules.bridging.BridgingAdjacency;
+import me.m0dii.modules.bridging.BridgingAxisMode;
+import me.m0dii.modules.bridging.BridgingAxisModeOverride;
+import me.m0dii.modules.bridging.BridgingPerspectiveLock;
 import me.m0dii.modules.mousetweaks.MouseTweaksScrollItemScaling;
 import me.m0dii.modules.mousetweaks.MouseTweaksWheelScrollDirection;
 import me.m0dii.modules.mousetweaks.MouseTweaksWheelSearchOrder;
@@ -99,6 +103,68 @@ public class ModConfig extends MidnightConfig {
 
     @MidnightConfig.Entry(name = "Disable Render Distance Fog", category = CATEGORY_TWEAKS)
     public static boolean tweaksDisableRenderDistanceFog = false;
+
+    public static final String CATEGORY_BRIDGING_TWEAKS = "Bridging Tweaks";
+
+    @MidnightConfig.Entry(name = "Bridging Tweaks Module Enabled", category = CATEGORY_BRIDGING_TWEAKS)
+    public static boolean bridgingTweaksEnabled = true;
+
+    @MidnightConfig.Entry(name = "Minimum Bridge Distance (%)", category = CATEGORY_BRIDGING_TWEAKS, isSlider = true, min = 0, max = 100)
+    public static float bridgingMinBridgeDistance = 20.0f;
+
+    @MidnightConfig.Entry(name = "Only Bridge When Crouched", category = CATEGORY_BRIDGING_TWEAKS)
+    public static boolean bridgingOnlyWhenCrouched = false;
+
+    @MidnightConfig.Entry(name = "Supported Bridge Axes", category = CATEGORY_BRIDGING_TWEAKS)
+    public static BridgingAxisMode bridgingSupportedAxes = BridgingAxisMode.BOTH;
+
+    @MidnightConfig.Entry(name = "Supported Bridge Axes When Crouched", category = CATEGORY_BRIDGING_TWEAKS)
+    public static BridgingAxisModeOverride bridgingSupportedAxesWhenCrouched = BridgingAxisModeOverride.FALLBACK;
+
+    @MidnightConfig.Entry(name = "Delay Post Bridging", category = CATEGORY_BRIDGING_TWEAKS, isSlider = true, min = 0, max = 20)
+    public static int bridgingDelayPostBridging = 4;
+
+    @MidnightConfig.Entry(name = "Show Crosshair Indicator", category = CATEGORY_BRIDGING_TWEAKS)
+    public static boolean bridgingShowCrosshair = true;
+
+    @MidnightConfig.Entry(name = "Show Bridging Outline", category = CATEGORY_BRIDGING_TWEAKS)
+    public static boolean bridgingShowOutline = false;
+
+    @MidnightConfig.Entry(name = "Show Outline When Not Bridging", category = CATEGORY_BRIDGING_TWEAKS)
+    public static boolean bridgingShowOutlineWhenNotBridging = false;
+
+    @MidnightConfig.Entry(name = "Non-Bridge Outline Respects Crouch Rules", category = CATEGORY_BRIDGING_TWEAKS)
+    public static boolean bridgingNonBridgeRespectsCrouchRules = true;
+
+    @MidnightConfig.Entry(name = "Outline Color (ARGB)", category = CATEGORY_BRIDGING_TWEAKS)
+    public static int bridgingOutlineColor = 0x66000000;
+
+    @MidnightConfig.Entry(name = "Skip Torch Bridging", category = CATEGORY_BRIDGING_TWEAKS)
+    public static boolean bridgingSkipTorchBridging = true;
+
+    @MidnightConfig.Entry(name = "Enable Slab Assist", category = CATEGORY_BRIDGING_TWEAKS)
+    public static boolean bridgingEnableSlabAssist = true;
+
+    @MidnightConfig.Entry(name = "Enable Non-Solid Replace", category = CATEGORY_BRIDGING_TWEAKS)
+    public static boolean bridgingEnableNonSolidReplace = true;
+
+    @MidnightConfig.Entry(name = "Bridging Snap Strength", category = CATEGORY_BRIDGING_TWEAKS, isSlider = true, min = 0, max = 1)
+    public static float bridgingSnapStrength = 1.0f;
+
+    @MidnightConfig.Entry(name = "Bridging Adjacency", category = CATEGORY_BRIDGING_TWEAKS)
+    public static BridgingAdjacency bridgingAdjacency = BridgingAdjacency.CORNERS;
+
+    @MidnightConfig.Entry(name = "Perspective Lock", category = CATEGORY_BRIDGING_TWEAKS)
+    public static BridgingPerspectiveLock bridgingPerspectiveLock = BridgingPerspectiveLock.LET_BRIDGING_DECIDE;
+
+    @MidnightConfig.Entry(name = "Show Debug Highlight", category = CATEGORY_BRIDGING_TWEAKS)
+    public static boolean bridgingShowDebugHighlight = true;
+
+    @MidnightConfig.Entry(name = "Show Debug Non-Bridging Highlight", category = CATEGORY_BRIDGING_TWEAKS)
+    public static boolean bridgingShowDebugNonBridgingHighlight = false;
+
+    @MidnightConfig.Entry(name = "Show Debug Trace", category = CATEGORY_BRIDGING_TWEAKS)
+    public static boolean bridgingShowDebugTrace = false;
 
     public static final String CATEGORY_MOUSE_TWEAKS = "Mouse Tweaks";
 
