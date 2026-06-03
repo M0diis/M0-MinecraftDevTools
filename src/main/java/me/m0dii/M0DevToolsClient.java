@@ -19,6 +19,7 @@ import me.m0dii.modules.instantbreak.InstantBreakModule;
 import me.m0dii.modules.inventorymove.InventoryMoveModule;
 import me.m0dii.modules.macros.MacrosModule;
 import me.m0dii.modules.messagehistory.MessageHistoryModule;
+import me.m0dii.modules.mousetweaks.MouseTweaksModule;
 import me.m0dii.modules.nbthud.NBTInfoHudModule;
 import me.m0dii.modules.nbttooltip.NBTTooltipModule;
 import me.m0dii.modules.nbttooltip.ShulkerTooltipModule;
@@ -79,6 +80,7 @@ public class M0DevToolsClient implements ClientModInitializer {
         InventoryMoveModule.INSTANCE.register();
         DynamicFpsModule.INSTANCE.register();
         FastBlockPlacementModule.INSTANCE.register();
+        MouseTweaksModule.INSTANCE.register();
         ReachModule.INSTANCE.register();
         BetterCommandBlockUiModule.INSTANCE.register();
         TweaksModule.INSTANCE.register();

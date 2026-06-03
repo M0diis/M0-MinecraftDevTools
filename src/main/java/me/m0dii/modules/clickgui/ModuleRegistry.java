@@ -16,6 +16,7 @@ import me.m0dii.modules.macros.gui.MacroKeybindHudModule;
 import me.m0dii.modules.macros.gui.PendingMacrosHudModule;
 import me.m0dii.modules.macros.hud.MacroHudModule;
 import me.m0dii.modules.messagehistory.MessageHistoryModule;
+import me.m0dii.modules.mousetweaks.MouseTweaksModule;
 import me.m0dii.modules.nbthud.NBTInfoHudModule;
 import me.m0dii.modules.nbttooltip.NBTTooltipModule;
 import me.m0dii.modules.nbttooltip.ShulkerTooltipModule;
@@ -95,6 +96,10 @@ public class ModuleRegistry {
         safeAdd(utilities, TweaksModule.INSTANCE);
         safeAdd(utilities, WatsonCoreProtectModule.INSTANCE);
         categories.add(utilities);
+
+        ModuleCategory mouseTweaks = new ModuleCategory("Mouse Tweaks");
+        safeAdd(mouseTweaks, MouseTweaksModule.INSTANCE);
+        categories.add(mouseTweaks);
 
         ModuleCategory movement = new ModuleCategory("Movement");
         safeAdd(movement, InventoryMoveModule.INSTANCE);

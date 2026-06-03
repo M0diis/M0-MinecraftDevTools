@@ -20,6 +20,8 @@
     "EntityMixin",
     "GameRendererBlockAttributesMixin",
     "GameRendererMixin",
+    "HandledScreenAccessor",
+    "HandledScreenMouseTweaksMixin",
     "HandledScreenMoveMixin",
     "InactivityFpsLimiterMixin",
     "ItemstackMixin",

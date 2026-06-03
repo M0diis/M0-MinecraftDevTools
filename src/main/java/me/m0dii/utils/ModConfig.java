@@ -3,6 +3,9 @@ package me.m0dii.utils;
 
 import eu.midnightdust.lib.config.MidnightConfig;
 import me.m0dii.M0DevToolsClient;
+import me.m0dii.modules.mousetweaks.MouseTweaksScrollItemScaling;
+import me.m0dii.modules.mousetweaks.MouseTweaksWheelScrollDirection;
+import me.m0dii.modules.mousetweaks.MouseTweaksWheelSearchOrder;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -96,6 +99,32 @@ public class ModConfig extends MidnightConfig {
 
     @MidnightConfig.Entry(name = "Disable Render Distance Fog", category = CATEGORY_TWEAKS)
     public static boolean tweaksDisableRenderDistanceFog = false;
+
+    public static final String CATEGORY_MOUSE_TWEAKS = "Mouse Tweaks";
+
+    @MidnightConfig.Entry(name = "Mouse Tweaks Module Enabled", category = CATEGORY_MOUSE_TWEAKS)
+    public static boolean mouseTweaksModuleEnabled = true;
+
+    @MidnightConfig.Entry(name = "RMB Tweak", category = CATEGORY_MOUSE_TWEAKS)
+    public static boolean mouseTweaksRmbTweak = true;
+
+    @MidnightConfig.Entry(name = "LMB Tweak With Item", category = CATEGORY_MOUSE_TWEAKS)
+    public static boolean mouseTweaksLmbTweakWithItem = true;
+
+    @MidnightConfig.Entry(name = "LMB Tweak Without Item", category = CATEGORY_MOUSE_TWEAKS)
+    public static boolean mouseTweaksLmbTweakWithoutItem = true;
+
+    @MidnightConfig.Entry(name = "Wheel Tweak", category = CATEGORY_MOUSE_TWEAKS)
+    public static boolean mouseTweaksWheelTweak = true;
+
+    @MidnightConfig.Entry(name = "Wheel Search Order", category = CATEGORY_MOUSE_TWEAKS)
+    public static MouseTweaksWheelSearchOrder mouseTweaksWheelSearchOrder = MouseTweaksWheelSearchOrder.LAST_TO_FIRST;
+
+    @MidnightConfig.Entry(name = "Wheel Scroll Direction", category = CATEGORY_MOUSE_TWEAKS)
+    public static MouseTweaksWheelScrollDirection mouseTweaksWheelScrollDirection = MouseTweaksWheelScrollDirection.NORMAL;
+
+    @MidnightConfig.Entry(name = "Scroll Item Scaling", category = CATEGORY_MOUSE_TWEAKS)
+    public static MouseTweaksScrollItemScaling mouseTweaksScrollItemScaling = MouseTweaksScrollItemScaling.PROPORTIONAL;
 
     public static final String CATEGORY_REACH = "Reach";
 

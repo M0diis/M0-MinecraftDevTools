@@ -9,6 +9,10 @@ import me.m0dii.modules.fullbright.FullbrightModule;
 import me.m0dii.modules.heldlight.HeldLightModule;
 import me.m0dii.modules.instantbreak.InstantBreakModule;
 import me.m0dii.modules.inventorymove.InventoryMoveModule;
+import me.m0dii.modules.mousetweaks.MouseTweaksModule;
+import me.m0dii.modules.mousetweaks.MouseTweaksScrollItemScaling;
+import me.m0dii.modules.mousetweaks.MouseTweaksWheelScrollDirection;
+import me.m0dii.modules.mousetweaks.MouseTweaksWheelSearchOrder;
 import me.m0dii.modules.nbthud.NBTInfoHudModule;
 import me.m0dii.modules.nbttooltip.NBTTooltipModule;
 import me.m0dii.modules.nbttooltip.ShulkerTooltipModule;
@@ -43,7 +47,8 @@ final class MacroWorkbenchConfigurationTab {
         SECONDARY_CHAT("Secondary Chat"),
         PICKUP_FEED("Pickup Feed"),
         BLOCK_ATTRIBUTES("Block Attributes"),
-        TWEAKS("Tweaks");
+        TWEAKS("Tweaks"),
+        MOUSE_TWEAKS("Mouse Tweaks");
 
         private final String label;
 
@@ -65,6 +70,7 @@ final class MacroWorkbenchConfigurationTab {
     private ButtonWidget pickupFeedCategoryButton;
     private ButtonWidget blockAttributesCategoryButton;
     private ButtonWidget tweaksCategoryButton;
+    private ButtonWidget mouseTweaksCategoryButton;
 
     private ButtonWidget macroOverlayToggleButton;
     private ButtonWidget nbtHudToggleButton;
@@ -129,6 +135,14 @@ final class MacroWorkbenchConfigurationTab {
     private ButtonWidget reachEntityDistanceButton;
     private ButtonWidget reachMpBlockExtraButton;
     private ButtonWidget reachMpEntityExtraButton;
+    private ButtonWidget mouseTweaksModuleToggleButton;
+    private ButtonWidget mouseTweaksRmbToggleButton;
+    private ButtonWidget mouseTweaksLmbWithItemToggleButton;
+    private ButtonWidget mouseTweaksLmbWithoutItemToggleButton;
+    private ButtonWidget mouseTweaksWheelToggleButton;
+    private ButtonWidget mouseTweaksWheelSearchOrderButton;
+    private ButtonWidget mouseTweaksWheelScrollDirectionButton;
+    private ButtonWidget mouseTweaksScrollScalingButton;
 
     private TextFieldWidget secondaryRegexInputField;
     private TextFieldWidget secondaryOutgoingRegexField;
@@ -158,6 +172,7 @@ final class MacroWorkbenchConfigurationTab {
         this.pickupFeedCategoryButton = button(Category.PICKUP_FEED.label, b -> setCategory(Category.PICKUP_FEED), listX, listY + ROW_GAP * 4, categoryW, ROW_H);
         this.blockAttributesCategoryButton = button(Category.BLOCK_ATTRIBUTES.label, b -> setCategory(Category.BLOCK_ATTRIBUTES), listX, listY + ROW_GAP * 5, categoryW, ROW_H);
         this.tweaksCategoryButton = button(Category.TWEAKS.label, b -> setCategory(Category.TWEAKS), listX, listY + ROW_GAP * 6, categoryW, ROW_H);
+        this.mouseTweaksCategoryButton = button(Category.MOUSE_TWEAKS.label, b -> setCategory(Category.MOUSE_TWEAKS), listX, listY + ROW_GAP * 7, categoryW, ROW_H);
 
         this.macroOverlayToggleButton = button("Macro Keybind HUD", b -> {
             ModConfig.updateAndSave(() -> ModConfig.showMacroKeybindOverlay = !ModConfig.showMacroKeybindOverlay);
@@ -480,10 +495,50 @@ final class MacroWorkbenchConfigurationTab {
             syncControls();
         }, rightX, rowY(20), settingW, ROW_H);
 
+        this.mouseTweaksModuleToggleButton = button("Mouse Tweaks Module", b -> {
+            MouseTweaksModule.INSTANCE.setEnabled(!MouseTweaksModule.INSTANCE.isEnabled());
+            syncControls();
+        }, rightX, rowY(0), settingW, ROW_H);
+
+        this.mouseTweaksRmbToggleButton = button("RMB Tweak", b -> {
+            ModConfig.updateAndSave(() -> ModConfig.mouseTweaksRmbTweak = !ModConfig.mouseTweaksRmbTweak);
+            syncControls();
+        }, rightX, rowY(1), settingW, ROW_H);
+
+        this.mouseTweaksLmbWithItemToggleButton = button("LMB Tweak With Item", b -> {
+            ModConfig.updateAndSave(() -> ModConfig.mouseTweaksLmbTweakWithItem = !ModConfig.mouseTweaksLmbTweakWithItem);
+            syncControls();
+        }, rightX, rowY(2), settingW, ROW_H);
+
+        this.mouseTweaksLmbWithoutItemToggleButton = button("LMB Tweak Without Item", b -> {
+            ModConfig.updateAndSave(() -> ModConfig.mouseTweaksLmbTweakWithoutItem = !ModConfig.mouseTweaksLmbTweakWithoutItem);
+            syncControls();
+        }, rightX, rowY(3), settingW, ROW_H);
+
+        this.mouseTweaksWheelToggleButton = button("Wheel Tweak", b -> {
+            ModConfig.updateAndSave(() -> ModConfig.mouseTweaksWheelTweak = !ModConfig.mouseTweaksWheelTweak);
+            syncControls();
+        }, rightX, rowY(4), settingW, ROW_H);
+
+        this.mouseTweaksWheelSearchOrderButton = button("Wheel Search Order", b -> {
+            ModConfig.updateAndSave(() -> ModConfig.mouseTweaksWheelSearchOrder = nextWheelSearchOrder(ModConfig.mouseTweaksWheelSearchOrder));
+            syncControls();
+        }, rightX, rowY(5), settingW, ROW_H);
+
+        this.mouseTweaksWheelScrollDirectionButton = button("Wheel Scroll Direction", b -> {
+            ModConfig.updateAndSave(() -> ModConfig.mouseTweaksWheelScrollDirection = nextWheelScrollDirection(ModConfig.mouseTweaksWheelScrollDirection));
+            syncControls();
+        }, rightX, rowY(6), settingW, ROW_H);
+
+        this.mouseTweaksScrollScalingButton = button("Scroll Item Scaling", b -> {
+            ModConfig.updateAndSave(() -> ModConfig.mouseTweaksScrollItemScaling = nextScrollScaling(ModConfig.mouseTweaksScrollItemScaling));
+            syncControls();
+        }, rightX, rowY(7), settingW, ROW_H);
+
         register(
                 this.hudCategoryButton, this.overlaysCategoryButton, this.modulesCategoryButton,
                 this.secondaryChatCategoryButton, this.pickupFeedCategoryButton, this.blockAttributesCategoryButton,
-                this.tweaksCategoryButton,
+                this.tweaksCategoryButton, this.mouseTweaksCategoryButton,
                 this.macroOverlayToggleButton, this.nbtHudToggleButton,
                 this.secondaryEnabledToggleButton, this.secondaryOverlayToggleButton, this.secondaryInterceptModeButton,
                 this.secondaryRegexAddButton, this.secondaryRegexApplyButton, this.secondaryRegexRemoveButton,
@@ -505,6 +560,9 @@ final class MacroWorkbenchConfigurationTab {
                 this.permanentSneakToggleButton, this.permanentSprintToggleButton, this.disableHurtCameraToggleButton,
                 this.disableViewBobbingToggleButton, this.reachToggleButton, this.reachSafeClampToggleButton,
                 this.reachBlockDistanceButton, this.reachEntityDistanceButton, this.reachMpBlockExtraButton, this.reachMpEntityExtraButton,
+                this.mouseTweaksModuleToggleButton, this.mouseTweaksRmbToggleButton, this.mouseTweaksLmbWithItemToggleButton,
+                this.mouseTweaksLmbWithoutItemToggleButton, this.mouseTweaksWheelToggleButton, this.mouseTweaksWheelSearchOrderButton,
+                this.mouseTweaksWheelScrollDirectionButton, this.mouseTweaksScrollScalingButton,
                 this.secondaryRegexInputField, this.secondaryOutgoingRegexField
         );
 
@@ -523,6 +581,7 @@ final class MacroWorkbenchConfigurationTab {
         this.pickupFeedCategoryButton.setMessage(Text.literal((this.category == Category.PICKUP_FEED ? "> " : "") + Category.PICKUP_FEED.label));
         this.blockAttributesCategoryButton.setMessage(Text.literal((this.category == Category.BLOCK_ATTRIBUTES ? "> " : "") + Category.BLOCK_ATTRIBUTES.label));
         this.tweaksCategoryButton.setMessage(Text.literal((this.category == Category.TWEAKS ? "> " : "") + Category.TWEAKS.label));
+        this.mouseTweaksCategoryButton.setMessage(Text.literal((this.category == Category.MOUSE_TWEAKS ? "> " : "") + Category.MOUSE_TWEAKS.label));
 
         SecondaryChatSettings.Data secondary = SecondaryChatSettings.get();
         ensureRegexSelectionInBounds();
@@ -585,6 +644,14 @@ final class MacroWorkbenchConfigurationTab {
         this.reachEntityDistanceButton.setMessage(Text.literal("Reach Entity Distance: " + String.format(Locale.ROOT, "%.2f", ModConfig.reachEntityDistance)));
         this.reachMpBlockExtraButton.setMessage(Text.literal("Reach MP Block Extra: " + String.format(Locale.ROOT, "%.2f", ModConfig.reachMultiplayerBlockExtra)));
         this.reachMpEntityExtraButton.setMessage(Text.literal("Reach MP Entity Extra: " + String.format(Locale.ROOT, "%.2f", ModConfig.reachMultiplayerEntityExtra)));
+        this.mouseTweaksModuleToggleButton.setMessage(Text.literal("Mouse Tweaks Module: " + (MouseTweaksModule.INSTANCE.isEnabled() ? "ON" : "OFF")));
+        this.mouseTweaksRmbToggleButton.setMessage(Text.literal("RMB Tweak: " + (ModConfig.mouseTweaksRmbTweak ? "ON" : "OFF")));
+        this.mouseTweaksLmbWithItemToggleButton.setMessage(Text.literal("LMB Tweak With Item: " + (ModConfig.mouseTweaksLmbTweakWithItem ? "ON" : "OFF")));
+        this.mouseTweaksLmbWithoutItemToggleButton.setMessage(Text.literal("LMB Tweak Without Item: " + (ModConfig.mouseTweaksLmbTweakWithoutItem ? "ON" : "OFF")));
+        this.mouseTweaksWheelToggleButton.setMessage(Text.literal("Wheel Tweak: " + (ModConfig.mouseTweaksWheelTweak ? "ON" : "OFF")));
+        this.mouseTweaksWheelSearchOrderButton.setMessage(Text.literal("Wheel Search Order: " + ModConfig.mouseTweaksWheelSearchOrder));
+        this.mouseTweaksWheelScrollDirectionButton.setMessage(Text.literal("Wheel Scroll Direction: " + ModConfig.mouseTweaksWheelScrollDirection));
+        this.mouseTweaksScrollScalingButton.setMessage(Text.literal("Scroll Item Scaling: " + ModConfig.mouseTweaksScrollItemScaling));
 
         if (!this.secondaryOutgoingRegexField.isFocused()) {
             this.secondaryOutgoingRegexField.setText(secondary.outgoingRegex == null ? "" : secondary.outgoingRegex);
@@ -662,6 +729,16 @@ final class MacroWorkbenchConfigurationTab {
         setVisible(this.reachEntityDistanceButton, tweaks);
         setVisible(this.reachMpBlockExtraButton, tweaks);
         setVisible(this.reachMpEntityExtraButton, tweaks);
+
+        boolean mouseTweaks = this.category == Category.MOUSE_TWEAKS;
+        setVisible(this.mouseTweaksModuleToggleButton, mouseTweaks);
+        setVisible(this.mouseTweaksRmbToggleButton, mouseTweaks);
+        setVisible(this.mouseTweaksLmbWithItemToggleButton, mouseTweaks);
+        setVisible(this.mouseTweaksLmbWithoutItemToggleButton, mouseTweaks);
+        setVisible(this.mouseTweaksWheelToggleButton, mouseTweaks);
+        setVisible(this.mouseTweaksWheelSearchOrderButton, mouseTweaks);
+        setVisible(this.mouseTweaksWheelScrollDirectionButton, mouseTweaks);
+        setVisible(this.mouseTweaksScrollScalingButton, mouseTweaks);
     }
 
     void render(DrawContext context) {
@@ -685,6 +762,7 @@ final class MacroWorkbenchConfigurationTab {
             case PICKUP_FEED -> "Pick-up feed module toggle and behavior settings.";
             case BLOCK_ATTRIBUTES -> "Block interaction and hitbox behavior overrides.";
             case TWEAKS -> "Visual and gameplay tweaks, plus reach controls.";
+            case MOUSE_TWEAKS -> "Inventory mouse drag and wheel-transfer tweaks.";
             default -> "";
         };
         context.drawTextWithShadow(this.owner.workbenchTextRenderer(), description, splitX + 12, rowY(8), 0xFFA8CFCF);
@@ -942,5 +1020,22 @@ final class MacroWorkbenchConfigurationTab {
             double step = this.shiftDown.getAsBoolean() ? 0.5 : 0.25;
             ModConfig.reachMultiplayerEntityExtra = Math.clamp(ModConfig.reachMultiplayerEntityExtra + (direction * step), 0.0, 4.0);
         });
+    }
+
+    private static MouseTweaksWheelSearchOrder nextWheelSearchOrder(MouseTweaksWheelSearchOrder current) {
+        return current == MouseTweaksWheelSearchOrder.FIRST_TO_LAST
+                ? MouseTweaksWheelSearchOrder.LAST_TO_FIRST
+                : MouseTweaksWheelSearchOrder.FIRST_TO_LAST;
+    }
+
+    private static MouseTweaksWheelScrollDirection nextWheelScrollDirection(MouseTweaksWheelScrollDirection current) {
+        MouseTweaksWheelScrollDirection[] values = MouseTweaksWheelScrollDirection.values();
+        return values[(current.ordinal() + 1) % values.length];
+    }
+
+    private static MouseTweaksScrollItemScaling nextScrollScaling(MouseTweaksScrollItemScaling current) {
+        return current == MouseTweaksScrollItemScaling.PROPORTIONAL
+                ? MouseTweaksScrollItemScaling.ALWAYS_ONE
+                : MouseTweaksScrollItemScaling.PROPORTIONAL;
     }
 }
