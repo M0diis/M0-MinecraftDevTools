@@ -46,7 +46,7 @@ public final class MacroWorkbenchAdvancedLayouts {
                 UiFlexLayout.Item.flex(120, 1)
         );
 
-        List<UiRect> row6 = FormPanels.row(col.get(5), 4, UiFlexLayout.Align.STRETCH,
+        List<UiRect> row6 = FormPanels.row(col.get(6), 4, UiFlexLayout.Align.STRETCH,
                 UiFlexLayout.Item.fixed(170),
                 UiFlexLayout.Item.fixed(170),
                 UiFlexLayout.Item.flex(120, 1)

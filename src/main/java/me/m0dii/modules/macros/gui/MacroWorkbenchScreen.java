@@ -647,9 +647,7 @@ public class MacroWorkbenchScreen extends Screen {
     @Override
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
         context.fill(0, 0, this.width, this.height, 0xD0101010);
-        if (canvasChromeVisible) {
-            context.fill(0, TOP_BAR_H - 1, this.width, TOP_BAR_H, 0x70FFFFFF);
-        }
+        context.fill(0, TOP_BAR_H - 1, this.width, TOP_BAR_H, 0x70FFFFFF);
 
         if (this.tab == Tab.CANVAS) {
             renderCanvasTab(context, mouseX, mouseY);
@@ -712,7 +710,7 @@ public class MacroWorkbenchScreen extends Screen {
         updateDragging(mouseX, mouseY);
 
         context.drawTextWithShadow(this.textRenderer,
-                "Press F1 to toggle placement mode: " + (canvasChromeVisible ? "OFF" : "ON"),
+                "Press F1 to turn on/off placement mode: " + (canvasChromeVisible ? "OFF" : "ON"),
                 8, TOP_BAR_H + 4, 0xFF9FCFCF);
         context.drawTextWithShadow(this.textRenderer,
                 "Ctrl+Click multi-select, Ctrl+C/V copy/paste element, Ctrl+Shift+C/V dimensions, Ctrl+Z undo move",
@@ -742,8 +740,9 @@ public class MacroWorkbenchScreen extends Screen {
         drawSnapGuides(context);
 
         int y = this.height - BOTTOM_BAR_H;
-            if (this.macroField.visible) {
-            context.drawTextWithShadow(this.textRenderer, "Quick Edit (first line)", 8, y - 10, 0xFFAAAAAA);
+//        context.fill(0, y, this.width, this.height, 0xA0000000);
+        context.drawTextWithShadow(this.textRenderer, "Quick Edit (first line)", 8, y - 10, 0xFFAAAAAA);
+        if (this.macroField.visible) {
             context.drawTextWithShadow(this.textRenderer, "Macro Id (optional)", 292, y - 10, 0xFFAAAAAA);
             String actionLabel = "Action (optional)";
             if (selected != null && selected.type == MacroHudDataHandler.ElementType.BUTTON
@@ -1423,7 +1422,7 @@ public class MacroWorkbenchScreen extends Screen {
             return true;
         }
 
-        if (containsBox(click.x(), click.y(), boxX, boxY, MODAL_W, 20)) {
+        if (containsBox(click.x(), click.y(), boxX, boxY, modalWidth(), 20)) {
             advancedModalDragging = true;
             advancedModalDragOffsetX = (int) click.x() - boxX;
             advancedModalDragOffsetY = (int) click.y() - boxY;
@@ -2783,10 +2782,10 @@ public class MacroWorkbenchScreen extends Screen {
         this.advancedBorderColorFocused = false;
         this.advancedVisibilityScreenTypeFocused = false;
         this.advancedText = selected.type == MacroHudDataHandler.ElementType.BUTTON
-                ? StringUtils.safe(selected.buttonAction)
-                : (selected.type == MacroHudDataHandler.ElementType.TEXT ? StringUtils.safe(selected.text) : StringUtils.safe(selected.label));
-        this.advancedAction = selected.type == MacroHudDataHandler.ElementType.BUTTON ? StringUtils.safe(selected.label) : StringUtils.safe(selected.sourceToken);
-        this.advancedVisibilityScreenType = StringUtils.safe(selected.visibilityScreenType);
+                ? StringUtils.preserve(selected.buttonAction)
+                : (selected.type == MacroHudDataHandler.ElementType.TEXT ? StringUtils.preserve(selected.text) : StringUtils.preserve(selected.label));
+        this.advancedAction = selected.type == MacroHudDataHandler.ElementType.BUTTON ? StringUtils.preserve(selected.label) : StringUtils.preserve(selected.sourceToken);
+        this.advancedVisibilityScreenType = StringUtils.preserve(selected.visibilityScreenType);
         this.advancedBgColor = ColorUtils.formatColor(selected.backgroundColor);
         this.advancedBorderColor = ColorUtils.formatColor(selected.borderColor);
         this.advancedCursor = this.advancedText.length();
@@ -2867,8 +2866,10 @@ public class MacroWorkbenchScreen extends Screen {
         UiRect textArea = layout.textArea();
         UiRect actionField = layout.actionField();
 
+        int modalW = modalWidth();
+        int modalH = modalHeight();
         context.fill(0, 0, this.width, this.height, 0x88000000);
-        GuiSystem.drawPanel(context, boxX, boxY, MODAL_W, MODAL_H);
+        GuiSystem.drawPanel(context, boxX, boxY, modalW, modalH);
 
         if (isSecondaryChatProxy(selected)) {
             renderSecondaryChatAdvancedModal(context, mouseX, mouseY, boxX, boxY);
@@ -2982,8 +2983,13 @@ public class MacroWorkbenchScreen extends Screen {
         context.drawTextWithShadow(this.textRenderer,
                 "Line: " + (selected != null ? selected.lineHeight : 9) + "   Scale: " + (selected != null ? String.format("%.1f", selected.fontScale) : "1.0") + "   BG: " + bgPct + "%   Z: " + (selected != null ? selected.zIndex : 0),
                 layout.bgHex().x(), layout.bgHex().y() - 10, 0xFFEAEAEA);
-        context.drawTextWithShadow(this.textRenderer, "BG", layout.bgHex().x() - 26, layout.bgHex().y() + 4, 0xFFEAEAEA);
-        context.drawTextWithShadow(this.textRenderer, "BR", layout.borderHex().x() - 26, layout.borderHex().y() + 4, 0xFFEAEAEA);
+        int labelLeftBound = boxX + 12;
+        context.drawTextWithShadow(this.textRenderer, "BG",
+                Math.max(labelLeftBound, layout.bgHex().x() - this.textRenderer.getWidth("BG") - 8),
+                layout.bgHex().y() + 4, 0xFFEAEAEA);
+        context.drawTextWithShadow(this.textRenderer, "BR",
+                Math.max(labelLeftBound, layout.borderHex().x() - this.textRenderer.getWidth("BR") - 8),
+                layout.borderHex().y() + 4, 0xFFEAEAEA);
         context.drawTextWithShadow(this.textRenderer, "Use Opacity +/- for transparency. Right-click BR hex to open picker.", layout.bgHex().x(), layout.bgHex().bottom() + 2, 0xFF9A9A9A);
 
         int bgInputBg = advancedBgColorFocused ? 0xFF0F0F0F : 0xFF161616;
@@ -3031,7 +3037,7 @@ public class MacroWorkbenchScreen extends Screen {
     }
 
     private StandardAdvancedLayout standardAdvancedLayout(int boxX, int boxY) {
-        return MacroWorkbenchAdvancedLayouts.standard(boxX, boxY, MODAL_W, MODAL_H);
+        return MacroWorkbenchAdvancedLayouts.standard(boxX, boxY, modalWidth(), modalHeight());
     }
 
     private int[] cursorPixelWithScroll(int baseX, int baseY, String text, int cursorIndex, int scrollLine) {
@@ -3112,15 +3118,15 @@ public class MacroWorkbenchScreen extends Screen {
     }
 
     private ProxyAdvancedLayout proxyAdvancedLayout(int boxX, int boxY, boolean pickup) {
-        return MacroWorkbenchAdvancedLayouts.proxy(boxX, boxY, MODAL_W, MODAL_H, pickup);
+        return MacroWorkbenchAdvancedLayouts.proxy(boxX, boxY, modalWidth(), modalHeight(), pickup);
     }
 
     private SecondaryAdvancedLayout secondaryAdvancedLayout(int boxX, int boxY) {
-        return MacroWorkbenchAdvancedLayouts.secondary(boxX, boxY, MODAL_W, MODAL_H);
+        return MacroWorkbenchAdvancedLayouts.secondary(boxX, boxY, modalWidth(), modalHeight());
     }
 
     private CustomWidgetAdvancedLayout customWidgetAdvancedLayout(int boxX, int boxY) {
-        return MacroWorkbenchAdvancedLayouts.custom(boxX, boxY, MODAL_W, MODAL_H);
+        return MacroWorkbenchAdvancedLayouts.custom(boxX, boxY, modalWidth(), modalHeight());
     }
 
     private static UiRect slot(List<UiRect> row, int index) {
@@ -3747,15 +3753,17 @@ public class MacroWorkbenchScreen extends Screen {
     }
 
     private void renderKeyboardCommandsModal(DrawContext context, int mouseX, int mouseY) {
-        int boxX = this.width / 2 - (MODAL_W / 2);
-        int boxY = this.height / 2 - (MODAL_H / 2);
+        int modalW = modalWidth();
+        int modalH = modalHeight();
+        int boxX = this.width / 2 - (modalW / 2);
+        int boxY = this.height / 2 - (modalH / 2);
         int textX = boxX + 12;
         int textY = boxY + 34;
-        int textW = MODAL_W - 24;
-        int textH = 150;
+        int textW = modalW - 24;
+        int textH = Math.max(96, modalH - 68);
 
         context.fill(0, 0, this.width, this.height, 0x88000000);
-        GuiSystem.drawPanel(context, boxX, boxY, MODAL_W, MODAL_H);
+        GuiSystem.drawPanel(context, boxX, boxY, modalW, modalH);
 
         context.drawTextWithShadow(this.textRenderer, "Edit Commands", boxX + 12, boxY + 12, 0xFFFFFFFF);
         context.drawTextWithShadow(this.textRenderer, "One command per line", boxX + 12, boxY + 22, 0xFFB0B0B0);
@@ -3779,8 +3787,8 @@ public class MacroWorkbenchScreen extends Screen {
             context.fill(cursor[0], cursor[1], cursor[0] + 1, cursor[1] + 9, 0xFFFFFFFF);
         }
 
-        drawModalButton(context, boxX + MODAL_W - 122, boxY + MODAL_H - 22, 54, 18, "Apply", containsBox(mouseX, mouseY, boxX + MODAL_W - 122, boxY + MODAL_H - 22, 54, 18));
-        drawModalButton(context, boxX + MODAL_W - 64, boxY + MODAL_H - 22, 54, 18, "Cancel", containsBox(mouseX, mouseY, boxX + MODAL_W - 64, boxY + MODAL_H - 22, 54, 18));
+        drawModalButton(context, boxX + modalW - 122, boxY + modalH - 22, 54, 18, "Apply", containsBox(mouseX, mouseY, boxX + modalW - 122, boxY + modalH - 22, 54, 18));
+        drawModalButton(context, boxX + modalW - 64, boxY + modalH - 22, 54, 18, "Cancel", containsBox(mouseX, mouseY, boxX + modalW - 64, boxY + modalH - 22, 54, 18));
     }
 
     private boolean onKeyboardCommandsModalClick(Click click) {
@@ -3790,18 +3798,20 @@ public class MacroWorkbenchScreen extends Screen {
 
         this.activeDragSelectionField = ModalDragSelectionField.NONE;
 
-        int boxX = this.width / 2 - (MODAL_W / 2);
-        int boxY = this.height / 2 - (MODAL_H / 2);
+        int modalW = modalWidth();
+        int modalH = modalHeight();
+        int boxX = this.width / 2 - (modalW / 2);
+        int boxY = this.height / 2 - (modalH / 2);
         int textX = boxX + 12;
         int textY = boxY + 34;
-        int textW = MODAL_W - 24;
-        int textH = 150;
+        int textW = modalW - 24;
+        int textH = Math.max(96, modalH - 68);
 
-        if (containsBox(click.x(), click.y(), boxX + MODAL_W - 122, boxY + MODAL_H - 22, 54, 18)) {
+        if (containsBox(click.x(), click.y(), boxX + modalW - 122, boxY + modalH - 22, 54, 18)) {
             applyKeyboardCommandsModal();
             return true;
         }
-        if (containsBox(click.x(), click.y(), boxX + MODAL_W - 64, boxY + MODAL_H - 22, 54, 18)) {
+        if (containsBox(click.x(), click.y(), boxX + modalW - 64, boxY + modalH - 22, 54, 18)) {
             closeKeyboardCommandsModal();
             return true;
         }
@@ -4220,7 +4230,7 @@ public class MacroWorkbenchScreen extends Screen {
                 advancedActionSuggestionIndex = next;
                 advancedAction = MacroWorkbenchActionSuggestions.value(suggestions.get(next));
                 advancedActionCursor = advancedAction.length();
-                ensureSuggestionVisible(suggestions.size(), next, modalY() + 94);
+                ensureSuggestionVisible(suggestions.size(), next);
                 return true;
             }
         }
@@ -4298,7 +4308,7 @@ public class MacroWorkbenchScreen extends Screen {
                 advancedAction = MacroWorkbenchActionSuggestions.value(suggestions.get(next));
                 advancedActionCursor = advancedAction.length();
                 advancedActionSelectionAnchor = -1;
-                ensureSuggestionVisible(suggestions.size(), next, modalY() + 94);
+                ensureSuggestionVisible(suggestions.size(), next);
             }
             return true;
         }
@@ -4692,11 +4702,11 @@ public class MacroWorkbenchScreen extends Screen {
     }
 
     private void normalizeAdvancedModalInputState() {
-        this.advancedText = StringUtils.safe(this.advancedText);
-        this.advancedAction = StringUtils.safe(this.advancedAction);
-        this.advancedBgColor = StringUtils.safe(this.advancedBgColor);
-        this.advancedBorderColor = StringUtils.safe(this.advancedBorderColor);
-        this.advancedVisibilityScreenType = StringUtils.safe(this.advancedVisibilityScreenType);
+        this.advancedText = StringUtils.preserve(this.advancedText);
+        this.advancedAction = StringUtils.preserve(this.advancedAction);
+        this.advancedBgColor = StringUtils.preserve(this.advancedBgColor);
+        this.advancedBorderColor = StringUtils.preserve(this.advancedBorderColor);
+        this.advancedVisibilityScreenType = StringUtils.preserve(this.advancedVisibilityScreenType);
 
         this.advancedCursor = clampTextIndex(this.advancedText, this.advancedCursor);
         this.advancedActionCursor = clampTextIndex(this.advancedAction, this.advancedActionCursor);
@@ -5801,10 +5811,11 @@ public class MacroWorkbenchScreen extends Screen {
         }
     }
 
-    private void ensureSuggestionVisible(int totalSuggestions, int selectedIndex, int dropY) {
+    private void ensureSuggestionVisible(int totalSuggestions, int selectedIndex) {
+        CustomWidgetAdvancedLayout layout = customWidgetAdvancedLayout(modalX(), modalY());
+        UiRect suggestionArea = layout.suggestionArea();
         int rowH = 10;
-        int bottomLimit = modalY() + 208;
-        int visible = Math.clamp(Math.max(1, (bottomLimit - dropY) / rowH), 1, Math.max(1, totalSuggestions));
+        int visible = Math.clamp(Math.max(1, suggestionArea.height() / rowH), 1, Math.max(1, totalSuggestions));
         if (selectedIndex < advancedActionSuggestionScroll) {
             advancedActionSuggestionScroll = selectedIndex;
             return;
@@ -6148,15 +6159,37 @@ public class MacroWorkbenchScreen extends Screen {
 
 
     private int modalX() {
-        int defaultX = this.width / 2 - (MODAL_W / 2);
+        int modalW = modalWidth();
+        int defaultX = this.width / 2 - (modalW / 2);
         int x = advancedModalPosX == null ? defaultX : advancedModalPosX;
-        return Math.clamp(x, 0, Math.max(0, this.width - MODAL_W));
+        return Math.clamp(x, 0, Math.max(0, this.width - modalW));
     }
 
     private int modalY() {
-        int defaultY = this.height / 2 - (MODAL_H / 2);
+        int modalH = modalHeight();
+        int defaultY = this.height / 2 - (modalH / 2);
         int y = advancedModalPosY == null ? defaultY : advancedModalPosY;
-        return Math.clamp(y, 0, Math.max(0, this.height - MODAL_H));
+        return Math.clamp(y, 0, Math.max(0, this.height - modalH));
+    }
+
+    private float modalScale() {
+        int maxWidth = Math.max(1, this.width - 24);
+        int maxHeight = Math.max(1, this.height - 24);
+        float widthScale = maxWidth / (float) MODAL_W;
+        float heightScale = maxHeight / (float) MODAL_H;
+        return Math.clamp(Math.min(1.0f, Math.min(widthScale, heightScale)), 0.65f, 1.0f);
+    }
+
+    private int modalWidth() {
+        int maxWidth = Math.max(1, this.width - 24);
+        int minWidth = Math.min(420, maxWidth);
+        return Math.clamp(Math.round(MODAL_W * modalScale()), minWidth, maxWidth);
+    }
+
+    private int modalHeight() {
+        int maxHeight = Math.max(1, this.height - 24);
+        int minHeight = Math.min(300, maxHeight);
+        return Math.clamp(Math.round(MODAL_H * modalScale()), minHeight, maxHeight);
     }
 
     private void drawModalButton(DrawContext context, int x, int y, int w, int h, String label, boolean hovered) {

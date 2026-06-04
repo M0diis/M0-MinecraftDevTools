@@ -23,7 +23,7 @@ public final class KeybindManager {
     private static final Logger LOGGER = LoggerFactory.getLogger(M0DevToolsClient.MOD_ID);
 
     public static final KeyBinding.Category KEY_CATEGORY = KeyBinding.Category.create(
-            Identifier.of(M0DevToolsClient.MOD_ID, "keybinds"));;
+            Identifier.of(M0DevToolsClient.MOD_ID, "keybinds"));
 
     @Getter
     @RequiredArgsConstructor

@@ -1,6 +1,7 @@
 package bettercommandblockui.main;
 
 import bettercommandblockui.main.config.SimpleConfig;
+import me.m0dii.M0DevToolsClient;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
@@ -173,7 +174,7 @@ public class BetterCommandBlockUI implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
 
-        keybindCategory = KeyBinding.Category.create(Identifier.of("key.category.bcbui.keybinds"));
+        keybindCategory = KeyBinding.Category.create(Identifier.of(M0DevToolsClient.MOD_ID, "keybinds"));
         areaSelectionInput = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.bcbui.areaselectioninput",
                 InputUtil.Type.KEYSYM,
