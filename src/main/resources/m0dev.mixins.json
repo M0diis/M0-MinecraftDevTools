@@ -11,6 +11,7 @@
     "AbstractClientPlayerMixin",
     "BlockPlacementMixin",
     "ChatHudMixin",
+    "ClientDebugSubscriptionManagerMixin",
     "ClientPlayerEntityFreecamMixin",
     "ClientPlayerEntityMixin",
     "ClientPlayerInteractionManagerBlockAttributesMixin",

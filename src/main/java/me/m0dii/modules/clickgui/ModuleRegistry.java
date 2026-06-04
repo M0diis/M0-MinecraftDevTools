@@ -18,6 +18,7 @@ import me.m0dii.modules.macros.gui.MacroKeybindHudModule;
 import me.m0dii.modules.macros.hud.MacroHudModule;
 import me.m0dii.modules.macros.hud.PendingMacrosHudModule;
 import me.m0dii.modules.messagehistory.MessageHistoryModule;
+import me.m0dii.modules.mobai.MobAiVisualizerModule;
 import me.m0dii.modules.mousetweaks.MouseTweaksModule;
 import me.m0dii.modules.nbthud.NBTInfoHudModule;
 import me.m0dii.modules.nbttooltip.NBTTooltipModule;
@@ -69,6 +70,7 @@ public class ModuleRegistry {
         safeAdd(overlays, BiomeBorderOverlayModule.INSTANCE);
         safeAdd(overlays, StructureBoundingBoxOverlay.INSTANCE);
         safeAdd(overlays, CommandBlockOverlayModule.INSTANCE);
+        safeAdd(overlays, MobAiVisualizerModule.INSTANCE);
         categories.add(overlays);
 
         ModuleCategory hud = new ModuleCategory("HUD");
