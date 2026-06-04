@@ -677,7 +677,7 @@ public final class MacroHudDataHandler {
 
 
         HudElement button = createElement(ElementType.BUTTON);
-        button.label = "Example Macro";
+        button.label = "Press 'K' to open editor";
         button.macroId = "";
         button.x = 10;
         button.y = 26;

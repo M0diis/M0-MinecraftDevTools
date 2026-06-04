@@ -647,7 +647,9 @@ public class MacroWorkbenchScreen extends Screen {
     @Override
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
         context.fill(0, 0, this.width, this.height, 0xD0101010);
-        context.fill(0, TOP_BAR_H - 1, this.width, TOP_BAR_H, 0x70FFFFFF);
+        if (canvasChromeVisible) {
+            context.fill(0, TOP_BAR_H - 1, this.width, TOP_BAR_H, 0x70FFFFFF);
+        }
 
         if (this.tab == Tab.CANVAS) {
             renderCanvasTab(context, mouseX, mouseY);
@@ -710,7 +712,7 @@ public class MacroWorkbenchScreen extends Screen {
         updateDragging(mouseX, mouseY);
 
         context.drawTextWithShadow(this.textRenderer,
-                "Press F1 to turn on/off placement mode: " + (canvasChromeVisible ? "OFF" : "ON"),
+                "Press F1 to toggle placement mode: " + (canvasChromeVisible ? "OFF" : "ON"),
                 8, TOP_BAR_H + 4, 0xFF9FCFCF);
         context.drawTextWithShadow(this.textRenderer,
                 "Ctrl+Click multi-select, Ctrl+C/V copy/paste element, Ctrl+Shift+C/V dimensions, Ctrl+Z undo move",
@@ -740,9 +742,8 @@ public class MacroWorkbenchScreen extends Screen {
         drawSnapGuides(context);
 
         int y = this.height - BOTTOM_BAR_H;
-//        context.fill(0, y, this.width, this.height, 0xA0000000);
-        context.drawTextWithShadow(this.textRenderer, "Quick Edit (first line)", 8, y - 10, 0xFFAAAAAA);
-        if (this.macroField.visible) {
+            if (this.macroField.visible) {
+            context.drawTextWithShadow(this.textRenderer, "Quick Edit (first line)", 8, y - 10, 0xFFAAAAAA);
             context.drawTextWithShadow(this.textRenderer, "Macro Id (optional)", 292, y - 10, 0xFFAAAAAA);
             String actionLabel = "Action (optional)";
             if (selected != null && selected.type == MacroHudDataHandler.ElementType.BUTTON
