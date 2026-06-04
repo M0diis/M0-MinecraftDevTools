@@ -48,6 +48,7 @@ import net.minecraft.util.Identifier;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.*;
+import java.util.function.Consumer;
 import java.util.function.IntConsumer;
 
 public class MacroWorkbenchScreen extends Screen {
@@ -55,6 +56,7 @@ public class MacroWorkbenchScreen extends Screen {
     public enum Tab {
         CANVAS,
         KEYBOARD,
+        MACROS,
         PLACEHOLDERS,
         ENTITY_RADAR,
         COMMAND_HISTORY,
@@ -133,10 +135,13 @@ public class MacroWorkbenchScreen extends Screen {
     private final List<ClickableWidget> topBarWidgets = new ArrayList<>();
     private final List<ClickableWidget> canvasWidgets = new ArrayList<>();
     private final List<ClickableWidget> keyboardWidgets = new ArrayList<>();
+    private final List<ClickableWidget> macroManagerWidgets = new ArrayList<>();
+    private final List<ClickableWidget> placeholderWidgets = new ArrayList<>();
     private final List<ClickableWidget> entityRadarWidgets = new ArrayList<>();
     private final List<ClickableWidget> cmdHistoryWidgets = new ArrayList<>();
     private final List<ClickableWidget> msgHistoryWidgets = new ArrayList<>();
     private final List<ClickableWidget> configWidgets = new ArrayList<>();
+    private MacroWorkbenchMacrosTab macrosTabController;
     private MacroWorkbenchConfigurationTab configurationTabController;
 
     private final List<KeyCell> cells = new ArrayList<>();
@@ -150,6 +155,12 @@ public class MacroWorkbenchScreen extends Screen {
     private TextFieldWidget kbNameField;
     private TextFieldWidget kbCommandsField;
     private TextFieldWidget kbDelayField;
+    private ButtonWidget keyboardGameToggleButton;
+    private ButtonWidget kbSaveButton;
+    private ButtonWidget kbDeleteMacroButton;
+    private ButtonWidget kbEditCommandsButton;
+    private ButtonWidget kbNewButton;
+    private ButtonWidget kbOpenManagerButton;
 
     private boolean advancedOpen = false;
     private boolean advancedTextFocused = false;
@@ -199,6 +210,10 @@ public class MacroWorkbenchScreen extends Screen {
     };
 
     private int placeholderScroll = 0;
+    private String placeholderSearchQuery = "";
+    private List<String> filteredPlaceholderDocs = List.of();
+    private TextFieldWidget placeholderSearchField;
+    private ButtonWidget placeholderSearchButton;
     private boolean gridEnabled = GRID_ENABLED_PREF;
 
     private List<String> cmdHistoryItems = new ArrayList<>();
@@ -219,6 +234,7 @@ public class MacroWorkbenchScreen extends Screen {
     private String kbCommandsText = "";
     private int kbCommandsCursor = 0;
     private int kbCommandsSelectionAnchor = -1;
+    private Consumer<List<String>> commandListApplyConsumer;
 
     private boolean advancedSecondaryShowWhileGuiOpen;
     private boolean advancedSecondaryFadeEnabled;
@@ -296,15 +312,16 @@ public class MacroWorkbenchScreen extends Screen {
         List<Tab> tabs = List.of(
                 Tab.CANVAS,
                 Tab.KEYBOARD,
+                Tab.MACROS,
                 Tab.PLACEHOLDERS,
                 Tab.ENTITY_RADAR,
                 Tab.COMMAND_HISTORY,
                 Tab.MESSAGE_HISTORY,
                 Tab.CONFIGURATION
         );
-        List<String> labels = List.of("Canvas", "Keyboard", "Placeholders", "Entity Radar", "Cmd Hist", "Msg Hist", "Configuration");
-        List<String> compactLabels = List.of("Canvas", "Keys", "Place", "Radar", "Cmd", "Msg", "Config");
-        List<String> tinyLabels = List.of("CV", "KB", "PH", "ER", "CH", "MH", "CF");
+        List<String> labels = List.of("Canvas", "Keyboard", "Macros", "Placeholders", "Entity Radar", "Cmd Hist", "Msg Hist", "Configuration");
+        List<String> compactLabels = List.of("Canvas", "Keys", "Macros", "Place", "Radar", "Cmd", "Msg", "Config");
+        List<String> tinyLabels = List.of("CV", "KB", "MC", "PH", "ER", "CH", "MH", "CF");
         int tabGap = 4;
         int tabsStartX = 8;
         int tabsEndX = saveX - 8;
@@ -483,16 +500,19 @@ public class MacroWorkbenchScreen extends Screen {
         int panelW = keyboardPanelWidth();
         int panelX = keyboardPanelX();
         int panelInnerW = panelW - 20;
-        int keyboardRowY1 = this.height - 50;
-        int keyboardRowY2 = this.height - 28;
+        int fieldH = 20;
+        int keyboardNameY = this.height - 112;
+        int keyboardCommandsY = this.height - 88;
+        int keyboardRowY1 = this.height - 62;
+        int keyboardRowY2 = this.height - 36;
 
         ButtonWidget gameToggle = ButtonWidget.builder(Text.literal("Show Game Binds: OFF"), b -> {
             showGameKeybinds = !showGameKeybinds;
             b.setMessage(Text.literal("Show Game Binds: " + (showGameKeybinds ? "ON" : "OFF")));
-        }).dimensions(panelX + 10, TOP_BAR_H + 8, panelInnerW, 18).build();
+        }).dimensions(panelX + 10, TOP_BAR_H + 8, panelInnerW, fieldH).build();
 
-        this.kbNameField = new TextFieldWidget(this.textRenderer, panelX + 10, this.height - 94, panelInnerW, 18, Text.literal("Macro Name"));
-        this.kbCommandsField = new TextFieldWidget(this.textRenderer, panelX + 10, this.height - 72, panelInnerW, 18, Text.literal("Commands (; separated)"));
+        this.kbNameField = new TextFieldWidget(this.textRenderer, panelX + 10, keyboardNameY, panelInnerW, fieldH, Text.literal("Macro Name"));
+        this.kbCommandsField = new TextFieldWidget(this.textRenderer, panelX + 10, keyboardCommandsY, panelInnerW, fieldH, Text.literal("Commands (; separated)"));
 
         int delayW = Math.clamp(panelInnerW / 3, 72, 120);
         int row1RightW = panelInnerW - delayW - 4;
@@ -502,20 +522,20 @@ public class MacroWorkbenchScreen extends Screen {
         int deleteW = Math.max(66, (panelInnerW - 8 - newW) / 2);
         int openW = Math.max(80, panelInnerW - newW - deleteW - 8);
 
-        this.kbDelayField = new TextFieldWidget(this.textRenderer, panelX + 10, keyboardRowY1, delayW, 18, Text.literal("Delay Ticks"));
+        this.kbDelayField = new TextFieldWidget(this.textRenderer, panelX + 10, keyboardRowY1, delayW, fieldH, Text.literal("Delay Ticks"));
         this.kbNameField.setMaxLength(80);
         this.kbCommandsField.setMaxLength(500);
         this.kbDelayField.setMaxLength(6);
 
         ButtonWidget kbEditCommands = ButtonWidget.builder(Text.literal("Edit Cmds"), b -> openKeyboardCommandsModal())
-                .dimensions(panelX + 10 + delayW + 4, keyboardRowY1, editW, 18).build();
+                .dimensions(panelX + 10 + delayW + 4, keyboardRowY1, editW, fieldH).build();
         ButtonWidget kbSave = ButtonWidget.builder(Text.literal("Save Macro"), b -> saveKeyboardMacro())
-                .dimensions(panelX + 10 + delayW + 4 + editW + 4, keyboardRowY1, kbSaveW, 18).build();
-        ButtonWidget kbNew = ButtonWidget.builder(Text.literal("+ New"), b -> createKeyboardMacro()).dimensions(panelX + 10, keyboardRowY2, newW, 18).build();
+                .dimensions(panelX + 10 + delayW + 4 + editW + 4, keyboardRowY1, kbSaveW, fieldH).build();
+        ButtonWidget kbNew = ButtonWidget.builder(Text.literal("+ New"), b -> createKeyboardMacro()).dimensions(panelX + 10, keyboardRowY2, newW, fieldH).build();
         ButtonWidget kbDelete = ButtonWidget.builder(Text.literal("Delete"), b -> deleteKeyboardMacro())
-                .dimensions(panelX + 10 + newW + 4, keyboardRowY2, deleteW, 18).build();
+                .dimensions(panelX + 10 + newW + 4, keyboardRowY2, deleteW, fieldH).build();
         ButtonWidget kbOpenManager = ButtonWidget.builder(Text.literal("Open Macro Manager"),
-                b -> this.client.setScreen(MacroConfigScreen.create(this))).dimensions(panelX + 10 + newW + 4 + deleteW + 4, keyboardRowY2, openW, 18).build();
+                b -> setTab(Tab.MACROS)).dimensions(panelX + 10 + newW + 4 + deleteW + 4, keyboardRowY2, openW, fieldH).build();
 
         this.keyboardWidgets.add(gameToggle);
         this.keyboardWidgets.add(kbNameField);
@@ -536,6 +556,8 @@ public class MacroWorkbenchScreen extends Screen {
         addDrawableChild(kbNew);
         addDrawableChild(kbOpenManager);
 
+        initPlaceholderWidgets();
+
         ButtonWidget clearCmdHistoryButton = ButtonWidget.builder(
                         Text.literal("Clear History"),
                         b -> {
@@ -555,6 +577,7 @@ public class MacroWorkbenchScreen extends Screen {
         addDrawableChild(clearCmdHistoryButton);
         addDrawableChild(clearMsgHistoryButton);
 
+        initMacrosWidgets();
         initConfigurationWidgets();
 
         syncCanvasFields();
@@ -565,9 +588,17 @@ public class MacroWorkbenchScreen extends Screen {
     }
 
     private void setTab(Tab next) {
+        if (this.tab == Tab.KEYBOARD && next != Tab.KEYBOARD) {
+            saveKeyboardMacro();
+        }
+        if (this.tab == Tab.MACROS && next != Tab.MACROS && this.macrosTabController != null) {
+            this.macrosTabController.commitAll();
+        }
+
         this.tab = next;
         boolean canvas = next == Tab.CANVAS;
         boolean keyboard = next == Tab.KEYBOARD;
+        boolean macros = next == Tab.MACROS;
         boolean placeholders = next == Tab.PLACEHOLDERS;
 
         refreshTabWidgetVisibility();
@@ -583,11 +614,20 @@ public class MacroWorkbenchScreen extends Screen {
             rebuildBindingMaps();
             rebuildKeyboardGrid();
             syncKeyboardFields();
+        } else if (macros) {
+            applyQuickEdit();
+            closeAdvancedModal();
+            closeKeyboardCommandsModal();
+            dragging = false;
+            if (this.macrosTabController != null) {
+                this.macrosTabController.reloadFromStore(this.selectedMacroId);
+            }
         } else if (placeholders) {
             applyQuickEdit();
             closeAdvancedModal();
             closeKeyboardCommandsModal();
             dragging = false;
+            syncPlaceholderSearchButton();
         } else if (next == Tab.ENTITY_RADAR) {
             applyQuickEdit();
             closeAdvancedModal();
@@ -621,6 +661,8 @@ public class MacroWorkbenchScreen extends Screen {
     private void refreshTabWidgetVisibility() {
         boolean canvasTab = this.tab == Tab.CANVAS;
         boolean keyboardTab = this.tab == Tab.KEYBOARD;
+        boolean macrosTab = this.tab == Tab.MACROS;
+        boolean placeholdersTab = this.tab == Tab.PLACEHOLDERS;
         boolean entityRadarTab = this.tab == Tab.ENTITY_RADAR;
         boolean cmdHistoryTab = this.tab == Tab.COMMAND_HISTORY;
         boolean msgHistoryTab = this.tab == Tab.MESSAGE_HISTORY;
@@ -631,6 +673,8 @@ public class MacroWorkbenchScreen extends Screen {
         setWidgetState(topBarWidgets, showChrome);
         setWidgetState(canvasWidgets, canvasTab && showChrome);
         setWidgetState(keyboardWidgets, keyboardTab);
+        setWidgetState(macroManagerWidgets, macrosTab);
+        setWidgetState(placeholderWidgets, placeholdersTab);
         setWidgetState(entityRadarWidgets, entityRadarTab);
         setWidgetState(cmdHistoryWidgets, cmdHistoryTab);
         setWidgetState(msgHistoryWidgets, msgHistoryTab);
@@ -652,7 +696,9 @@ public class MacroWorkbenchScreen extends Screen {
         if (this.tab == Tab.CANVAS) {
             renderCanvasTab(context, mouseX, mouseY);
         } else if (this.tab == Tab.KEYBOARD) {
-            renderKeyboardTab(context);
+            renderKeyboardTab(context, mouseX, mouseY);
+        } else if (this.tab == Tab.MACROS) {
+            renderMacrosTab(context, mouseX, mouseY);
         } else if (this.tab == Tab.ENTITY_RADAR) {
             renderEntityRadarTab(context);
         } else if (this.tab == Tab.COMMAND_HISTORY) {
@@ -662,7 +708,7 @@ public class MacroWorkbenchScreen extends Screen {
         } else if (this.tab == Tab.CONFIGURATION) {
             renderConfigurationTab(context);
         } else {
-            renderPlaceholdersTab(context);
+            renderPlaceholdersTab(context, mouseX, mouseY);
         }
 
         // Draw normal widgets first.
@@ -758,26 +804,98 @@ public class MacroWorkbenchScreen extends Screen {
         }
     }
 
-    private void renderPlaceholdersTab(DrawContext context) {
+    private void renderPlaceholdersTab(DrawContext context, int mouseX, int mouseY) {
         int left = 12;
-        int top = TOP_BAR_H + 8;
+        int top = TOP_BAR_H + 46;
         int bottom = this.height - 14;
-        int lineHeight = 11;
+        int lineHeight = 13;
         int maxLines = Math.max(1, (bottom - top) / lineHeight);
-        List<String> docs = MacroPlaceholders.getPlaceholderDocs();
+        List<String> docs = placeholderDocs();
         int maxScroll = Math.max(0, docs.size() - maxLines);
         placeholderScroll = Math.clamp(placeholderScroll, 0, maxScroll);
+        this.filteredPlaceholderDocs = docs;
 
-        context.drawTextWithShadow(this.textRenderer, "Placeholder reference and return values", left, TOP_BAR_H - 16, 0xFFFFFFFF);
-        context.drawTextWithShadow(this.textRenderer, "Mouse wheel scrolls this page", this.width - 170, TOP_BAR_H - 16, 0xFF9F9F9F);
+        context.drawTextWithShadow(this.textRenderer, "Placeholder reference and return values", left, TOP_BAR_H + 6, 0xFFFFFFFF);
+        context.drawTextWithShadow(this.textRenderer, "Search and click a line to copy it", this.width - 188, TOP_BAR_H + 6, 0xFF9F9F9F);
 
         int y = top;
         for (int i = placeholderScroll; i < docs.size() && y <= bottom; i++) {
             String line = docs.get(i);
+            boolean hovered = mouseY >= y - 1 && mouseY <= y + lineHeight - 2 && mouseX >= left - 2 && mouseX <= this.width - 16;
+            if (hovered) {
+                context.fill(left - 3, y - 1, this.width - 10, y + lineHeight - 2, 0x302B5C85);
+            }
             int color = line.startsWith("[") ? 0xFF55FFFF : 0xFFD8D8D8;
             context.drawTextWithShadow(this.textRenderer, line, left, y, color);
+            if (hovered) {
+                String hint = "[Click to copy]";
+                context.drawTextWithShadow(this.textRenderer, hint, this.width - this.textRenderer.getWidth(hint) - 14, y, 0xFFFFFFAA);
+            }
             y += lineHeight;
         }
+
+        if (docs.isEmpty()) {
+            context.drawTextWithShadow(this.textRenderer, "No placeholders matched the current search.", left, top, 0xFFB8B8B8);
+        }
+    }
+
+    private void initPlaceholderWidgets() {
+        int fieldX = 12;
+        int fieldY = TOP_BAR_H + 22;
+        int buttonW = 70;
+        int fieldW = Math.max(120, this.width - fieldX - buttonW - 20);
+
+        this.placeholderSearchField = new TextFieldWidget(this.textRenderer, fieldX, fieldY, fieldW, 18, Text.literal("Search placeholders"));
+        this.placeholderSearchField.setMaxLength(96);
+        this.placeholderSearchField.setText(this.placeholderSearchQuery);
+        this.placeholderSearchField.setChangedListener(value -> {
+            this.placeholderSearchQuery = value == null ? "" : value;
+            this.placeholderScroll = 0;
+        });
+
+        this.placeholderSearchButton = ButtonWidget.builder(Text.literal("Search"), button -> applyPlaceholderSearch())
+                .dimensions(fieldX + fieldW + 6, fieldY, buttonW, 18)
+                .build();
+
+        this.placeholderWidgets.add(this.placeholderSearchField);
+        this.placeholderWidgets.add(this.placeholderSearchButton);
+        addDrawableChild(this.placeholderSearchField);
+        addDrawableChild(this.placeholderSearchButton);
+        syncPlaceholderSearchButton();
+    }
+
+    private void applyPlaceholderSearch() {
+        this.placeholderSearchQuery = this.placeholderSearchField == null ? "" : StringUtils.safe(this.placeholderSearchField.getText());
+        this.placeholderScroll = 0;
+        syncPlaceholderSearchButton();
+    }
+
+    private void syncPlaceholderSearchButton() {
+        if (this.placeholderSearchButton == null) {
+            return;
+        }
+        String query = StringUtils.safe(this.placeholderSearchQuery).trim();
+        this.placeholderSearchButton.setMessage(Text.literal(query.isEmpty() ? "Search" : "Search"));
+    }
+
+    private List<String> placeholderDocs() {
+        String query = StringUtils.safe(this.placeholderSearchQuery).trim().toLowerCase(Locale.ROOT);
+        List<String> docs = MacroPlaceholders.getPlaceholderDocs();
+        if (query.isEmpty()) {
+            return docs;
+        }
+        List<String> filtered = new ArrayList<>();
+        for (String line : docs) {
+            if (line != null && line.toLowerCase(Locale.ROOT).contains(query)) {
+                filtered.add(line);
+            }
+        }
+        return filtered;
+    }
+
+    private void initMacrosWidgets() {
+        this.macrosTabController = new MacroWorkbenchMacrosTab(this, this.macroManagerWidgets);
+        this.macrosTabController.initWidgets();
     }
 
     private void initConfigurationWidgets() {
@@ -795,6 +913,12 @@ public class MacroWorkbenchScreen extends Screen {
     private void renderConfigurationTab(DrawContext context) {
         if (this.configurationTabController != null) {
             this.configurationTabController.render(context);
+        }
+    }
+
+    private void renderMacrosTab(DrawContext context, int mouseX, int mouseY) {
+        if (this.macrosTabController != null) {
+            this.macrosTabController.render(context, mouseX, mouseY);
         }
     }
 
@@ -1007,19 +1131,42 @@ public class MacroWorkbenchScreen extends Screen {
         return false;
     }
 
-    private void renderKeyboardTab(DrawContext context) {
+    private boolean onPlaceholderClick(double mouseX, double mouseY) {
+        int left = 12;
+        int top = TOP_BAR_H + 46;
+        int bottom = this.height - 14;
+        int lineHeight = 13;
+        List<String> docs = placeholderDocs();
+        int y = top;
+        for (int i = placeholderScroll; i < docs.size() && y <= bottom; i++) {
+            if (mouseX >= left - 2 && mouseX <= this.width - 12 && mouseY >= y - 1 && mouseY <= y + lineHeight - 2) {
+                if (this.client != null) {
+                    this.client.keyboard.setClipboard(docs.get(i));
+                }
+                return true;
+            }
+            y += lineHeight;
+        }
+        return false;
+    }
+
+    private void renderKeyboardTab(DrawContext context, int mouseX, int mouseY) {
         int panelW = keyboardPanelWidth();
         int panelX = keyboardPanelX();
         int panelRight = panelX + panelW;
+        int panelTop = TOP_BAR_H + 6;
+        int panelHeight = Math.max(120, this.height - panelTop - 8);
         context.drawTextWithShadow(this.textRenderer, "Macros = Green, Game binds = Blue", 8, TOP_BAR_H + 4, 0xFFB0FFB0);
+        context.drawTextWithShadow(this.textRenderer, "Click a key to inspect or create bindings", 8, TOP_BAR_H + 16, 0xFF9FCFCF);
 
         for (KeyCell cell : cells) {
-            if (cell.x + cell.w > panelX - 6) {
+            if (cell.x + cell.w > panelX - 10) {
                 continue;
             }
             boolean macroBound = macroBindingIds.containsKey(cell.keyCode);
             boolean gameBound = showGameKeybinds && gameBindingNames.containsKey(cell.keyCode);
             boolean selectedCell = cell.keyCode == selectedKey;
+            boolean hovered = containsBox(mouseX, mouseY, cell.x, cell.y, cell.w, cell.h);
 
             int bg = 0xAA202020;
             if (gameBound) {
@@ -1030,18 +1177,21 @@ public class MacroWorkbenchScreen extends Screen {
             }
             if (selectedCell) {
                 bg = 0xAA7A5A1A;
+            } else if (hovered) {
+                bg = 0xAA383838;
             }
 
             context.fill(cell.x, cell.y, cell.x + cell.w, cell.y + cell.h, bg);
             context.fill(cell.x, cell.y, cell.x + cell.w, cell.y + 1, 0x60FFFFFF);
-            context.drawCenteredTextWithShadow(this.textRenderer, cell.label, cell.x + (cell.w / 2), cell.y + 5, 0xFFFFFFFF);
+            context.fill(cell.x, cell.y + cell.h - 1, cell.x + cell.w, cell.y + cell.h, hovered ? 0x80FFFFFF : 0x40000000);
+            context.drawCenteredTextWithShadow(this.textRenderer, cell.label, cell.x + (cell.w / 2), cell.y + Math.max(4, (cell.h - 9) / 2), 0xFFFFFFFF);
         }
 
-        context.fill(panelX, TOP_BAR_H, panelRight, this.height - 8, 0xAA111111);
-        context.drawTextWithShadow(this.textRenderer, "Selected key", panelX + 10, TOP_BAR_H + 30, 0xFFFFFFFF);
-        context.drawTextWithShadow(this.textRenderer, selectedKey < 0 ? "None" : MacroWorkbenchCanvasUtils.keyLabel(selectedKey), panelX + 10, TOP_BAR_H + 42, 0xFFFFFF55);
+        GuiSystem.drawPanel(context, panelX, panelTop, panelW, panelHeight);
+        context.drawTextWithShadow(this.textRenderer, "Selected key", panelX + 10, panelTop + 30, 0xFFFFFFFF);
+        context.drawTextWithShadow(this.textRenderer, selectedKey < 0 ? "None" : MacroWorkbenchCanvasUtils.keyLabel(selectedKey), panelX + 10, panelTop + 42, 0xFFFFFF55);
 
-        int y = TOP_BAR_H + 62;
+        int y = keyboardMacroListStartY();
         List<String> ids = macroBindingIds.getOrDefault(selectedKey, List.of());
         List<String> names = macroBindingNames.getOrDefault(selectedKey, List.of());
         if (ids.isEmpty()) {
@@ -1052,21 +1202,23 @@ public class MacroWorkbenchScreen extends Screen {
             for (int i = 0; i < ids.size(); i++) {
                 String id = ids.get(i);
                 String name = i < names.size() ? names.get(i) : id;
-                context.fill(panelX + 8, y - 2, panelRight - 8, y + 10, id.equals(selectedMacroId) ? 0x905A3A12 : 0x50202020);
+                boolean hovered = mouseX >= panelX + 8 && mouseX <= panelRight - 8 && mouseY >= y - 2 && mouseY <= y + 10;
+                int rowBg = id.equals(selectedMacroId) ? 0x905A3A12 : (hovered ? 0x60404040 : 0x50202020);
+                context.fill(panelX + 8, y - 2, panelRight - 8, y + 10, rowBg);
                 context.drawTextWithShadow(this.textRenderer, name + " [" + id + "]", panelX + 12, y, 0xFFE0E0E0);
                 y += 13;
-                if (y > this.height - 178) {
+                if (y > this.height - 192) {
                     break;
                 }
             }
         }
 
         if (showGameKeybinds) {
-            int gameY = Math.max(y + 8, this.height - 168);
+            int gameY = Math.max(y + 10, this.height - 182);
             context.drawTextWithShadow(this.textRenderer, "Game keybinds:", panelX + 10, gameY, 0xFF9AC2FF);
             gameY += 14;
             for (String bind : gameBindingNames.getOrDefault(selectedKey, List.of())) {
-                if (gameY > this.height - 124) {
+                if (gameY > this.height - 136) {
                     break;
                 }
                 context.drawTextWithShadow(this.textRenderer, "- " + bind, panelX + 10, gameY, 0xFFC8DFFF);
@@ -1105,6 +1257,9 @@ public class MacroWorkbenchScreen extends Screen {
         if (this.tab == Tab.CONFIGURATION && this.configurationTabController != null) {
             return this.configurationTabController.handleMouseClick(click.x(), click.y(), click.button());
         }
+        if (this.tab == Tab.MACROS && this.macrosTabController != null) {
+            return this.macrosTabController.handleMouseClick(click.x(), click.y(), click.button());
+        }
 
         if (click.button() != 0) {
             return false;
@@ -1120,6 +1275,12 @@ public class MacroWorkbenchScreen extends Screen {
         }
         if (this.tab == Tab.KEYBOARD) {
             return onKeyboardClick(click.x(), click.y());
+        }
+        if (this.tab == Tab.PLACEHOLDERS) {
+            return onPlaceholderClick(click.x(), click.y());
+        }
+        if (this.tab == Tab.MACROS) {
+            return false;
         }
         if (this.tab == Tab.ENTITY_RADAR) {
             return false;
@@ -1171,6 +1332,12 @@ public class MacroWorkbenchScreen extends Screen {
         if (this.tab == Tab.PLACEHOLDERS) {
             placeholderScroll -= verticalAmount > 0 ? 3 : -3;
             return true;
+        }
+
+        if (this.tab == Tab.MACROS && this.macrosTabController != null) {
+            if (this.macrosTabController.handleMouseScroll(mouseX, mouseY, verticalAmount)) {
+                return true;
+            }
         }
 
         if (this.tab == Tab.COMMAND_HISTORY) {
@@ -1312,6 +1479,16 @@ public class MacroWorkbenchScreen extends Screen {
             }
             return true;
         }
+        if (this.tab == Tab.PLACEHOLDERS
+                && this.placeholderSearchField != null
+                && this.placeholderSearchField.isFocused()
+                && (keyCode == GLFW.GLFW_KEY_ENTER || keyCode == GLFW.GLFW_KEY_KP_ENTER)) {
+            applyPlaceholderSearch();
+            return true;
+        }
+        if (this.tab == Tab.MACROS && this.macrosTabController != null && this.macrosTabController.handleKeyPressed(keyCode)) {
+            return true;
+        }
         return super.keyPressed(input);
     }
 
@@ -1392,7 +1569,7 @@ public class MacroWorkbenchScreen extends Screen {
 
         int panelX = keyboardPanelX();
         int panelRight = panelX + keyboardPanelWidth();
-        int lineY = TOP_BAR_H + 76;
+        int lineY = keyboardMacroListStartY() + 14;
         for (String id : macroBindingIds.getOrDefault(selectedKey, List.of())) {
             if (x >= panelX + 8 && x <= panelRight - 8 && y >= lineY - 2 && y <= lineY + 10) {
                 selectedMacroId = id;
@@ -1400,7 +1577,7 @@ public class MacroWorkbenchScreen extends Screen {
                 return true;
             }
             lineY += 13;
-            if (lineY > this.height - 178) {
+            if (lineY > this.height - 192) {
                 break;
             }
         }
@@ -3736,20 +3913,48 @@ public class MacroWorkbenchScreen extends Screen {
         if (macro == null) {
             return;
         }
+        openCommandListEditor(macro.commands, commands -> {
+            if (selectedMacroId == null) {
+                return;
+            }
+            MacroDataHandler.MacroEntry existing = MacroDataHandler.getMacro(selectedMacroId);
+            if (existing == null) {
+                return;
+            }
 
-        this.kbCommandsModalOpen = true;
-        this.kbCommandsFocused = true;
-        this.kbCommandsText = macro.commands == null ? "" : String.join("\n", macro.commands);
-        this.kbCommandsCursor = this.kbCommandsText.length();
+            MacroDataHandler.updateMacro(
+                    selectedMacroId,
+                    StringUtils.safe(kbNameField.getText()),
+                    commands,
+                    existing.keyCode,
+                    existing.modifierKey,
+                    parseDelayOrDefault(existing.delayTicks),
+                    existing.showInOverlay
+            );
+
+            kbCommandsField.setText(String.join(";", commands));
+            CommandMacros.refreshKeybindings();
+            rebuildBindingMaps();
+        });
     }
 
     private void closeKeyboardCommandsModal() {
         this.kbCommandsModalOpen = false;
         this.kbCommandsFocused = false;
+        this.commandListApplyConsumer = null;
         this.activeDragSelectionField = ModalDragSelectionField.NONE;
         this.modalDragStartMouseX = Integer.MIN_VALUE;
         this.modalDragStartMouseY = Integer.MIN_VALUE;
         this.modalDragSelectionStarted = false;
+    }
+
+    void openCommandListEditor(List<String> initialCommands, Consumer<List<String>> applyConsumer) {
+        this.kbCommandsModalOpen = true;
+        this.kbCommandsFocused = true;
+        this.commandListApplyConsumer = applyConsumer;
+        this.kbCommandsText = initialCommands == null ? "" : String.join("\n", initialCommands);
+        this.kbCommandsCursor = this.kbCommandsText.length();
+        this.kbCommandsSelectionAnchor = -1;
     }
 
     private void renderKeyboardCommandsModal(DrawContext context, int mouseX, int mouseY) {
@@ -4040,15 +4245,6 @@ public class MacroWorkbenchScreen extends Screen {
     }
 
     private void applyKeyboardCommandsModal() {
-        if (selectedMacroId == null) {
-            closeKeyboardCommandsModal();
-            return;
-        }
-        MacroDataHandler.MacroEntry existing = MacroDataHandler.getMacro(selectedMacroId);
-        if (existing == null) {
-            return;
-        }
-
         List<String> commands = new ArrayList<>();
         String raw = kbCommandsText == null ? "" : kbCommandsText.trim();
         if (!raw.isBlank()) {
@@ -4059,21 +4255,9 @@ public class MacroWorkbenchScreen extends Screen {
                 }
             }
         }
-
-        MacroDataHandler.updateMacro(
-                selectedMacroId,
-                StringUtils.safe(kbNameField.getText()),
-                commands,
-                existing.keyCode,
-                existing.modifierKey,
-                parseDelayOrDefault(existing.delayTicks),
-                existing.showInOverlay
-        );
-
-        kbCommandsText = String.join("\n", commands);
-        kbCommandsField.setText(String.join(";", commands));
-        CommandMacros.refreshKeybindings();
-        rebuildBindingMaps();
+        if (this.commandListApplyConsumer != null) {
+            this.commandListApplyConsumer.accept(commands);
+        }
         closeKeyboardCommandsModal();
     }
 
@@ -4907,10 +5091,8 @@ public class MacroWorkbenchScreen extends Screen {
         int panelX = keyboardPanelX();
         int availableW = Math.max(170, panelX - 16);
         int x0 = 10;
-        int y0 = TOP_BAR_H + 14;
-        int kw = 28;
-        int kh = 18;
-        int gap = 4;
+        int y0 = TOP_BAR_H + 26;
+        int gap = Math.clamp(availableW / 180, 3, 6);
 
         int[] rowFn = {
                 GLFW.GLFW_KEY_ESCAPE,
@@ -4943,52 +5125,64 @@ public class MacroWorkbenchScreen extends Screen {
                 GLFW.GLFW_KEY_SLASH, GLFW.GLFW_KEY_RIGHT_SHIFT
         };
 
-        while (kw > 14 && rowPixelWidth(kw, gap, rowTab) > availableW) {
+        int kw = 46;
+        while (kw > 18 && keyboardMainWidth(kw, gap, rowDigits, rowTab, rowCaps, rowShift) > availableW) {
             kw--;
         }
-        while (gap > 1 && rowPixelWidth(kw, gap, rowTab) > availableW) {
+        while (gap > 2 && keyboardMainWidth(kw, gap, rowDigits, rowTab, rowCaps, rowShift) > availableW) {
             gap--;
         }
+        int kh = Math.clamp((int) Math.round(kw * 0.8f), 18, 28);
+        int rowStep = kh + Math.max(4, gap);
 
         addRow(x0, y0, kw, kh, gap, rowFn);
-
-        addRow(x0, y0 + 28, kw, kh, gap, rowDigits);
-
-        addRow(x0, y0 + 50, kw, kh, gap, rowTab);
-
-        addRow(x0, y0 + 72, kw, kh, gap, rowCaps);
-
-        addRow(x0, y0 + 94, kw, kh, gap, rowShift);
-
-        addRow(x0, y0 + 116, kw, kh, gap,
+        addRow(x0, y0 + rowStep, kw, kh, gap, rowDigits);
+        addRow(x0, y0 + rowStep * 2, kw, kh, gap, rowTab);
+        addRow(x0, y0 + rowStep * 3, kw, kh, gap, rowCaps);
+        addRow(x0, y0 + rowStep * 4, kw, kh, gap, rowShift);
+        addRow(x0, y0 + rowStep * 5, kw, kh, gap,
                 GLFW.GLFW_KEY_LEFT_CONTROL, GLFW.GLFW_KEY_LEFT_ALT, GLFW.GLFW_KEY_SPACE,
                 GLFW.GLFW_KEY_RIGHT_ALT, GLFW.GLFW_KEY_RIGHT_CONTROL,
                 GLFW.GLFW_KEY_UP, GLFW.GLFW_KEY_LEFT, GLFW.GLFW_KEY_DOWN, GLFW.GLFW_KEY_RIGHT);
-
-        addRow(x0, y0 + 138, kw, kh, gap,
+        addRow(x0, y0 + rowStep * 6, kw, kh, gap,
                 GLFW.GLFW_KEY_HOME, GLFW.GLFW_KEY_END, GLFW.GLFW_KEY_PAGE_UP, GLFW.GLFW_KEY_PAGE_DOWN,
                 GLFW.GLFW_KEY_INSERT, GLFW.GLFW_KEY_DELETE);
-
-        addRow(x0 + 7 * (kw + gap), y0 + 138, kw, kh, gap,
+        addRow(x0 + 7 * (kw + gap), y0 + rowStep * 6, kw, kh, gap,
                 GLFW.GLFW_MOUSE_BUTTON_LEFT, GLFW.GLFW_MOUSE_BUTTON_RIGHT,
                 GLFW.GLFW_MOUSE_BUTTON_MIDDLE, GLFW.GLFW_MOUSE_BUTTON_4, GLFW.GLFW_MOUSE_BUTTON_5);
 
-        boolean placeNumpadRight = panelX >= 700;
-        int numpadX = placeNumpadRight ? Math.max(360, panelX - 170) : x0;
-        int numpadY = placeNumpadRight ? (y0 + 50) : (y0 + 160);
+        int numpadWidth = rowPixelWidth(kw, gap, GLFW.GLFW_KEY_KP_7, GLFW.GLFW_KEY_KP_8, GLFW.GLFW_KEY_KP_9, GLFW.GLFW_KEY_KP_ADD);
+        int mainWidth = keyboardMainWidth(kw, gap, rowDigits, rowTab, rowCaps, rowShift);
+        boolean placeNumpadRight = availableW >= mainWidth + (gap * 6) + numpadWidth;
+        int numpadX = placeNumpadRight
+                ? Math.min(panelX - numpadWidth - 14, x0 + mainWidth + (gap * 4))
+                : x0 + Math.max(0, (mainWidth - numpadWidth) / 2);
+        int numpadY = placeNumpadRight ? (y0 + rowStep * 2) : (y0 + rowStep * 7 + 10);
         addRow(numpadX, numpadY, kw, kh, gap, GLFW.GLFW_KEY_KP_DIVIDE, GLFW.GLFW_KEY_KP_MULTIPLY, GLFW.GLFW_KEY_KP_SUBTRACT);
-        addRow(numpadX, numpadY + 22, kw, kh, gap, GLFW.GLFW_KEY_KP_7, GLFW.GLFW_KEY_KP_8, GLFW.GLFW_KEY_KP_9, GLFW.GLFW_KEY_KP_ADD);
-        addRow(numpadX, numpadY + 44, kw, kh, gap, GLFW.GLFW_KEY_KP_4, GLFW.GLFW_KEY_KP_5, GLFW.GLFW_KEY_KP_6);
-        addRow(numpadX, numpadY + 66, kw, kh, gap, GLFW.GLFW_KEY_KP_1, GLFW.GLFW_KEY_KP_2, GLFW.GLFW_KEY_KP_3, GLFW.GLFW_KEY_KP_ENTER);
-        addRow(numpadX, numpadY + 88, kw, kh, gap, GLFW.GLFW_KEY_KP_0, GLFW.GLFW_KEY_KP_DECIMAL);
+        addRow(numpadX, numpadY + rowStep, kw, kh, gap, GLFW.GLFW_KEY_KP_7, GLFW.GLFW_KEY_KP_8, GLFW.GLFW_KEY_KP_9, GLFW.GLFW_KEY_KP_ADD);
+        addRow(numpadX, numpadY + rowStep * 2, kw, kh, gap, GLFW.GLFW_KEY_KP_4, GLFW.GLFW_KEY_KP_5, GLFW.GLFW_KEY_KP_6);
+        addRow(numpadX, numpadY + rowStep * 3, kw, kh, gap, GLFW.GLFW_KEY_KP_1, GLFW.GLFW_KEY_KP_2, GLFW.GLFW_KEY_KP_3, GLFW.GLFW_KEY_KP_ENTER);
+        addRow(numpadX, numpadY + rowStep * 4, kw, kh, gap, GLFW.GLFW_KEY_KP_0, GLFW.GLFW_KEY_KP_DECIMAL);
     }
 
     private int keyboardPanelWidth() {
-        return Math.clamp(this.width - 16, 220, 320);
+        return Math.clamp((int) (this.width * 0.34f), 300, 430);
     }
 
     private int keyboardPanelX() {
         return Math.max(8, this.width - keyboardPanelWidth() - 8);
+    }
+
+    private int keyboardMacroListStartY() {
+        return TOP_BAR_H + 76;
+    }
+
+    private int keyboardMainWidth(int baseWidth, int gap, int[]... rows) {
+        int max = 0;
+        for (int[] row : rows) {
+            max = Math.max(max, rowPixelWidth(baseWidth, gap, row));
+        }
+        return max;
     }
 
     private int rowPixelWidth(int baseWidth, int gap, int... keys) {
@@ -5114,7 +5308,12 @@ public class MacroWorkbenchScreen extends Screen {
         if (advancedOpen) {
             applyAdvancedAndClose();
         }
-        saveKeyboardMacro();
+        if (this.tab == Tab.KEYBOARD) {
+            saveKeyboardMacro();
+        }
+        if (this.tab == Tab.MACROS && this.macrosTabController != null) {
+            this.macrosTabController.commitAll();
+        }
 
         persistExternalCanvasElements();
 
@@ -6029,6 +6228,28 @@ public class MacroWorkbenchScreen extends Screen {
 
     TextRenderer workbenchTextRenderer() {
         return this.textRenderer;
+    }
+
+    void openWorkbenchTab(Tab next) {
+        setTab(next);
+    }
+
+    String currentMacroSelectionId() {
+        return this.selectedMacroId;
+    }
+
+    void updateKeyboardMacroSelection(String macroId, int keyCode) {
+        this.selectedMacroId = macroId;
+        this.selectedKey = keyCode;
+        syncKeyboardFields();
+    }
+
+    void onMacrosChanged() {
+        rebuildBindingMaps();
+        if (this.selectedMacroId != null && MacroDataHandler.getMacro(this.selectedMacroId) == null) {
+            this.selectedMacroId = null;
+        }
+        syncKeyboardFields();
     }
 
     private List<String> buildMacroKeybindPreviewLines(MacroHudDataHandler.HudElement element) {

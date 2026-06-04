@@ -19,7 +19,7 @@ public class MacroDataHandler {
     private static final Path CONFIG_FILE = FabricLoader.getInstance().getConfigDir().resolve("m0-dev-tools-macros.json");
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
-    private static Map<String, MacroEntry> macros = new HashMap<>();
+    private static Map<String, MacroEntry> macros = new LinkedHashMap<>();
 
     @Builder
     public static class MacroEntry {
@@ -43,7 +43,7 @@ public class MacroDataHandler {
             };
             Map<String, MacroEntry> loadedMacros = GSON.fromJson(json, typeToken.getType());
             if (loadedMacros != null) {
-                macros = loadedMacros;
+                macros = new LinkedHashMap<>(loadedMacros);
             }
         } catch (IOException e) {
             M0DevTools.LOGGER.error("Failed to load macros: {}", e.getMessage());
@@ -89,7 +89,7 @@ public class MacroDataHandler {
     }
 
     public static Map<String, MacroEntry> getAllMacros() {
-        return new HashMap<>(macros);
+        return new LinkedHashMap<>(macros);
     }
 
     public static boolean hasMacro(@NotNull String id) {
@@ -106,5 +106,10 @@ public class MacroDataHandler {
         if (macros.containsKey(id)) {
             addMacro(id, name, commands, keyCode, modifierKey, delayTicks, showInOverlay);
         }
+    }
+
+    public static void setAllMacros(@Nullable Map<String, MacroEntry> next) {
+        macros = next == null ? new LinkedHashMap<>() : new LinkedHashMap<>(next);
+        saveMacros();
     }
 }

@@ -155,4 +155,20 @@ public final class MacroWorkbenchCanvasUtils {
             }
         };
     }
+
+    public static String keyTranslationLabel(String translationKey) {
+        if (translationKey == null || translationKey.isBlank()) {
+            return "None";
+        }
+        try {
+            InputUtil.Key key = InputUtil.fromTranslationKey(translationKey.toLowerCase(Locale.ROOT));
+            if (key == null) {
+                return translationKey;
+            }
+            String text = key.getLocalizedText().getString();
+            return text == null || text.isBlank() ? translationKey : text;
+        } catch (Exception ignored) {
+            return translationKey;
+        }
+    }
 }
