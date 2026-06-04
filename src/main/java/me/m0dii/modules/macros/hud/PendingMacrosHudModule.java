@@ -1,4 +1,4 @@
-package me.m0dii.modules.macros.gui;
+package me.m0dii.modules.macros.hud;
 
 import me.m0dii.M0DevToolsClient;
 import me.m0dii.modules.Module;
