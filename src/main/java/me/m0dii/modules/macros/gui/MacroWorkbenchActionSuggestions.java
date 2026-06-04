@@ -42,7 +42,7 @@ public final class MacroWorkbenchActionSuggestions {
             }
             return matches;
         }
-        return sourceTokenSuggestions(actionPrefix);
+        return sourceTokenSuggestions(actionPrefix, usesRawSourceTokenSuggestions(selected));
     }
 
     public static int nextSelectableIndex(List<String> suggestions, int start, int direction) {
@@ -95,7 +95,17 @@ public final class MacroWorkbenchActionSuggestions {
         return allItemIds.toArray(String[]::new);
     }
 
-    private static List<String> sourceTokenSuggestions(String prefix) {
+    private static boolean usesRawSourceTokenSuggestions(MacroHudDataHandler.HudElement selected) {
+        if (selected == null) {
+            return false;
+        }
+        return selected.type == MacroHudDataHandler.ElementType.BAR
+                || selected.type == MacroHudDataHandler.ElementType.VALUE
+                || selected.type == MacroHudDataHandler.ElementType.LIST
+                || selected.type == MacroHudDataHandler.ElementType.STATE_BADGE;
+    }
+
+    private static List<String> sourceTokenSuggestions(String prefix, boolean rawOnly) {
         String p = StringUtils.safe(prefix).toLowerCase(Locale.ROOT);
         LinkedHashMap<String, List<String>> grouped = new LinkedHashMap<>();
         grouped.put("Player", new ArrayList<>());
@@ -110,34 +120,39 @@ public final class MacroWorkbenchActionSuggestions {
         grouped.put("Commands", new ArrayList<>());
 
         for (String token : MacroPlaceholders.getKnownPlaceholderTokens()) {
+            if (rawOnly && token.indexOf('{') >= 0) {
+                continue;
+            }
             String category = categorizeSuggestion(token);
             grouped.computeIfAbsent(category, ignored -> new ArrayList<>()).add(token);
         }
 
-        grouped.get("Commands").addAll(List.of(
-                "cmd:/",
-                "msg:",
-                "say:",
-                "copy:",
-                "bar:",
-                "if:{left}=={right}::cmd:/say yes:else:cmd:/say no"
-        ));
+        if (!rawOnly) {
+            grouped.get("Commands").addAll(List.of(
+                    "cmd:/",
+                    "msg:",
+                    "say:",
+                    "copy:",
+                    "bar:",
+                    "if:{left}=={right}::cmd:/say yes:else:cmd:/say no"
+            ));
 
-        grouped.get("Variables").addAll(List.of(
-                "{player.name}",
-                "{player.uuid}",
-                "{pos.x} {pos.y} {pos.z}",
-                "{client.fps}",
-                "{world.time.clock}"
-        ));
+            grouped.get("Variables").addAll(List.of(
+                    "{player.name}",
+                    "{player.uuid}",
+                    "{pos.x} {pos.y} {pos.z}",
+                    "{client.fps}",
+                    "{world.time.clock}"
+            ));
 
-        grouped.get("Script").addAll(List.of(
-                "groovy:player.sendMessage(net.minecraft.text.Text.literal('Hi from Groovy'), false)",
-                "kotlin:player.sendMessage(net.minecraft.text.Text.literal(\"Hi from Kotlin\"), false)",
-                "example.groovy",
-                "example.kts"
-        ));
-        grouped.get("Script").addAll(ScriptStorage.listScripts());
+            grouped.get("Script").addAll(List.of(
+                    "groovy:player.sendMessage(net.minecraft.text.Text.literal('Hi from Groovy'), false)",
+                    "kotlin:player.sendMessage(net.minecraft.text.Text.literal(\"Hi from Kotlin\"), false)",
+                    "example.groovy",
+                    "example.kts"
+            ));
+            grouped.get("Script").addAll(ScriptStorage.listScripts());
+        }
 
         List<String> out = new ArrayList<>();
         for (Map.Entry<String, List<String>> entry : grouped.entrySet()) {

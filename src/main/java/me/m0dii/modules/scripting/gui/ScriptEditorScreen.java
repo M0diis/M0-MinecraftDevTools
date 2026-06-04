@@ -40,6 +40,11 @@ public class ScriptEditorScreen extends Screen {
     private static final int CODE_LINE_H = 10;
     private static final int SCRIPT_ROW_H = 14;
     private static final int SCRIPT_HEADER_H = 18;
+    private static final int SCRIPT_SEARCH_TOP = 16;
+    private static final int SCRIPT_FIELD_H = 16;
+    private static final int SCRIPT_RENAME_TOP = 36;
+    private static final int SCRIPT_HELP_TOP = 56;
+    private static final int SCRIPT_BODY_TOP = 72;
     private static final int DIAG_ROW_H = 11;
     private static final int HISTORY_LIMIT = 180;
     private static final int SUGGESTION_ROW_H = 11;
@@ -125,6 +130,8 @@ public class ScriptEditorScreen extends Screen {
     private int scriptsScroll = 0;
     private String scriptSearch = "";
     private boolean scriptsSearchFocused = false;
+    private String renameDraft = "";
+    private boolean renameFieldFocused = false;
     private SortMode sortMode = SortMode.NAME_ASC;
     private FilterMode filterMode = FilterMode.ALL;
 
@@ -190,6 +197,7 @@ public class ScriptEditorScreen extends Screen {
                 default -> UiTab.SCRIPTS;
             };
             scriptsSearchFocused = false;
+            renameFieldFocused = false;
             hideSuggestions();
             return true;
         }
@@ -197,17 +205,27 @@ public class ScriptEditorScreen extends Screen {
         if (tab == UiTab.DOCS) {
             editor.focused = false;
             scriptsSearchFocused = false;
+            renameFieldFocused = false;
             return false;
         }
 
         if (tab == UiTab.SCRIPTS) {
             if (scriptsSearchRect().contains(click.x(), click.y())) {
                 scriptsSearchFocused = true;
+                renameFieldFocused = false;
+                editor.focused = false;
+                hideSuggestions();
+                return true;
+            }
+            if (scriptsRenameRect().contains(click.x(), click.y())) {
+                renameFieldFocused = true;
+                scriptsSearchFocused = false;
                 editor.focused = false;
                 hideSuggestions();
                 return true;
             }
             scriptsSearchFocused = false;
+            renameFieldFocused = false;
             if (scriptsBodyRect().contains(click.x(), click.y())) {
                 int idx = visibleScriptIndexAt(click.y());
                 if (idx >= 0 && idx < visibleScripts.size()) {
@@ -245,6 +263,7 @@ public class ScriptEditorScreen extends Screen {
             }
         } else {
             scriptsSearchFocused = false;
+            renameFieldFocused = false;
             if (mainBtnSave().contains(click.x(), click.y())) {
                 return saveScript();
             }
@@ -367,6 +386,10 @@ public class ScriptEditorScreen extends Screen {
             refreshScripts();
             return true;
         }
+        if (tab == UiTab.SCRIPTS && renameFieldFocused && (codepoint >= 32 && codepoint != 127)) {
+            renameDraft = renameDraft + new String(Character.toChars(codepoint));
+            return true;
+        }
 
         if (!editor.focused || tab == UiTab.DOCS) {
             return false;
@@ -389,6 +412,15 @@ public class ScriptEditorScreen extends Screen {
             scriptSearch = scriptSearch.substring(0, scriptSearch.length() - 1);
             refreshScripts();
             return true;
+        }
+        if (tab == UiTab.SCRIPTS && renameFieldFocused) {
+            if (key == GLFW.GLFW_KEY_BACKSPACE && !renameDraft.isEmpty()) {
+                renameDraft = renameDraft.substring(0, renameDraft.length() - 1);
+                return true;
+            }
+            if (key == GLFW.GLFW_KEY_ENTER || key == GLFW.GLFW_KEY_KP_ENTER) {
+                return renameScript();
+            }
         }
 
         if (key == GLFW.GLFW_KEY_ESCAPE) {
@@ -605,6 +637,20 @@ public class ScriptEditorScreen extends Screen {
             }
         }
 
+        Rect rename = scriptsRenameRect();
+        context.fill(rename.x, rename.y, rename.x + rename.w, rename.y + rename.h, renameFieldFocused ? 0xFF203018 : 0xFF111111);
+        String renameValue = renameDraft.isEmpty() ? "<new script name>" : renameDraft;
+        String renameLine = "Name: " + renameValue;
+        int renameColor = renameDraft.isEmpty() ? 0xFF7F7F7F : 0xFFDADADA;
+        context.drawText(textRenderer, renameLine, rename.x + 4, rename.y + 5, renameColor, false);
+        if (renameFieldFocused && blinkOn()) {
+            int cursorX = rename.x + 4 + textRenderer.getWidth("Name: " + renameDraft);
+            if (cursorX < rename.x + rename.w - 2) {
+                context.fill(cursorX, rename.y + 4, cursorX + 1, rename.y + 13, 0xFFFFFFFF);
+            }
+        }
+        context.drawText(textRenderer, "Rename selected script. Press Enter or click Rename.", pane.x + 6, rename.y + rename.h + 4, 0xFF9EA7B3, false);
+
         Rect body = scriptsBodyRect();
         context.fill(body.x, body.y, body.x + body.w, body.y + body.h, 0xFF111111);
         int visible = Math.max(1, body.h / SCRIPT_ROW_H);
@@ -780,6 +826,7 @@ public class ScriptEditorScreen extends Screen {
             i++;
         }
         currentScriptName = name;
+        renameDraft = name;
         clearEditor();
         outputText = "Created " + name + " (not saved yet)";
         return true;
@@ -791,7 +838,7 @@ public class ScriptEditorScreen extends Screen {
             outputText = "Select a script first.";
             return true;
         }
-        String requestedName = scriptSearch == null ? "" : scriptSearch.trim();
+        String requestedName = renameDraft == null ? "" : renameDraft.trim();
         String renamed = requestedName.isBlank()
                 ? nextName(current, "_renamed", allScripts)
                 : normalizeScriptNameForRename(requestedName, current);
@@ -809,8 +856,8 @@ public class ScriptEditorScreen extends Screen {
                 return true;
             }
             currentScriptName = renamed;
-            scriptSearch = "";
-            scriptsSearchFocused = false;
+            renameDraft = renamed;
+            renameFieldFocused = false;
             refreshScripts();
             selectByName(renamed, true);
             outputText = "Renamed to " + renamed;
@@ -1175,6 +1222,9 @@ public class ScriptEditorScreen extends Screen {
         if (selectedScriptIndex < 0 && !visibleScripts.isEmpty()) {
             selectedScriptIndex = 0;
         }
+        if (keepName == null && selectedScriptIndex >= 0 && selectedScriptIndex < visibleScripts.size()) {
+            renameDraft = visibleScripts.get(selectedScriptIndex);
+        }
     }
 
     private boolean matchesFilter(String script) {
@@ -1227,6 +1277,7 @@ public class ScriptEditorScreen extends Screen {
         }
         selectedScriptIndex = idx;
         currentScriptName = visibleScripts.get(idx);
+        renameDraft = currentScriptName;
         try {
             editor.text = normalize(ScriptStorage.readScript(currentScriptName));
             editor.cursor = editor.text.length();
@@ -2602,13 +2653,18 @@ public class ScriptEditorScreen extends Screen {
 
     private Rect scriptsSearchRect() {
         Rect p = scriptsPaneRect();
-        return new Rect(p.x + 4, p.y + 16, p.w - 8, 16);
+        return new Rect(p.x + 4, p.y + SCRIPT_SEARCH_TOP, p.w - 8, SCRIPT_FIELD_H);
+    }
+
+    private Rect scriptsRenameRect() {
+        Rect p = scriptsPaneRect();
+        return new Rect(p.x + 4, p.y + SCRIPT_RENAME_TOP, p.w - 8, SCRIPT_FIELD_H);
     }
 
     private Rect scriptsBodyRect() {
         Rect p = scriptsPaneRect();
-        int top = p.y + SCRIPT_HEADER_H + 16;
-        int h = p.h - 100 - SCRIPT_HEADER_H - 16;
+        int top = p.y + SCRIPT_BODY_TOP;
+        int h = p.h - (SCRIPT_BODY_TOP + 68);
         return new Rect(p.x + 4, top, p.w - 8, Math.max(40, h));
     }
 
@@ -2687,7 +2743,7 @@ public class ScriptEditorScreen extends Screen {
 
     private Rect scriptsBtnSave() {
         Rect p = scriptsPaneRect();
-        return new Rect(p.x + 4, p.y + p.h - 34, 70, 18);
+        return new Rect(p.x + 4, p.y + p.h - 34, 62, 18);
     }
 
     private Rect scriptsBtnRun() {
