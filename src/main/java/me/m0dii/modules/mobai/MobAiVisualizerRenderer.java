@@ -42,7 +42,8 @@ final class MobAiVisualizerRenderer {
 
     private void onAfterEntities(WorldRenderContext context) {
         MobAiVisualizerModule module = MobAiVisualizerModule.INSTANCE;
-        if (!module.isEnabled()) {
+        boolean hasCommandData = MobAiDebugClientState.hasActiveData();
+        if (!module.isEnabled() && !hasCommandData) {
             return;
         }
 
@@ -72,16 +73,18 @@ final class MobAiVisualizerRenderer {
         Set<Integer> debugBrainEntities = new LinkedHashSet<>();
 
         DebugDataStore debugDataStore = handler.getDebugDataStore();
-        if (debugDataStore != null) {
+        if (module.isEnabled() && debugDataStore != null) {
             renderDebugPathData(client, debugDataStore, cameraPos, tickDelta, radiusSq, visible, occluded, overlays, debugPathEntities);
             renderDebugBrainData(client, debugDataStore, cameraPos, tickDelta, radiusSq, visible, occluded, overlays, debugBrainEntities);
         }
 
-        if (module.useClientFallback()) {
+        if (module.isEnabled() && module.useClientFallback()) {
             renderClientFallbackData(client, cameraPos, tickDelta, radiusSq, visible, occluded, overlays, debugPathEntities, debugBrainEntities);
         }
 
-        if (module.showLabels()) {
+        renderCommandDebugData(client, cameraPos, tickDelta, visible, occluded, overlays);
+
+        if (module.showLabels() || hasCommandData) {
             renderLabels(context, consumers, cameraPos, tickDelta, overlays.values());
         }
 
@@ -200,6 +203,60 @@ final class MobAiVisualizerRenderer {
         }
     }
 
+    private void renderCommandDebugData(MinecraftClient client,
+                                        Vec3d cameraPos,
+                                        float tickDelta,
+                                        VertexConsumer visible,
+                                        VertexConsumer occluded,
+                                        Map<Integer, EntityOverlayInfo> overlays) {
+        if (client.world == null) {
+            return;
+        }
+
+        MobAiDebugClientState.PathPreviewState previewState = MobAiDebugClientState.getPathPreviewState();
+        if (previewState != null) {
+            Entity entity = client.world.getEntityById(previewState.entityId());
+            if (entity instanceof MobEntity mob) {
+                EntityOverlayInfo overlay = overlays.computeIfAbsent(entity.getId(), id -> new EntityOverlayInfo(entity));
+                overlay.focused = overlay.focused || entity == client.targetedEntity;
+                overlay.previewPath = true;
+
+                drawEntityOutline(visible, occluded, entity, cameraPos, tickDelta,
+                        previewState.reachesTarget() ? 0.48f : 1.0f,
+                        0.94f,
+                        previewState.reachesTarget() ? 0.36f : 0.32f,
+                        0.90f,
+                        0.45f,
+                        1.55f,
+                        0.05);
+                drawPreviewPath(visible, occluded, mob, previewState, cameraPos, tickDelta);
+
+                for (MobAiDebugPayloads.DebugLine line : previewState.lines()) {
+                    overlay.addLine(line.text(), line.color());
+                }
+            }
+        }
+
+        MobAiDebugClientState.InspectState inspectState = MobAiDebugClientState.getInspectState();
+        if (inspectState != null) {
+            Entity entity = client.world.getEntityById(inspectState.entityId());
+            if (entity != null) {
+                EntityOverlayInfo overlay = overlays.computeIfAbsent(entity.getId(), id -> new EntityOverlayInfo(entity));
+                overlay.focused = true;
+                overlay.inspected = true;
+
+                if (!overlay.hasVisualMarker()) {
+                    drawEntityOutline(visible, occluded, entity, cameraPos, tickDelta,
+                            0.68f, 0.82f, 1.0f, 0.88f, 0.35f, 1.3f, 0.03);
+                }
+
+                for (MobAiDebugPayloads.DebugLine line : inspectState.lines()) {
+                    overlay.addLine(line.text(), line.color());
+                }
+            }
+        }
+    }
+
     private void addClientBrainLines(MobEntity mob,
                                      EntityOverlayInfo overlay,
                                      boolean hasClientPath,
@@ -284,6 +341,79 @@ final class MobAiVisualizerRenderer {
         }
 
         return drewAnything;
+    }
+
+    private void drawPreviewPath(VertexConsumer visible,
+                                 VertexConsumer occluded,
+                                 MobEntity mob,
+                                 MobAiDebugClientState.PathPreviewState previewState,
+                                 Vec3d cameraPos,
+                                 float tickDelta) {
+        Vec3d source = entityCenter(mob, tickDelta);
+        List<BlockPos> nodes = previewState.nodes();
+
+        if (nodes.isEmpty()) {
+            drawTargetLineAndBox(
+                    visible,
+                    occluded,
+                    source,
+                    previewState.target(),
+                    cameraPos,
+                    1.0f,
+                    0.32f,
+                    0.32f,
+                    0.94f,
+                    0.42f,
+                    1.35f
+            );
+            return;
+        }
+
+        Vec3d previous = source;
+        int currentNodeIndex = clamp(previewState.currentNodeIndex(), 0, nodes.size() - 1);
+        for (int i = 0; i < nodes.size(); i++) {
+            Vec3d current = center(nodes.get(i));
+            boolean activeSegment = i >= currentNodeIndex;
+            float r = previewState.reachesTarget() ? 0.48f : 1.0f;
+            float g = activeSegment ? 0.96f : 0.58f;
+            float b = previewState.reachesTarget() ? 0.36f : 0.26f;
+            float alpha = activeSegment ? 0.96f : 0.42f;
+            drawLineBetween(visible, occluded, previous, current, cameraPos, r, g, b, alpha, alpha * 0.45f, 1.7f);
+            previous = current;
+        }
+
+        for (int i = 0; i < nodes.size(); i++) {
+            BlockPos nodePos = nodes.get(i);
+            boolean current = i == currentNodeIndex;
+            boolean visited = i < currentNodeIndex;
+            float r = previewState.reachesTarget() ? 0.48f : 1.0f;
+            float g = current ? 1.0f : (visited ? 0.62f : 0.92f);
+            float b = previewState.reachesTarget() ? 0.36f : 0.28f;
+            double half = current ? 0.28 : 0.20;
+            drawMarkerBox(visible, occluded, nodePos, cameraPos, half, r, g, b, current ? 0.95f : 0.78f, current ? 0.42f : 0.24f, current ? 1.25f : 1.0f);
+        }
+
+        for (BlockPos openNode : previewState.openNodes()) {
+            drawMarkerBox(visible, occluded, openNode, cameraPos, 0.14, 0.22f, 0.88f, 1.0f, 0.46f, 0.16f, 0.85f);
+        }
+
+        for (BlockPos closedNode : previewState.closedNodes()) {
+            drawMarkerBox(visible, occluded, closedNode, cameraPos, 0.11, 0.90f, 0.90f, 0.90f, 0.24f, 0.10f, 0.78f);
+        }
+
+        drawMarkerBox(
+                visible,
+                occluded,
+                previewState.target(),
+                cameraPos,
+                0.30,
+                previewState.reachesTarget() ? 0.48f : 1.0f,
+                previewState.reachesTarget() ? 0.98f : 0.38f,
+                0.28f,
+                0.95f,
+                0.35f,
+                1.4f
+        );
     }
 
     private static <T> Optional<T> getOptionalMemory(Brain<?> brain, MemoryModuleType<T> type) {
@@ -721,6 +851,8 @@ final class MobAiVisualizerRenderer {
         private boolean brainDebug;
         private boolean clientPath;
         private boolean clientBrain;
+        private boolean previewPath;
+        private boolean inspected;
         private boolean idleVisual;
 
         private EntityOverlayInfo(Entity entity) {
@@ -731,14 +863,15 @@ final class MobAiVisualizerRenderer {
             if (text == null || text.isBlank()) {
                 return;
             }
-            if (lines.size() >= (focused ? 8 : 5)) {
+            int limit = inspected ? 16 : previewPath ? 12 : focused ? 8 : 5;
+            if (lines.size() >= limit) {
                 return;
             }
             lines.add(new LabelLine(truncate(text, 56), color));
         }
 
         private boolean hasVisualMarker() {
-            return pathDebug || brainDebug || clientPath || clientBrain || idleVisual;
+            return pathDebug || brainDebug || clientPath || clientBrain || previewPath || inspected || idleVisual;
         }
 
         private List<LabelLine> buildLines() {
@@ -754,6 +887,12 @@ final class MobAiVisualizerRenderer {
                 badges.add("B*");
             } else if (clientBrain) {
                 badges.add("B");
+            }
+            if (previewPath) {
+                badges.add("SIM");
+            }
+            if (inspected) {
+                badges.add("D");
             }
             if (idleVisual && badges.isEmpty()) {
                 badges.add("I");

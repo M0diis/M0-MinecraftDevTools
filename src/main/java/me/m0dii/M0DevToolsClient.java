@@ -21,6 +21,7 @@ import me.m0dii.modules.instantbreak.InstantBreakModule;
 import me.m0dii.modules.inventorymove.InventoryMoveModule;
 import me.m0dii.modules.macros.MacrosModule;
 import me.m0dii.modules.messagehistory.MessageHistoryModule;
+import me.m0dii.modules.mobai.MobAiDebugClient;
 import me.m0dii.modules.mobai.MobAiVisualizerModule;
 import me.m0dii.modules.mousetweaks.MouseTweaksModule;
 import me.m0dii.modules.nbthud.NBTInfoHudModule;
@@ -107,6 +108,7 @@ public class M0DevToolsClient implements ClientModInitializer {
         ClientCommandRunScript.register();
         GetDataClientCommand.register();
         GetDataSyncClient.registerReceivers();
+        MobAiDebugClient.registerReceivers();
         DrawClientCommand.register();
         InGameScriptingKeybinds.register();
         DebugDrawManager.registerRenderer();
