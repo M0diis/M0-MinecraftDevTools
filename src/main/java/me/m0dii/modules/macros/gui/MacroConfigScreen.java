@@ -55,25 +55,6 @@ public final class MacroConfigScreen {
                 .build());
         category.addEntry(overlaySettings.build());
 
-        SubCategoryBuilder performanceSettings = eb.startSubCategory(Text.literal("Performance"))
-                .setExpanded(false);
-        performanceSettings.add(eb.startBooleanToggle(Text.literal("Dynamic FPS when unfocused"), dynamicFpsEnabled[0])
-                .setTooltip(Text.literal("Automatically limits FPS while the game window is not focused"))
-                .setSaveConsumer(val -> dynamicFpsEnabled[0] = val)
-                .build());
-        performanceSettings.add(eb.startIntField(Text.literal("Unfocused FPS cap"), dynamicFpsUnfocusedCap.get())
-                .setTooltip(Text.literal("FPS cap applied while unfocused"))
-                .setMin(5)
-                .setMax(260)
-                .setDefaultValue(30)
-                .setSaveConsumer(val -> {
-                    if (val != null) {
-                        dynamicFpsUnfocusedCap.set(Math.clamp(val, 5, 260));
-                    }
-                })
-                .build());
-        category.addEntry(performanceSettings.build());
-
         SubCategoryBuilder subInstructors = eb.startSubCategory(Text.literal("Instructions"))
                 .setExpanded(false);
 
