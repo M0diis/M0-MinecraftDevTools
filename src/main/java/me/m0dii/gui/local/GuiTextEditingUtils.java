@@ -48,7 +48,7 @@ public final class GuiTextEditingUtils {
         String safeText = text == null ? "" : text;
         int cursor = Math.clamp(cursorIndex, 0, safeText.length());
         int line = cursorLineIndex(safeText, cursor);
-        int lineStart = StringUtils.lineStart(safeText, cursor);
+        int lineStart = Math.clamp(StringUtils.lineStart(safeText, cursor), 0, cursor);
         String before = safeText.substring(lineStart, cursor);
         int x = baseX + textRenderer.getWidth(before);
         int y = baseY + Math.max(0, line - Math.max(0, scrollLine)) * 9;

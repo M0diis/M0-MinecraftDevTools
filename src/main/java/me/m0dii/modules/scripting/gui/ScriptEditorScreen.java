@@ -3,9 +3,9 @@ package me.m0dii.modules.scripting.gui;
 import groovy.lang.GroovyShell;
 import me.m0dii.gui.GuiSystem;
 import me.m0dii.modules.macros.MacroPlaceholders;
-import me.m0dii.modules.scripting.GroovyScriptManager;
-import me.m0dii.modules.scripting.KotlinScriptManager;
+import me.m0dii.modules.scripting.ScriptManager;
 import me.m0dii.modules.scripting.ScriptStorage;
+import me.m0dii.modules.scripting.ScriptTypes;
 import net.minecraft.client.gui.Click;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
@@ -24,14 +24,13 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.*;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 public class ScriptEditorScreen extends Screen {
 
     private static final String DEFAULT_SCRIPT_NAME = "untitled.kts";
-    private static final String GROOVY_EXT = ".groovy";
-    private static final String KOTLIN_EXT = ".kts";
+    private static final String GROOVY_EXT = ScriptTypes.GROOVY_EXT;
+    private static final String KOTLIN_EXT = ScriptTypes.KOTLIN_EXT;
+    private static final String JAVASCRIPT_EXT = ScriptTypes.JAVASCRIPT_EXT;
     private static final String ASYNC_DIRECTIVE = "@async";
 
     private static final int PAD = 10;
@@ -55,19 +54,13 @@ public class ScriptEditorScreen extends Screen {
     private static final Map<String, List<CompletionItem>> TYPE_COMPLETIONS = new LinkedHashMap<>();
     private static final Map<String, Map<String, String>> TYPE_MEMBER_TYPES = new LinkedHashMap<>();
     private static boolean completionCacheReady = false;
-    private static final ExecutorService SCRIPT_RUN_EXECUTOR = Executors.newCachedThreadPool(r -> {
-        Thread t = new Thread(r, "m0dev-script-editor");
-        t.setDaemon(true);
-        return t;
-    });
-
     private enum UiTab {MAIN, DOCS, SCRIPTS}
 
-    private enum Language {GROOVY, KOTLIN}
+    private enum Language {GROOVY, KOTLIN, JAVASCRIPT}
 
     private enum SortMode {NAME_ASC, NAME_DESC, LANGUAGE}
 
-    private enum FilterMode {ALL, GROOVY, KOTLIN}
+    private enum FilterMode {ALL, GROOVY, KOTLIN, JAVASCRIPT}
 
     private enum SuggestionKind {VARIABLE, PROPERTY, METHOD, KEYWORD, SNIPPET}
 
@@ -99,6 +92,9 @@ public class ScriptEditorScreen extends Screen {
             String loc = file + ":" + Math.max(1, line) + ":" + Math.max(1, column);
             return "[" + severity + "] " + loc + " " + message;
         }
+    }
+
+    private record KotlinValidationSource(String source, int insertedAfterOriginalLine) {
     }
 
     private record Snapshot(String text, int cursor, int anchor, int scrollLine, int viewLeft) {
@@ -141,6 +137,9 @@ public class ScriptEditorScreen extends Screen {
     private String outputText = "";
     private long lastEditAt = 0L;
     private long lastValidationAt = 0L;
+    private long editVersion = 0L;
+    private long lastAutoValidatedEditVersion = -1L;
+    private long lastStrictValidatedEditVersion = -1L;
 
     private final List<Suggestion> suggestions = new ArrayList<>();
     private final List<DisplaySuggestion> visibleSuggestions = new ArrayList<>();
@@ -174,10 +173,14 @@ public class ScriptEditorScreen extends Screen {
             return;
         }
         long now = System.currentTimeMillis();
-        if (now - lastEditAt >= 350L && now - lastValidationAt >= 300L) {
+        if (editVersion != lastAutoValidatedEditVersion
+                && editVersion != lastStrictValidatedEditVersion
+                && now - lastEditAt >= 350L
+                && now - lastValidationAt >= 300L) {
             diagnostics.clear();
             diagnostics.addAll(validateSyntax(editor.text, inferLanguage(currentScriptName), false));
             lastValidationAt = now;
+            lastAutoValidatedEditVersion = editVersion;
         }
     }
 
@@ -281,7 +284,9 @@ public class ScriptEditorScreen extends Screen {
         if (diagnosticsRect().contains(click.x(), click.y())) {
             int idx = diagnosticIndexAt(click.y());
             if (idx >= 0 && idx < diagnostics.size()) {
-                jumpToDiagnostic(diagnostics.get(idx));
+                Diagnostic diagnostic = diagnostics.get(idx);
+                jumpToDiagnostic(diagnostic);
+                copyDiagnosticToClipboard(diagnostic);
                 return true;
             }
         }
@@ -739,7 +744,7 @@ public class ScriptEditorScreen extends Screen {
         String header = "Problems (" + diagnostics.size() + ")";
         context.drawTextWithShadow(textRenderer, header, panel.x + 6, panel.y + 4, 0xFFFFFFFF);
         if (!outputText.isBlank()) {
-            context.drawText(textRenderer, outputText, panel.x + 120, panel.y + 4, 0xFFC6C6C6, false);
+            context.drawText(textRenderer, trimToWidth(outputText, Math.max(40, panel.w - 126)), panel.x + 120, panel.y + 4, 0xFFC6C6C6, false);
         }
 
         int rows = Math.max(1, (panel.h - 18) / DIAG_ROW_H);
@@ -757,7 +762,7 @@ public class ScriptEditorScreen extends Screen {
                 context.fill(panel.x + 1, y, panel.x + panel.w - 1, y + DIAG_ROW_H, 0x402F5C8E);
             }
             int color = "ERROR".equals(diagnostic.severity) ? 0xFFFF9D9D : 0xFFE8D49E;
-            context.drawText(textRenderer, diagnostic.rowText(), panel.x + 6, y + 1, color, false);
+            context.drawText(textRenderer, trimToWidth(diagnostic.rowText(), Math.max(40, panel.w - 12)), panel.x + 6, y + 1, color, false);
         }
     }
 
@@ -921,7 +926,8 @@ public class ScriptEditorScreen extends Screen {
         filterMode = switch (filterMode) {
             case ALL -> FilterMode.GROOVY;
             case GROOVY -> FilterMode.KOTLIN;
-            case KOTLIN -> FilterMode.ALL;
+            case KOTLIN -> FilterMode.JAVASCRIPT;
+            case JAVASCRIPT -> FilterMode.ALL;
         };
         refreshScripts();
         return true;
@@ -931,6 +937,7 @@ public class ScriptEditorScreen extends Screen {
         currentScriptName = normalizeScriptName(currentScriptName);
         diagnostics.clear();
         diagnostics.addAll(validateSyntax(editor.text, inferLanguage(currentScriptName), true));
+        markStrictValidationComplete();
         try {
             ScriptStorage.writeScript(currentScriptName, normalize(editor.text));
             outputText = "Saved " + currentScriptName;
@@ -946,37 +953,41 @@ public class ScriptEditorScreen extends Screen {
         diagnostics.clear();
         Language language = inferLanguage(currentScriptName);
         diagnostics.addAll(validateSyntax(editor.text, language, true));
+        markStrictValidationComplete();
         if (!diagnostics.isEmpty()) {
             outputText = "Execution cancelled: syntax errors present.";
             return true;
         }
 
         String scriptSnapshot = editor.text;
+        Map<String, Object> context = ScriptTypes.defaultContext();
+        ScriptManager manager = ScriptTypes.managerFor(currentScriptName);
         boolean async = scriptRunsAsync(scriptSnapshot);
         if (async) {
             outputText = "Running script asynchronously...";
-            SCRIPT_RUN_EXECUTOR.execute(() -> {
+            if (client != null) {
+                client.execute(() -> {
+                    try {
+                        Object result = manager.runScript(scriptSnapshot, context);
+                        outputText = ScriptTypes.formatResult(result);
+                    } catch (Exception e) {
+                        outputText = "Run error: " + e.getMessage();
+                    }
+                });
+            } else {
                 try {
-                    Object result = language == Language.GROOVY
-                            ? new GroovyScriptManager().runScript(scriptSnapshot)
-                            : new KotlinScriptManager().runScript(scriptSnapshot);
-                    if (client != null) {
-                        client.execute(() -> outputText = String.valueOf(result));
-                    }
+                    Object result = manager.runScript(scriptSnapshot, context);
+                    outputText = ScriptTypes.formatResult(result);
                 } catch (Exception e) {
-                    if (client != null) {
-                        client.execute(() -> outputText = "Run error: " + e.getMessage());
-                    }
+                    outputText = "Run error: " + e.getMessage();
                 }
-            });
+            }
             return true;
         }
 
         try {
-            Object result = language == Language.GROOVY
-                    ? new GroovyScriptManager().runScript(scriptSnapshot)
-                    : new KotlinScriptManager().runScript(scriptSnapshot);
-            outputText = String.valueOf(result);
+            Object result = manager.runScript(scriptSnapshot, context);
+            outputText = ScriptTypes.formatResult(result);
         } catch (Exception e) {
             outputText = "Run error: " + e.getMessage();
         }
@@ -997,6 +1008,7 @@ public class ScriptEditorScreen extends Screen {
     private boolean validateNow() {
         diagnostics.clear();
         diagnostics.addAll(validateSyntax(editor.text, inferLanguage(currentScriptName), true));
+        markStrictValidationComplete();
         outputText = diagnostics.isEmpty() ? "No syntax issues found." : "Found " + diagnostics.size() + " problem(s).";
         return true;
     }
@@ -1013,8 +1025,10 @@ public class ScriptEditorScreen extends Screen {
                 int line = parseIntAfter("line", e.getMessage(), 1);
                 out.add(new Diagnostic("ERROR", currentScriptName, line, 1, safeMessage(e.getMessage(), "Groovy parse error")));
             }
-        } else {
+        } else if (language == Language.KOTLIN) {
             out.addAll(validateKotlinScript(source));
+        } else {
+            out.addAll(validateJavaScriptScript(source));
         }
         return dedupeDiagnostics(out);
     }
@@ -1031,13 +1045,41 @@ public class ScriptEditorScreen extends Screen {
                 out.add(new Diagnostic("ERROR", currentScriptName, 1, 1, "Kotlin script engine does not support compilation diagnostics."));
                 return out;
             }
+            KotlinValidationSource wrapped = wrapKotlinValidationSource(source);
+            compilable.compile(wrapped.source());
+        } catch (ScriptException e) {
+            int line = e.getLineNumber() > 0 ? e.getLineNumber() : parseIntAfter("line", e.getMessage(), 1);
+            int col = e.getColumnNumber() > 0 ? e.getColumnNumber() : parseIntAfter("column", e.getMessage(), 1);
+            line = unwrapKotlinValidationLine(source, line);
+            out.add(new Diagnostic("ERROR", currentScriptName, line, col, cleanupCompilerMessage(safeMessage(e.getMessage(), "Kotlin parse error"))));
+        } catch (Exception e) {
+            out.add(new Diagnostic("ERROR", currentScriptName, 1, 1, safeMessage(e.getMessage(), "Kotlin validation failed")));
+        }
+        return out;
+    }
+
+    private List<Diagnostic> validateJavaScriptScript(String source) {
+        List<Diagnostic> out = new ArrayList<>();
+        try {
+            ScriptEngine engine = new ScriptEngineManager().getEngineByExtension("js");
+            if (engine == null) {
+                engine = new ScriptEngineManager().getEngineByName("js");
+            }
+            if (engine == null) {
+                out.add(new Diagnostic("ERROR", currentScriptName, 1, 1, "JavaScript engine not found."));
+                return out;
+            }
+            if (!(engine instanceof Compilable compilable)) {
+                out.add(new Diagnostic("ERROR", currentScriptName, 1, 1, "JavaScript engine does not support compilation diagnostics."));
+                return out;
+            }
             compilable.compile(source == null ? "" : source);
         } catch (ScriptException e) {
             int line = e.getLineNumber() > 0 ? e.getLineNumber() : parseIntAfter("line", e.getMessage(), 1);
             int col = e.getColumnNumber() > 0 ? e.getColumnNumber() : parseIntAfter("column", e.getMessage(), 1);
-            out.add(new Diagnostic("ERROR", currentScriptName, line, col, safeMessage(e.getMessage(), "Kotlin parse error")));
+            out.add(new Diagnostic("ERROR", currentScriptName, line, col, cleanupCompilerMessage(safeMessage(e.getMessage(), "JavaScript parse error"))));
         } catch (Exception e) {
-            out.add(new Diagnostic("ERROR", currentScriptName, 1, 1, safeMessage(e.getMessage(), "Kotlin validation failed")));
+            out.add(new Diagnostic("ERROR", currentScriptName, 1, 1, safeMessage(e.getMessage(), "JavaScript validation failed")));
         }
         return out;
     }
@@ -1187,6 +1229,82 @@ public class ScriptEditorScreen extends Screen {
         return message == null || message.isBlank() ? fallback : message;
     }
 
+    private static String cleanupCompilerMessage(String message) {
+        if (message == null || message.isBlank()) {
+            return "";
+        }
+        String cleaned = message
+                .replaceAll("\\(ScriptingHost[^)]*\\)", "")
+                .replaceAll("\\s+", " ")
+                .trim();
+        cleaned = cleaned.replace("ERROR ERROR", "ERROR");
+        return cleaned;
+    }
+
+    private static final String KOTLIN_VALIDATION_PREAMBLE = """
+            import net.minecraft.client.MinecraftClient
+            import net.minecraft.client.network.ClientPlayerEntity
+            import net.minecraft.client.option.GameOptions
+            import net.minecraft.client.world.ClientWorld
+            import net.minecraft.server.MinecraftServer
+
+            val client: MinecraftClient? = null
+            val source: ClientPlayerEntity? = null
+            val player: ClientPlayerEntity? = null
+            val world: ClientWorld? = null
+            val options: GameOptions? = null
+            val server: MinecraftServer? = null
+
+            """;
+
+    private static final int KOTLIN_VALIDATION_PREAMBLE_LINES = splitLines(KOTLIN_VALIDATION_PREAMBLE).size();
+
+    private static KotlinValidationSource wrapKotlinValidationSource(String source) {
+        String text = source == null ? "" : source;
+        List<String> lines = splitLines(text);
+        int insertAtIndex = 0;
+
+        while (insertAtIndex < lines.size()) {
+            String trimmed = lines.get(insertAtIndex).trim();
+            if (trimmed.startsWith("import ")) {
+                insertAtIndex++;
+                continue;
+            }
+            if (trimmed.isEmpty() && insertAtIndex > 0) {
+                insertAtIndex++;
+                continue;
+            }
+            break;
+        }
+
+        StringBuilder builder = new StringBuilder(text.length() + KOTLIN_VALIDATION_PREAMBLE.length() + 32);
+        for (int i = 0; i < lines.size(); i++) {
+            if (i == insertAtIndex) {
+                builder.append(KOTLIN_VALIDATION_PREAMBLE);
+            }
+            builder.append(lines.get(i));
+            if (i < lines.size() - 1) {
+                builder.append('\n');
+            }
+        }
+        if (lines.isEmpty() || insertAtIndex >= lines.size()) {
+            if (!builder.isEmpty() && builder.charAt(builder.length() - 1) != '\n') {
+                builder.append('\n');
+            }
+            builder.append(KOTLIN_VALIDATION_PREAMBLE);
+        }
+
+        return new KotlinValidationSource(builder.toString(), insertAtIndex);
+    }
+
+    private static int unwrapKotlinValidationLine(String source, int line) {
+        KotlinValidationSource wrapped = wrapKotlinValidationSource(source);
+        if (line > wrapped.insertedAfterOriginalLine()) {
+            return Math.max(1, line - KOTLIN_VALIDATION_PREAMBLE_LINES);
+        }
+        return Math.max(1, line);
+    }
+
     private void jumpToDiagnostic(Diagnostic d) {
         int line = Math.max(1, d.line);
         int col = Math.max(1, d.column);
@@ -1199,6 +1317,14 @@ public class ScriptEditorScreen extends Screen {
         editor.selectionAnchor = -1;
         editor.focused = true;
         clampEditor();
+    }
+
+    private void copyDiagnosticToClipboard(Diagnostic diagnostic) {
+        if (client == null || diagnostic == null) {
+            return;
+        }
+        client.keyboard.setClipboard(diagnostic.rowText());
+        outputText = diagnostic.rowText();
     }
 
     private void refreshScripts() {
@@ -1234,7 +1360,10 @@ public class ScriptEditorScreen extends Screen {
         if (filterMode == FilterMode.GROOVY) {
             return script.toLowerCase(Locale.ROOT).endsWith(GROOVY_EXT);
         }
-        return script.toLowerCase(Locale.ROOT).endsWith(KOTLIN_EXT);
+        if (filterMode == FilterMode.KOTLIN) {
+            return script.toLowerCase(Locale.ROOT).endsWith(KOTLIN_EXT);
+        }
+        return script.toLowerCase(Locale.ROOT).endsWith(JAVASCRIPT_EXT);
     }
 
     private void applySort() {
@@ -1340,12 +1469,15 @@ public class ScriptEditorScreen extends Screen {
             return normalizeScriptName(current);
         }
         String lower = name.toLowerCase(Locale.ROOT);
-        if (lower.endsWith(GROOVY_EXT) || lower.endsWith(KOTLIN_EXT)) {
+        if (lower.endsWith(GROOVY_EXT) || lower.endsWith(KOTLIN_EXT) || lower.endsWith(JAVASCRIPT_EXT)) {
             return name;
         }
         String currentLower = current == null ? "" : current.toLowerCase(Locale.ROOT);
         if (currentLower.endsWith(GROOVY_EXT)) {
             return name + GROOVY_EXT;
+        }
+        if (currentLower.endsWith(JAVASCRIPT_EXT)) {
+            return name + JAVASCRIPT_EXT;
         }
         return name + KOTLIN_EXT;
     }
@@ -1357,6 +1489,7 @@ public class ScriptEditorScreen extends Screen {
         docsLines.add("- Ctrl+Z undo, Ctrl+Y / Ctrl+Shift+Z redo");
         docsLines.add("- Tab/Shift+Tab indent and unindent");
         docsLines.add("- Placeholder suggestions trigger after '{'");
+        docsLines.add("- Supported extensions: .groovy, .kts, .js");
         docsLines.add("");
         docsLines.add("[Variables]");
         docsLines.add("client, source, player, world, options, server");
@@ -1369,7 +1502,7 @@ public class ScriptEditorScreen extends Screen {
         if (name.isEmpty()) {
             return DEFAULT_SCRIPT_NAME;
         }
-        if (name.endsWith(GROOVY_EXT) || name.endsWith(KOTLIN_EXT)) {
+        if (name.endsWith(GROOVY_EXT) || name.endsWith(KOTLIN_EXT) || name.endsWith(JAVASCRIPT_EXT)) {
             return name;
         }
         return name + KOTLIN_EXT;
@@ -1377,7 +1510,13 @@ public class ScriptEditorScreen extends Screen {
 
     private static Language inferLanguage(String file) {
         String lower = file == null ? "" : file.toLowerCase(Locale.ROOT);
-        return lower.endsWith(GROOVY_EXT) ? Language.GROOVY : Language.KOTLIN;
+        if (lower.endsWith(GROOVY_EXT)) {
+            return Language.GROOVY;
+        }
+        if (lower.endsWith(JAVASCRIPT_EXT)) {
+            return Language.JAVASCRIPT;
+        }
+        return Language.KOTLIN;
     }
 
     private void clearEditor() {
@@ -2552,6 +2691,13 @@ public class ScriptEditorScreen extends Screen {
 
     private void markEdited() {
         lastEditAt = System.currentTimeMillis();
+        editVersion++;
+    }
+
+    private void markStrictValidationComplete() {
+        lastValidationAt = System.currentTimeMillis();
+        lastStrictValidatedEditVersion = editVersion;
+        lastAutoValidatedEditVersion = editVersion;
     }
 
     private static String normalize(String raw) {
@@ -2603,6 +2749,19 @@ public class ScriptEditorScreen extends Screen {
         }
         lines.addFirst(directiveLine);
         return String.join("\n", lines);
+    }
+
+    private String trimToWidth(String raw, int maxWidth) {
+        String text = raw == null ? "" : raw;
+        if (maxWidth <= 0 || textRenderer.getWidth(text) <= maxWidth) {
+            return text;
+        }
+        final String ellipsis = "...";
+        int keep = text.length();
+        while (keep > 0 && textRenderer.getWidth(text.substring(0, keep) + ellipsis) > maxWidth) {
+            keep--;
+        }
+        return keep <= 0 ? ellipsis : text.substring(0, keep) + ellipsis;
     }
 
     private static List<String> splitLines(String source) {

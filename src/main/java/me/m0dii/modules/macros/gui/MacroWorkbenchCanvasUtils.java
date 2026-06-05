@@ -110,6 +110,7 @@ public final class MacroWorkbenchCanvasUtils {
             case COMMAND -> "Command";
             case GROOVY_SCRIPT -> "Groovy Script";
             case KOTLIN_SCRIPT -> "Kotlin Script";
+            case JAVASCRIPT_SCRIPT -> "JavaScript Script";
         };
     }
 

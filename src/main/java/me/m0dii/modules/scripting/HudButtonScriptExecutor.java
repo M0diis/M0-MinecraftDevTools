@@ -7,17 +7,11 @@ import net.minecraft.text.Text;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 public final class HudButtonScriptExecutor {
     private static final GroovyScriptManager GROOVY = new GroovyScriptManager();
     private static final KotlinScriptManager KOTLIN = new KotlinScriptManager();
-    private static final ExecutorService SCRIPT_EXECUTOR = Executors.newCachedThreadPool(r -> {
-        Thread t = new Thread(r, "m0dev-hud-script");
-        t.setDaemon(true);
-        return t;
-    });
+    private static final JavaScriptScriptManager JAVASCRIPT = new JavaScriptScriptManager();
 
     private HudButtonScriptExecutor() {
     }
@@ -34,7 +28,11 @@ public final class HudButtonScriptExecutor {
         }
 
         String script = raw;
-        ScriptManager engine = mode == MacroHudDataHandler.ButtonExecutionMode.KOTLIN_SCRIPT ? KOTLIN : GROOVY;
+        ScriptManager engine = switch (mode) {
+            case KOTLIN_SCRIPT -> KOTLIN;
+            case JAVASCRIPT_SCRIPT -> JAVASCRIPT;
+            default -> GROOVY;
+        };
 
         if (raw.regionMatches(true, 0, "kotlin:", 0, 7) || raw.regionMatches(true, 0, "kts:", 0, 4)) {
             script = raw.substring(raw.indexOf(':') + 1).trim();
@@ -42,9 +40,13 @@ public final class HudButtonScriptExecutor {
         } else if (raw.regionMatches(true, 0, "groovy:", 0, 7)) {
             script = raw.substring(raw.indexOf(':') + 1).trim();
             engine = GROOVY;
+        } else if (raw.regionMatches(true, 0, "javascript:", 0, 11)
+                || raw.regionMatches(true, 0, "js:", 0, 3)) {
+            script = raw.substring(raw.indexOf(':') + 1).trim();
+            engine = JAVASCRIPT;
         }
 
-        if ((script.endsWith(".groovy") || script.endsWith(".kts")) && !script.contains("\n") && !script.contains("\r")) {
+        if (ScriptTypes.isScriptFile(script) && !script.contains("\n") && !script.contains("\r")) {
             try {
                 script = ScriptStorage.readScript(script);
             } catch (Exception e) {
@@ -58,31 +60,21 @@ public final class HudButtonScriptExecutor {
             return false;
         }
 
-        Map<String, Object> context = new HashMap<>();
-        context.put("client", client);
-        context.put("player", client.player);
-        context.put("source", client.player);
-        context.put("world", client.world);
-        context.put("options", client.options);
-        context.put("server", client.getServer());
+        Map<String, Object> context = new HashMap<>(ScriptTypes.defaultContext());
 
         if (async) {
             String finalScript = script;
             ScriptManager finalEngine = engine;
-            SCRIPT_EXECUTOR.execute(() -> {
+            client.execute(() -> {
                 try {
                     Object result = finalEngine.runScript(finalScript, context);
-                    client.execute(() -> {
-                        if (client.player != null) {
-                            client.player.sendMessage(Text.literal(String.valueOf(result)), false);
-                        }
-                    });
+                    if (client.player != null) {
+                        client.player.sendMessage(Text.literal(ScriptTypes.formatResult(result)), false);
+                    }
                 } catch (Exception e) {
-                    client.execute(() -> {
-                        if (client.player != null) {
-                            client.player.sendMessage(Text.literal("Script button '" + actionName + "' failed: " + e.getMessage()), true);
-                        }
-                    });
+                    if (client.player != null) {
+                        client.player.sendMessage(Text.literal("Script button '" + actionName + "' failed: " + e.getMessage()), true);
+                    }
                     M0DevTools.LOGGER.error("Error executing HUD script button '{}':", actionName, e);
                 }
             });
@@ -91,7 +83,7 @@ public final class HudButtonScriptExecutor {
 
         try {
             Object result = engine.runScript(script, context);
-            client.player.sendMessage(Text.literal(String.valueOf(result)), false);
+            client.player.sendMessage(Text.literal(ScriptTypes.formatResult(result)), false);
             return true;
         } catch (Exception e) {
             client.player.sendMessage(Text.literal("Script button '" + actionName + "' failed: " + e.getMessage()), true);

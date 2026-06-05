@@ -67,11 +67,16 @@ dependencies {
     modImplementation 'org.codehaus.groovy:groovy:3.0.21'
     include 'org.codehaus.groovy:groovy:3.0.21'
 
+    implementation "org.graalvm.js:js-scriptengine:25.0.3"
+    implementation "org.graalvm.js:js:25.0.3"
+
     modImplementation("org.jetbrains.kotlin:kotlin-scripting-jsr223:1.9.22")
     modImplementation("eu.jrie.jetbrains:kotlin-shell-core:0.2.1")
 
     include "org.jetbrains.kotlin:kotlin-scripting-jsr223:1.9.22"
     include "eu.jrie.jetbrains:kotlin-shell-core:0.2.1"
+    include "org.graalvm.js:js-scriptengine:25.0.3"
+    include "org.graalvm.js:js:25.0.3"
 
     modImplementation "org.jetbrains.kotlin:kotlin-compiler-embeddable:1.9.22"
     modImplementation "org.jetbrains.kotlin:kotlin-scripting-compiler-embeddable:1.9.22"

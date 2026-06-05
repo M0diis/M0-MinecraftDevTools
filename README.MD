@@ -57,6 +57,7 @@ M0-Dev Tools is a client-side Fabric toolbox for Minecraft modders, builders, an
 - Macro placeholders
 - Groovy scripting
 - Kotlin scripting
+- JavaScript scripting
 - In-game script editor
 - Action runner for queued client actions such as item use, offhand use, left click, sneak, jump, drop, command execution, offhand swapping, and hotbar selection
 
@@ -105,44 +106,19 @@ M0-Dev Tools is a client-side Fabric toolbox for Minecraft modders, builders, an
 - Open the modules screen from the keybinds menu.
 - Most modules can be toggled and configured from the ClickGUI.
 - Macros and scripting are available from the in-game GUI.
-- Groovy (`.groovy`) and Kotlin (`.kts`) scripts are both supported; the script type is chosen by file extension.
+- Groovy (`.groovy`), Kotlin (`.kts`), and JavaScript (`.js`) scripts are supported; the script type is chosen by file extension.
 - Common client commands include `/draw`, `/getdata`, `/actionrunner`, `/waypoint`, and `/watson`.
 
 ### Example scripts
 
-#### Groovy: give yourself a diamond sword
-```groovy
-import net.minecraft.item.Items
-import net.minecraft.item.ItemStack
-
-player.giveItemStack(new ItemStack(Items.DIAMOND_SWORD))
-
-"Gave you a diamond sword!"
-```
-
-#### Kotlin: spawn particles around the player
-```kotlin
-import net.minecraft.particle.ParticleTypes
-import kotlin.math.cos
-import kotlin.math.sin
-
-val particleManager = client.particleManager
-
-for (i in 0 until 20) {
-    val angle = Math.toRadians(i * (360.0 / 20))
-    val x = player.x + cos(angle) * 1.5
-    val y = player.y + 1.0
-    val z = player.z + sin(angle) * 1.5
-
-    particleManager.addParticle(
-        ParticleTypes.HAPPY_VILLAGER,
-        x, y, z,
-        0.0, 0.1, 0.0
-    )
-}
-
-"Spawned"
-```
+- Curated examples live under `src/main/resources/example_scripts/`.
+- Scripts are grouped by type: `client-effects/`, `inventory/`, `utility/`, and `world/`.
+- Every example has Groovy (`.groovy`), Kotlin (`.kts`), and JavaScript (`.js`) counterparts.
+- Current bundled examples:
+  - `client-effects/particle-ring`
+  - `inventory/give-starter-kit`
+  - `utility/report-player-status`
+  - `world/place-diamond-block-below`
 
 ---
 

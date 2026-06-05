@@ -10,22 +10,16 @@ import java.util.Map;
 
 public class GroovyScriptManager implements ScriptManager {
 
-    private final GroovyShell shell;
-    private final Binding binding;
-
-    public GroovyScriptManager() {
-        this.binding = new Binding();
-        this.shell = new GroovyShell(binding);
-    }
-
     @Override
     public Object runScript(String script, Map<String, Object> context) {
+        Binding binding = new Binding();
         if (context != null) {
             for (Map.Entry<String, Object> entry : context.entrySet()) {
                 binding.setVariable(entry.getKey(), entry.getValue());
             }
         }
         try {
+            GroovyShell shell = new GroovyShell(binding);
             return shell.evaluate(script);
         } catch (Exception e) {
             M0DevTools.LOGGER.error("Error executing Groovy script:", e);

@@ -13,8 +13,6 @@ import java.util.List;
 @SuppressWarnings("unused")
 public final class ScriptStorage {
     private static final Path SCRIPTS_DIR = Paths.get("config/m0-dev-tools/scripts");
-    private static final String GROOVY_EXT = ".groovy";
-    private static final String KOTLIN_EXT = ".kts";
     private static final String AUTOMATION_HEARTBEAT = "heartbeat.kts";
 
     private ScriptStorage() {
@@ -29,8 +27,7 @@ public final class ScriptStorage {
             return Collections.emptyList();
         }
         try (var stream = Files.list(SCRIPTS_DIR)) {
-            return stream.filter(p -> p.getFileName().toString().endsWith(GROOVY_EXT)
-                            || p.getFileName().toString().endsWith(KOTLIN_EXT))
+            return stream.filter(p -> ScriptTypes.isScriptFile(p.getFileName().toString()))
                     .map(p -> p.getFileName().toString())
                     .sorted()
                     .toList();

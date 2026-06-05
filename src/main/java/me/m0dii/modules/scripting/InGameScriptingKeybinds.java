@@ -66,14 +66,11 @@ public class InGameScriptingKeybinds {
                 M0DevTools.LOGGER.warn("Script '{}' returned null content", scriptName);
                 return;
             }
-            if (scriptName.endsWith(".groovy")) {
-                GroovyScriptManager manager = new GroovyScriptManager();
-                manager.runScript(script);
-            } else if (scriptName.endsWith(".kts")) {
-                KotlinScriptManager manager = new KotlinScriptManager();
-                manager.runScript(script);
+            if (ScriptTypes.isScriptFile(scriptName)) {
+                ScriptManager manager = ScriptTypes.managerFor(scriptName);
+                manager.runScript(script, ScriptTypes.defaultContext());
             } else {
-                M0DevTools.LOGGER.warn("Unknown script extension for '{}'. Supported: .groovy, .kts", scriptName);
+                M0DevTools.LOGGER.warn("Unknown script extension for '{}'. Supported: .groovy, .kts, .js", scriptName);
             }
         } catch (Exception e) {
             M0DevTools.LOGGER.error("Error executing script '{}':", scriptName, e);

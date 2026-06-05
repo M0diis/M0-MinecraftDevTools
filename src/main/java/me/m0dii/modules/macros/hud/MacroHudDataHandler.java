@@ -47,7 +47,8 @@ public final class MacroHudDataHandler {
     public enum ButtonExecutionMode {
         COMMAND,
         GROOVY_SCRIPT,
-        KOTLIN_SCRIPT
+        KOTLIN_SCRIPT,
+        JAVASCRIPT_SCRIPT
     }
 
     public enum BorderMode {
@@ -474,6 +475,8 @@ public final class MacroHudDataHandler {
                 String actionLower = e.buttonAction.toLowerCase(Locale.ROOT);
                 if (actionLower.startsWith("kotlin:") || actionLower.startsWith("kts:")) {
                     e.buttonExecutionMode = ButtonExecutionMode.KOTLIN_SCRIPT;
+                } else if (actionLower.startsWith("javascript:") || actionLower.startsWith("js:")) {
+                    e.buttonExecutionMode = ButtonExecutionMode.JAVASCRIPT_SCRIPT;
                 } else if (actionLower.startsWith("groovy:")) {
                     e.buttonExecutionMode = ButtonExecutionMode.GROOVY_SCRIPT;
                 }

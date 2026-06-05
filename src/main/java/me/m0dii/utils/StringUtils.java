@@ -56,8 +56,14 @@ public final class StringUtils {
     }
 
     public static int lineStart(String text, int index) {
+        if (text == null || text.isEmpty()) {
+            return 0;
+        }
         int cursor = Math.clamp(index, 0, text.length());
-        int prevNewline = text.lastIndexOf('\n', Math.max(0, cursor - 1));
+        if (cursor <= 0) {
+            return 0;
+        }
+        int prevNewline = text.lastIndexOf('\n', cursor - 1);
         return prevNewline < 0 ? 0 : prevNewline + 1;
     }
 

@@ -110,7 +110,7 @@ public final class MacroHudRuntime {
             if (element.buttonAction != null && !element.buttonAction.isBlank()) {
                 switch (element.buttonExecutionMode) {
                     case COMMAND -> CommandMacros.runInlineAction(actionName, element.buttonAction);
-                    case GROOVY_SCRIPT, KOTLIN_SCRIPT ->
+                    case GROOVY_SCRIPT, KOTLIN_SCRIPT, JAVASCRIPT_SCRIPT ->
                             HudButtonScriptExecutor.runScript(actionName, element.buttonAction, element.buttonExecutionMode, element.runScriptsAsync);
                 }
                 return true;

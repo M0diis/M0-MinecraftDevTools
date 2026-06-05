@@ -6,10 +6,9 @@ import me.m0dii.modules.clickgui.ModuleRegistry;
 import me.m0dii.modules.macros.CommandMacros;
 import me.m0dii.modules.macros.MacroPlaceholders;
 import me.m0dii.modules.macros.gui.MacroWorkbenchScreen;
-import me.m0dii.modules.scripting.GroovyScriptManager;
-import me.m0dii.modules.scripting.KotlinScriptManager;
 import me.m0dii.modules.scripting.ScriptManager;
 import me.m0dii.modules.scripting.ScriptStorage;
+import me.m0dii.modules.scripting.ScriptTypes;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
@@ -31,9 +30,6 @@ import java.util.Objects;
 
 public final class AutomationModule {
     public static final AutomationModule INSTANCE = new AutomationModule();
-
-    private static final GroovyScriptManager GROOVY = new GroovyScriptManager();
-    private static final KotlinScriptManager KOTLIN = new KotlinScriptManager();
 
     private final EventBus eventBus = EventBus.getInstance();
     private final AutomationEngine engine = new AutomationEngine(eventBus, new ActionExecutor(new ClientBridge()), new ClientContextSnapshotProvider());
@@ -570,14 +566,7 @@ public final class AutomationModule {
         }
 
         private static ScriptManager managerForScript(String scriptFile) {
-            String lower = scriptFile.toLowerCase(Locale.ROOT);
-            if (lower.endsWith(".groovy")) {
-                return GROOVY;
-            }
-            if (lower.endsWith(".kts")) {
-                return KOTLIN;
-            }
-            throw new IllegalArgumentException("Unsupported script type: " + scriptFile);
+            return ScriptTypes.managerFor(scriptFile);
         }
     }
 }

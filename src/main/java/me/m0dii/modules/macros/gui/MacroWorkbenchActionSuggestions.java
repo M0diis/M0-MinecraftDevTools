@@ -148,8 +148,10 @@ public final class MacroWorkbenchActionSuggestions {
             grouped.get("Script").addAll(List.of(
                     "groovy:player.sendMessage(net.minecraft.text.Text.literal('Hi from Groovy'), false)",
                     "kotlin:player.sendMessage(net.minecraft.text.Text.literal(\"Hi from Kotlin\"), false)",
+                    "js:player.sendMessage(Java.type('net.minecraft.text.Text').literal('Hi from JavaScript'), false)",
                     "example.groovy",
-                    "example.kts"
+                    "example.kts",
+                    "example.js"
             ));
             grouped.get("Script").addAll(ScriptStorage.listScripts());
         }
