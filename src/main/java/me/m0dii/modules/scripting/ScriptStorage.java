@@ -15,6 +15,7 @@ public final class ScriptStorage {
     private static final Path SCRIPTS_DIR = Paths.get("config/m0-dev-tools/scripts");
     private static final String GROOVY_EXT = ".groovy";
     private static final String KOTLIN_EXT = ".kts";
+    private static final String AUTOMATION_HEARTBEAT = "heartbeat.kts";
 
     private ScriptStorage() {
     }
@@ -43,6 +44,10 @@ public final class ScriptStorage {
         return Files.readString(file);
     }
 
+    public static boolean exists(@NotNull String name) {
+        return Files.exists(SCRIPTS_DIR.resolve(name));
+    }
+
     public static void writeScript(@NotNull String name, @Nullable String content) throws IOException {
         ensureDir();
         Path file = SCRIPTS_DIR.resolve(name);
@@ -66,5 +71,18 @@ public final class ScriptStorage {
 
         Files.move(oldFile, newFile);
         return true;
+    }
+
+    public static void ensureAutomationExamples() throws IOException {
+        ensureDir();
+        Path heartbeat = SCRIPTS_DIR.resolve(AUTOMATION_HEARTBEAT);
+        if (!Files.exists(heartbeat)) {
+            Files.writeString(heartbeat, """
+                    // Example automation script. Available bindings: event, client, player, world
+                    val eventType = event.type().name()
+                    player?.sendMessage(net.minecraft.text.Text.literal("[automation] " + eventType), false)
+                    "ok"
+                    """);
+        }
     }
 }

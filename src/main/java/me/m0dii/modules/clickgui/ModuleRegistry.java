@@ -32,15 +32,16 @@ import me.m0dii.modules.watson.WatsonCoreProtectModule;
 import me.m0dii.modules.waypoints.WaypointModule;
 import me.m0dii.modules.xray.XrayModule;
 import me.m0dii.modules.zoom.ZoomModule;
+import org.jetbrains.annotations.Nullable;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 
 /**
  * Central registry for organizing modules into categories for the ClickGUI.
  */
 public class ModuleRegistry {
     private static final List<ModuleCategory> categories = new ArrayList<>();
+    private static final Map<String, Module> modulesById = new LinkedHashMap<>();
 
     private ModuleRegistry() {
         // Utility class
@@ -50,6 +51,7 @@ public class ModuleRegistry {
         try {
             if (mod != null) {
                 cat.addModule(mod);
+                modulesById.putIfAbsent(mod.getId().toLowerCase(Locale.ROOT), mod);
             }
         } catch (Exception t) {
             M0DevTools.LOGGER.error("ModuleRegistry: failed to add module to category '{}': {}", cat.getName(), t);
@@ -123,6 +125,16 @@ public class ModuleRegistry {
             initializeCategories();
         }
         return categories.toArray(new ModuleCategory[0]);
+    }
+
+    public static @Nullable Module findModuleById(String id) {
+        if (id == null || id.isBlank()) {
+            return null;
+        }
+        if (categories.isEmpty()) {
+            initializeCategories();
+        }
+        return modulesById.get(id.trim().toLowerCase(Locale.ROOT));
     }
 
 }

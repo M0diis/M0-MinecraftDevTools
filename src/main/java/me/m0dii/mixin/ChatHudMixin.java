@@ -1,6 +1,7 @@
 package me.m0dii.mixin;
 
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
+import me.m0dii.modules.automation.AutomationModule;
 import me.m0dii.modules.chat.SecondaryChatManager;
 import me.m0dii.modules.chat.SecondaryChatSettings;
 import me.m0dii.modules.messagehistory.MessageHistoryManager;
@@ -25,6 +26,7 @@ public class ChatHudMixin {
         handleMessage(message, ci);
         MessageHistoryManager.addMessage(message);
         CoreProtectTracker.onChatMessage(message);
+        AutomationModule.INSTANCE.onChatMessage(message);
     }
 
     // Hook the full signature addMessage - catches actual chat messages
@@ -38,6 +40,7 @@ public class ChatHudMixin {
 
         MessageHistoryManager.addMessage(message);
         CoreProtectTracker.onChatMessage(message);
+        AutomationModule.INSTANCE.onChatMessage(message);
     }
 
     @Unique

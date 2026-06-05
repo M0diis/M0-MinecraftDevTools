@@ -1,6 +1,7 @@
 package me.m0dii;
 
 import eu.midnightdust.lib.config.MidnightConfig;
+import me.m0dii.modules.automation.AutomationModule;
 import me.m0dii.modules.bridging.BridgingTweaksModule;
 import me.m0dii.modules.chat.SecondaryChatModule;
 import me.m0dii.modules.clickgui.ClickHudModule;
@@ -97,6 +98,7 @@ public class M0DevToolsClient implements ClientModInitializer {
         WatsonCoreProtectModule.INSTANCE.register();
         me.m0dii.modules.actionrunner.ActionRunnerClientInit.register();
         me.m0dii.modules.actionrunner.ActionRunnerClientTick.register();
+        AutomationModule.INSTANCE.register();
 
         // Populate ModuleRegistry categories after modules have had a chance to create their singletons
         ModuleRegistry.initializeCategories();

@@ -1,0 +1,14 @@
+package me.m0dii.modules.automation;
+
+public enum AutomationEventType {
+    TICK_INTERVAL,
+    PLAYER_MOVE,
+    WORLD_JOIN,
+    DIMENSION_CHANGE,
+    CHAT_RECEIVED_REGEX,
+    SCREEN_CHANGED,
+    HOTBAR_SLOT_CHANGED,
+    HELD_ITEM_CHANGED,
+    PLAYER_HEALTH_CHANGED,
+    PLAYER_FOOD_CHANGED
+}

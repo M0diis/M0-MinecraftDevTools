@@ -57,6 +57,7 @@ public class MacroWorkbenchScreen extends Screen {
         CANVAS,
         KEYBOARD,
         MACROS,
+        AUTOMATION,
         PLACEHOLDERS,
         ENTITY_RADAR,
         COMMAND_HISTORY,
@@ -136,12 +137,14 @@ public class MacroWorkbenchScreen extends Screen {
     private final List<ClickableWidget> canvasWidgets = new ArrayList<>();
     private final List<ClickableWidget> keyboardWidgets = new ArrayList<>();
     private final List<ClickableWidget> macroManagerWidgets = new ArrayList<>();
+    private final List<ClickableWidget> automationWidgets = new ArrayList<>();
     private final List<ClickableWidget> placeholderWidgets = new ArrayList<>();
     private final List<ClickableWidget> entityRadarWidgets = new ArrayList<>();
     private final List<ClickableWidget> cmdHistoryWidgets = new ArrayList<>();
     private final List<ClickableWidget> msgHistoryWidgets = new ArrayList<>();
     private final List<ClickableWidget> configWidgets = new ArrayList<>();
     private MacroWorkbenchMacrosTab macrosTabController;
+    private MacroWorkbenchAutomationTab automationTabController;
     private MacroWorkbenchConfigurationTab configurationTabController;
 
     private final List<KeyCell> cells = new ArrayList<>();
@@ -313,15 +316,16 @@ public class MacroWorkbenchScreen extends Screen {
                 Tab.CANVAS,
                 Tab.KEYBOARD,
                 Tab.MACROS,
+                Tab.AUTOMATION,
                 Tab.PLACEHOLDERS,
                 Tab.ENTITY_RADAR,
                 Tab.COMMAND_HISTORY,
                 Tab.MESSAGE_HISTORY,
                 Tab.CONFIGURATION
         );
-        List<String> labels = List.of("Canvas", "Keyboard", "Macros", "Placeholders", "Entity Radar", "Cmd Hist", "Msg Hist", "Configuration");
-        List<String> compactLabels = List.of("Canvas", "Keys", "Macros", "Place", "Radar", "Cmd", "Msg", "Config");
-        List<String> tinyLabels = List.of("CV", "KB", "MC", "PH", "ER", "CH", "MH", "CF");
+        List<String> labels = List.of("Canvas", "Keyboard", "Macros", "Automation", "Placeholders", "Entity Radar", "Cmd Hist", "Msg Hist", "Configuration");
+        List<String> compactLabels = List.of("Canvas", "Keys", "Macros", "Auto", "Place", "Radar", "Cmd", "Msg", "Config");
+        List<String> tinyLabels = List.of("CV", "KB", "MC", "AU", "PH", "ER", "CH", "MH", "CF");
         int tabGap = 4;
         int tabsStartX = 8;
         int tabsEndX = saveX - 8;
@@ -578,6 +582,7 @@ public class MacroWorkbenchScreen extends Screen {
         addDrawableChild(clearMsgHistoryButton);
 
         initMacrosWidgets();
+        initAutomationWidgets();
         initConfigurationWidgets();
 
         syncCanvasFields();
@@ -594,11 +599,15 @@ public class MacroWorkbenchScreen extends Screen {
         if (this.tab == Tab.MACROS && next != Tab.MACROS && this.macrosTabController != null) {
             this.macrosTabController.commitAll();
         }
+        if (this.tab == Tab.AUTOMATION && next != Tab.AUTOMATION && this.automationTabController != null) {
+            this.automationTabController.commitAll();
+        }
 
         this.tab = next;
         boolean canvas = next == Tab.CANVAS;
         boolean keyboard = next == Tab.KEYBOARD;
         boolean macros = next == Tab.MACROS;
+        boolean automation = next == Tab.AUTOMATION;
         boolean placeholders = next == Tab.PLACEHOLDERS;
 
         refreshTabWidgetVisibility();
@@ -621,6 +630,14 @@ public class MacroWorkbenchScreen extends Screen {
             dragging = false;
             if (this.macrosTabController != null) {
                 this.macrosTabController.reloadFromStore(this.selectedMacroId);
+            }
+        } else if (automation) {
+            applyQuickEdit();
+            closeAdvancedModal();
+            closeKeyboardCommandsModal();
+            dragging = false;
+            if (this.automationTabController != null) {
+                this.automationTabController.reloadFromEngine(null);
             }
         } else if (placeholders) {
             applyQuickEdit();
@@ -662,6 +679,7 @@ public class MacroWorkbenchScreen extends Screen {
         boolean canvasTab = this.tab == Tab.CANVAS;
         boolean keyboardTab = this.tab == Tab.KEYBOARD;
         boolean macrosTab = this.tab == Tab.MACROS;
+        boolean automationTab = this.tab == Tab.AUTOMATION;
         boolean placeholdersTab = this.tab == Tab.PLACEHOLDERS;
         boolean entityRadarTab = this.tab == Tab.ENTITY_RADAR;
         boolean cmdHistoryTab = this.tab == Tab.COMMAND_HISTORY;
@@ -674,6 +692,7 @@ public class MacroWorkbenchScreen extends Screen {
         setWidgetState(canvasWidgets, canvasTab && showChrome);
         setWidgetState(keyboardWidgets, keyboardTab);
         setWidgetState(macroManagerWidgets, macrosTab);
+        setWidgetState(automationWidgets, automationTab);
         setWidgetState(placeholderWidgets, placeholdersTab);
         setWidgetState(entityRadarWidgets, entityRadarTab);
         setWidgetState(cmdHistoryWidgets, cmdHistoryTab);
@@ -690,6 +709,11 @@ public class MacroWorkbenchScreen extends Screen {
 
     @Override
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
+        boolean automationOverlayOpen = this.tab == Tab.AUTOMATION
+                && this.automationTabController != null
+                && this.automationTabController.hasOverlayOpen();
+        int effectiveMouseX = automationOverlayOpen ? -10_000 : mouseX;
+        int effectiveMouseY = automationOverlayOpen ? -10_000 : mouseY;
         context.fill(0, 0, this.width, this.height, 0xD0101010);
         context.fill(0, TOP_BAR_H - 1, this.width, TOP_BAR_H, 0x70FFFFFF);
 
@@ -699,6 +723,8 @@ public class MacroWorkbenchScreen extends Screen {
             renderKeyboardTab(context, mouseX, mouseY);
         } else if (this.tab == Tab.MACROS) {
             renderMacrosTab(context, mouseX, mouseY);
+        } else if (this.tab == Tab.AUTOMATION) {
+            renderAutomationTab(context, effectiveMouseX, effectiveMouseY);
         } else if (this.tab == Tab.ENTITY_RADAR) {
             renderEntityRadarTab(context);
         } else if (this.tab == Tab.COMMAND_HISTORY) {
@@ -712,7 +738,11 @@ public class MacroWorkbenchScreen extends Screen {
         }
 
         // Draw normal widgets first.
-        super.render(context, mouseX, mouseY, delta);
+        super.render(context, effectiveMouseX, effectiveMouseY, delta);
+
+        if (this.tab == Tab.AUTOMATION && this.automationTabController != null) {
+            this.automationTabController.renderOverlay(context, mouseX, mouseY);
+        }
 
         if (advancedOpen && advancedModalDragging && this.client != null) {
             long window = this.client.getWindow().getHandle();
@@ -898,6 +928,11 @@ public class MacroWorkbenchScreen extends Screen {
         this.macrosTabController.initWidgets();
     }
 
+    private void initAutomationWidgets() {
+        this.automationTabController = new MacroWorkbenchAutomationTab(this, this.automationWidgets);
+        this.automationTabController.initWidgets();
+    }
+
     private void initConfigurationWidgets() {
         this.configurationTabController = new MacroWorkbenchConfigurationTab(this, this.configWidgets, this::isShiftDown);
         this.configurationTabController.initWidgets();
@@ -919,6 +954,12 @@ public class MacroWorkbenchScreen extends Screen {
     private void renderMacrosTab(DrawContext context, int mouseX, int mouseY) {
         if (this.macrosTabController != null) {
             this.macrosTabController.render(context, mouseX, mouseY);
+        }
+    }
+
+    private void renderAutomationTab(DrawContext context, int mouseX, int mouseY) {
+        if (this.automationTabController != null) {
+            this.automationTabController.render(context, mouseX, mouseY);
         }
     }
 
@@ -1245,6 +1286,10 @@ public class MacroWorkbenchScreen extends Screen {
             return onAddElementModalClick(click);
         }
 
+        if (this.tab == Tab.AUTOMATION && this.automationTabController != null && this.automationTabController.hasOverlayOpen()) {
+            return this.automationTabController.handleMouseClick(click.x(), click.y(), click.button());
+        }
+
         // Configuration tab has right-click decrement controls.
         if (this.tab == Tab.CONFIGURATION && this.configurationTabController != null && click.button() != 0) {
             return this.configurationTabController.handleMouseClick(click.x(), click.y(), click.button());
@@ -1259,6 +1304,9 @@ public class MacroWorkbenchScreen extends Screen {
         }
         if (this.tab == Tab.MACROS && this.macrosTabController != null) {
             return this.macrosTabController.handleMouseClick(click.x(), click.y(), click.button());
+        }
+        if (this.tab == Tab.AUTOMATION && this.automationTabController != null) {
+            return this.automationTabController.handleMouseClick(click.x(), click.y(), click.button());
         }
 
         if (click.button() != 0) {
@@ -1280,6 +1328,9 @@ public class MacroWorkbenchScreen extends Screen {
             return onPlaceholderClick(click.x(), click.y());
         }
         if (this.tab == Tab.MACROS) {
+            return false;
+        }
+        if (this.tab == Tab.AUTOMATION) {
             return false;
         }
         if (this.tab == Tab.ENTITY_RADAR) {
@@ -1336,6 +1387,18 @@ public class MacroWorkbenchScreen extends Screen {
 
         if (this.tab == Tab.MACROS && this.macrosTabController != null) {
             if (this.macrosTabController.handleMouseScroll(mouseX, mouseY, verticalAmount)) {
+                return true;
+            }
+        }
+
+        if (this.tab == Tab.AUTOMATION && this.automationTabController != null && this.automationTabController.hasOverlayOpen()) {
+            if (this.automationTabController.handleMouseScroll(mouseX, mouseY, verticalAmount)) {
+                return true;
+            }
+        }
+
+        if (this.tab == Tab.AUTOMATION && this.automationTabController != null) {
+            if (this.automationTabController.handleMouseScroll(mouseX, mouseY, verticalAmount)) {
                 return true;
             }
         }
@@ -1408,6 +1471,12 @@ public class MacroWorkbenchScreen extends Screen {
             } else if (advancedVisibilityScreenTypeFocused && codepoint >= 32 && codepoint != 127) {
                 insertAtAdvancedVisibilityScreenTypeCursor(new String(Character.toChars(codepoint)));
             }
+            return true;
+        }
+        if (this.tab == Tab.AUTOMATION
+                && this.automationTabController != null
+                && this.automationTabController.hasOverlayOpen()
+                && this.automationTabController.handleCharTyped(input)) {
             return true;
         }
         return super.charTyped(input);
@@ -1484,6 +1553,12 @@ public class MacroWorkbenchScreen extends Screen {
                 && this.placeholderSearchField.isFocused()
                 && (keyCode == GLFW.GLFW_KEY_ENTER || keyCode == GLFW.GLFW_KEY_KP_ENTER)) {
             applyPlaceholderSearch();
+            return true;
+        }
+        if (this.tab == Tab.AUTOMATION
+                && this.automationTabController != null
+                && this.automationTabController.hasOverlayOpen()
+                && this.automationTabController.handleKeyPressed(input)) {
             return true;
         }
         if (this.tab == Tab.MACROS && this.macrosTabController != null && this.macrosTabController.handleKeyPressed(keyCode)) {
@@ -5313,6 +5388,9 @@ public class MacroWorkbenchScreen extends Screen {
         }
         if (this.tab == Tab.MACROS && this.macrosTabController != null) {
             this.macrosTabController.commitAll();
+        }
+        if (this.tab == Tab.AUTOMATION && this.automationTabController != null) {
+            this.automationTabController.commitAll();
         }
 
         persistExternalCanvasElements();

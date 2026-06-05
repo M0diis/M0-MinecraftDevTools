@@ -1,0 +1,120 @@
+{
+  "version": 1,
+  "globalRateLimit": {
+    "maxExecutions": 25,
+    "windowMs": 5000
+  },
+  "loopPreventionBurstCount": 5,
+  "loopPreventionWindowMs": 1500,
+  "rules": [
+    {
+      "id": "welcome_join",
+      "name": "Welcome Join",
+      "enabled": true,
+      "eventType": "WORLD_JOIN",
+      "eventFilters": [],
+      "conditions": [],
+      "actions": [
+        {
+          "type": "SEND_CLIENT_COMMAND",
+          "target": "/say automation online",
+          "argument": "",
+          "enabled": true,
+          "parameters": {}
+        }
+      ],
+      "cooldownMs": 0,
+      "debounceMs": 0,
+      "rateLimitCount": 0,
+      "rateLimitWindowMs": 0,
+      "priority": 100
+    },
+    {
+      "id": "chat_join_macro",
+      "name": "Chat Regex Macro",
+      "enabled": true,
+      "eventType": "CHAT_RECEIVED_REGEX",
+      "eventFilters": [
+        {
+          "field": "message",
+          "operator": "REGEX",
+          "value": ".*joined the game.*",
+          "ignoreCase": true
+        }
+      ],
+      "conditions": [],
+      "actions": [
+        {
+          "type": "RUN_MACRO",
+          "target": "announce_join",
+          "argument": "",
+          "enabled": true,
+          "parameters": {}
+        }
+      ],
+      "cooldownMs": 2000,
+      "debounceMs": 0,
+      "rateLimitCount": 0,
+      "rateLimitWindowMs": 0,
+      "priority": 50
+    },
+    {
+      "id": "tick_script",
+      "name": "Tick Script",
+      "enabled": true,
+      "eventType": "TICK_INTERVAL",
+      "eventFilters": [
+        {
+          "field": "intervalTicks",
+          "operator": "EQUALS",
+          "value": "20",
+          "ignoreCase": true
+        }
+      ],
+      "conditions": [],
+      "actions": [
+        {
+          "type": "RUN_SCRIPT",
+          "target": "heartbeat.kts",
+          "argument": "",
+          "enabled": true,
+          "parameters": {}
+        }
+      ],
+      "cooldownMs": 0,
+      "debounceMs": 0,
+      "rateLimitCount": 3,
+      "rateLimitWindowMs": 10000,
+      "priority": 10
+    },
+    {
+      "id": "inventory_screen_ping",
+      "name": "Inventory Screen Ping",
+      "enabled": true,
+      "eventType": "SCREEN_CHANGED",
+      "eventFilters": [
+        {
+          "field": "toScreen",
+          "operator": "EQUALS",
+          "value": "InventoryScreen",
+          "ignoreCase": true
+        }
+      ],
+      "conditions": [],
+      "actions": [
+        {
+          "type": "RUN_SCRIPT",
+          "target": "heartbeat.kts",
+          "argument": "",
+          "enabled": true,
+          "parameters": {}
+        }
+      ],
+      "cooldownMs": 0,
+      "debounceMs": 0,
+      "rateLimitCount": 0,
+      "rateLimitWindowMs": 0,
+      "priority": 5
+    }
+  ]
+}

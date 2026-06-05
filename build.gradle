@@ -77,6 +77,10 @@ dependencies {
     modImplementation "org.jetbrains.kotlin:kotlin-scripting-compiler-embeddable:1.9.22"
     include "org.jetbrains.kotlin:kotlin-compiler-embeddable:1.9.22"
     include "org.jetbrains.kotlin:kotlin-scripting-compiler-embeddable:1.9.22"
+
+    testImplementation platform("org.junit:junit-bom:5.12.2")
+    testImplementation "org.junit.jupiter:junit-jupiter"
+    testRuntimeOnly "org.junit.platform:junit-platform-launcher"
 }
 
 processResources {
@@ -102,6 +106,10 @@ loom {
 
 tasks.withType(JavaCompile).configureEach {
     it.options.release = 21
+}
+
+tasks.withType(Test).configureEach {
+    useJUnitPlatform()
 }
 
 java {
