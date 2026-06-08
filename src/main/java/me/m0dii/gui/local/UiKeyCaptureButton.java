@@ -1,5 +1,6 @@
 package me.m0dii.gui.local;
 
+import lombok.Getter;
 import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.text.Text;
 import org.lwjgl.glfw.GLFW;
@@ -14,6 +15,7 @@ public final class UiKeyCaptureButton {
     };
     private Function<Integer, String> labelFormatter = code -> Integer.toString(code);
     private int value;
+    @Getter
     private boolean capturing = false;
 
     public UiKeyCaptureButton(String label,
@@ -53,10 +55,6 @@ public final class UiKeyCaptureButton {
 
     public int value() {
         return this.value;
-    }
-
-    public boolean isCapturing() {
-        return this.capturing;
     }
 
     public void cancelCapture() {

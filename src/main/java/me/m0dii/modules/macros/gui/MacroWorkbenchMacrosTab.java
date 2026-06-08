@@ -137,7 +137,7 @@ final class MacroWorkbenchMacrosTab {
                     draft.delayTicks = value;
                     this.dirty = true;
                 });
-        this.showInOverlayToggle = new UiToggleButton("Show In Overlay", false, fieldX + halfW + 4, rowY, halfW, 20)
+        this.showInOverlayToggle = new UiToggleButton("Show In HUD", false, fieldX + halfW + 4, rowY, halfW, 20)
                 .setLabels("YES", "NO")
                 .setSaveConsumer(value -> {
                     MacroDraft draft = selectedDraft();
@@ -371,7 +371,7 @@ final class MacroWorkbenchMacrosTab {
             }
         }
 
-        this.selectedIndex = match >= 0 ? match : 0;
+        this.selectedIndex = Math.max(match, 0);
         this.macroList.setSelectedIndex(this.selectedIndex);
         syncSelectionIntoWorkbench();
     }

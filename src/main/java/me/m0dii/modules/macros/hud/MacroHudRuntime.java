@@ -368,7 +368,7 @@ public final class MacroHudRuntime {
                 int fillW = Math.max(0, Math.round(segW * local));
                 context.fill(sx, innerY, sx + segW, innerY + innerH, 0x33000000);
                 if (fillW > 0) {
-                    float t = segments <= 1 ? progress : (i / (float) (segments - 1));
+                    float t = segments == 1 ? progress : (i / (float) (segments - 1));
                     int c = blendColor(element.colorStart, element.colorEnd, t);
                     context.fill(sx, innerY, sx + fillW, innerY + innerH, c);
                 }
@@ -377,7 +377,7 @@ public final class MacroHudRuntime {
             int fillW = Math.max(0, Math.round(innerW * progress));
             context.fill(innerX, innerY, innerX + innerW, innerY + innerH, 0x33000000);
             for (int px = 0; px < fillW; px++) {
-                float t = innerW <= 1 ? progress : (px / (float) (innerW - 1));
+                float t = innerW == 1 ? progress : (px / (float) (innerW - 1));
                 int c = blendColor(element.colorStart, element.colorEnd, t);
                 context.fill(innerX + px, innerY, innerX + px + 1, innerY + innerH, c);
             }
@@ -1485,7 +1485,7 @@ public final class MacroHudRuntime {
         int rightX = x + w - 1;
         int baseY = y + h - 1;
         for (int row = 0; row < h; row++) {
-            float t = h <= 1 ? 1.0f : (row / (float) (h - 1));
+            float t = h == 1 ? 1.0f : (row / (float) (h - 1));
             int rowHalfW = Math.max(0, Math.round((w / 2f) * t));
             int yy = apexY + row;
             int rowLeft = apexX - rowHalfW;

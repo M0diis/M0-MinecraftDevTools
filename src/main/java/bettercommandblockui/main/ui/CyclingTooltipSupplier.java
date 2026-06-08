@@ -6,8 +6,8 @@ import net.minecraft.client.gui.tooltip.Tooltip;
 import net.minecraft.text.Text;
 
 public class CyclingTooltipSupplier {
-    private Screen screen;
-    private Text[] tooltips;
+    private final Screen screen;
+    private final Text[] tooltips;
     @Getter
     private int currentIndex;
 

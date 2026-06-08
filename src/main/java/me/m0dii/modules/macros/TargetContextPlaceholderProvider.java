@@ -412,7 +412,7 @@ public final class TargetContextPlaceholderProvider implements MacroPlaceholderP
         if (rawLimit != null && !rawLimit.isBlank()) {
             try {
                 int parsed = Integer.parseInt(unquote(rawLimit).trim());
-                return parsed < 0 ? 0 : parsed;
+                return Math.max(parsed, 0);
             } catch (NumberFormatException ignored) {
                 return defaultSelectorLimit(query.baseSelector());
             }

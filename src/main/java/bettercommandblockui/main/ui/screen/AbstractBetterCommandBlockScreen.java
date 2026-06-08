@@ -194,7 +194,7 @@ public abstract class AbstractBetterCommandBlockScreen extends Screen {
         Tooltip showSideWindowTooltip = Tooltip.of(Text.translatable("bcbui.tools"));
         this.showSideWindowButton.setTooltip(showSideWindowTooltip);
 
-        this.consoleCommandTextField = new MultiLineTextFieldWidget(this.textRenderer, this.width / 2 - textBoxWidth / 2, this.height / 2 - textBoxHeight / 2, textBoxWidth, textBoxHeight, (Text) Text.translatable("advMode.command"), this) {
+        this.consoleCommandTextField = new MultiLineTextFieldWidget(this.textRenderer, this.width / 2 - textBoxWidth / 2, this.height / 2 - textBoxHeight / 2, textBoxWidth, textBoxHeight, Text.translatable("advMode.command"), this) {
             @Override
             protected MutableText getNarrationMessage() {
                 return super.getNarrationMessage().append(commandSuggestor.getNarration());

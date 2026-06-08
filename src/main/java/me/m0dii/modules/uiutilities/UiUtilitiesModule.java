@@ -24,19 +24,15 @@ public class UiUtilitiesModule extends Module {
 
     public static final UiUtilitiesModule INSTANCE = new UiUtilitiesModule();
 
+    @Setter
     @Getter
     private boolean sendUiPackets = true;
-    public void setSendUiPackets(boolean sendUiPackets) {
-        this.sendUiPackets = sendUiPackets;
-    }
     @Getter
     @Setter
     private boolean shouldEditSign = true;
+    @Setter
     @Getter
     private boolean delayUiPackets = false;
-    public void setDelayUiPackets(boolean delayUiPackets) {
-        this.delayUiPackets = delayUiPackets;
-    }
     @Getter
     public List<Packet<?>> delayedUiPackets = new ArrayList<>();
 

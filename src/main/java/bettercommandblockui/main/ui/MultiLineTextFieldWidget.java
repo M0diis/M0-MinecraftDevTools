@@ -26,8 +26,9 @@ import java.util.Stack;
 public class MultiLineTextFieldWidget extends TextFieldWidget implements Element {
     private final int visibleChars = 20;
 
-    private AbstractBetterCommandBlockScreen screen;
-    private ScrollbarWidget scrollX, scrollY;
+    private final AbstractBetterCommandBlockScreen screen;
+    private final ScrollbarWidget scrollX;
+    private final ScrollbarWidget scrollY;
     private List<String> lines;
     private List<Integer> lineOffsets, textOffsets;
     private List<Pair<Style, Integer>> textColors;
@@ -40,7 +41,7 @@ public class MultiLineTextFieldWidget extends TextFieldWidget implements Element
     private boolean hasCommandSuggestor = false;
     private boolean textModified = false;
     private MultiLineCommandSuggestor suggestor;
-    private TextFieldWidgetAccessor accessor = (TextFieldWidgetAccessor) this;
+    private final TextFieldWidgetAccessor accessor = (TextFieldWidgetAccessor) this;
     private float timeSinceClick = 0.0f;
 
     public MultiLineTextFieldWidget(TextRenderer textRenderer, int x, int y, int width, int height, Text text, AbstractBetterCommandBlockScreen screen) {
@@ -960,7 +961,7 @@ public class MultiLineTextFieldWidget extends TextFieldWidget implements Element
         TextRenderer textRenderer = accessor.getTextRenderer();
 
         Pair<Integer, Integer> lineAndOffset = indexToLineAndOffset(accessor.invokeGetCursorPosWithOffset(0));
-        if (lines.size() < 1) {
+        if (lines.isEmpty()) {
             horizontalOffset = 0;
             scrollY.updatePos(0);
             scrolledLines = 0;

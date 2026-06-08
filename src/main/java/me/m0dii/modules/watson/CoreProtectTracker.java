@@ -1,5 +1,6 @@
 package me.m0dii.modules.watson;
 
+import lombok.Getter;
 import net.minecraft.text.Text;
 import net.minecraft.util.math.BlockPos;
 import org.jetbrains.annotations.NotNull;
@@ -15,6 +16,7 @@ public final class CoreProtectTracker {
     private static final ConcurrentLinkedDeque<CoreProtectEntry> ENTRIES = new ConcurrentLinkedDeque<>();
     private static final CoreProtectParser PARSER = new CoreProtectParser();
 
+    @Getter
     private static volatile long ttlMs = 5 * 60_000L;
 
     private CoreProtectTracker() {
@@ -111,10 +113,6 @@ public final class CoreProtectTracker {
 
     public static void clear() {
         ENTRIES.clear();
-    }
-
-    public static long getTtlMs() {
-        return ttlMs;
     }
 
     public static void setTtlSeconds(int seconds) {

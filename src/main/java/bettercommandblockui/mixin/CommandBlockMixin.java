@@ -26,7 +26,7 @@ public class CommandBlockMixin {
         }
         if (instance instanceof ClientPlayerEntity) {
             MinecraftClient client = ((ClientPlayerEntityAccessor) instance).getClient();
-            client.setScreen(new BetterCommandBlockScreen(client, commandBlock, commandBlock.getCommandExecutor()));
+            client.setScreen(new BetterCommandBlockScreen(commandBlock, commandBlock.getCommandExecutor()));
         } else if (instance instanceof ServerPlayerEntity) {
             ((ServerPlayerEntityAccessor) instance).getNetworkHandler().sendPacket(BlockEntityUpdateS2CPacket.create(commandBlock, BlockEntity::createNbt));
         }

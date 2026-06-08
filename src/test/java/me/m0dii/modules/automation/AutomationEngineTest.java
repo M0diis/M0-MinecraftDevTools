@@ -1,5 +1,6 @@
 package me.m0dii.modules.automation;
 
+import org.jspecify.annotations.NonNull;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -99,21 +100,7 @@ class AutomationEngineTest {
     @Test
     void placeholderConditionSourceResolvesSelectedToken() {
         RecordingExecutor executor = new RecordingExecutor();
-        AutomationEngine engine = new AutomationEngine(EventBus.getInstance(), executor, new AutomationEngine.ContextSnapshotProvider() {
-            @Override
-            public Map<String, Object> snapshot(AutomationRule.ConditionSource source, AutomationEvent event) {
-                return Map.of();
-            }
-
-            @Override
-            public Object resolve(AutomationRule.ConditionSource source, String field, AutomationEvent event) {
-                if (source == AutomationRule.ConditionSource.PLACEHOLDER && "player.name".equals(field)) {
-                    return "Steve";
-                }
-                return null;
-            }
-        });
-        engine.configureInMemory(10, 10_000L, 10, 10_000L);
+        AutomationEngine engine = getAutomationEngine(executor);
 
         AutomationRule rule = new AutomationRule();
         rule.id = "placeholder_rule";
@@ -133,6 +120,25 @@ class AutomationEngineTest {
         assertEquals(List.of("placeholder_rule@WORLD_JOIN"), executor.executions);
     }
 
+    private static @NonNull AutomationEngine getAutomationEngine(RecordingExecutor executor) {
+        AutomationEngine engine = new AutomationEngine(EventBus.getInstance(), executor, new AutomationEngine.ContextSnapshotProvider() {
+            @Override
+            public @NonNull Map<String, Object> snapshot(AutomationRule.@NonNull ConditionSource source, @NonNull AutomationEvent event) {
+                return Map.of();
+            }
+
+            @Override
+            public Object resolve(AutomationRule.@NonNull ConditionSource source, @NonNull String field, @NonNull AutomationEvent event) {
+                if (source == AutomationRule.ConditionSource.PLACEHOLDER && "player.name".equals(field)) {
+                    return "Steve";
+                }
+                return null;
+            }
+        });
+        engine.configureInMemory(10, 10_000L, 10, 10_000L);
+        return engine;
+    }
+
     private static final class RecordingExecutor extends ActionExecutor {
         private final List<String> executions = new ArrayList<>();
 
@@ -149,22 +155,22 @@ class AutomationEngineTest {
 
     private static final class NoOpBridge implements ActionExecutor.Bridge {
         @Override
-        public boolean runMacro(String macroId) {
+        public boolean runMacro(@NonNull String macroId) {
             return true;
         }
 
         @Override
-        public ActionExecutor.ActionResult runScript(String scriptFile, Map<String, Object> context) {
+        public ActionExecutor.ActionResult runScript(@NonNull String scriptFile, @NonNull Map<String, Object> context) {
             return ActionExecutor.ActionResult.ok("ok");
         }
 
         @Override
-        public boolean sendClientCommand(String command) {
+        public boolean sendClientCommand(@NonNull String command) {
             return true;
         }
 
         @Override
-        public boolean toggleModule(String moduleId, Boolean enabledState) {
+        public boolean toggleModule(@NonNull String moduleId, Boolean enabledState) {
             return true;
         }
 

@@ -13,6 +13,7 @@ import net.minecraft.entity.passive.AnimalEntity;
 import net.minecraft.entity.passive.PassiveEntity;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.Box;
+import net.minecraft.util.math.Vec3d;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -90,7 +91,7 @@ public class EntityRadarModule extends Module {
             return List.of();
         }
 
-        var playerPos = new net.minecraft.util.math.Vec3d(getClient().player.getX(), getClient().player.getY(), getClient().player.getZ());
+        var playerPos = new Vec3d(getClient().player.getX(), getClient().player.getY(), getClient().player.getZ());
         Box box = new Box(playerPos, playerPos).expand(ModConfig.entityRadarRadius);
         return getClient().world.getOtherEntities(getClient().player, box).stream()
                 .sorted((a, b) -> Double.compare(a.distanceTo(getClient().player), b.distanceTo(getClient().player)))

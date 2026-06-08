@@ -194,7 +194,7 @@ public final class EntityHealthBarsModule extends Module {
         if (maxHealth <= 0.0f) {
             return "[----------]";
         }
-        int filled = (int) Math.round(Math.clamp(health / maxHealth, 0.0f, 1.0f) * width);
+        int filled = Math.round(Math.clamp(health / maxHealth, 0.0f, 1.0f) * width);
         StringBuilder builder = new StringBuilder(width + 2);
         builder.append('[');
         for (int i = 0; i < width; i++) {

@@ -510,7 +510,7 @@ public final class AutomationModule {
                 String script = ScriptStorage.readScript(scriptFile);
                 ScriptManager manager = managerForScript(scriptFile);
                 Object result = manager.runScript(script, context);
-                return ActionExecutor.ActionResult.ok("Script '" + scriptFile + "' result: " + String.valueOf(result));
+                return ActionExecutor.ActionResult.ok("Script '" + scriptFile + "' result: " + result);
             } catch (Exception e) {
                 M0DevTools.LOGGER.warn("Automation script '{}' failed: {}", scriptFile, e.getMessage());
                 return ActionExecutor.ActionResult.error("Script '" + scriptFile + "' failed: " + e.getMessage());

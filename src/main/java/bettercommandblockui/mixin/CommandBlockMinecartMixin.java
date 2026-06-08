@@ -21,7 +21,7 @@ public class CommandBlockMinecartMixin {
         }
         if (instance instanceof ClientPlayerEntity) {
             MinecraftClient client = ((ClientPlayerEntityAccessor) instance).getClient();
-            client.setScreen(new BetterMinecartCommandBlockScreen(client, minecart));
+            client.setScreen(new BetterMinecartCommandBlockScreen(minecart));
         }
     }
 }

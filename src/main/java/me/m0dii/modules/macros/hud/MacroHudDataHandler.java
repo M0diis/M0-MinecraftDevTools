@@ -261,7 +261,7 @@ public final class MacroHudDataHandler {
 
     public static void renamePreset(String fromId, String toId) {
         HudConfig cleaned = sanitize(config);
-        if (cleaned.presetElements.size() <= 0) {
+        if (cleaned.presetElements.isEmpty()) {
             return;
         }
         String from = sanitizePresetId(fromId, cleaned.activePresetId);

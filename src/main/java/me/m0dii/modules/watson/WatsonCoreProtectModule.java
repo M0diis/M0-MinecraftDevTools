@@ -183,11 +183,6 @@ public final class WatsonCoreProtectModule extends Module {
     }
 
     @Override
-    protected void onDisable() {
-        // Keep entries by default so players can toggle renderer without losing recent context.
-    }
-
-    @Override
     public List<String> getSettingsDisplay() {
         List<String> settings = new ArrayList<>();
         settings.add("Entries: " + CoreProtectTracker.size());

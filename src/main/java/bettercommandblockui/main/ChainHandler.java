@@ -19,14 +19,14 @@ import java.util.LinkedList;
 import java.util.List;
 
 public class ChainHandler {
-    private BetterCommandBlockScreen screen;
-    private BlockState current;
+    private final BetterCommandBlockScreen screen;
+    private final BlockState current;
     @Getter
     private BlockState next;
-    private BlockPos currentPos;
+    private final BlockPos currentPos;
     @Getter
-    private List<Pair<BlockState, Direction>> prior;
-    private World world;
+    private final List<Pair<BlockState, Direction>> prior;
+    private final World world;
 
     public ChainHandler(BetterCommandBlockScreen screen, BlockPos pos) {
         this.screen = screen;

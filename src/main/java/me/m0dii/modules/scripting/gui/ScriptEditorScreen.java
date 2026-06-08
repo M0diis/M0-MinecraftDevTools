@@ -144,7 +144,7 @@ public class ScriptEditorScreen extends Screen {
     private final List<Suggestion> suggestions = new ArrayList<>();
     private final List<DisplaySuggestion> visibleSuggestions = new ArrayList<>();
     private final Map<String, Boolean> expandedMethodGroups = new LinkedHashMap<>();
-    private boolean placeholderSuggestionsInScripts = false;
+    private final boolean placeholderSuggestionsInScripts = false;
     private boolean suggestionsVisible = false;
     private int suggestionSelected = 0;
     private int suggestionScroll = 0;

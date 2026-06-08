@@ -123,7 +123,7 @@ public class BetterCommandBlockUI implements ClientModInitializer {
         };
     }
 
-    private static SimpleConfig CONFIG = SimpleConfig.of("betterCommandBlockUI").provider(BetterCommandBlockUI::provider).request();
+    private static final SimpleConfig CONFIG = SimpleConfig.of("betterCommandBlockUI").provider(BetterCommandBlockUI::provider).request();
 
     public static final String VAR_SCROLL_X = "scroll_step_horizontal";
     public static final String VAR_SCROLL_Y = "scroll_step_vertical";

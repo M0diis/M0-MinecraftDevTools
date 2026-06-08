@@ -28,8 +28,8 @@ import java.util.stream.Stream;
 public class MultiLineCommandSuggestor extends ChatInputSuggestor {
     private static final List<Style> HIGHLIGHT_STYLES = Stream.of(Formatting.RED, Formatting.GRAY, Formatting.AQUA, Formatting.YELLOW, Formatting.GREEN, Formatting.LIGHT_PURPLE, Formatting.GOLD).map(Style.EMPTY::withColor).collect(ImmutableList.toImmutableList());
 
-    private CommandSuggestorAccessor accessor;
-    private Pair<Integer, Integer> startPos;
+    private final CommandSuggestorAccessor accessor;
+    private final Pair<Integer, Integer> startPos;
     @Getter
     private int x;
     @Getter

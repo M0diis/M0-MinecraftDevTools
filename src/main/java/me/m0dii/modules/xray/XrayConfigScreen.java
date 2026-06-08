@@ -343,7 +343,7 @@ public final class XrayConfigScreen extends Screen {
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
         int maxScroll = Math.max(0, this.visibleIds.size() - this.availableRows);
-        if (maxScroll <= 0) {
+        if (maxScroll == 0) {
             return super.mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount);
         }
         this.scroll = Math.clamp(this.scroll + (verticalAmount > 0 ? -1 : 1), 0, maxScroll);

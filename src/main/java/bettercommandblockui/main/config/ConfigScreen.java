@@ -20,21 +20,22 @@ import org.lwjgl.glfw.GLFW;
 @Environment(EnvType.CLIENT)
 public class ConfigScreen extends Screen {
 
-    private Screen parent;
+    private final Screen parent;
     private final String sampleText = "setblock ~ ~1 ~ oak_hanging_sign{front_text:{messages:['[\"[Brackets within a String]\"]','[\"Some more text\"]','[\"A really long example text to demonstrate text wraparound. Remember to stay hydrated and take care of yourself, I hope you have a lovely day :)\"]','[\"\"]']}}";
     public MultiLineTextFieldWidget textField;
     private MultiLineCommandSuggestor commandSuggestor;
 
     private static final int checkboxDistX = 26;
     private static final int checkboxDistY = 22;
-    private static int buttonHeight = 20;
-    private static int sliderHeight = 10;
-    private static int textHeight = 10;
-    private static int buttonMargin = 10;
-    private static int textMargin = 5;
-    private static int screenMarginX = 40;
-    private static int screenMarginY = 12;
-    private static int numberInputWidth = 40;
+    private static final int buttonHeight = 20;
+    private static final int sliderHeight = 10;
+    private static final int textHeight = 10;
+    private static final int buttonMargin = 10;
+    private static final int textMargin = 5;
+    private static final int screenMarginX = 40;
+    private static final int screenMarginY = 12;
+    private static final int numberInputWidth = 40;
+
     private CheckboxWidget newLinePreOpen, newLinePostOpen, newLinePreClose, newLinePostClose, //newLinePostLastClose,
             newLinePostComma, avoidDoubleNewline, formatStrings, ignoreEnter, autosave;//, bracketAutocomplete;
     private TextFieldWidget indentationFac, wraparound, scrollSpeedX, scrollSpeedY;

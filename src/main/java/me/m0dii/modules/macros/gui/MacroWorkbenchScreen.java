@@ -905,7 +905,7 @@ public class MacroWorkbenchScreen extends Screen {
             return;
         }
         String query = StringUtils.safe(this.placeholderSearchQuery).trim();
-        this.placeholderSearchButton.setMessage(Text.literal(query.isEmpty() ? "Search" : "Search"));
+        this.placeholderSearchButton.setMessage(Text.literal("Search"));
     }
 
     private List<String> placeholderDocs() {
@@ -2516,7 +2516,7 @@ public class MacroWorkbenchScreen extends Screen {
         int innerH = Math.max(1, e.height - 2);
         int fillW = Math.round(innerW * progress);
         for (int px = 0; px < fillW; px++) {
-            float t = innerW <= 1 ? progress : (px / (float) (innerW - 1));
+            float t = innerW == 1 ? progress : (px / (float) (innerW - 1));
             int c = blendColor(e.colorStart, e.colorEnd, t);
             context.fill(innerX + px, innerY, innerX + px + 1, innerY + innerH, c);
         }
@@ -2868,7 +2868,7 @@ public class MacroWorkbenchScreen extends Screen {
             return -1;
         }
         int idx = ids.indexOf(active);
-        return idx >= 0 ? idx : 0;
+        return Math.max(idx, 0);
     }
 
     private void createPresetFromField() {
@@ -3615,7 +3615,7 @@ public class MacroWorkbenchScreen extends Screen {
 
                     @Override
                     public String[] iconIdSuggestionsForKind(String kind) {
-                        return MacroWorkbenchScreen.this.iconIdSuggestionsForKind(kind);
+                        return MacroWorkbenchScreen.iconIdSuggestionsForKind(kind);
                     }
 
                     @Override
@@ -5110,7 +5110,7 @@ public class MacroWorkbenchScreen extends Screen {
         while (gap > 2 && keyboardMainWidth(kw, gap, rowDigits, rowTab, rowCaps, rowShift) > availableW) {
             gap--;
         }
-        int kh = Math.clamp((int) Math.round(kw * 0.8f), 18, 28);
+        int kh = Math.clamp(Math.round(kw * 0.8f), 18, 28);
         int rowStep = kh + Math.max(4, gap);
 
         addRow(x0, y0, kw, kh, gap, rowFn);
@@ -6283,7 +6283,7 @@ public class MacroWorkbenchScreen extends Screen {
         int rightX = x + w - 1;
         int baseY = y + h - 1;
         for (int row = 0; row < h; row++) {
-            float t = h <= 1 ? 1.0f : (row / (float) (h - 1));
+            float t = h == 1 ? 1.0f : (row / (float) (h - 1));
             int rowHalfW = Math.max(0, Math.round((w / 2f) * t));
             int yy = apexY + row;
             int rowLeft = apexX - rowHalfW;

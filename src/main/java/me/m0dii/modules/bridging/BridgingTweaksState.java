@@ -1,8 +1,10 @@
 package me.m0dii.modules.bridging;
 
+import lombok.Getter;
 import net.minecraft.client.MinecraftClient;
 
 public final class BridgingTweaksState {
+    @Getter
     private static BridgingTarget lastAssistTarget;
     static double lastKnownYFraction;
 
@@ -27,7 +29,4 @@ public final class BridgingTweaksState {
         lastAssistTarget = BridgingTweaksLogic.findAssistTarget(client, client.player);
     }
 
-    public static BridgingTarget getLastAssistTarget() {
-        return lastAssistTarget;
-    }
 }

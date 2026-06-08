@@ -11,12 +11,14 @@ import net.minecraft.client.gui.widget.ClickableWidget;
 import net.minecraft.text.Text;
 import org.joml.Vector2d;
 
+import java.util.function.Consumer;
+
 public class RotationIndicator extends ClickableWidget {
     private boolean dragging = false;
     private double angle = -1.0d;
-    private Vector2d midPos;
+    private final Vector2d midPos;
     @Setter
-    private java.util.function.Consumer<Double> changedListener;
+    private Consumer<Double> changedListener;
 
     public RotationIndicator(int x, int y, Text message) {
         super(x, y, 32, 32, message);

@@ -1504,7 +1504,7 @@ final class MacroWorkbenchAutomationTab {
         if (size <= 0) {
             return -1;
         }
-        return Math.clamp(current < 0 ? 0 : current, 0, size - 1);
+        return Math.clamp(Math.max(current, 0), 0, size - 1);
     }
 
     private static String displayRuleName(AutomationRule rule) {

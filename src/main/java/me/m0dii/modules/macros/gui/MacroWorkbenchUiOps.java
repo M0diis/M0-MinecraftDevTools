@@ -170,7 +170,7 @@ public final class MacroWorkbenchUiOps {
         }
         if (element.backgroundAlpha <= 0) {
             element.backgroundAlpha = (element.backgroundColor >>> 24) & 0xFF;
-            if (element.backgroundAlpha <= 0) {
+            if (element.backgroundAlpha == 0) {
                 element.backgroundAlpha = 0xAA;
             }
         }

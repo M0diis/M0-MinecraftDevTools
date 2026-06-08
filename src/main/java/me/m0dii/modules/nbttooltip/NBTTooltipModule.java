@@ -19,11 +19,6 @@ public class NBTTooltipModule extends Module {
         super("nbt_tooltip", "NBT Tooltip", false);
     }
 
-    @Override
-    public void register() {
-        // Enabled via ClickGUI
-    }
-
     public static List<Text> getNbtTooltipText(ItemStack itemStack, List<Text> base) {
         if (itemStack == null || base == null) {
             return base;

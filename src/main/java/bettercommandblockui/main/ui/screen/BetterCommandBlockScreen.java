@@ -40,19 +40,18 @@ public class BetterCommandBlockScreen extends AbstractBetterCommandBlockScreen {
     private CommandBlockBlockEntity.Type mode = REDSTONE;
 
     private BlockState blockState;
-    private ChainHandler chainHandler;
+    private final ChainHandler chainHandler;
     private ButtonWidget chainNext;
-    private List<ButtonWidget> chainPrior;
+    private final List<ButtonWidget> chainPrior;
     CommandBlockBlockEntity blockEntity;
     private boolean conditional;
     private boolean autoActivate;
 
     public static BetterCommandBlockScreen instance;
 
-    public BetterCommandBlockScreen(MinecraftClient client, CommandBlockBlockEntity blockEntity, CommandBlockExecutor commandExecutor) {
+    public BetterCommandBlockScreen(CommandBlockBlockEntity blockEntity, CommandBlockExecutor commandExecutor) {
         this.blockEntity = blockEntity;
         this.commandExecutor = commandExecutor;
-        //this.client = client;
         this.chainHandler = new ChainHandler(this, this.blockEntity.getPos());
         this.chainPrior = new LinkedList<>();
         instance = this;

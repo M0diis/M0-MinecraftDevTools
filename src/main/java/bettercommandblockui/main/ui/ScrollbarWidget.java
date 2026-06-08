@@ -1,5 +1,7 @@
 package bettercommandblockui.main.ui;
 
+import lombok.Getter;
+import lombok.Setter;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gl.RenderPipelines;
 import net.minecraft.client.gui.Click;
@@ -18,6 +20,7 @@ public class ScrollbarWidget extends ClickableWidget {
     protected boolean horizontal = false;
     protected double prevMouseX = 0.0d;
     protected double prevMouseY = 0.0d;
+    @Getter
     protected double pos = 0.0d;
     protected double scale;
     protected int length;
@@ -25,6 +28,7 @@ public class ScrollbarWidget extends ClickableWidget {
     protected int frameRepeatLength;
     protected int barRepeatLength;
     protected final int textureLength = 256;
+    @Setter
     protected java.util.function.Consumer<Double> changedListener;
 
     public ScrollbarWidget(int x, int y, int width, int height, Text message, boolean horizontal) {
@@ -78,10 +82,6 @@ public class ScrollbarWidget extends ClickableWidget {
         }
     }
 
-    public void setChangedListener(java.util.function.Consumer<Double> changedListener) {
-        this.changedListener = changedListener;
-    }
-
     /*@Override
     protected boolean clicked(double mouseX, double mouseY){
         if (!this.visible) {
@@ -131,9 +131,9 @@ public class ScrollbarWidget extends ClickableWidget {
         if (dragging) {
             double posBefore = pos;
             if (horizontal) {
-                pos = Math.min(Math.max(pos + distX / (length - barLength), 0), 1);
+                pos = Math.clamp(pos + distX / (length - barLength), 0, 1);
             } else {
-                pos = Math.min(Math.max(pos + distY / (length - barLength), 0), 1);
+                pos = Math.clamp(pos + distY / (length - barLength), 0, 1);
             }
             if ((changedListener != null) && (Math.abs(posBefore - pos) > 0.0d)) {
                 changedListener.accept(pos);
@@ -148,11 +148,7 @@ public class ScrollbarWidget extends ClickableWidget {
     }
 
     public void updatePos(double newPos) {
-        this.pos = Math.max(Math.min(newPos, 1), 0);
-    }
-
-    public double getPos() {
-        return pos;
+        this.pos = Math.clamp(newPos, 0, 1);
     }
 
     @Override

@@ -23,6 +23,7 @@ package bettercommandblockui.main.config;
  * THE SOFTWARE.
  */
 
+import lombok.Getter;
 import net.fabricmc.loader.api.FabricLoader;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -44,6 +45,15 @@ public class SimpleConfig {
     private final HashMap<String, String> config = new HashMap<>();
     private final ConfigRequest request;
     private Set<String> edited;
+    /**
+     * -- GETTER --
+     *  If any error occurred during loading or reading from the config
+     *  a 'broken' flag is set, indicating that the config's state
+     *  is undefined and should be discarded using `delete()`
+     *
+     * @return the 'broken' flag of the configuration
+     */
+    @Getter
     private boolean broken = false;
     private static boolean modified = false;
 
@@ -242,7 +252,7 @@ public class SimpleConfig {
             loadConfig();
             broken = false;
         } catch (IOException e) {
-            e.printStackTrace();
+            LOGGER.error("Failed to reconstruct config file '" + request.filename + "'!");
         }
     }
 
@@ -304,17 +314,6 @@ public class SimpleConfig {
             broken = true;
             return def;
         }
-    }
-
-    /**
-     * If any error occurred during loading or reading from the config
-     * a 'broken' flag is set, indicating that the config's state
-     * is undefined and should be discarded using `delete()`
-     *
-     * @return the 'broken' flag of the configuration
-     */
-    public boolean isBroken() {
-        return broken;
     }
 
 }
