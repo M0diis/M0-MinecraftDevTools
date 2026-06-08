@@ -145,7 +145,7 @@ public final class MacroWorkbenchCustomWidgetAdvancedClickHandler {
                 case LIST -> listSourcePresets;
                 case STATE_BADGE -> stateSourcePresets;
                 case ICON -> ops.iconIdSuggestionsForKind(selected.iconKind);
-                case INVENTORY -> new String[]{"HOTBAR", "INVENTORY", "ARMOR"};
+                case INVENTORY -> new String[]{"HOTBAR", "INVENTORY", "ARMOR", "ARMOR_ONLY", "OFFHAND"};
                 default -> barValueSourcePresets;
             };
             String value = ops.cyclePreset(ops.getAdvancedAction(), presets, forward);

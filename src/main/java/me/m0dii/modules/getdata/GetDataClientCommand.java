@@ -91,25 +91,30 @@ public final class GetDataClientCommand {
                     openBlockScreenWithSync(client, pos, display, targetToken);
                     return 1;
                 } catch (Exception ignored) {
-                    // fall through to entity-style target handling
+                    client.player.sendMessage(Text.literal("[GetData] Invalid block target. Use `block x y z` or `block ~ ~ ~`."), false);
+                    return 0;
                 }
             }
+            client.player.sendMessage(Text.literal("[GetData] Invalid block target. Use `block x y z` or `block ~ ~ ~`."), false);
+            return 0;
         }
 
         var lookedEntity = client.crosshairTarget instanceof EntityHitResult entityHit ? entityHit.getEntity() : null;
         var resolved = NbtExtractors.resolveEntityTarget(client.world, client.player, target, lookedEntity);
-        NbtCompound base = resolved == null ? new NbtCompound() : NbtExtractors.extractEntityNbt(resolved);
+        if (resolved == null) {
+            client.player.sendMessage(Text.literal("[GetData] Could not resolve target: " + target), false);
+            return 0;
+        }
+
+        NbtCompound base = NbtExtractors.extractEntityNbt(resolved);
         if (base == null) {
             base = new NbtCompound();
         }
-        if (base.isEmpty()) {
-            base.putString("target", target);
-        }
 
         final String selectorPayload = base.toString();
-        final String selectorDisplay = resolved == null ? "Entity/Selector " + target : "Entity " + resolved.getName().getString();
+        final String selectorDisplay = "Entity " + resolved.getName().getString();
         final String selectorToken = "entity " + target;
-        client.execute(() -> client.setScreen(GetDataScreen.create(client.currentScreen, selectorDisplay, selectorToken, selectorPayload)));
+        openBrowser(client, selectorDisplay, selectorToken, selectorPayload);
         return 1;
     }
 
@@ -155,7 +160,7 @@ public final class GetDataClientCommand {
             final String payload = nbt.toString();
             final String display = "Entity " + selector;
             final String targetToken = "entity " + selector;
-            client.execute(() -> client.setScreen(GetDataScreen.create(client.currentScreen, display, targetToken, payload)));
+            openBrowser(client, display, targetToken, payload);
             return 1;
         }
 
@@ -165,19 +170,23 @@ public final class GetDataClientCommand {
     private static void openBlockScreenWithSync(MinecraftClient client, BlockPos pos, String display, String targetToken) {
         NbtCompound localNbt = NbtExtractors.extractBlockData(client.world, pos);
         String localPayload = localNbt == null ? "{}" : localNbt.toString();
-        client.execute(() -> client.setScreen(GetDataScreen.create(client.currentScreen, display, targetToken, localPayload)));
+        openBrowser(client, display, targetToken, localPayload);
 
         GetDataSyncClient.requestBlockNbt(pos, syncedNbt -> {
             if (syncedNbt == null || syncedNbt.isEmpty()) {
                 return;
             }
             String syncedPayload = syncedNbt.toString();
-            if (client.currentScreen instanceof GetDataScreen existing && existing.matchesTarget(targetToken)) {
+            if (client.currentScreen instanceof GetDataTargetView existing && existing.matchesTarget(targetToken)) {
                 existing.applySyncedPayload(syncedPayload);
             } else {
-                client.execute(() -> client.setScreen(GetDataScreen.create(client.currentScreen, display, targetToken, syncedPayload)));
+                openBrowser(client, display, targetToken, syncedPayload);
             }
         });
+    }
+
+    private static void openBrowser(MinecraftClient client, String display, String targetToken, String payload) {
+        client.execute(() -> client.setScreen(GetDataBrowserScreen.create(client.currentScreen, display, targetToken, payload)));
     }
 }
 

@@ -159,20 +159,20 @@ public final class ItemComponentMetadata {
         }
 
         replace(entries, "minecraft:custom_name", "Custom Name",
-                "Sets the display name players see for this stack. This is the normal rename-style component.",
+                "Sets the display name players see for this stack. Friendly input accepts legacy codes like `&c` and hex tags like `<#ff0000>`.",
                 0,
-                textLiteral("Renamed Item"),
-                textLiteral("OP Sword"));
+                constant("&eRenamed Item"),
+                constant("&cOP Sword"));
         replace(entries, "minecraft:item_name", "Item Name",
-                "Overrides the base translated item name without adding an anvil-style custom rename.",
+                "Overrides the base translated item name without adding an anvil-style custom rename. Friendly `&` and `<#rrggbb>` formatting is accepted.",
                 1,
-                textLiteral("Debug Wrench"),
-                textLiteral("Developer Tool"));
+                constant("&bDebug Wrench"),
+                constant("<#55ffff>Developer Tool"));
         replace(entries, "minecraft:lore", "Lore",
-                "Adds tooltip lines under the item name. Each entry is a text component.",
+                "Adds tooltip lines under the item name. In easy editing you can enter one line per lore row with legacy or hex formatting.",
                 2,
-                lookup -> "[" + ItemDataCodec.encodeTextLiteral("Line 1", lookup) + "]",
-                lookup -> "[" + ItemDataCodec.encodeTextLiteral("Line 1", lookup) + "," + ItemDataCodec.encodeTextLiteral("Shift-click for details", lookup) + "]");
+                constant("&7Line 1"),
+                constant("&7Line 1\n<#ff5555>Danger"));
         replace(entries, "minecraft:enchantments", "Enchantments",
                 "Stores the live enchantments applied to the item stack.",
                 3,
@@ -722,7 +722,7 @@ public final class ItemComponentMetadata {
             if (part == null || part.isBlank()) {
                 continue;
             }
-            if (builder.length() > 0) {
+            if (!builder.isEmpty()) {
                 builder.append(' ');
             }
             builder.append(Character.toUpperCase(part.charAt(0)));
@@ -730,7 +730,7 @@ public final class ItemComponentMetadata {
                 builder.append(part.substring(1));
             }
         }
-        return builder.length() == 0 ? "Unknown" : builder.toString();
+        return builder.isEmpty() ? "Unknown" : builder.toString();
     }
 
     private static Spec spec(String id, String typeHint) {

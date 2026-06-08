@@ -6,6 +6,7 @@ import me.m0dii.gui.local.UiRect;
 import me.m0dii.modules.macros.MacroPlaceholderCatalog;
 import me.m0dii.modules.macros.gui.MacroWorkbenchAdvancedLayouts.CustomWidgetAdvancedLayout;
 import me.m0dii.modules.macros.hud.MacroHudDataHandler;
+import me.m0dii.modules.macros.hud.MacroInventoryWidgetSupport;
 import me.m0dii.utils.StringUtils;
 import net.minecraft.client.gui.Click;
 
@@ -94,6 +95,11 @@ public final class MacroWorkbenchCustomWidgetTypeClickHandler {
             selected.inventoryShowCount = selected.inventoryShowCount == null || !selected.inventoryShowCount;
             return true;
         }
+        if (ops.contains(click, row1.get(1))) {
+            selected.inventorySlotStyle = MacroInventoryWidgetSupport.cycleSlotStyle(selected.inventorySlotStyle, forward);
+            applyInventoryDefaultSize(selected);
+            return true;
+        }
         return false;
     }
 
@@ -114,23 +120,7 @@ public final class MacroWorkbenchCustomWidgetTypeClickHandler {
     }
 
     private static void applyInventoryDefaultSize(MacroHudDataHandler.HudElement selected) {
-        MacroHudDataHandler.InventoryDisplayMode mode = selected.inventoryDisplayMode == null
-                ? MacroHudDataHandler.InventoryDisplayMode.HOTBAR
-                : selected.inventoryDisplayMode;
-        switch (mode) {
-            case HOTBAR -> {
-                selected.width = 182;
-                selected.height = 22;
-            }
-            case INVENTORY -> {
-                selected.width = 182;
-                selected.height = 62;
-            }
-            case ARMOR -> {
-                selected.width = 22;
-                selected.height = 102;
-            }
-        }
+        MacroInventoryWidgetSupport.applyDefaultSize(selected);
     }
 
     private static boolean handleIconClick(Click click,

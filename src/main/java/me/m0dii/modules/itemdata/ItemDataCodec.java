@@ -5,12 +5,11 @@ import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.mojang.brigadier.exceptions.SimpleCommandExceptionType;
 import com.mojang.serialization.Codec;
 import me.m0dii.M0DevTools;
+import me.m0dii.utils.StringUtils;
+import me.m0dii.utils.StyledTextParser;
 import net.minecraft.component.ComponentType;
 import net.minecraft.item.ItemStack;
-import net.minecraft.nbt.NbtCompound;
-import net.minecraft.nbt.NbtElement;
-import net.minecraft.nbt.NbtInt;
-import net.minecraft.nbt.NbtOps;
+import net.minecraft.nbt.*;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.RegistryWrapper;
 import net.minecraft.text.Text;
@@ -23,6 +22,7 @@ public final class ItemDataCodec {
     private static final String COMPONENTS_KEY = "components";
     private static final String CUSTOM_NAME_COMPONENT = "minecraft:custom_name";
     private static final String ITEM_NAME_COMPONENT = "minecraft:item_name";
+    private static final String LORE_COMPONENT = "minecraft:lore";
 
     private ItemDataCodec() {
     }
@@ -96,8 +96,16 @@ public final class ItemDataCodec {
             throw invalid("Registry lookup is not available.");
         }
 
-        NbtElement rawValue = net.minecraft.nbt.StringNbtReader.fromOps(NbtOps.INSTANCE).readAsArgument(new StringReader(raw));
-        return normalizeComponentValue(componentType, componentId, rawValue, registryLookup);
+        try {
+            NbtElement rawValue = StringNbtReader.fromOps(NbtOps.INSTANCE).readAsArgument(new StringReader(raw));
+            return normalizeComponentValue(componentType, componentId, rawValue, registryLookup);
+        } catch (CommandSyntaxException syntaxException) {
+            NbtElement friendlyValue = tryNormalizeFriendlyComponentValue(componentType, componentId, raw, registryLookup);
+            if (friendlyValue != null) {
+                return friendlyValue;
+            }
+            throw syntaxException;
+        }
     }
 
     public static NbtElement normalizeComponentValue(ComponentType<?> componentType,
@@ -113,13 +121,11 @@ public final class ItemDataCodec {
                 .orElseThrow(() -> invalid("Invalid value for component " + componentId));
         return codec.encodeStart(registryLookup.getOps(NbtOps.INSTANCE), decoded)
                 .resultOrPartial(message -> M0DevTools.LOGGER.warn("[ItemData] Failed to encode component {}: {}", componentId, message))
-                .filter(NbtElement.class::isInstance)
-                .map(NbtElement.class::cast)
                 .orElseThrow(() -> invalid("Invalid value for component " + componentId));
     }
 
     public static NbtCompound normalizeItemData(String raw, RegistryWrapper.WrapperLookup registryLookup) throws CommandSyntaxException {
-        NbtCompound parsed = net.minecraft.nbt.StringNbtReader.readCompoundAsArgument(new StringReader(raw));
+        NbtCompound parsed = StringNbtReader.readCompoundAsArgument(new StringReader(raw));
         ItemStack stack = decode(parsed, registryLookup)
                 .orElseThrow(() -> invalid("Invalid serialized item data."));
         return encode(stack, registryLookup)
@@ -156,11 +162,7 @@ public final class ItemDataCodec {
             return;
         }
 
-        NbtElement encoded = TextCodecs.CODEC.encodeStart(registryLookup.getOps(NbtOps.INSTANCE), Text.literal(plainName))
-                .resultOrPartial(message -> M0DevTools.LOGGER.warn("[ItemData] Failed to encode custom name: {}", message))
-                .filter(NbtElement.class::isInstance)
-                .map(NbtElement.class::cast)
-                .orElseThrow(() -> invalid("Unable to encode the custom item name."));
+        NbtElement encoded = encodeTextElement(StyledTextParser.parseText(StringUtils.normalizeSingleLineInput(plainName)), registryLookup);
         components.put(CUSTOM_NAME_COMPONENT, encoded);
     }
 
@@ -205,8 +207,6 @@ public final class ItemDataCodec {
         }
         return TextCodecs.CODEC.encodeStart(registryLookup.getOps(NbtOps.INSTANCE), Text.literal(value))
                 .resultOrPartial(message -> M0DevTools.LOGGER.warn("[ItemData] Failed to encode text literal: {}", message))
-                .filter(NbtElement.class::isInstance)
-                .map(NbtElement.class::cast)
                 .map(NbtElement::toString)
                 .orElse("\"" + value.replace("\"", "\\\"") + "\"");
     }
@@ -219,6 +219,56 @@ public final class ItemDataCodec {
                 .resultOrPartial(message -> M0DevTools.LOGGER.warn("[ItemData] Failed to decode text component: {}", message))
                 .map(Text::getString)
                 .orElse("");
+    }
+
+    private static NbtElement tryNormalizeFriendlyComponentValue(ComponentType<?> componentType,
+                                                                 String componentId,
+                                                                 String raw,
+                                                                 RegistryWrapper.WrapperLookup registryLookup) throws CommandSyntaxException {
+        if (!shouldTryFriendlyTextFallback(componentId, raw)) {
+            return null;
+        }
+
+        if (CUSTOM_NAME_COMPONENT.equals(componentId) || ITEM_NAME_COMPONENT.equals(componentId)) {
+            Text parsed = StyledTextParser.parseText(StringUtils.normalizeSingleLineInput(raw));
+            return normalizeComponentValue(componentType, componentId, encodeTextElement(parsed, registryLookup), registryLookup);
+        }
+
+        if (LORE_COMPONENT.equals(componentId)) {
+            NbtList list = new NbtList();
+            for (Text line : StyledTextParser.parseLines(raw)) {
+                list.add(encodeTextElement(line, registryLookup));
+            }
+            return normalizeComponentValue(componentType, componentId, list, registryLookup);
+        }
+
+        return null;
+    }
+
+    private static boolean shouldTryFriendlyTextFallback(String componentId, String raw) {
+        if (!(CUSTOM_NAME_COMPONENT.equals(componentId) || ITEM_NAME_COMPONENT.equals(componentId) || LORE_COMPONENT.equals(componentId))) {
+            return false;
+        }
+        String normalized = StringUtils.normalizeMultilineInput(raw).trim();
+        if (normalized.isEmpty()) {
+            return true;
+        }
+        if (normalized.contains("\n")) {
+            return true;
+        }
+        if (normalized.contains("&") || normalized.contains("§") || normalized.contains("<#") || normalized.startsWith("#")) {
+            return true;
+        }
+        return !(normalized.startsWith("{")
+                || normalized.startsWith("[")
+                || normalized.startsWith("\"")
+                || normalized.startsWith("'"));
+    }
+
+    private static NbtElement encodeTextElement(Text text, RegistryWrapper.WrapperLookup registryLookup) throws CommandSyntaxException {
+        return TextCodecs.CODEC.encodeStart(registryLookup.getOps(NbtOps.INSTANCE), text)
+                .resultOrPartial(message -> M0DevTools.LOGGER.warn("[ItemData] Failed to encode text component: {}", message))
+                .orElseThrow(() -> invalid("Unable to encode the text component."));
     }
 
     private static CommandSyntaxException invalid(String message) {

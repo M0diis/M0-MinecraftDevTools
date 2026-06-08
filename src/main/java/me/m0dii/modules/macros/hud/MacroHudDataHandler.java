@@ -74,7 +74,15 @@ public final class MacroHudDataHandler {
     public enum InventoryDisplayMode {
         HOTBAR,
         INVENTORY,
-        ARMOR
+        ARMOR,
+        ARMOR_ONLY,
+        OFFHAND
+    }
+
+    public enum InventorySlotStyle {
+        DEFAULT,
+        MINECRAFT,
+        HOTBAR
     }
 
     public enum Anchor {
@@ -149,6 +157,7 @@ public final class MacroHudDataHandler {
         // INVENTORY behavior.
         public InventoryDisplayMode inventoryDisplayMode = InventoryDisplayMode.HOTBAR;
         public Boolean inventoryShowCount = true;
+        public InventorySlotStyle inventorySlotStyle = InventorySlotStyle.DEFAULT;
 
         // ICON behavior.
         public String iconKind = MacroPlaceholderCatalog.DEFAULT_ICON_KIND; // item|block|entity|entity_model
@@ -526,6 +535,7 @@ public final class MacroHudDataHandler {
             e.listScroll = Math.max(0, raw.listScroll);
             e.inventoryDisplayMode = raw.inventoryDisplayMode == null ? InventoryDisplayMode.HOTBAR : raw.inventoryDisplayMode;
             e.inventoryShowCount = raw.inventoryShowCount == null || raw.inventoryShowCount;
+            e.inventorySlotStyle = raw.inventorySlotStyle == null ? InventorySlotStyle.DEFAULT : raw.inventorySlotStyle;
             e.iconKind = safe(raw.iconKind, MacroPlaceholderCatalog.DEFAULT_ICON_KIND).toLowerCase();
             e.iconId = safe(raw.iconId, MacroPlaceholderCatalog.DEFAULT_ICON_ID);
             if ("entity_model".equals(e.iconKind)
@@ -647,6 +657,7 @@ public final class MacroHudDataHandler {
         cloned.listScroll = e.listScroll;
         cloned.inventoryDisplayMode = e.inventoryDisplayMode;
         cloned.inventoryShowCount = e.inventoryShowCount;
+        cloned.inventorySlotStyle = e.inventorySlotStyle;
         cloned.iconKind = e.iconKind;
         cloned.iconId = e.iconId;
         cloned.iconShowCount = e.iconShowCount;

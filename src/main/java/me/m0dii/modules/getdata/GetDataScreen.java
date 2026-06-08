@@ -2,9 +2,11 @@ package me.m0dii.modules.getdata;
 
 import com.mojang.brigadier.StringReader;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
+import com.mojang.brigadier.exceptions.SimpleCommandExceptionType;
 import me.m0dii.gui.local.FormPanel;
 import me.m0dii.gui.local.ListPanel;
 import me.m0dii.gui.local.UiTheme;
+import me.m0dii.utils.NbtEditorUtils;
 import net.minecraft.client.gui.Click;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
@@ -13,17 +15,29 @@ import net.minecraft.client.gui.widget.TextFieldWidget;
 import net.minecraft.client.input.CharInput;
 import net.minecraft.client.input.KeyInput;
 import net.minecraft.client.util.InputUtil;
-import net.minecraft.nbt.*;
+import net.minecraft.nbt.NbtCompound;
+import net.minecraft.nbt.NbtElement;
+import net.minecraft.nbt.NbtOps;
+import net.minecraft.nbt.StringNbtReader;
 import net.minecraft.text.Text;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.List;
 
-public class GetDataScreen extends Screen {
+public class GetDataScreen extends Screen implements GetDataTargetView {
+    private static final int BUTTON_BAR_HEIGHT = 34;
+    private static final int NO_PATH_BOTTOM_RESERVE = 90;
+    private static final int PATH_BOTTOM_RESERVE = 84;
+
     @FunctionalInterface
     public interface SaveAction {
         void save(GetDataScreen screen, String raw, String path) throws CommandSyntaxException;
+    }
+
+    @FunctionalInterface
+    public interface InputValidator {
+        void validate(GetDataScreen screen, String raw, String path) throws CommandSyntaxException;
     }
 
     @FunctionalInterface
@@ -44,6 +58,7 @@ public class GetDataScreen extends Screen {
     private final boolean requireCompoundRootWhenPathBlank;
     private final boolean closeAfterSave;
     private final SaveAction saveAction;
+    private final InputValidator inputValidator;
     private final InlineSuggestionProvider inlineSuggestionProvider;
     private TextFieldWidget pathField;
 
@@ -80,6 +95,7 @@ public class GetDataScreen extends Screen {
                           boolean requireCompoundRootWhenPathBlank,
                           boolean closeAfterSave,
                           SaveAction saveAction,
+                          InputValidator inputValidator,
                           InlineSuggestionProvider inlineSuggestionProvider) {
         super(screenTitle);
         this.parent = parent;
@@ -87,11 +103,12 @@ public class GetDataScreen extends Screen {
         this.targetName = targetName;
         this.targetToken = targetToken;
         this.helperText = helperText;
-        this.initialData = prettySnbt(initialData);
+        this.initialData = NbtEditorUtils.prettySnbt(initialData);
         this.supportsPathField = supportsPathField;
         this.requireCompoundRootWhenPathBlank = requireCompoundRootWhenPathBlank;
         this.closeAfterSave = closeAfterSave;
         this.saveAction = saveAction;
+        this.inputValidator = inputValidator;
         this.inlineSuggestionProvider = inlineSuggestionProvider;
     }
 
@@ -107,6 +124,7 @@ public class GetDataScreen extends Screen {
                 true,
                 false,
                 GetDataScreen::saveGetDataChanges,
+                null,
                 null
         );
     }
@@ -128,6 +146,7 @@ public class GetDataScreen extends Screen {
                 requireCompoundRootWhenPathBlank,
                 closeAfterSave,
                 saveAction,
+                null,
                 null
         );
     }
@@ -141,6 +160,30 @@ public class GetDataScreen extends Screen {
                                           boolean closeAfterSave,
                                           SaveAction saveAction,
                                           InlineSuggestionProvider inlineSuggestionProvider) {
+        return createStandalone(
+                parent,
+                screenTitle,
+                targetName,
+                initialData,
+                helperText,
+                requireCompoundRootWhenPathBlank,
+                closeAfterSave,
+                saveAction,
+                null,
+                inlineSuggestionProvider
+        );
+    }
+
+    public static Screen createStandalone(Screen parent,
+                                          Text screenTitle,
+                                          String targetName,
+                                          String initialData,
+                                          String helperText,
+                                          boolean requireCompoundRootWhenPathBlank,
+                                          boolean closeAfterSave,
+                                          SaveAction saveAction,
+                                          InputValidator inputValidator,
+                                          InlineSuggestionProvider inlineSuggestionProvider) {
         return new GetDataScreen(
                 parent,
                 screenTitle,
@@ -152,6 +195,7 @@ public class GetDataScreen extends Screen {
                 requireCompoundRootWhenPathBlank,
                 closeAfterSave,
                 saveAction,
+                inputValidator,
                 inlineSuggestionProvider
         );
     }
@@ -161,7 +205,7 @@ public class GetDataScreen extends Screen {
         this.boxX = 12;
         this.boxY = 34;
         this.boxW = this.width - 24;
-        this.boxH = this.height - (this.supportsPathField ? 84 : 58);
+        this.boxH = this.height - (this.supportsPathField ? PATH_BOTTOM_RESERVE : NO_PATH_BOTTOM_RESERVE);
         this.editorText = this.initialData;
         this.cursor = this.editorText.length();
         this.selectionAnchor = -1;
@@ -171,7 +215,7 @@ public class GetDataScreen extends Screen {
 
         this.pathField = null;
         if (this.supportsPathField) {
-            this.pathField = new TextFieldWidget(this.textRenderer, 12, this.height - 62, this.width - 24, 18, Text.literal("Path"));
+            this.pathField = new TextFieldWidget(this.textRenderer, 12, this.height - 98, this.width - 24, 18, Text.literal("Path"));
             this.pathField.setMaxLength(120);
             this.pathField.setText("");
             this.pathField.setChangedListener(value -> {
@@ -183,16 +227,16 @@ public class GetDataScreen extends Screen {
         }
 
         this.addDrawableChild(ButtonWidget.builder(Text.literal("Save"), b -> saveChanges())
-                .dimensions(12, this.height - 38, 60, 20)
+                .dimensions(12, this.height - BUTTON_BAR_HEIGHT, 60, 20)
                 .build());
         this.addDrawableChild(ButtonWidget.builder(Text.literal("Copy"), b -> {
                     if (this.client != null) {
                         this.client.keyboard.setClipboard(this.editorText);
                     }
-                }).dimensions(76, this.height - 38, 60, 20)
+                }).dimensions(76, this.height - BUTTON_BAR_HEIGHT, 60, 20)
                 .build());
         this.addDrawableChild(ButtonWidget.builder(Text.literal("Done"), b -> close())
-                .dimensions(this.width - 72, this.height - 38, 60, 20)
+                .dimensions(this.width - 72, this.height - BUTTON_BAR_HEIGHT, 60, 20)
                 .build());
     }
 
@@ -204,15 +248,7 @@ public class GetDataScreen extends Screen {
         String raw = this.editorText;
         try {
             String path = this.pathField == null ? "" : this.pathField.getText().trim();
-            if (path.isEmpty()) {
-                if (this.requireCompoundRootWhenPathBlank) {
-                    StringNbtReader.readCompoundAsArgument(new StringReader(raw));
-                } else {
-                    StringNbtReader.fromOps(NbtOps.INSTANCE).readAsArgument(new StringReader(raw));
-                }
-            } else {
-                StringNbtReader.fromOps(NbtOps.INSTANCE).readAsArgument(new StringReader(raw));
-            }
+            validateRawInput(raw, path);
             this.saveAction.save(this, raw, path);
             if (this.closeAfterSave) {
                 close();
@@ -228,72 +264,11 @@ public class GetDataScreen extends Screen {
         }
 
         if (path == null || path.isBlank()) {
-            NbtCompound merged = StringNbtReader.readCompoundAsArgument(new StringReader(raw));
-            if (screen.targetToken.startsWith("block ")) {
-                screen.applyBlockStateAndNbtMerge(merged);
-                return;
-            }
-
-            String command = "data merge " + screen.targetToken + " " + merged;
-            screen.client.player.networkHandler.sendChatCommand(command);
-            screen.client.player.sendMessage(Text.literal("[GetData] Sent: /" + command), false);
+            GetDataTargetActions.saveTargetPayload(screen.client, screen.targetToken, raw);
             return;
         }
 
-        NbtElement value = StringNbtReader.fromOps(NbtOps.INSTANCE).readAsArgument(new StringReader(raw));
-        String command = "data modify " + screen.targetToken + " " + path + " set value " + value;
-        screen.client.player.networkHandler.sendChatCommand(command);
-        screen.client.player.sendMessage(Text.literal("[GetData] Sent: /" + command), false);
-    }
-
-    private void applyBlockStateAndNbtMerge(NbtCompound merged) {
-        if (this.client == null || this.client.player == null) {
-            return;
-        }
-        String blockCoords = this.targetToken.substring("block ".length()).trim();
-
-        String id = merged.contains("id") ? merged.getString("id").orElse("") : "";
-        NbtCompound props = merged.contains("Properties") && merged.get("Properties") instanceof NbtCompound c ? c : null;
-
-        if (!id.isBlank()) {
-            String stateSuffix = toBlockStateSuffix(props);
-            String setblock = "setblock " + blockCoords + " " + id + stateSuffix;
-            this.client.player.networkHandler.sendChatCommand(setblock);
-            this.client.player.sendMessage(Text.literal("[GetData] Sent: /" + setblock), false);
-        }
-
-        NbtCompound forMerge = merged.copy();
-        forMerge.remove("id");
-        forMerge.remove("Properties");
-        forMerge.remove("x");
-        forMerge.remove("y");
-        forMerge.remove("z");
-        if (!forMerge.isEmpty()) {
-            String mergeCmd = "data merge " + this.targetToken + " " + forMerge;
-            this.client.player.networkHandler.sendChatCommand(mergeCmd);
-            this.client.player.sendMessage(Text.literal("[GetData] Sent: /" + mergeCmd), false);
-        }
-    }
-
-    private static String toBlockStateSuffix(NbtCompound properties) {
-        if (properties == null || properties.isEmpty()) {
-            return "";
-        }
-        StringBuilder builder = new StringBuilder("[");
-        boolean first = true;
-        for (String key : properties.getKeys()) {
-            String value = properties.getString(key).orElse("");
-            if (value.isBlank()) {
-                continue;
-            }
-            if (!first) {
-                builder.append(',');
-            }
-            builder.append(key).append('=').append(value.replace('"', ' ').trim());
-            first = false;
-        }
-        builder.append(']');
-        return first ? "" : builder.toString();
+        GetDataTargetActions.saveTargetPathValue(screen.client, screen.targetToken, raw, path);
     }
 
     @Override
@@ -314,7 +289,8 @@ public class GetDataScreen extends Screen {
         context.drawTextWithShadow(this.textRenderer, "Target: " + this.targetName, 12, 10, UiTheme.TEXT);
         context.drawTextWithShadow(this.textRenderer, this.helperText, 12, 22, UiTheme.TEXT_MUTED);
         int statusColor = this.parseError == null ? 0xFF70D070 : 0xFFFF7070;
-        String status = this.parseError == null ? "SNBT valid" : "SNBT error: " + this.parseError;
+        String statusPrefix = this.inputValidator == null ? "SNBT" : "Input";
+        String status = this.parseError == null ? statusPrefix + " valid" : statusPrefix + " error: " + this.parseError;
         if (this.syncedPayloadApplied && this.parseError == null) {
             status = status + " (server sync)";
         }
@@ -649,15 +625,17 @@ public class GetDataScreen extends Screen {
         return Math.min(this.editorText.length(), index + best);
     }
 
+    @Override
     public boolean matchesTarget(String token) {
         return token != null && token.equals(this.targetToken);
     }
 
+    @Override
     public void applySyncedPayload(String payload) {
         if (payload == null || payload.isBlank()) {
             return;
         }
-        this.editorText = prettySnbt(payload);
+        this.editorText = NbtEditorUtils.prettySnbt(payload);
         this.cursor = Math.min(this.cursor, this.editorText.length());
         this.selectionAnchor = -1;
         this.syncedPayloadApplied = true;
@@ -676,26 +654,34 @@ public class GetDataScreen extends Screen {
     private void validateEditorSnbt() {
         String path = this.pathField == null ? "" : this.pathField.getText().trim();
         try {
-            if (path.isEmpty()) {
-                if (this.requireCompoundRootWhenPathBlank) {
-                    StringNbtReader.readCompoundAsArgument(new StringReader(this.editorText));
-                } else {
-                    StringNbtReader.fromOps(NbtOps.INSTANCE).readAsArgument(new StringReader(this.editorText));
-                }
-            } else {
-                NbtElement value = StringNbtReader.fromOps(NbtOps.INSTANCE).readAsArgument(new StringReader(this.editorText));
-                String valueError = validatePathValue(path, value, this.editorText);
-                if (valueError != null) {
-                    this.parseError = valueError;
-                    this.parseErrorIndex = 0;
-                    return;
-                }
-            }
+            validateRawInput(this.editorText, path);
             this.parseError = null;
             this.parseErrorIndex = -1;
         } catch (CommandSyntaxException e) {
             this.parseError = e.getRawMessage().getString();
             this.parseErrorIndex = Math.max(0, e.getCursor());
+        }
+    }
+
+    private void validateRawInput(String raw, String path) throws CommandSyntaxException {
+        if (this.inputValidator != null) {
+            this.inputValidator.validate(this, raw, path);
+            return;
+        }
+
+        if (path == null || path.isBlank()) {
+            if (this.requireCompoundRootWhenPathBlank) {
+                StringNbtReader.readCompoundAsArgument(new StringReader(raw));
+                return;
+            }
+            StringNbtReader.fromOps(NbtOps.INSTANCE).readAsArgument(new StringReader(raw));
+            return;
+        }
+
+        NbtElement value = StringNbtReader.fromOps(NbtOps.INSTANCE).readAsArgument(new StringReader(raw));
+        String valueError = validatePathValue(path, value, raw);
+        if (valueError != null) {
+            throw new SimpleCommandExceptionType(Text.literal(valueError)).create();
         }
     }
 
@@ -714,21 +700,21 @@ public class GetDataScreen extends Screen {
             return null;
         }
 
-        if (isNumericNbt(expected)) {
+        if (NbtEditorUtils.isNumeric(expected)) {
             if ("true".equals(normalized) || "false".equals(normalized)) {
                 return "Expected numeric value at path '" + path + "', got boolean";
             }
-            if (!isNumericNbt(value)) {
-                return "Expected numeric value at path '" + path + "', got " + typeName(value);
+            if (!NbtEditorUtils.isNumeric(value)) {
+                return "Expected numeric value at path '" + path + "', got " + NbtEditorUtils.typeName(value);
             }
-            if ((expected instanceof NbtFloat || expected instanceof NbtDouble) && !isFloatingNbt(value)) {
+            if (NbtEditorUtils.isFloating(expected) && !NbtEditorUtils.isFloating(value)) {
                 return "Expected floating-point value at path '" + path + "'";
             }
             return null;
         }
 
         if (!expected.getClass().equals(value.getClass())) {
-            return "Type mismatch at path '" + path + "': expected " + typeName(expected) + ", got " + typeName(value);
+            return "Type mismatch at path '" + path + "': expected " + NbtEditorUtils.typeName(expected) + ", got " + NbtEditorUtils.typeName(value);
         }
         return null;
     }
@@ -751,29 +737,6 @@ public class GetDataScreen extends Screen {
         return current;
     }
 
-    private static boolean isNumericNbt(NbtElement element) {
-        return element instanceof AbstractNbtNumber;
-    }
-
-    private static boolean isFloatingNbt(NbtElement element) {
-        return element instanceof NbtFloat || element instanceof NbtDouble;
-    }
-
-    private static String typeName(NbtElement element) {
-        return switch (element) {
-            case null -> "null";
-            case NbtString nbtString -> "string";
-            case NbtCompound nbtCompound -> "compound";
-            case NbtByte nbtByte -> "byte/boolean";
-            case NbtShort nbtShort -> "short";
-            case NbtInt nbtInt -> "int";
-            case NbtLong nbtLong -> "long";
-            case NbtFloat nbtFloat -> "float";
-            case NbtDouble nbtDouble -> "double";
-            default -> element.getClass().getSimpleName();
-        };
-    }
-
     private void rebuildPathSuggestions() {
         this.pathSuggestions.clear();
         if (!this.supportsPathField) {
@@ -787,11 +750,7 @@ public class GetDataScreen extends Screen {
     }
 
     private NbtCompound parseRootCompound(String raw) {
-        try {
-            return StringNbtReader.readCompoundAsArgument(new StringReader(raw));
-        } catch (CommandSyntaxException ignored) {
-            return null;
-        }
+        return NbtEditorUtils.parseCompoundOrNull(raw);
     }
 
     private void collectCompoundPaths(NbtCompound compound, String prefix, int depth) {
@@ -1060,49 +1019,4 @@ public class GetDataScreen extends Screen {
         clampScrollLine(totalLines);
     }
 
-    private static String prettySnbt(String raw) {
-        if (raw == null || raw.isBlank()) {
-            return "{}";
-        }
-
-        StringBuilder out = new StringBuilder();
-        int indent = 0;
-        boolean inString = false;
-        for (int i = 0; i < raw.length(); i++) {
-            char ch = raw.charAt(i);
-            if (ch == '"' && (i == 0 || raw.charAt(i - 1) != '\\')) {
-                inString = !inString;
-                out.append(ch);
-                continue;
-            }
-            if (inString) {
-                out.append(ch);
-                continue;
-            }
-            switch (ch) {
-                case '{', '[' -> {
-                    out.append(ch).append('\n');
-                    indent++;
-                    appendIndent(out, indent);
-                }
-                case '}', ']' -> {
-                    out.append('\n');
-                    indent = Math.max(0, indent - 1);
-                    appendIndent(out, indent);
-                    out.append(ch);
-                }
-                case ',' -> {
-                    out.append(ch).append('\n');
-                    appendIndent(out, indent);
-                }
-                case ':' -> out.append(": ");
-                default -> out.append(ch);
-            }
-        }
-        return out.toString();
-    }
-
-    private static void appendIndent(StringBuilder builder, int indent) {
-        builder.repeat("  ", Math.max(0, indent));
-    }
 }

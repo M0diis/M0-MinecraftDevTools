@@ -6,6 +6,7 @@ import me.m0dii.gui.local.UiFlexLayout;
 import me.m0dii.gui.local.UiRect;
 import me.m0dii.modules.macros.gui.MacroWorkbenchAdvancedLayouts.CustomWidgetAdvancedLayout;
 import me.m0dii.modules.macros.hud.MacroHudDataHandler;
+import me.m0dii.modules.macros.hud.MacroInventoryWidgetSupport;
 import me.m0dii.utils.StringUtils;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
@@ -273,10 +274,11 @@ public final class MacroWorkbenchCustomWidgetTypeRenderer {
                 ? MacroHudDataHandler.InventoryDisplayMode.HOTBAR
                 : selected.inventoryDisplayMode;
         List<UiRect> row1 = layout.typeRow1();
-        drawModalButton(context, textRenderer, layout.typeWideTop(), "Mode: " + mode.name(), mouseX, mouseY);
+        drawModalButton(context, textRenderer, layout.typeWideTop(), "Mode: " + MacroInventoryWidgetSupport.modeLabel(mode), mouseX, mouseY);
         drawModalButton(context, textRenderer, row1.getFirst(), "Count: " + ((selected.inventoryShowCount == null || selected.inventoryShowCount) ? "ON" : "OFF"), mouseX, mouseY);
-        context.drawTextWithShadow(textRenderer, "Hotbar: 9 slots  |  Inventory: 27 slots  |  Armor: 4 + offhand", layout.typeInfo1().x(), layout.typeInfo1().y(), 0xFFEAEAEA);
-        context.drawTextWithShadow(textRenderer, "Mode auto-sizes. Count text scales from slot size.", layout.typeInfo2().x(), layout.typeInfo2().y(), 0xFF98B8D8);
+        drawModalButton(context, textRenderer, row1.get(1), "Look: " + MacroInventoryWidgetSupport.slotStyleLabel(selected.inventorySlotStyle), mouseX, mouseY);
+        context.drawTextWithShadow(textRenderer, "Hotbar: 9  |  Inventory: 27  |  Armor + Offhand: 5  |  Armor: 4  |  Offhand: 1", layout.typeInfo1().x(), layout.typeInfo1().y(), 0xFFEAEAEA);
+        context.drawTextWithShadow(textRenderer, "Looks: Default | Slot | Hotbar. Hotbar auto-sizes to vanilla strip rows.", layout.typeInfo2().x(), layout.typeInfo2().y(), 0xFF98B8D8);
     }
 
     private static void renderStateBadge(DrawContext context,

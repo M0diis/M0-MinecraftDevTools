@@ -32,7 +32,7 @@ public final class MacroWorkbenchActionSuggestions {
         }
         if (selected != null && selected.type == MacroHudDataHandler.ElementType.INVENTORY) {
             String prefix = StringUtils.safe(actionPrefix).toLowerCase(Locale.ROOT);
-            List<String> modes = List.of("HOTBAR", "INVENTORY", "ARMOR");
+            List<String> modes = List.of("HOTBAR", "INVENTORY", "ARMOR", "ARMOR_ONLY", "OFFHAND");
             List<String> matches = new ArrayList<>();
             for (String mode : modes) {
                 String lower = mode.toLowerCase(Locale.ROOT);

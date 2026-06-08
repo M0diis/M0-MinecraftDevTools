@@ -13,7 +13,6 @@ import net.minecraft.client.gui.screen.ingame.HandledScreen;
 import net.minecraft.client.gui.screen.ingame.InventoryScreen;
 import net.minecraft.client.util.InputUtil;
 import net.minecraft.entity.Entity;
-import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
@@ -464,65 +463,16 @@ public final class MacroHudRuntime {
         if (client.player == null) {
             return;
         }
-
-        List<ItemStack> stacks = new ArrayList<>();
-        int cols = 9;
-        int rows = 1;
-        int selectedSlot = -1;
-        MacroHudDataHandler.InventoryDisplayMode mode = element.inventoryDisplayMode == null
-                ? MacroHudDataHandler.InventoryDisplayMode.HOTBAR
-                : element.inventoryDisplayMode;
-        switch (mode) {
-            case HOTBAR -> {
-                cols = 9;
-                rows = 1;
-                for (int i = 0; i < 9; i++) {
-                    stacks.add(client.player.getInventory().getStack(i));
-                }
-                selectedSlot = client.player.getInventory().getSelectedSlot();
-            }
-            case INVENTORY -> {
-                cols = 9;
-                rows = 3;
-                for (int row = 0; row < 3; row++) {
-                    for (int col = 0; col < 9; col++) {
-                        int index = 9 + row * 9 + col;
-                        stacks.add(client.player.getInventory().getStack(index));
-                    }
-                }
-            }
-            case ARMOR -> {
-                cols = 1;
-                rows = 5;
-                stacks.add(client.player.getEquippedStack(EquipmentSlot.HEAD));
-                stacks.add(client.player.getEquippedStack(EquipmentSlot.CHEST));
-                stacks.add(client.player.getEquippedStack(EquipmentSlot.LEGS));
-                stacks.add(client.player.getEquippedStack(EquipmentSlot.FEET));
-                stacks.add(client.player.getOffHandStack());
-            }
-        }
-
-        int padding = 2;
-        int gap = 2;
-        int contentW = Math.max(1, element.width - padding * 2);
-        int contentH = Math.max(1, element.height - padding * 2);
-        int cellW = Math.max(1, (contentW - gap * Math.max(0, cols - 1)) / Math.max(1, cols));
-        int cellH = Math.max(1, (contentH - gap * Math.max(0, rows - 1)) / Math.max(1, rows));
-        int cell = Math.max(1, Math.min(cellW, cellH));
-        int gridW = cols * cell + gap * Math.max(0, cols - 1);
-        int gridH = rows * cell + gap * Math.max(0, rows - 1);
-        int startX = x + padding + Math.max(0, (contentW - gridW) / 2);
-        int startY = y + padding + Math.max(0, (contentH - gridH) / 2);
-        boolean showCount = inventoryCountVisible(element);
-
-        for (int i = 0; i < stacks.size(); i++) {
-            int col = i % cols;
-            int row = i / cols;
-            int slotX = startX + col * (cell + gap);
-            int slotY = startY + row * (cell + gap);
-            boolean selected = mode == MacroHudDataHandler.InventoryDisplayMode.HOTBAR && i == selectedSlot;
-            drawInventorySlot(context, slotX, slotY, cell, stacks.get(i), selected, showCount);
-        }
+        MacroInventoryWidgetSupport.render(
+                context,
+                client.textRenderer,
+                element,
+                client.player,
+                x,
+                y,
+                element.width,
+                element.height
+        );
     }
 
     private static void renderShapeElement(DrawContext context, MacroHudDataHandler.HudElement element, int x, int y) {
@@ -642,58 +592,6 @@ public final class MacroHudRuntime {
         if (resolved == MacroHudDataHandler.BorderMode.FULL || resolved == MacroHudDataHandler.BorderMode.RIGHT) {
             context.fill(x2 - 1, y, x2, y2, color);
         }
-    }
-
-    private static boolean inventoryCountVisible(MacroHudDataHandler.HudElement element) {
-        return element.inventoryShowCount == null || element.inventoryShowCount;
-    }
-
-    private static void drawInventorySlot(DrawContext context,
-                                          int x,
-                                          int y,
-                                          int size,
-                                          ItemStack stack,
-                                          boolean selected,
-                                          boolean showCount) {
-        int bg = selected ? 0xA0785A20 : 0xAA1A1A1A;
-        int edge = Math.max(1, Math.round(size / 18.0f));
-        context.fill(x, y, x + size, y + size, bg);
-        context.fill(x, y, x + size, y + edge, 0x50FFFFFF);
-        context.fill(x, y + size - edge, x + size, y + size, 0x50303030);
-        context.fill(x, y, x + edge, y + size, 0x50FFFFFF);
-        context.fill(x + size - edge, y, x + size, y + size, 0x50303030);
-
-        if (stack.isEmpty()) {
-            return;
-        }
-
-        int inner = Math.max(1, size - edge * 2);
-        float scale = inner / 16.0f;
-        int ix = x + Math.max(0, (size - inner) / 2);
-        int iy = y + Math.max(0, (size - inner) / 2);
-        context.getMatrices().pushMatrix();
-        context.getMatrices().translate(ix, iy);
-        context.getMatrices().scale(scale, scale);
-        context.drawItem(stack, 0, 0);
-        context.getMatrices().popMatrix();
-
-        if (showCount && stack.getCount() > 1) {
-            drawScaledCountText(context, stack.getCount(), x, y, size, edge);
-        }
-    }
-
-    private static void drawScaledCountText(DrawContext context, int count, int x, int y, int size, int padding) {
-        String text = Integer.toString(count);
-        var textRenderer = MinecraftClient.getInstance().textRenderer;
-        float scale = Math.clamp(size / 18.0f, 0.35f, 4.0f);
-        int textWidth = Math.max(1, Math.round(textRenderer.getWidth(text) * scale));
-        int textHeight = Math.max(1, Math.round(9 * scale));
-        int screenX = x + Math.max(padding, size - textWidth - padding);
-        int screenY = y + Math.max(padding, size - textHeight - padding);
-        context.getMatrices().pushMatrix();
-        context.getMatrices().scale(scale, scale);
-        context.drawTextWithShadow(textRenderer, text, Math.round(screenX / scale), Math.round(screenY / scale), 0xFFFFFFFF);
-        context.getMatrices().popMatrix();
     }
 
     private static int brighten(int color, int add) {

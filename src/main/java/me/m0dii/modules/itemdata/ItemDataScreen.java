@@ -6,6 +6,7 @@ import me.m0dii.gui.local.ListPanel;
 import me.m0dii.gui.local.UiRect;
 import me.m0dii.gui.local.UiTheme;
 import me.m0dii.modules.getdata.GetDataScreen;
+import me.m0dii.utils.NbtEditorUtils;
 import net.minecraft.client.gui.Click;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
@@ -20,6 +21,7 @@ import net.minecraft.text.Text;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.*;
+import java.util.function.IntConsumer;
 
 public final class ItemDataScreen extends Screen {
     private static final int LIST_ROW_HEIGHT = 12;
@@ -234,7 +236,7 @@ public final class ItemDataScreen extends Screen {
         context.drawTextWithShadow(this.textRenderer, this.reference.slotLabel() + " | " + itemId, this.summaryRect.x() + 40, this.summaryRect.y() + 22, UiTheme.TEXT_MUTED);
         context.drawTextWithShadow(this.textRenderer, "Mode: Easy", this.summaryRect.right() - 76, this.summaryRect.y() + 10, UiTheme.TEXT_ACCENT);
         context.drawTextWithShadow(this.textRenderer, "Count", this.countField.getX(), this.countField.getY() - 10, UiTheme.TEXT_MUTED);
-        context.drawTextWithShadow(this.textRenderer, "Rename (minecraft:custom_name)", this.nameField.getX(), this.nameField.getY() - 10, UiTheme.TEXT_MUTED);
+        context.drawTextWithShadow(this.textRenderer, "Rename (minecraft:custom_name, supports & codes and <#hex>)", this.nameField.getX(), this.nameField.getY() - 10, UiTheme.TEXT_MUTED);
         context.drawTextWithShadow(this.textRenderer,
                 "Current components: " + presentComponentIds().size(),
                 this.summaryRect.x() + 40,
@@ -347,7 +349,7 @@ public final class ItemDataScreen extends Screen {
                                UiRect rect,
                                int totalRows,
                                int visibleRows,
-                               java.util.function.IntConsumer setter,
+                               IntConsumer setter,
                                int currentValue) {
         if (!rect.contains(mouseX, mouseY)) {
             return false;
@@ -397,9 +399,7 @@ public final class ItemDataScreen extends Screen {
         String initialValue = present && currentValue != null
                 ? currentValue.toString()
                 : ItemDataCodec.defaultTemplateForComponent(componentId, registryLookup);
-        String helperText = present
-                ? "Edit this component value directly. Save validates it with the actual 1.21.11 component codec."
-                : "Add this component using the starter template below. Save validates it with the actual 1.21.11 component codec.";
+        String helperText = buildComponentEditorHelperText(componentId, present);
 
         this.client.setScreen(GetDataScreen.createStandalone(
                 this,
@@ -417,7 +417,9 @@ public final class ItemDataScreen extends Screen {
                     refreshSelection();
                     updateButtons();
                     setStatus((present ? "Updated " : "Added ") + componentId + ".", 0xFF70D070);
-                }
+                },
+                (screen, raw, path) -> ItemDataCodec.normalizeComponentValue(componentId, raw, registryLookup),
+                null
         ));
     }
 
@@ -761,6 +763,19 @@ public final class ItemDataScreen extends Screen {
         this.statusColor = color;
     }
 
+    private static String buildComponentEditorHelperText(String componentId, boolean present) {
+        String prefix = present
+                ? "Edit this component value directly. Live validation uses the actual 1.21.11 component codec."
+                : "Add this component using the starter template below. Live validation uses the actual 1.21.11 component codec.";
+        if ("minecraft:custom_name".equals(componentId) || "minecraft:item_name".equals(componentId)) {
+            return prefix + " Friendly text input supports legacy color/format codes like &c, &l, &r and hex tags like <#ff0000>.";
+        }
+        if ("minecraft:lore".equals(componentId)) {
+            return prefix + " You can still use raw SNBT, but plain multi-line lore input is also accepted. Use one line per lore row, with & color codes or <#rrggbb> hex tags.";
+        }
+        return prefix;
+    }
+
     private static void appendWrapped(List<String> lines, String prefix, String text) {
         if (text == null || text.isBlank()) {
             lines.add(prefix.trim());
@@ -778,50 +793,12 @@ public final class ItemDataScreen extends Screen {
             }
             current.append(word);
         }
-        if (current.length() > 0) {
+        if (!current.isEmpty()) {
             lines.add(current.toString());
         }
     }
 
     private static String prettySnbt(String raw) {
-        if (raw == null || raw.isBlank()) {
-            return "{}";
-        }
-
-        StringBuilder out = new StringBuilder();
-        int indent = 0;
-        boolean inString = false;
-        for (int i = 0; i < raw.length(); i++) {
-            char ch = raw.charAt(i);
-            if (ch == '"' && (i == 0 || raw.charAt(i - 1) != '\\')) {
-                inString = !inString;
-                out.append(ch);
-                continue;
-            }
-            if (inString) {
-                out.append(ch);
-                continue;
-            }
-            switch (ch) {
-                case '{', '[' -> {
-                    out.append(ch).append('\n');
-                    indent++;
-                    out.repeat("  ", Math.max(0, indent));
-                }
-                case '}', ']' -> {
-                    out.append('\n');
-                    indent = Math.max(0, indent - 1);
-                    out.repeat("  ", Math.max(0, indent));
-                    out.append(ch);
-                }
-                case ',' -> {
-                    out.append(ch).append('\n');
-                    out.repeat("  ", Math.max(0, indent));
-                }
-                case ':' -> out.append(": ");
-                default -> out.append(ch);
-            }
-        }
-        return out.toString();
+        return NbtEditorUtils.prettySnbt(raw);
     }
 }
