@@ -40,7 +40,9 @@ public abstract class ClientPlayerEntityMixin extends AbstractClientPlayerEntity
 
     @Inject(method = "isCamera", at = @At("HEAD"), cancellable = true)
     private void allowPlayerMovementInFreeCameraMode(CallbackInfoReturnable<Boolean> cir) {
-        if (FreecamModule.INSTANCE.isEnabled() && this.isLocalClientPlayer()) {
+        if (FreecamModule.INSTANCE.isEnabled()
+                && this.isLocalClientPlayer()
+                && !FreecamModule.INSTANCE.shouldShowPlayerModel()) {
             cir.setReturnValue(true);
         }
     }

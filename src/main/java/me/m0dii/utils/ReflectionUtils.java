@@ -57,6 +57,45 @@ public final class ReflectionUtils {
         return false;
     }
 
+    public static Object invokeNoArg(Object target, String methodName) {
+        if (target == null || methodName == null || methodName.isBlank()) {
+            return null;
+        }
+        Method method = findNoArgMethod(target.getClass(), methodName);
+        if (method == null) {
+            return null;
+        }
+        try {
+            method.setAccessible(true);
+            return method.invoke(target);
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    public static Boolean invokeBooleanNoArg(Object target, String methodName) {
+        Object value = invokeNoArg(target, methodName);
+        return value instanceof Boolean bool ? bool : null;
+    }
+
+    public static Integer readIntField(Object target, String fieldName) {
+        if (target == null || fieldName == null || fieldName.isBlank()) {
+            return null;
+        }
+        for (Class<?> type = target.getClass(); type != null; type = type.getSuperclass()) {
+            try {
+                Field field = type.getDeclaredField(fieldName);
+                field.setAccessible(true);
+                return field.getInt(target);
+            } catch (NoSuchFieldException ignored) {
+                // Continue up the hierarchy.
+            } catch (Exception ignored) {
+                return null;
+            }
+        }
+        return null;
+    }
+
     public static String getGameKeybindDisplayName(KeyBinding kb, Object options) {
         String action = reflectActionName(kb);
         if ((action == null || action.isBlank()) && options != null) {
@@ -167,6 +206,22 @@ public final class ReflectionUtils {
                     return s;
                 }
             } catch (Exception ignored) {
+            }
+        }
+        return null;
+    }
+
+    private static Method findNoArgMethod(Class<?> type, String methodName) {
+        for (Class<?> current = type; current != null; current = current.getSuperclass()) {
+            for (Method method : current.getDeclaredMethods()) {
+                if (method.getName().equals(methodName) && method.getParameterCount() == 0) {
+                    return method;
+                }
+            }
+        }
+        for (Method method : type.getMethods()) {
+            if (method.getName().equals(methodName) && method.getParameterCount() == 0) {
+                return method;
             }
         }
         return null;

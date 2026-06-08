@@ -4,6 +4,7 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.suggestion.Suggestions;
 import com.mojang.brigadier.suggestion.SuggestionsBuilder;
+import me.m0dii.modules.itemdata.ItemDataClientCommand;
 import me.m0dii.utils.NbtExtractors;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
@@ -27,6 +28,20 @@ public final class GetDataClientCommand {
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) ->
                 dispatcher.register(ClientCommandManager.literal("getdata")
                         .executes(GetDataClientCommand::openFromCrosshair)
+                        .then(ClientCommandManager.literal("item")
+                                .executes(context -> ItemDataClientCommand.openDefault(context.getSource()))
+                                .then(ClientCommandManager.literal("mainhand")
+                                        .executes(context -> ItemDataClientCommand.openSlot(
+                                                context.getSource(),
+                                                context.getSource().getClient().player == null
+                                                        ? -1
+                                                        : context.getSource().getClient().player.getInventory().getSelectedSlot()
+                                        )))
+                                .then(ClientCommandManager.literal("offhand")
+                                        .executes(context -> ItemDataClientCommand.openSlot(
+                                                context.getSource(),
+                                                net.minecraft.entity.player.PlayerInventory.OFF_HAND_SLOT
+                                        ))))
                         .then(ClientCommandManager.argument("target", StringArgumentType.greedyString())
                                 .suggests(GetDataClientCommand::suggestTargets)
                                 .executes(GetDataClientCommand::openFromArgument))));

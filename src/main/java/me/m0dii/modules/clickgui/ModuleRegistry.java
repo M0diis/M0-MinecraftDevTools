@@ -10,6 +10,7 @@ import me.m0dii.modules.entityradar.EntityRadarModule;
 import me.m0dii.modules.fastblockplacement.FastBlockPlacementModule;
 import me.m0dii.modules.freecam.FreecamModule;
 import me.m0dii.modules.fullbright.FullbrightModule;
+import me.m0dii.modules.healthbars.EntityHealthBarsModule;
 import me.m0dii.modules.heldlight.HeldLightModule;
 import me.m0dii.modules.hungertweaks.HungerTweaksModule;
 import me.m0dii.modules.instantbreak.InstantBreakModule;
@@ -73,6 +74,7 @@ public class ModuleRegistry {
         safeAdd(overlays, StructureBoundingBoxOverlay.INSTANCE);
         safeAdd(overlays, CommandBlockOverlayModule.INSTANCE);
         safeAdd(overlays, MobAiVisualizerModule.INSTANCE);
+        safeAdd(overlays, EntityHealthBarsModule.INSTANCE);
         categories.add(overlays);
 
         ModuleCategory hud = new ModuleCategory("HUD");

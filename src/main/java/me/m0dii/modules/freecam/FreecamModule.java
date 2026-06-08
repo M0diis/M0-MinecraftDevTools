@@ -8,6 +8,7 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.util.InputUtil;
 import net.minecraft.entity.player.PlayerEntity;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public class FreecamModule extends Module {
@@ -42,6 +43,8 @@ public class FreecamModule extends Module {
         }
     };
 
+    private boolean showPlayerModel = true;
+
     protected FreecamModule() {
         super("freecam", "Freecam", false);
     }
@@ -67,5 +70,28 @@ public class FreecamModule extends Module {
     @Override
     public void onDisable() {
         CameraEntity.setCameraState(false);
+    }
+
+    public boolean shouldShowPlayerModel() {
+        return showPlayerModel;
+    }
+
+    @Override
+    public List<String> getSettingsDisplay() {
+        List<String> settings = new ArrayList<>();
+        settings.add("Show Player Model: " + (showPlayerModel ? "ON" : "OFF"));
+        settings.add("Toggle: " + (isEnabled() ? "ON" : "OFF"));
+        return settings;
+    }
+
+    @Override
+    public void onSettingSelected(int settingIndex) {
+        if (settingIndex == 0) {
+            showPlayerModel = !showPlayerModel;
+            return;
+        }
+        if (settingIndex == 1) {
+            toggleEnabled();
+        }
     }
 }

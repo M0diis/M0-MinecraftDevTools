@@ -21,10 +21,30 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class GetDataScreen extends Screen {
+    @FunctionalInterface
+    public interface SaveAction {
+        void save(GetDataScreen screen, String raw, String path) throws CommandSyntaxException;
+    }
+
+    @FunctionalInterface
+    public interface InlineSuggestionProvider {
+        InlineSuggestions suggest(String editorText, int cursor);
+    }
+
+    public record InlineSuggestions(int start, int end, List<String> suggestions) {
+    }
+
     private final Screen parent;
+    private final Text screenTitle;
     private final String targetName;
     private final String targetToken;
+    private final String helperText;
     private final String initialData;
+    private final boolean supportsPathField;
+    private final boolean requireCompoundRootWhenPathBlank;
+    private final boolean closeAfterSave;
+    private final SaveAction saveAction;
+    private final InlineSuggestionProvider inlineSuggestionProvider;
     private TextFieldWidget pathField;
 
     private String editorText = "{}";
@@ -42,18 +62,98 @@ public class GetDataScreen extends Screen {
     private int parseErrorIndex = -1;
     private final List<String> pathSuggestions = new ArrayList<>();
     private String activePathSuggestion = null;
+    private InlineSuggestions inlineSuggestions = null;
+    private int suggestionPanelX = -1;
+    private int suggestionPanelY = -1;
+    private int suggestionPanelW = 0;
+    private int suggestionPanelRowHeight = 10;
+    private int suggestionPanelRows = 0;
     private boolean syncedPayloadApplied = false;
 
-    private GetDataScreen(Screen parent, String targetName, String targetToken, String initialData) {
-        super(Text.literal("GetData Editor"));
+    private GetDataScreen(Screen parent,
+                          Text screenTitle,
+                          String targetName,
+                          String targetToken,
+                          String initialData,
+                          String helperText,
+                          boolean supportsPathField,
+                          boolean requireCompoundRootWhenPathBlank,
+                          boolean closeAfterSave,
+                          SaveAction saveAction,
+                          InlineSuggestionProvider inlineSuggestionProvider) {
+        super(screenTitle);
         this.parent = parent;
+        this.screenTitle = screenTitle;
         this.targetName = targetName;
         this.targetToken = targetToken;
+        this.helperText = helperText;
         this.initialData = prettySnbt(initialData);
+        this.supportsPathField = supportsPathField;
+        this.requireCompoundRootWhenPathBlank = requireCompoundRootWhenPathBlank;
+        this.closeAfterSave = closeAfterSave;
+        this.saveAction = saveAction;
+        this.inlineSuggestionProvider = inlineSuggestionProvider;
     }
 
     public static Screen create(Screen parent, String targetName, String targetToken, String initialData) {
-        return new GetDataScreen(parent, targetName, targetToken, initialData);
+        return new GetDataScreen(
+                parent,
+                Text.literal("GetData Editor"),
+                targetName,
+                targetToken,
+                initialData,
+                "Edit SNBT. Optional path enables /data modify ... set value. Empty path uses /data merge.",
+                true,
+                true,
+                false,
+                GetDataScreen::saveGetDataChanges,
+                null
+        );
+    }
+
+    public static Screen createStandalone(Screen parent,
+                                          Text screenTitle,
+                                          String targetName,
+                                          String initialData,
+                                          String helperText,
+                                          boolean requireCompoundRootWhenPathBlank,
+                                          boolean closeAfterSave,
+                                          SaveAction saveAction) {
+        return createStandalone(
+                parent,
+                screenTitle,
+                targetName,
+                initialData,
+                helperText,
+                requireCompoundRootWhenPathBlank,
+                closeAfterSave,
+                saveAction,
+                null
+        );
+    }
+
+    public static Screen createStandalone(Screen parent,
+                                          Text screenTitle,
+                                          String targetName,
+                                          String initialData,
+                                          String helperText,
+                                          boolean requireCompoundRootWhenPathBlank,
+                                          boolean closeAfterSave,
+                                          SaveAction saveAction,
+                                          InlineSuggestionProvider inlineSuggestionProvider) {
+        return new GetDataScreen(
+                parent,
+                screenTitle,
+                targetName,
+                null,
+                initialData,
+                helperText,
+                false,
+                requireCompoundRootWhenPathBlank,
+                closeAfterSave,
+                saveAction,
+                inlineSuggestionProvider
+        );
     }
 
     @Override
@@ -61,22 +161,26 @@ public class GetDataScreen extends Screen {
         this.boxX = 12;
         this.boxY = 34;
         this.boxW = this.width - 24;
-        this.boxH = this.height - 84;
+        this.boxH = this.height - (this.supportsPathField ? 84 : 58);
         this.editorText = this.initialData;
         this.cursor = this.editorText.length();
         this.selectionAnchor = -1;
         validateEditorSnbt();
         rebuildPathSuggestions();
+        rebuildInlineSuggestions();
 
-        this.pathField = new TextFieldWidget(this.textRenderer, 12, this.height - 62, this.width - 24, 18, Text.literal("Path"));
-        this.pathField.setMaxLength(120);
-        this.pathField.setText("");
-        this.pathField.setChangedListener(value -> {
+        this.pathField = null;
+        if (this.supportsPathField) {
+            this.pathField = new TextFieldWidget(this.textRenderer, 12, this.height - 62, this.width - 24, 18, Text.literal("Path"));
+            this.pathField.setMaxLength(120);
+            this.pathField.setText("");
+            this.pathField.setChangedListener(value -> {
+                updatePathSuggestionHint();
+                validateEditorSnbt();
+            });
+            this.addDrawableChild(this.pathField);
             updatePathSuggestionHint();
-            validateEditorSnbt();
-        });
-        this.addDrawableChild(this.pathField);
-        updatePathSuggestionHint();
+        }
 
         this.addDrawableChild(ButtonWidget.builder(Text.literal("Save"), b -> saveChanges())
                 .dimensions(12, this.height - 38, 60, 20)
@@ -101,26 +205,45 @@ public class GetDataScreen extends Screen {
         try {
             String path = this.pathField == null ? "" : this.pathField.getText().trim();
             if (path.isEmpty()) {
-                NbtCompound merged = StringNbtReader.readCompoundAsArgument(new StringReader(raw));
-
-                if (this.targetToken.startsWith("block ")) {
-                    applyBlockStateAndNbtMerge(merged);
-                    return;
+                if (this.requireCompoundRootWhenPathBlank) {
+                    StringNbtReader.readCompoundAsArgument(new StringReader(raw));
+                } else {
+                    StringNbtReader.fromOps(NbtOps.INSTANCE).readAsArgument(new StringReader(raw));
                 }
-
-                String command = "data merge " + this.targetToken + " " + merged;
-                this.client.player.networkHandler.sendChatCommand(command);
-                this.client.player.sendMessage(Text.literal("[GetData] Sent: /" + command), false);
             } else {
-                // /data modify ... set value accepts any NBT element
-                NbtElement value = StringNbtReader.fromOps(NbtOps.INSTANCE).readAsArgument(new StringReader(raw));
-                String command = "data modify " + this.targetToken + " " + path + " set value " + value;
-                this.client.player.networkHandler.sendChatCommand(command);
-                this.client.player.sendMessage(Text.literal("[GetData] Sent: /" + command), false);
+                StringNbtReader.fromOps(NbtOps.INSTANCE).readAsArgument(new StringReader(raw));
+            }
+            this.saveAction.save(this, raw, path);
+            if (this.closeAfterSave) {
+                close();
             }
         } catch (CommandSyntaxException e) {
             this.client.player.sendMessage(Text.literal("[GetData] Invalid NBT/SNBT: " + e.getMessage()), false);
         }
+    }
+
+    private static void saveGetDataChanges(GetDataScreen screen, String raw, String path) throws CommandSyntaxException {
+        if (screen.client == null || screen.client.player == null || screen.targetToken == null) {
+            return;
+        }
+
+        if (path == null || path.isBlank()) {
+            NbtCompound merged = StringNbtReader.readCompoundAsArgument(new StringReader(raw));
+            if (screen.targetToken.startsWith("block ")) {
+                screen.applyBlockStateAndNbtMerge(merged);
+                return;
+            }
+
+            String command = "data merge " + screen.targetToken + " " + merged;
+            screen.client.player.networkHandler.sendChatCommand(command);
+            screen.client.player.sendMessage(Text.literal("[GetData] Sent: /" + command), false);
+            return;
+        }
+
+        NbtElement value = StringNbtReader.fromOps(NbtOps.INSTANCE).readAsArgument(new StringReader(raw));
+        String command = "data modify " + screen.targetToken + " " + path + " set value " + value;
+        screen.client.player.networkHandler.sendChatCommand(command);
+        screen.client.player.sendMessage(Text.literal("[GetData] Sent: /" + command), false);
     }
 
     private void applyBlockStateAndNbtMerge(NbtCompound merged) {
@@ -189,25 +312,40 @@ public class GetDataScreen extends Screen {
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
         context.fill(0, 0, this.width, this.height, UiTheme.BG);
         context.drawTextWithShadow(this.textRenderer, "Target: " + this.targetName, 12, 10, UiTheme.TEXT);
-        context.drawTextWithShadow(this.textRenderer, "Edit SNBT. Optional path enables /data modify ... set value. Empty path uses /data merge.", 12, 22, UiTheme.TEXT_MUTED);
+        context.drawTextWithShadow(this.textRenderer, this.helperText, 12, 22, UiTheme.TEXT_MUTED);
         int statusColor = this.parseError == null ? 0xFF70D070 : 0xFFFF7070;
         String status = this.parseError == null ? "SNBT valid" : "SNBT error: " + this.parseError;
         if (this.syncedPayloadApplied && this.parseError == null) {
             status = status + " (server sync)";
         }
-        context.drawTextWithShadow(this.textRenderer, status, 12, this.height - 76, statusColor);
+        context.drawTextWithShadow(this.textRenderer, status, 12, this.supportsPathField ? this.height - 76 : this.height - 50, statusColor);
 
         FormPanel editorPanel = new FormPanel(this.boxX, this.boxY, this.boxW, this.boxH);
         editorPanel.render(context);
 
         List<String> suggestionRows = this.pathSuggestions.stream().limit(6).map(s -> "- " + s).toList();
-        if (!suggestionRows.isEmpty()) {
+        if (!this.supportsPathField && this.inlineSuggestions != null && this.inlineSuggestions.suggestions() != null) {
+            suggestionRows = this.inlineSuggestions.suggestions().stream().limit(6).map(s -> "- " + s).toList();
+        }
+        if (((this.supportsPathField && !suggestionRows.isEmpty()) || (!this.supportsPathField && !suggestionRows.isEmpty()))) {
             int suggestionW = 208;
             int suggestionX = this.boxX + this.boxW - suggestionW - 4;
             int suggestionY = this.boxY + 6;
             int suggestionH = Math.clamp(this.boxH - 12, 42, 96);
+            this.suggestionPanelX = suggestionX;
+            this.suggestionPanelY = suggestionY;
+            this.suggestionPanelW = suggestionW;
+            this.suggestionPanelRows = Math.min(6, suggestionRows.size());
             ListPanel listPanel = new ListPanel(suggestionX, suggestionY, suggestionW, suggestionH);
             listPanel.render(context, this.textRenderer, suggestionRows, -1, 0, 10);
+            if (!this.supportsPathField) {
+                context.drawTextWithShadow(this.textRenderer, "Tab or click to insert", suggestionX + 6, suggestionY + suggestionH - 12, UiTheme.TEXT_MUTED);
+            }
+        } else {
+            this.suggestionPanelX = -1;
+            this.suggestionPanelY = -1;
+            this.suggestionPanelW = 0;
+            this.suggestionPanelRows = 0;
         }
 
         int borderColor = this.parseError == null ? 0x60FFFFFF : 0x90FF6060;
@@ -299,11 +437,15 @@ public class GetDataScreen extends Screen {
         if (click.button() != 0) {
             return false;
         }
+        if (tryApplyInlineSuggestionClick(click)) {
+            return true;
+        }
         if (click.x() < this.boxX || click.x() > this.boxX + this.boxW || click.y() < this.boxY || click.y() > this.boxY + this.boxH) {
             return false;
         }
         this.cursor = cursorFromMouse((int) click.x(), (int) click.y());
         this.selectionAnchor = -1;
+        rebuildInlineSuggestions();
         ensureCursorVisible();
         return true;
     }
@@ -320,6 +462,7 @@ public class GetDataScreen extends Screen {
             this.selectionAnchor = this.cursor;
         }
         this.cursor = cursorFromMouse((int) click.x(), (int) click.y());
+        rebuildInlineSuggestions();
         ensureCursorVisible();
         return true;
     }
@@ -368,6 +511,9 @@ public class GetDataScreen extends Screen {
                 return true;
             }
             return super.keyPressed(input);
+        }
+        if (keyCode == GLFW.GLFW_KEY_TAB && applyInlineSuggestion(0)) {
+            return true;
         }
 
         if (ctrl && keyCode == GLFW.GLFW_KEY_A) {
@@ -438,6 +584,7 @@ public class GetDataScreen extends Screen {
             } else {
                 this.selectionAnchor = -1;
             }
+            rebuildInlineSuggestions();
             ensureCursorVisible();
             return true;
         }
@@ -519,15 +666,22 @@ public class GetDataScreen extends Screen {
 
     private void onEditorTextChanged() {
         validateEditorSnbt();
-        rebuildPathSuggestions();
-        updatePathSuggestionHint();
+        if (this.supportsPathField) {
+            rebuildPathSuggestions();
+            updatePathSuggestionHint();
+        }
+        rebuildInlineSuggestions();
     }
 
     private void validateEditorSnbt() {
         String path = this.pathField == null ? "" : this.pathField.getText().trim();
         try {
             if (path.isEmpty()) {
-                StringNbtReader.readCompoundAsArgument(new StringReader(this.editorText));
+                if (this.requireCompoundRootWhenPathBlank) {
+                    StringNbtReader.readCompoundAsArgument(new StringReader(this.editorText));
+                } else {
+                    StringNbtReader.fromOps(NbtOps.INSTANCE).readAsArgument(new StringReader(this.editorText));
+                }
             } else {
                 NbtElement value = StringNbtReader.fromOps(NbtOps.INSTANCE).readAsArgument(new StringReader(this.editorText));
                 String valueError = validatePathValue(path, value, this.editorText);
@@ -622,6 +776,9 @@ public class GetDataScreen extends Screen {
 
     private void rebuildPathSuggestions() {
         this.pathSuggestions.clear();
+        if (!this.supportsPathField) {
+            return;
+        }
         NbtCompound root = parseRootCompound(this.editorText);
         if (root == null) {
             return;
@@ -682,6 +839,49 @@ public class GetDataScreen extends Screen {
         }
 
         this.pathField.setSuggestion(hint);
+    }
+
+    private void rebuildInlineSuggestions() {
+        if (this.inlineSuggestionProvider == null) {
+            this.inlineSuggestions = null;
+            return;
+        }
+        this.inlineSuggestions = this.inlineSuggestionProvider.suggest(this.editorText, this.cursor);
+        if (this.inlineSuggestions != null && (this.inlineSuggestions.suggestions() == null || this.inlineSuggestions.suggestions().isEmpty())) {
+            this.inlineSuggestions = null;
+        }
+    }
+
+    private boolean applyInlineSuggestion(int index) {
+        if (this.inlineSuggestions == null || this.inlineSuggestions.suggestions() == null) {
+            return false;
+        }
+        if (index < 0 || index >= this.inlineSuggestions.suggestions().size()) {
+            return false;
+        }
+        String suggestion = this.inlineSuggestions.suggestions().get(index);
+        int start = Math.clamp(this.inlineSuggestions.start(), 0, this.editorText.length());
+        int end = Math.clamp(this.inlineSuggestions.end(), start, this.editorText.length());
+        this.editorText = this.editorText.substring(0, start) + suggestion + this.editorText.substring(end);
+        this.cursor = start + suggestion.length();
+        this.selectionAnchor = -1;
+        onEditorTextChanged();
+        ensureCursorVisible();
+        return true;
+    }
+
+    private boolean tryApplyInlineSuggestionClick(Click click) {
+        if (this.supportsPathField || this.inlineSuggestions == null || this.suggestionPanelX < 0 || click.button() != 0) {
+            return false;
+        }
+        if (click.x() < this.suggestionPanelX || click.x() > this.suggestionPanelX + this.suggestionPanelW) {
+            return false;
+        }
+        if (click.y() < this.suggestionPanelY || click.y() > this.suggestionPanelY + 6 + (this.suggestionPanelRows * this.suggestionPanelRowHeight)) {
+            return false;
+        }
+        int row = Math.max(0, ((int) click.y() - this.suggestionPanelY - 4) / this.suggestionPanelRowHeight);
+        return applyInlineSuggestion(row);
     }
 
     private String buildSuggestionPreview() {

@@ -39,6 +39,7 @@ public class MacrosModule extends Module {
 
         CommandMacros.register();
         ParsePlaceholderClientCommand.register();
+        TargetContextPlaceholderProvider.register();
         MacroHudDataHandler.load();
 
         registerPressedKeybind(
