@@ -120,6 +120,58 @@ class AutomationEngineTest {
         assertEquals(List.of("placeholder_rule@WORLD_JOIN"), executor.executions);
     }
 
+    @Test
+    void worldLeaveRuleDispatchesWhenDimensionMatches() {
+        RecordingExecutor executor = new RecordingExecutor();
+        AutomationEngine engine = new AutomationEngine(EventBus.getInstance(), executor, (source, event) -> Map.of());
+        engine.configureInMemory(10, 10_000L, 10, 10_000L);
+
+        AutomationRule rule = new AutomationRule();
+        rule.id = "leave_rule";
+        rule.eventType = AutomationEventType.WORLD_LEAVE;
+        rule.actions = List.of(AutomationRule.Action.command("/say bye"));
+        rule.eventFilters = List.of(AutomationRule.EventFilter.regex("fromDimension", "minecraft:overworld"));
+        engine.setRulesInMemory(List.of(rule));
+
+        engine.onAutomationEvent(new AutomationEvent(
+                AutomationEventType.WORLD_LEAVE,
+                1_000L,
+                20L,
+                Map.of("fromDimension", "minecraft:overworld")
+        ));
+
+        assertEquals(List.of("leave_rule@WORLD_LEAVE"), executor.executions);
+    }
+
+    @Test
+    void playerDeathRuleDispatchesWhenHealthDropsToZero() {
+        RecordingExecutor executor = new RecordingExecutor();
+        AutomationEngine engine = new AutomationEngine(EventBus.getInstance(), executor, (source, event) -> Map.of());
+        engine.configureInMemory(10, 10_000L, 10, 10_000L);
+
+        AutomationRule rule = new AutomationRule();
+        rule.id = "death_rule";
+        rule.eventType = AutomationEventType.PLAYER_DEATH;
+        rule.actions = List.of(AutomationRule.Action.command("/say respawn"));
+
+        AutomationRule.EventFilter filter = new AutomationRule.EventFilter();
+        filter.field = "health";
+        filter.operator = AutomationRule.Operator.LESS_OR_EQUAL;
+        filter.value = "0";
+        rule.eventFilters = List.of(filter);
+
+        engine.setRulesInMemory(List.of(rule));
+
+        engine.onAutomationEvent(new AutomationEvent(
+                AutomationEventType.PLAYER_DEATH,
+                1_000L,
+                20L,
+                Map.of("health", 0.0F)
+        ));
+
+        assertEquals(List.of("death_rule@PLAYER_DEATH"), executor.executions);
+    }
+
     private static @NonNull AutomationEngine getAutomationEngine(RecordingExecutor executor) {
         AutomationEngine engine = new AutomationEngine(EventBus.getInstance(), executor, new AutomationEngine.ContextSnapshotProvider() {
             @Override

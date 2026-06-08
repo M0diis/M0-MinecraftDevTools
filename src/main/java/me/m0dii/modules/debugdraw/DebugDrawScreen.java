@@ -9,6 +9,7 @@ import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.client.gui.widget.TextFieldWidget;
 import net.minecraft.text.Text;
 import net.minecraft.util.hit.BlockHitResult;
+import net.minecraft.util.math.BlockPos;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -92,6 +93,14 @@ public final class DebugDrawScreen extends Screen {
         this.addDrawableChild(ButtonWidget.builder(Text.literal("Save"), b -> saveShapes()).dimensions(margin + 240, actionY, 58, 20).build());
         this.addDrawableChild(ButtonWidget.builder(Text.literal("Load"), b -> loadShapes()).dimensions(margin + 302, actionY, 58, 20).build());
         this.addDrawableChild(ButtonWidget.builder(Text.literal("Clear"), b -> clearShapes()).dimensions(margin + 364, actionY, 58, 20).build());
+
+        int selectY = actionY + 24;
+        this.addDrawableChild(ButtonWidget.builder(Text.literal("Sel On/Off"), b -> toggleSelectionEnabled()).dimensions(margin, selectY, 84, 20).build());
+        this.addDrawableChild(ButtonWidget.builder(Text.literal("Sel Pos1"), b -> setSelectionPosFromLook(false)).dimensions(margin + 88, selectY, 68, 20).build());
+        this.addDrawableChild(ButtonWidget.builder(Text.literal("Sel Pos2"), b -> setSelectionPosFromLook(true)).dimensions(margin + 160, selectY, 68, 20).build());
+        this.addDrawableChild(ButtonWidget.builder(Text.literal("Sel->Form"), b -> loadFormFromSelection()).dimensions(margin + 232, selectY, 70, 20).build());
+        this.addDrawableChild(ButtonWidget.builder(Text.literal("Sel Add"), b -> addShapeFromSelection()).dimensions(margin + 306, selectY, 60, 20).build());
+        this.addDrawableChild(ButtonWidget.builder(Text.literal("Sel Clear"), b -> clearSelection()).dimensions(margin + 370, selectY, 60, 20).build());
 
         this.addDrawableChild(ButtonWidget.builder(Text.literal("Prev"), b -> moveSelection(-1)).dimensions(rightX + 8, top + 10, 56, 20).build());
         this.addDrawableChild(ButtonWidget.builder(Text.literal("Next"), b -> moveSelection(1)).dimensions(rightX + 68, top + 10, 56, 20).build());
@@ -267,6 +276,60 @@ public final class DebugDrawScreen extends Screen {
         this.pos2ZField.setText(Integer.toString(hit.getBlockPos().getZ()));
     }
 
+    private void toggleSelectionEnabled() {
+        boolean next = !DebugDrawManager.isSelectionEnabled();
+        DebugDrawManager.setSelectionEnabled(next);
+        this.status = "Selection " + (next ? "enabled" : "disabled") + ".";
+    }
+
+    private void setSelectionPosFromLook(boolean rightClick) {
+        boolean ok = DebugDrawManager.pickSelectionPos(rightClick);
+        this.status = ok ? "Set " + (rightClick ? "pos2" : "pos1") + " from crosshair." : "No block under crosshair.";
+    }
+
+    private void loadFormFromSelection() {
+        BlockPos pos1 = DebugDrawManager.getSelectionPos1();
+        BlockPos pos2 = DebugDrawManager.getSelectionPos2();
+        if (pos1 == null) {
+            this.status = "Selection pos1 not set.";
+            return;
+        }
+        this.pos1XField.setText(Integer.toString(pos1.getX()));
+        this.pos1YField.setText(Integer.toString(pos1.getY()));
+        this.pos1ZField.setText(Integer.toString(pos1.getZ()));
+        if (pos2 != null) {
+            this.pos2XField.setText(Integer.toString(pos2.getX()));
+            this.pos2YField.setText(Integer.toString(pos2.getY()));
+            this.pos2ZField.setText(Integer.toString(pos2.getZ()));
+        }
+        this.typeField.setText(DebugDrawManager.getSelectionShape().name().toLowerCase());
+        persistForm();
+        this.status = pos2 == null ? "Loaded pos1 from selection." : "Loaded selection into form.";
+    }
+
+    private void addShapeFromSelection() {
+        persistForm();
+        try {
+            int rgb = DrawClientCommand.parseColorToken(this.colorField.getText());
+            double seconds = Math.max(0.2, parseDouble(this.secondsField.getText(), 20.0));
+            int id = DebugDrawManager.addSelectionShape(rgb, seconds);
+            if (id < 0) {
+                this.status = "Set selection pos1 and pos2 first.";
+                return;
+            }
+            refreshShapeList(true);
+            this.selectedShapeIdx = findShapeIndexById(id);
+            this.status = "Added selection shape #" + id;
+        } catch (Exception e) {
+            this.status = "Invalid color/TTL: " + e.getMessage();
+        }
+    }
+
+    private void clearSelection() {
+        DebugDrawManager.clearSelectionPositions();
+        this.status = "Cleared selection positions.";
+    }
+
     private void stepType(int delta) {
         String[] types = {"line", "box", "circle", "cylinder", "sphere"};
         String current = this.typeField.getText().trim().toLowerCase();
@@ -393,6 +456,9 @@ public final class DebugDrawScreen extends Screen {
         context.drawTextWithShadow(this.textRenderer,
                 "Use 'Use Sel' then edit fields, click Update.",
                 margin, this.height - 44, UiTheme.TEXT_MUTED);
+        context.drawTextWithShadow(this.textRenderer,
+                "Selection: " + DebugDrawManager.selectionStatus(),
+                margin, this.height - 56, UiTheme.TEXT_MUTED);
         context.drawTextWithShadow(this.textRenderer, this.status, margin, this.height - 30, UiTheme.TEXT_ACCENT);
 
         super.render(context, mouseX, mouseY, delta);

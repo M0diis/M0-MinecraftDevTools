@@ -16,7 +16,7 @@ import org.lwjgl.glfw.GLFW;
 import java.util.List;
 import java.util.Objects;
 
-public class ClickGuiRenderer implements Toggleable {
+public class ClickHudRenderer implements Toggleable {
 
     private static final ModuleCategory[] categories = ModuleRegistry.getCategories();
 
@@ -55,7 +55,7 @@ public class ClickGuiRenderer implements Toggleable {
     @Setter
     private boolean wasdNavigation = false;
 
-    public ClickGuiRenderer() {
+    public ClickHudRenderer() {
         ClientTickEvents.END_CLIENT_TICK.register(this::onClientTick);
     }
 

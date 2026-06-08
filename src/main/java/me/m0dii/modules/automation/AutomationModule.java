@@ -42,8 +42,14 @@ public final class AutomationModule {
     private int lastHotbarSlot = -1;
     private @Nullable String lastHeldItemId = null;
     private @Nullable String lastHeldItemName = null;
+    private @Nullable String lastPlayerName = null;
     private float lastHealth = Float.NaN;
     private int lastFood = Integer.MIN_VALUE;
+    private int lastExperienceLevel = Integer.MIN_VALUE;
+    private float lastExperienceProgress = Float.NaN;
+    private @Nullable Boolean lastRaining = null;
+    private @Nullable Boolean lastThundering = null;
+    private @Nullable Boolean lastAlive = null;
     private @Nullable String lastChatMessage = null;
     private long lastChatAtMs = 0L;
 
@@ -120,6 +126,17 @@ public final class AutomationModule {
         eventBus.post(new AutomationEvent(AutomationEventType.DIMENSION_CHANGE, System.currentTimeMillis(), clientTickCounter, attributes));
     }
 
+    public void fireWorldLeaveTest() {
+        MinecraftClient client = MinecraftClient.getInstance();
+        Map<String, Object> attributes = new LinkedHashMap<>();
+        attributes.put("fromDimension", currentDimensionId(client.world));
+        attributes.put("playerName", client.player == null ? "" : client.player.getName().getString());
+        attributes.put("fromX", client.player == null ? 0.0D : client.player.getX());
+        attributes.put("fromY", client.player == null ? 0.0D : client.player.getY());
+        attributes.put("fromZ", client.player == null ? 0.0D : client.player.getZ());
+        eventBus.post(new AutomationEvent(AutomationEventType.WORLD_LEAVE, System.currentTimeMillis(), clientTickCounter, attributes));
+    }
+
     public void fireChatTest(@NotNull String message) {
         Map<String, Object> attributes = new LinkedHashMap<>();
         attributes.put("message", message);
@@ -135,6 +152,10 @@ public final class AutomationModule {
                 clientTickCounter,
                 screenChangeAttributes(fromScreen, toScreen)
         ));
+    }
+
+    public void fireWeatherChangeTest(boolean fromRaining, boolean toRaining, boolean fromThundering, boolean toThundering) {
+        postWeatherChangedEvent(fromRaining, toRaining, fromThundering, toThundering);
     }
 
     public void fireHotbarSlotChangeTest(int toSlot) {
@@ -175,6 +196,30 @@ public final class AutomationModule {
         eventBus.post(new AutomationEvent(AutomationEventType.PLAYER_FOOD_CHANGED, System.currentTimeMillis(), clientTickCounter, attributes));
     }
 
+    public void firePlayerLevelChangeTest(int fromLevel, int toLevel, float fromProgress, float toProgress) {
+        Map<String, Object> attributes = new LinkedHashMap<>();
+        attributes.put("fromLevel", fromLevel);
+        attributes.put("toLevel", toLevel);
+        attributes.put("deltaLevel", toLevel - fromLevel);
+        attributes.put("fromProgress", fromProgress);
+        attributes.put("toProgress", toProgress);
+        attributes.put("deltaProgress", toProgress - fromProgress);
+        eventBus.post(new AutomationEvent(AutomationEventType.PLAYER_LEVEL_CHANGED, System.currentTimeMillis(), clientTickCounter, attributes));
+    }
+
+    public void firePlayerDeathTest(float health) {
+        MinecraftClient client = MinecraftClient.getInstance();
+        ClientPlayerEntity player = client.player;
+        Map<String, Object> attributes = new LinkedHashMap<>();
+        attributes.put("health", health);
+        attributes.put("food", player == null ? 0 : player.getHungerManager().getFoodLevel());
+        attributes.put("dimension", currentDimensionId(client.world));
+        attributes.put("x", player == null ? 0.0D : player.getX());
+        attributes.put("y", player == null ? 0.0D : player.getY());
+        attributes.put("z", player == null ? 0.0D : player.getZ());
+        eventBus.post(new AutomationEvent(AutomationEventType.PLAYER_DEATH, System.currentTimeMillis(), clientTickCounter, attributes));
+    }
+
     private void registerCommands(CommandDispatcher<FabricClientCommandSource> dispatcher, net.minecraft.command.CommandRegistryAccess registryAccess) {
         AutomationCommands.register(dispatcher, this);
     }
@@ -188,6 +233,9 @@ public final class AutomationModule {
         ClientPlayerEntity player = client.player;
         ClientWorld world = client.world;
         if (player == null || world == null) {
+            if (wasWorldLoaded) {
+                postWorldLeaveEvent();
+            }
             resetPlayerTracking();
             return;
         }
@@ -232,14 +280,40 @@ public final class AutomationModule {
             postPlayerFoodChangedEvent(lastFood, currentFood);
         }
 
+        int currentExperienceLevel = player.experienceLevel;
+        float currentExperienceProgress = player.experienceProgress;
+        if (lastExperienceLevel != Integer.MIN_VALUE
+                && (currentExperienceLevel != lastExperienceLevel
+                || Math.abs(currentExperienceProgress - lastExperienceProgress) > 0.0001F)) {
+            postPlayerLevelChangedEvent(lastExperienceLevel, currentExperienceLevel, lastExperienceProgress, currentExperienceProgress);
+        }
+
+        boolean currentRaining = world.isRaining();
+        boolean currentThundering = world.isThundering();
+        if (lastRaining != null && lastThundering != null
+                && (currentRaining != lastRaining || currentThundering != lastThundering)) {
+            postWeatherChangedEvent(lastRaining, currentRaining, lastThundering, currentThundering);
+        }
+
+        boolean currentlyAlive = player.isAlive() && currentHealth > 0.0F;
+        if (Boolean.TRUE.equals(lastAlive) && !currentlyAlive) {
+            postPlayerDeathEvent(player, world);
+        }
+
         wasWorldLoaded = true;
         lastDimensionId = currentDimension;
         lastPlayerPos = currentPos;
+        lastPlayerName = player.getName().getString();
         lastHotbarSlot = currentHotbarSlot;
         lastHeldItemId = currentItemId;
         lastHeldItemName = currentItemName;
         lastHealth = currentHealth;
         lastFood = currentFood;
+        lastExperienceLevel = currentExperienceLevel;
+        lastExperienceProgress = currentExperienceProgress;
+        lastRaining = currentRaining;
+        lastThundering = currentThundering;
+        lastAlive = currentlyAlive;
     }
 
     private void postPlayerMoveEvent(@NotNull Vec3d from, @NotNull Vec3d to) {
@@ -310,6 +384,51 @@ public final class AutomationModule {
         eventBus.post(new AutomationEvent(AutomationEventType.PLAYER_FOOD_CHANGED, System.currentTimeMillis(), clientTickCounter, attributes));
     }
 
+    private void postWorldLeaveEvent() {
+        Map<String, Object> attributes = new LinkedHashMap<>();
+        attributes.put("fromDimension", safe(lastDimensionId));
+        attributes.put("playerName", safe(lastPlayerName));
+        attributes.put("fromX", lastPlayerPos == null ? 0.0D : lastPlayerPos.x);
+        attributes.put("fromY", lastPlayerPos == null ? 0.0D : lastPlayerPos.y);
+        attributes.put("fromZ", lastPlayerPos == null ? 0.0D : lastPlayerPos.z);
+        eventBus.post(new AutomationEvent(AutomationEventType.WORLD_LEAVE, System.currentTimeMillis(), clientTickCounter, attributes));
+    }
+
+    private void postWeatherChangedEvent(boolean fromRaining, boolean toRaining, boolean fromThundering, boolean toThundering) {
+        Map<String, Object> attributes = new LinkedHashMap<>();
+        attributes.put("fromRaining", fromRaining);
+        attributes.put("toRaining", toRaining);
+        attributes.put("fromThundering", fromThundering);
+        attributes.put("toThundering", toThundering);
+        attributes.put("startedRaining", !fromRaining && toRaining);
+        attributes.put("stoppedRaining", fromRaining && !toRaining);
+        attributes.put("startedThundering", !fromThundering && toThundering);
+        attributes.put("stoppedThundering", fromThundering && !toThundering);
+        eventBus.post(new AutomationEvent(AutomationEventType.WEATHER_CHANGED, System.currentTimeMillis(), clientTickCounter, attributes));
+    }
+
+    private void postPlayerLevelChangedEvent(int fromLevel, int toLevel, float fromProgress, float toProgress) {
+        Map<String, Object> attributes = new LinkedHashMap<>();
+        attributes.put("fromLevel", fromLevel);
+        attributes.put("toLevel", toLevel);
+        attributes.put("deltaLevel", toLevel - fromLevel);
+        attributes.put("fromProgress", fromProgress);
+        attributes.put("toProgress", toProgress);
+        attributes.put("deltaProgress", toProgress - fromProgress);
+        eventBus.post(new AutomationEvent(AutomationEventType.PLAYER_LEVEL_CHANGED, System.currentTimeMillis(), clientTickCounter, attributes));
+    }
+
+    private void postPlayerDeathEvent(@NotNull ClientPlayerEntity player, @NotNull ClientWorld world) {
+        Map<String, Object> attributes = new LinkedHashMap<>();
+        attributes.put("health", player.getHealth());
+        attributes.put("food", player.getHungerManager().getFoodLevel());
+        attributes.put("dimension", currentDimensionId(world));
+        attributes.put("x", player.getX());
+        attributes.put("y", player.getY());
+        attributes.put("z", player.getZ());
+        eventBus.post(new AutomationEvent(AutomationEventType.PLAYER_DEATH, System.currentTimeMillis(), clientTickCounter, attributes));
+    }
+
     private Map<String, Object> buildTickAttributes(MinecraftClient client) {
         Map<String, Object> attributes = new LinkedHashMap<>();
         attributes.put("tick", clientTickCounter);
@@ -331,8 +450,14 @@ public final class AutomationModule {
         lastHotbarSlot = -1;
         lastHeldItemId = null;
         lastHeldItemName = null;
+        lastPlayerName = null;
         lastHealth = Float.NaN;
         lastFood = Integer.MIN_VALUE;
+        lastExperienceLevel = Integer.MIN_VALUE;
+        lastExperienceProgress = Float.NaN;
+        lastRaining = null;
+        lastThundering = null;
+        lastAlive = null;
     }
 
     private static Map<String, Object> screenChangeAttributes(@NotNull String fromScreen, @NotNull String toScreen) {
@@ -467,6 +592,9 @@ public final class AutomationModule {
             values.put("hotbarSlot", player.getInventory().getSelectedSlot());
             values.put("mainHandItemId", itemId(player.getMainHandStack()));
             values.put("mainHandItemName", itemName(player.getMainHandStack()));
+            values.put("experienceLevel", player.experienceLevel);
+            values.put("experienceProgress", player.experienceProgress);
+            values.put("alive", player.isAlive());
             return values;
         }
 

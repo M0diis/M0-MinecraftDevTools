@@ -9,6 +9,10 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.RenderLayers;
 import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.client.render.VertexConsumerProvider;
+import net.minecraft.item.Item;
+import net.minecraft.item.ItemStack;
+import net.minecraft.registry.Registries;
+import net.minecraft.util.Identifier;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.BlockPos;
@@ -17,12 +21,14 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public final class DebugDrawManager {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final Path SAVE_PATH = M0DevToolsClient.SETTINGS_FOLDER.toPath().resolve("debugdraw-shapes.json");
     private static final Path SELECTION_SAVE_PATH = M0DevToolsClient.SETTINGS_FOLDER.toPath().resolve("debugdraw-selection.json");
+    private static final String DEFAULT_WAND_ITEM_ID = "minecraft:wooden_axe";
     private static final AtomicInteger NEXT_ID = new AtomicInteger(1);
     private static final List<DrawShape> SHAPES = new ArrayList<>();
 
@@ -34,9 +40,12 @@ public final class DebugDrawManager {
     }
 
     private static boolean selectionEnabled = false;
+    private static boolean selectionUseAnyClick = false;
     private static BlockPos selectionPos1;
     private static BlockPos selectionPos2;
     private static SelectionShape selectionShape = SelectionShape.BOX;
+    private static String selectionWandItemId = DEFAULT_WAND_ITEM_ID;
+    private static Item selectionWandItem;
 
     public record ShapeDescriptor(int id,
                                   String type,
@@ -125,12 +134,81 @@ public final class DebugDrawManager {
         return selectionEnabled;
     }
 
+    public static synchronized void setSelectionUseAnyClick(boolean useAnyClick) {
+        selectionUseAnyClick = useAnyClick;
+    }
+
+    public static synchronized boolean isSelectionUseAnyClick() {
+        return selectionUseAnyClick;
+    }
+
+    public static synchronized String getSelectionWandItemId() {
+        return selectionWandItemId;
+    }
+
+    public static synchronized boolean setSelectionWandItem(String token) {
+        String value = token == null ? "" : token.trim().toLowerCase(Locale.ROOT);
+        if (value.isEmpty() || "default".equals(value)) {
+            value = DEFAULT_WAND_ITEM_ID;
+        }
+        if (!value.contains(":")) {
+            value = "minecraft:" + value;
+        }
+        Identifier id = Identifier.tryParse(value);
+        if (id == null || !Registries.ITEM.containsId(id)) {
+            return false;
+        }
+        selectionWandItemId = id.toString();
+        selectionWandItem = Registries.ITEM.get(id);
+        return true;
+    }
+
     public static synchronized SelectionShape getSelectionShape() {
         return selectionShape;
     }
 
     public static synchronized void setSelectionShape(SelectionShape shape) {
         selectionShape = shape == null ? SelectionShape.BOX : shape;
+    }
+
+    public static synchronized void clearSelectionPositions() {
+        selectionPos1 = null;
+        selectionPos2 = null;
+    }
+
+    public static synchronized BlockPos getSelectionPos1() {
+        return selectionPos1;
+    }
+
+    public static synchronized BlockPos getSelectionPos2() {
+        return selectionPos2;
+    }
+
+    public static synchronized void setSelectionPos(boolean rightClick, BlockPos pos) {
+        if (rightClick) {
+            selectionPos2 = pos;
+        } else {
+            selectionPos1 = pos;
+        }
+    }
+
+    public static synchronized boolean shouldCaptureSelectionClick() {
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (!selectionEnabled || client == null || client.player == null || client.world == null || client.currentScreen != null) {
+            return false;
+        }
+        if (selectionUseAnyClick) {
+            return true;
+        }
+        return isWandHeld(client.player.getMainHandStack()) || isWandHeld(client.player.getOffHandStack());
+    }
+
+    public static synchronized boolean isSelectionWandEquipped() {
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (client == null || client.player == null) {
+            return false;
+        }
+        return isWandHeld(client.player.getMainHandStack()) || isWandHeld(client.player.getOffHandStack());
     }
 
     public static synchronized boolean pickSelectionPos(boolean rightClick) {
@@ -150,11 +228,7 @@ public final class DebugDrawManager {
         if (hit == null) {
             return false;
         }
-        if (rightClick) {
-            selectionPos2 = hit.getBlockPos();
-        } else {
-            selectionPos1 = hit.getBlockPos();
-        }
+        setSelectionPos(rightClick, hit.getBlockPos());
         return true;
     }
 
@@ -192,12 +266,20 @@ public final class DebugDrawManager {
     public static synchronized String selectionStatus() {
         String left = selectionPos1 == null ? "-" : selectionPos1.getX() + " " + selectionPos1.getY() + " " + selectionPos1.getZ();
         String right = selectionPos2 == null ? "-" : selectionPos2.getX() + " " + selectionPos2.getY() + " " + selectionPos2.getZ();
-        return "enabled=" + selectionEnabled + " shape=" + selectionShape.name().toLowerCase() + " pos1=" + left + " pos2=" + right;
+        String mode = selectionUseAnyClick ? "any-click" : "wand";
+        return "enabled=" + selectionEnabled
+                + " mode=" + mode
+                + " wand=" + selectionWandItemId
+                + " shape=" + selectionShape.name().toLowerCase(Locale.ROOT)
+                + " pos1=" + left
+                + " pos2=" + right;
     }
 
     public static synchronized boolean saveSelection() {
         JsonObject json = new JsonObject();
         json.addProperty("enabled", selectionEnabled);
+        json.addProperty("useAnyClick", selectionUseAnyClick);
+        json.addProperty("wandItem", selectionWandItemId);
         json.addProperty("shape", selectionShape.name());
         if (selectionPos1 != null) {
             json.addProperty("x1", selectionPos1.getX());
@@ -228,6 +310,14 @@ public final class DebugDrawManager {
                 return false;
             }
             selectionEnabled = json.has("enabled") && json.get("enabled").getAsBoolean();
+            selectionUseAnyClick = json.has("useAnyClick") && json.get("useAnyClick").getAsBoolean();
+            if (json.has("wandItem")) {
+                if (!setSelectionWandItem(json.get("wandItem").getAsString())) {
+                    setSelectionWandItem(DEFAULT_WAND_ITEM_ID);
+                }
+            } else {
+                setSelectionWandItem(DEFAULT_WAND_ITEM_ID);
+            }
             if (json.has("shape")) {
                 try {
                     selectionShape = SelectionShape.valueOf(json.get("shape").getAsString().toUpperCase());
@@ -637,6 +727,25 @@ public final class DebugDrawManager {
             return null;
         }
         return new BlockPos(json.get(x).getAsInt(), json.get(y).getAsInt(), json.get(z).getAsInt());
+    }
+
+    private static boolean isWandHeld(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) {
+            return false;
+        }
+        Item wand = selectionWandItem;
+        if (wand == null) {
+            Identifier id = Identifier.tryParse(selectionWandItemId);
+            if (id == null || !Registries.ITEM.containsId(id)) {
+                id = Identifier.tryParse(DEFAULT_WAND_ITEM_ID);
+            }
+            if (id == null || !Registries.ITEM.containsId(id)) {
+                return false;
+            }
+            wand = Registries.ITEM.get(id);
+            selectionWandItem = wand;
+        }
+        return stack.isOf(wand);
     }
 
     private static float[] toColor(int rgb, float alphaMul) {

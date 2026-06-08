@@ -25,27 +25,18 @@ public abstract class MouseMixin {
         if (action == GLFW.GLFW_PRESS) {
             CpsTracker.registerClick(input.getKeycode());
 
-            if (DebugDrawManager.isSelectionEnabled()) {
+            int key = input.getKeycode();
+            if ((key == GLFW.GLFW_MOUSE_BUTTON_LEFT || key == GLFW.GLFW_MOUSE_BUTTON_RIGHT)
+                    && DebugDrawManager.shouldCaptureSelectionClick()) {
                 MinecraftClient client = MinecraftClient.getInstance();
-                if (client != null && client.currentScreen == null) {
-                    int key = input.getKeycode();
-                    if (key == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
-                        if (DebugDrawManager.pickSelectionPos(false)) {
-                            if (client.player != null) {
-                                client.player.sendMessage(net.minecraft.text.Text.literal("[Draw] Set pos1."), true);
-                            }
-                            ci.cancel();
-                            return;
-                        }
+                boolean rightClick = key == GLFW.GLFW_MOUSE_BUTTON_RIGHT;
+                if (DebugDrawManager.pickSelectionPos(rightClick)) {
+                    if (client != null && client.player != null) {
+                        client.player.sendMessage(net.minecraft.text.Text.literal("[Draw] Set " + (rightClick ? "pos2" : "pos1") + "."), true);
                     }
-                    if (key == GLFW.GLFW_MOUSE_BUTTON_RIGHT) {
-                        if (DebugDrawManager.pickSelectionPos(true)) {
-                            if (client.player != null) {
-                                client.player.sendMessage(net.minecraft.text.Text.literal("[Draw] Set pos2."), true);
-                            }
-                            ci.cancel();
-                        }
-                    }
+                    ci.cancel();
+                } else if (client != null && client.player != null) {
+                    client.player.sendMessage(net.minecraft.text.Text.literal("[Draw] No block under crosshair."), true);
                 }
             }
         }

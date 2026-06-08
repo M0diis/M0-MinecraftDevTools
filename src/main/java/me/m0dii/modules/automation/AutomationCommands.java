@@ -10,6 +10,7 @@ import net.minecraft.text.Text;
 
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Locale;
 
 import static net.fabricmc.fabric.api.client.command.v2.ClientCommandManager.argument;
 import static net.fabricmc.fabric.api.client.command.v2.ClientCommandManager.literal;
@@ -40,6 +41,7 @@ public final class AutomationCommands {
                         .then(literal("tick").executes(ctx -> fireTick(ctx, module)))
                         .then(literal("move").executes(ctx -> fireMove(ctx, module)))
                         .then(literal("world_join").executes(ctx -> fireWorldJoin(ctx, module)))
+                        .then(literal("world_leave").executes(ctx -> fireWorldLeave(ctx, module)))
                         .then(literal("dimension_change")
                                 .then(argument("dimension", StringArgumentType.greedyString())
                                         .executes(ctx -> fireDimensionChange(ctx, module))))
@@ -50,6 +52,18 @@ public final class AutomationCommands {
                                 .executes(ctx -> fireScreenChange(ctx, module, "InventoryScreen"))
                                 .then(argument("screen", StringArgumentType.greedyString())
                                         .executes(ctx -> fireScreenChange(ctx, module, StringArgumentType.getString(ctx, "screen")))))
+                        .then(literal("weather_change")
+                                .executes(ctx -> fireWeatherChange(ctx, module, false, true, false, false))
+                                .then(argument("toRaining", StringArgumentType.word())
+                                        .then(argument("toThundering", StringArgumentType.word())
+                                                .executes(ctx -> fireWeatherChange(
+                                                        ctx,
+                                                        module,
+                                                        false,
+                                                        parseBooleanWord(StringArgumentType.getString(ctx, "toRaining"), true),
+                                                        false,
+                                                        parseBooleanWord(StringArgumentType.getString(ctx, "toThundering"), false)
+                                                )))))
                         .then(literal("hotbar_change")
                                 .executes(ctx -> fireHotbarChange(ctx, module, 1))
                                 .then(argument("slot", IntegerArgumentType.integer(0, 8))
@@ -65,7 +79,15 @@ public final class AutomationCommands {
                         .then(literal("food_change")
                                 .executes(ctx -> fireFoodChange(ctx, module, 20, 16))
                                 .then(argument("toFood", IntegerArgumentType.integer(0, 20))
-                                        .executes(ctx -> fireFoodChange(ctx, module, 20, IntegerArgumentType.getInteger(ctx, "toFood"))))));
+                                        .executes(ctx -> fireFoodChange(ctx, module, 20, IntegerArgumentType.getInteger(ctx, "toFood")))))
+                        .then(literal("level_change")
+                                .executes(ctx -> fireLevelChange(ctx, module, 10, 11, 0.25F, 0.05F))
+                                .then(argument("toLevel", IntegerArgumentType.integer(0))
+                                        .executes(ctx -> fireLevelChange(ctx, module, 10, IntegerArgumentType.getInteger(ctx, "toLevel"), 0.25F, 0.05F))))
+                        .then(literal("death")
+                                .executes(ctx -> fireDeath(ctx, module, 0.0F))
+                                .then(argument("health", FloatArgumentType.floatArg(0.0F, 1.0F))
+                                        .executes(ctx -> fireDeath(ctx, module, FloatArgumentType.getFloat(ctx, "health"))))));
         dispatcher.register(root);
     }
 
@@ -160,6 +182,12 @@ public final class AutomationCommands {
         return 1;
     }
 
+    private static int fireWorldLeave(CommandContext<FabricClientCommandSource> context, AutomationModule module) {
+        module.fireWorldLeaveTest();
+        context.getSource().sendFeedback(Text.literal("[automation] fired WORLD_LEAVE"));
+        return 1;
+    }
+
     private static int fireDimensionChange(CommandContext<FabricClientCommandSource> context, AutomationModule module) {
         String dimension = StringArgumentType.getString(context, "dimension");
         module.fireDimensionChangeTest(dimension);
@@ -177,6 +205,17 @@ public final class AutomationCommands {
     private static int fireScreenChange(CommandContext<FabricClientCommandSource> context, AutomationModule module, String screen) {
         module.fireScreenChangeTest(screen);
         context.getSource().sendFeedback(Text.literal("[automation] fired SCREEN_CHANGED -> " + screen));
+        return 1;
+    }
+
+    private static int fireWeatherChange(CommandContext<FabricClientCommandSource> context,
+                                         AutomationModule module,
+                                         boolean fromRaining,
+                                         boolean toRaining,
+                                         boolean fromThundering,
+                                         boolean toThundering) {
+        module.fireWeatherChangeTest(fromRaining, toRaining, fromThundering, toThundering);
+        context.getSource().sendFeedback(Text.literal("[automation] fired WEATHER_CHANGED"));
         return 1;
     }
 
@@ -202,5 +241,34 @@ public final class AutomationCommands {
         module.firePlayerFoodChangeTest(fromFood, toFood);
         context.getSource().sendFeedback(Text.literal("[automation] fired PLAYER_FOOD_CHANGED -> " + toFood));
         return 1;
+    }
+
+    private static int fireLevelChange(CommandContext<FabricClientCommandSource> context,
+                                       AutomationModule module,
+                                       int fromLevel,
+                                       int toLevel,
+                                       float fromProgress,
+                                       float toProgress) {
+        module.firePlayerLevelChangeTest(fromLevel, toLevel, fromProgress, toProgress);
+        context.getSource().sendFeedback(Text.literal("[automation] fired PLAYER_LEVEL_CHANGED -> " + toLevel));
+        return 1;
+    }
+
+    private static int fireDeath(CommandContext<FabricClientCommandSource> context, AutomationModule module, float health) {
+        module.firePlayerDeathTest(health);
+        context.getSource().sendFeedback(Text.literal("[automation] fired PLAYER_DEATH"));
+        return 1;
+    }
+
+    private static boolean parseBooleanWord(String raw, boolean fallback) {
+        if (raw == null || raw.isBlank()) {
+            return fallback;
+        }
+        String normalized = raw.trim().toLowerCase(Locale.ROOT);
+        return switch (normalized) {
+            case "1", "true", "yes", "on" -> true;
+            case "0", "false", "no", "off" -> false;
+            default -> fallback;
+        };
     }
 }

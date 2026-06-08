@@ -50,6 +50,13 @@ public final class AutomationFieldCatalog {
                 field("dimension", "Dimension", "Dimension id for the joined world."),
                 field("playerName", "Player Name", "Client player display name.")
         )));
+        EVENT_FILTER_FIELDS.put(AutomationEventType.WORLD_LEAVE, join(EVENT_META_FIELDS, List.of(
+                field("fromDimension", "From Dimension", "Dimension id from the world that was left."),
+                field("playerName", "Player Name", "Last known client player display name before leaving."),
+                field("fromX", "From X", "Last known player X position before leaving the world."),
+                field("fromY", "From Y", "Last known player Y position before leaving the world."),
+                field("fromZ", "From Z", "Last known player Z position before leaving the world.")
+        )));
         EVENT_FILTER_FIELDS.put(AutomationEventType.DIMENSION_CHANGE, join(EVENT_META_FIELDS, List.of(
                 field("fromDimension", "From Dimension", "Previous dimension id."),
                 field("toDimension", "To Dimension", "New dimension id.")
@@ -63,6 +70,16 @@ public final class AutomationFieldCatalog {
                 field("toScreen", "To Screen", "New screen class name."),
                 field("fromScreenPresent", "From Screen Present", "True when a screen was open before the change."),
                 field("toScreenPresent", "To Screen Present", "True when a screen is open after the change.")
+        )));
+        EVENT_FILTER_FIELDS.put(AutomationEventType.WEATHER_CHANGED, join(EVENT_META_FIELDS, List.of(
+                field("fromRaining", "From Raining", "True if it was raining before the weather change."),
+                field("toRaining", "To Raining", "True if it is raining after the weather change."),
+                field("fromThundering", "From Thundering", "True if it was thundering before the weather change."),
+                field("toThundering", "To Thundering", "True if it is thundering after the weather change."),
+                field("startedRaining", "Started Raining", "True when rain started during this change."),
+                field("stoppedRaining", "Stopped Raining", "True when rain stopped during this change."),
+                field("startedThundering", "Started Thundering", "True when thunder started during this change."),
+                field("stoppedThundering", "Stopped Thundering", "True when thunder stopped during this change.")
         )));
         EVENT_FILTER_FIELDS.put(AutomationEventType.HOTBAR_SLOT_CHANGED, join(EVENT_META_FIELDS, List.of(
                 field("fromSlot", "From Slot", "Previous hotbar slot index."),
@@ -84,6 +101,22 @@ public final class AutomationFieldCatalog {
                 field("toFood", "To Food", "New hunger level."),
                 field("deltaFood", "Delta Food", "Food level change amount.")
         )));
+        EVENT_FILTER_FIELDS.put(AutomationEventType.PLAYER_LEVEL_CHANGED, join(EVENT_META_FIELDS, List.of(
+                field("fromLevel", "From Level", "Previous experience level."),
+                field("toLevel", "To Level", "New experience level."),
+                field("deltaLevel", "Delta Level", "Experience level change amount."),
+                field("fromProgress", "From Progress", "Previous experience progress to next level."),
+                field("toProgress", "To Progress", "New experience progress to next level."),
+                field("deltaProgress", "Delta Progress", "Experience progress change amount.")
+        )));
+        EVENT_FILTER_FIELDS.put(AutomationEventType.PLAYER_DEATH, join(EVENT_META_FIELDS, List.of(
+                field("health", "Health", "Health value at the time of death."),
+                field("food", "Food", "Hunger level at the time of death."),
+                field("dimension", "Dimension", "Dimension id where the death happened."),
+                field("x", "X", "Player X position at death."),
+                field("y", "Y", "Player Y position at death."),
+                field("z", "Z", "Player Z position at death.")
+        )));
 
         EVENT_CONDITION_FIELDS.put(AutomationEventType.TICK_INTERVAL, join(EVENT_META_FIELDS, List.of(
                 field("tick", "Tick Counter", "Current client tick counter."),
@@ -96,13 +129,17 @@ public final class AutomationFieldCatalog {
         )));
         EVENT_CONDITION_FIELDS.put(AutomationEventType.PLAYER_MOVE, EVENT_FILTER_FIELDS.get(AutomationEventType.PLAYER_MOVE));
         EVENT_CONDITION_FIELDS.put(AutomationEventType.WORLD_JOIN, EVENT_FILTER_FIELDS.get(AutomationEventType.WORLD_JOIN));
+        EVENT_CONDITION_FIELDS.put(AutomationEventType.WORLD_LEAVE, EVENT_FILTER_FIELDS.get(AutomationEventType.WORLD_LEAVE));
         EVENT_CONDITION_FIELDS.put(AutomationEventType.DIMENSION_CHANGE, EVENT_FILTER_FIELDS.get(AutomationEventType.DIMENSION_CHANGE));
         EVENT_CONDITION_FIELDS.put(AutomationEventType.CHAT_RECEIVED_REGEX, EVENT_FILTER_FIELDS.get(AutomationEventType.CHAT_RECEIVED_REGEX));
         EVENT_CONDITION_FIELDS.put(AutomationEventType.SCREEN_CHANGED, EVENT_FILTER_FIELDS.get(AutomationEventType.SCREEN_CHANGED));
+        EVENT_CONDITION_FIELDS.put(AutomationEventType.WEATHER_CHANGED, EVENT_FILTER_FIELDS.get(AutomationEventType.WEATHER_CHANGED));
         EVENT_CONDITION_FIELDS.put(AutomationEventType.HOTBAR_SLOT_CHANGED, EVENT_FILTER_FIELDS.get(AutomationEventType.HOTBAR_SLOT_CHANGED));
         EVENT_CONDITION_FIELDS.put(AutomationEventType.HELD_ITEM_CHANGED, EVENT_FILTER_FIELDS.get(AutomationEventType.HELD_ITEM_CHANGED));
+        EVENT_CONDITION_FIELDS.put(AutomationEventType.PLAYER_LEVEL_CHANGED, EVENT_FILTER_FIELDS.get(AutomationEventType.PLAYER_LEVEL_CHANGED));
         EVENT_CONDITION_FIELDS.put(AutomationEventType.PLAYER_HEALTH_CHANGED, EVENT_FILTER_FIELDS.get(AutomationEventType.PLAYER_HEALTH_CHANGED));
         EVENT_CONDITION_FIELDS.put(AutomationEventType.PLAYER_FOOD_CHANGED, EVENT_FILTER_FIELDS.get(AutomationEventType.PLAYER_FOOD_CHANGED));
+        EVENT_CONDITION_FIELDS.put(AutomationEventType.PLAYER_DEATH, EVENT_FILTER_FIELDS.get(AutomationEventType.PLAYER_DEATH));
 
         SNAPSHOT_FIELDS.put(AutomationRule.ConditionSource.CLIENT, List.of(
                 field("connected", "Connected", "True when both player and world exist."),
@@ -125,7 +162,10 @@ public final class AutomationFieldCatalog {
                 field("dimension", "Dimension", "Current dimension id."),
                 field("hotbarSlot", "Hotbar Slot", "Current selected hotbar slot."),
                 field("mainHandItemId", "Main Hand Item Id", "Current main-hand item id."),
-                field("mainHandItemName", "Main Hand Item Name", "Current main-hand item display name.")
+                field("mainHandItemName", "Main Hand Item Name", "Current main-hand item display name."),
+                field("experienceLevel", "Experience Level", "Current player experience level."),
+                field("experienceProgress", "Experience Progress", "Current progress toward the next experience level."),
+                field("alive", "Alive", "True when the player is alive.")
         ));
         SNAPSHOT_FIELDS.put(AutomationRule.ConditionSource.WORLD, List.of(
                 field("dimension", "Dimension", "Current dimension id."),

@@ -8,8 +8,10 @@ import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.registry.Registries;
 import net.minecraft.text.Text;
 import net.minecraft.util.hit.BlockHitResult;
+import net.minecraft.util.math.BlockPos;
 
 import java.util.List;
 import java.util.Locale;
@@ -52,7 +54,13 @@ public final class DrawClientCommand {
         send(context, "/draw cylinder <x> <y> <z> <radius> <height> [color] [seconds] [segments]");
         send(context, "/draw sphere <x> <y> <z> <radius> [color] [seconds] [segments]");
         send(context, "/draw boxlook [color] [seconds]");
-        send(context, "/draw select <on|off|toggle|shape|left|right|add|status|save|load> [color] [seconds]");
+        send(context, "/draw select on|off|toggle|status|save|load|clear");
+        send(context, "/draw select mode <wand|any>");
+        send(context, "/draw select wand [item_id|hand|default]");
+        send(context, "/draw select shape [box|circle|cylinder|sphere]");
+        send(context, "/draw select pos1|pos2 [look|here|<x> <y> <z>]");
+        send(context, "/draw select set <x1> <y1> <z1> <x2> <y2> <z2>");
+        send(context, "/draw select add [color] [seconds]");
         send(context, "/draw list | /draw remove <id> | /draw clear");
         send(context, "/draw save | /draw load | /draw ui");
         return 1;
@@ -71,7 +79,7 @@ public final class DrawClientCommand {
             case "cylinder" -> cylinder(context, tokens);
             case "sphere" -> sphere(context, tokens);
             case "boxlook" -> boxLook(context, tokens);
-            case "select" -> selection(context, tokens);
+            case "select", "sel" -> selection(context, tokens);
             case "list" -> list(context);
             case "remove" -> remove(context, tokens);
             case "clear" -> clear(context);
@@ -255,6 +263,9 @@ public final class DrawClientCommand {
             case "on" -> {
                 DebugDrawManager.setSelectionEnabled(true);
                 send(context, "Selection tool enabled.");
+                if (!DebugDrawManager.isSelectionUseAnyClick() && !DebugDrawManager.isSelectionWandEquipped()) {
+                    send(context, "Hold " + DebugDrawManager.getSelectionWandItemId() + " to select with clicks, or use /draw select mode any.");
+                }
                 yield 1;
             }
             case "off" -> {
@@ -268,15 +279,160 @@ public final class DrawClientCommand {
                 send(context, "Selection tool " + (next ? "enabled" : "disabled") + ".");
                 yield 1;
             }
-            case "left" -> {
+            case "left", "pos1", "p1" -> {
+                if (t.length >= 3 && "here".equalsIgnoreCase(t[2])) {
+                    MinecraftClient client = context.getSource().getClient();
+                    if (client.player == null) {
+                        yield 0;
+                    }
+                    BlockPos pos = client.player.getBlockPos();
+                    DebugDrawManager.setSelectionPos(false, pos);
+                    send(context, "Set pos1 to " + pos.toShortString() + " (player).");
+                    yield 1;
+                }
+                if (t.length >= 3 && "look".equalsIgnoreCase(t[2])) {
+                    boolean ok = DebugDrawManager.pickSelectionPos(false);
+                    send(context, ok ? "Set pos1 from crosshair block." : "No block under crosshair.");
+                    yield ok ? 1 : 0;
+                }
+                if (t.length >= 5) {
+                    MinecraftClient client = context.getSource().getClient();
+                    if (client.player == null) {
+                        yield 0;
+                    }
+                    try {
+                        BlockPos pos = new BlockPos(
+                                (int) Math.floor(parseCoord(t[2], client.player.getX())),
+                                (int) Math.floor(parseCoord(t[3], client.player.getY())),
+                                (int) Math.floor(parseCoord(t[4], client.player.getZ())));
+                        DebugDrawManager.setSelectionPos(false, pos);
+                        send(context, "Set pos1 to " + pos.toShortString() + ".");
+                        yield 1;
+                    } catch (Exception e) {
+                        send(context, "Invalid pos1 coords: " + e.getMessage());
+                        yield 0;
+                    }
+                }
                 boolean ok = DebugDrawManager.pickSelectionPos(false);
                 send(context, ok ? "Set pos1 from crosshair block." : "No block under crosshair.");
                 yield ok ? 1 : 0;
             }
-            case "right" -> {
+            case "right", "pos2", "p2" -> {
+                if (t.length >= 3 && "here".equalsIgnoreCase(t[2])) {
+                    MinecraftClient client = context.getSource().getClient();
+                    if (client.player == null) {
+                        yield 0;
+                    }
+                    BlockPos pos = client.player.getBlockPos();
+                    DebugDrawManager.setSelectionPos(true, pos);
+                    send(context, "Set pos2 to " + pos.toShortString() + " (player).");
+                    yield 1;
+                }
+                if (t.length >= 3 && "look".equalsIgnoreCase(t[2])) {
+                    boolean ok = DebugDrawManager.pickSelectionPos(true);
+                    send(context, ok ? "Set pos2 from crosshair block." : "No block under crosshair.");
+                    yield ok ? 1 : 0;
+                }
+                if (t.length >= 5) {
+                    MinecraftClient client = context.getSource().getClient();
+                    if (client.player == null) {
+                        yield 0;
+                    }
+                    try {
+                        BlockPos pos = new BlockPos(
+                                (int) Math.floor(parseCoord(t[2], client.player.getX())),
+                                (int) Math.floor(parseCoord(t[3], client.player.getY())),
+                                (int) Math.floor(parseCoord(t[4], client.player.getZ())));
+                        DebugDrawManager.setSelectionPos(true, pos);
+                        send(context, "Set pos2 to " + pos.toShortString() + ".");
+                        yield 1;
+                    } catch (Exception e) {
+                        send(context, "Invalid pos2 coords: " + e.getMessage());
+                        yield 0;
+                    }
+                }
                 boolean ok = DebugDrawManager.pickSelectionPos(true);
                 send(context, ok ? "Set pos2 from crosshair block." : "No block under crosshair.");
                 yield ok ? 1 : 0;
+            }
+            case "set" -> {
+                if (t.length < 8) {
+                    send(context, "Usage: /draw select set <x1> <y1> <z1> <x2> <y2> <z2>");
+                    yield 0;
+                }
+                MinecraftClient client = context.getSource().getClient();
+                if (client.player == null) {
+                    yield 0;
+                }
+                try {
+                    BlockPos pos1 = new BlockPos(
+                            (int) Math.floor(parseCoord(t[2], client.player.getX())),
+                            (int) Math.floor(parseCoord(t[3], client.player.getY())),
+                            (int) Math.floor(parseCoord(t[4], client.player.getZ())));
+                    BlockPos pos2 = new BlockPos(
+                            (int) Math.floor(parseCoord(t[5], client.player.getX())),
+                            (int) Math.floor(parseCoord(t[6], client.player.getY())),
+                            (int) Math.floor(parseCoord(t[7], client.player.getZ())));
+                    DebugDrawManager.setSelectionPos(false, pos1);
+                    DebugDrawManager.setSelectionPos(true, pos2);
+                    send(context, "Set both positions: pos1=" + pos1.toShortString() + " pos2=" + pos2.toShortString());
+                    yield 1;
+                } catch (Exception e) {
+                    send(context, "Invalid set coords: " + e.getMessage());
+                    yield 0;
+                }
+            }
+            case "clear" -> {
+                DebugDrawManager.clearSelectionPositions();
+                send(context, "Cleared selection positions.");
+                yield 1;
+            }
+            case "mode" -> {
+                if (t.length < 3) {
+                    send(context, "Selection mode: " + (DebugDrawManager.isSelectionUseAnyClick() ? "any" : "wand"));
+                    send(context, "Usage: /draw select mode <wand|any>");
+                    yield 1;
+                }
+                String mode = t[2].toLowerCase(Locale.ROOT);
+                if ("any".equals(mode) || "all".equals(mode)) {
+                    DebugDrawManager.setSelectionUseAnyClick(true);
+                    send(context, "Selection mode set to any-click.");
+                    yield 1;
+                }
+                if ("wand".equals(mode) || "tool".equals(mode)) {
+                    DebugDrawManager.setSelectionUseAnyClick(false);
+                    send(context, "Selection mode set to wand-only.");
+                    yield 1;
+                }
+                send(context, "Unknown mode: " + t[2] + " (use wand or any)");
+                yield 0;
+            }
+            case "wand" -> {
+                MinecraftClient client = context.getSource().getClient();
+                if (t.length < 3) {
+                    send(context, "Selection wand: " + DebugDrawManager.getSelectionWandItemId());
+                    send(context, "Wand equipped: " + (DebugDrawManager.isSelectionWandEquipped() ? "yes" : "no"));
+                    send(context, "Usage: /draw select wand [item_id|hand|default]");
+                    yield 1;
+                }
+                String token = t[2].toLowerCase(Locale.ROOT);
+                String wandValue;
+                if ("hand".equals(token)) {
+                    if (client.player == null || client.player.getMainHandStack().isEmpty()) {
+                        send(context, "Hold an item in your main hand first.");
+                        yield 0;
+                    }
+                    wandValue = Registries.ITEM.getId(client.player.getMainHandStack().getItem()).toString();
+                } else {
+                    wandValue = token;
+                }
+                boolean ok = DebugDrawManager.setSelectionWandItem(wandValue);
+                if (!ok) {
+                    send(context, "Invalid item id: " + t[2]);
+                    yield 0;
+                }
+                send(context, "Selection wand set to " + DebugDrawManager.getSelectionWandItemId() + ".");
+                yield 1;
             }
             case "shape" -> {
                 if (t.length < 3) {
@@ -429,7 +585,7 @@ public final class DrawClientCommand {
 
         if (rawTokens.length == 0 || (rawTokens.length == 1 && !trailingSpace)) {
             String prefix = rawTokens.length == 0 ? "" : rawTokens[0].toLowerCase(Locale.ROOT);
-            for (String sub : List.of("line", "box", "circle", "cylinder", "sphere", "boxlook", "select", "list", "remove", "clear", "save", "load", "ui")) {
+            for (String sub : List.of("line", "box", "circle", "cylinder", "sphere", "boxlook", "select", "sel", "list", "remove", "clear", "save", "load", "ui")) {
                 if (sub.startsWith(prefix)) {
                     builder.suggest(sub);
                 }
@@ -480,18 +636,59 @@ public final class DrawClientCommand {
             builder.suggest("boxlook #00FFFF 20");
         }
 
-        if ("select".equals(sub)) {
-            builder.suggest("select toggle");
-            builder.suggest("select shape box");
-            builder.suggest("select shape circle");
-            builder.suggest("select shape cylinder");
-            builder.suggest("select shape sphere");
-            builder.suggest("select left");
-            builder.suggest("select right");
-            builder.suggest("select add #00FFFF 20");
-            builder.suggest("select status");
-            builder.suggest("select save");
-            builder.suggest("select load");
+        if ("select".equals(sub) || "sel".equals(sub)) {
+            if (index <= 1) {
+                builder.suggest("select on");
+                builder.suggest("select off");
+                builder.suggest("select toggle");
+                builder.suggest("select status");
+                builder.suggest("select clear");
+                builder.suggest("select mode wand");
+                builder.suggest("select mode any");
+                builder.suggest("select wand hand");
+                builder.suggest("select wand minecraft:wooden_axe");
+                builder.suggest("select shape box");
+                builder.suggest("select shape circle");
+                builder.suggest("select shape cylinder");
+                builder.suggest("select shape sphere");
+                builder.suggest("select pos1 look");
+                builder.suggest("select pos2 look");
+                builder.suggest("select pos1 here");
+                builder.suggest("select pos2 here");
+                builder.suggest("select set ~ ~ ~ ~ ~ ~");
+                builder.suggest("select add #00FFFF 20");
+                builder.suggest("select save");
+                builder.suggest("select load");
+                return builder.buildFuture();
+            }
+
+            if (rawTokens.length >= 2) {
+                String selectSub = rawTokens[1].toLowerCase(Locale.ROOT);
+                if ("shape".equals(selectSub)) {
+                    builder.suggest("select shape box");
+                    builder.suggest("select shape circle");
+                    builder.suggest("select shape cylinder");
+                    builder.suggest("select shape sphere");
+                } else if ("mode".equals(selectSub)) {
+                    builder.suggest("select mode wand");
+                    builder.suggest("select mode any");
+                } else if ("wand".equals(selectSub)) {
+                    builder.suggest("select wand hand");
+                    builder.suggest("select wand default");
+                    builder.suggest("select wand minecraft:wooden_axe");
+                    builder.suggest("select wand minecraft:blaze_rod");
+                    builder.suggest("select wand minecraft:stick");
+                } else if (List.of("left", "right", "pos1", "pos2", "p1", "p2").contains(selectSub)) {
+                    builder.suggest("select " + selectSub + " look");
+                    builder.suggest("select " + selectSub + " here");
+                    builder.suggest("select " + selectSub + " ~ ~ ~");
+                } else if ("set".equals(selectSub)) {
+                    builder.suggest("select set ~ ~ ~ ~ ~ ~");
+                } else if ("add".equals(selectSub)) {
+                    builder.suggest("select add #00FFFF 20");
+                    builder.suggest("select add green 60");
+                }
+            }
         }
 
         return builder.buildFuture();

@@ -97,6 +97,7 @@ final class MacroWorkbenchAutomationTab {
     private ButtonWidget conditionDeleteButton;
     private ButtonWidget conditionSourceButton;
     private ButtonWidget conditionFieldButton;
+    private ButtonWidget conditionFieldModeButton;
     private ButtonWidget conditionOperatorButton;
     private ButtonWidget conditionIgnoreCaseButton;
     private ButtonWidget actionAddButton;
@@ -114,9 +115,11 @@ final class MacroWorkbenchAutomationTab {
     private TextFieldWidget rateCountField;
     private TextFieldWidget rateWindowField;
     private TextFieldWidget filterValueField;
+    private TextFieldWidget conditionFieldManualField;
     private TextFieldWidget conditionValueField;
     private TextFieldWidget actionTargetField;
     private TextFieldWidget actionArgumentField;
+    private boolean placeholderConditionManualEntry = false;
 
     MacroWorkbenchAutomationTab(MacroWorkbenchScreen owner, List<ClickableWidget> widgets) {
         this.owner = owner;
@@ -226,9 +229,14 @@ final class MacroWorkbenchAutomationTab {
         this.conditionSourceButton = register(ButtonWidget.builder(Text.literal("Source"), b -> cycleConditionSource())
                 .dimensions(layout.rightX + 8, layout.conditionPanelY + CONDITION_SOURCE_Y, layout.columnW - 16, BUTTON_H)
                 .build());
+        int conditionFieldModeButtonW = 84;
         this.conditionFieldButton = register(ButtonWidget.builder(Text.literal("Field"), b -> openConditionFieldPicker())
-                .dimensions(layout.rightX + 8, layout.conditionPanelY + CONDITION_FIELD_Y, layout.columnW - 16, BUTTON_H)
+                .dimensions(layout.rightX + 8, layout.conditionPanelY + CONDITION_FIELD_Y, layout.columnW - 24 - conditionFieldModeButtonW, BUTTON_H)
                 .build());
+        this.conditionFieldModeButton = register(ButtonWidget.builder(Text.literal("Pick"), b -> togglePlaceholderConditionFieldMode())
+                .dimensions(layout.rightX + layout.columnW - 8 - conditionFieldModeButtonW, layout.conditionPanelY + CONDITION_FIELD_Y, conditionFieldModeButtonW, BUTTON_H)
+                .build());
+        this.conditionFieldManualField = register(textField(layout.rightX + 8, layout.conditionPanelY + CONDITION_FIELD_Y, layout.columnW - 16, 256, "placeholder token (e.g. player.name)"));
         this.conditionOperatorButton = register(ButtonWidget.builder(Text.literal("Operator"), b -> cycleConditionOperator())
                 .dimensions(layout.rightX + 8, layout.conditionPanelY + CONDITION_OPERATOR_Y, Math.max(116, (layout.columnW - 28) / 2), BUTTON_H)
                 .build());
@@ -653,6 +661,20 @@ final class MacroWorkbenchAutomationTab {
             refreshConditionRows();
         });
 
+        this.conditionFieldManualField.setChangedListener(value -> {
+            if (this.syncing) {
+                return;
+            }
+            AutomationRule.Condition condition = selectedCondition();
+            if (condition == null || condition.source != AutomationRule.ConditionSource.PLACEHOLDER || !this.placeholderConditionManualEntry) {
+                return;
+            }
+            condition.field = normalizePlaceholderField(sanitizeFieldValue(this.conditionFieldManualField, value));
+            markDirty();
+            refreshConditionRows();
+            syncConditionFields();
+        });
+
         this.actionTargetField.setChangedListener(value -> {
             if (this.syncing) {
                 return;
@@ -896,6 +918,18 @@ final class MacroWorkbenchAutomationTab {
         syncConditionFields();
     }
 
+    private void togglePlaceholderConditionFieldMode() {
+        AutomationRule.Condition condition = selectedCondition();
+        if (condition == null || condition.source != AutomationRule.ConditionSource.PLACEHOLDER) {
+            return;
+        }
+        this.placeholderConditionManualEntry = !this.placeholderConditionManualEntry;
+        this.syncing = true;
+        this.conditionFieldManualField.setText(normalizePlaceholderField(condition.field));
+        this.syncing = false;
+        syncConditionFields();
+    }
+
     private void toggleConditionIgnoreCase() {
         AutomationRule.Condition condition = selectedCondition();
         if (condition == null) {
@@ -987,13 +1021,17 @@ final class MacroWorkbenchAutomationTab {
             case TICK_INTERVAL -> AutomationModule.INSTANCE.fireTickTest();
             case PLAYER_MOVE -> AutomationModule.INSTANCE.firePlayerMoveTest();
             case WORLD_JOIN -> AutomationModule.INSTANCE.fireWorldJoinTest();
+            case WORLD_LEAVE -> AutomationModule.INSTANCE.fireWorldLeaveTest();
             case DIMENSION_CHANGE -> AutomationModule.INSTANCE.fireDimensionChangeTest("minecraft:the_nether");
             case CHAT_RECEIVED_REGEX -> AutomationModule.INSTANCE.fireChatTest("automation test message");
             case SCREEN_CHANGED -> AutomationModule.INSTANCE.fireScreenChangeTest("InventoryScreen");
+            case WEATHER_CHANGED -> AutomationModule.INSTANCE.fireWeatherChangeTest(false, true, false, false);
             case HOTBAR_SLOT_CHANGED -> AutomationModule.INSTANCE.fireHotbarSlotChangeTest(1);
             case HELD_ITEM_CHANGED -> AutomationModule.INSTANCE.fireHeldItemChangeTest("minecraft:diamond_sword");
+            case PLAYER_LEVEL_CHANGED -> AutomationModule.INSTANCE.firePlayerLevelChangeTest(10, 11, 0.25F, 0.05F);
             case PLAYER_HEALTH_CHANGED -> AutomationModule.INSTANCE.firePlayerHealthChangeTest(20.0F, 16.0F);
             case PLAYER_FOOD_CHANGED -> AutomationModule.INSTANCE.firePlayerFoodChangeTest(20, 16);
+            case PLAYER_DEATH -> AutomationModule.INSTANCE.firePlayerDeathTest(0.0F);
         }
         status("Fired test event for " + rule.eventType.name() + ".", 0xFF70D070);
     }
@@ -1128,6 +1166,7 @@ final class MacroWorkbenchAutomationTab {
         this.conditionPickButton.active = active;
         this.conditionDeleteButton.active = active;
         this.conditionSourceButton.active = active;
+        this.conditionFieldModeButton.active = active;
         this.conditionOperatorButton.active = active;
         this.conditionIgnoreCaseButton.active = active;
     }
@@ -1136,20 +1175,29 @@ final class MacroWorkbenchAutomationTab {
         this.syncing = true;
         AutomationRule.Condition condition = selectedCondition();
         boolean active = condition != null;
+        boolean placeholderSource = active && condition.source == AutomationRule.ConditionSource.PLACEHOLDER;
+        boolean manualPlaceholder = placeholderSource && this.placeholderConditionManualEntry;
         this.conditionValueField.setEditable(active);
+        this.conditionFieldManualField.setEditable(manualPlaceholder);
         setVisible(this.conditionSourceButton, active);
-        setVisible(this.conditionFieldButton, active);
+        setVisible(this.conditionFieldButton, active && (!placeholderSource || !manualPlaceholder));
+        setVisible(this.conditionFieldModeButton, placeholderSource);
+        setVisible(this.conditionFieldManualField, manualPlaceholder);
         setVisible(this.conditionValueField, active);
         setVisible(this.conditionOperatorButton, active);
         setVisible(this.conditionIgnoreCaseButton, active);
         if (active) {
             this.conditionFieldButton.setMessage(Text.literal(conditionFieldButtonLabel(condition)));
+            this.conditionFieldModeButton.setMessage(Text.literal(this.placeholderConditionManualEntry ? "Manual" : "Pick"));
+            this.conditionFieldManualField.setText(normalizePlaceholderField(condition.field));
             this.conditionValueField.setText(safe(condition.value));
             this.conditionSourceButton.setMessage(Text.literal("Source: " + condition.source.name()));
             this.conditionOperatorButton.setMessage(Text.literal("Op: " + condition.operator.name()));
             this.conditionIgnoreCaseButton.setMessage(Text.literal(condition.ignoreCase ? "Ignore Case" : "Case Sensitive"));
         } else {
             this.conditionFieldButton.setMessage(Text.literal("Field"));
+            this.conditionFieldModeButton.setMessage(Text.literal("Pick"));
+            this.conditionFieldManualField.setText("");
             this.conditionValueField.setText("");
             this.conditionSourceButton.setMessage(Text.literal("Source"));
             this.conditionOperatorButton.setMessage(Text.literal("Op"));
@@ -1223,7 +1271,11 @@ final class MacroWorkbenchAutomationTab {
         setWidgetState(this.conditionAddButton, showConditions, showConditions && hasRule);
         setWidgetState(this.conditionDeleteButton, showConditions, showConditions && hasCondition);
         setWidgetState(this.conditionSourceButton, showConditions && hasCondition, showConditions && hasCondition);
-        setWidgetState(this.conditionFieldButton, showConditions && hasCondition, showConditions && hasCondition);
+        boolean placeholderCondition = hasCondition && selectedCondition().source == AutomationRule.ConditionSource.PLACEHOLDER;
+        boolean manualPlaceholder = placeholderCondition && this.placeholderConditionManualEntry;
+        setWidgetState(this.conditionFieldButton, showConditions && hasCondition && !manualPlaceholder, showConditions && hasCondition && !manualPlaceholder);
+        setWidgetState(this.conditionFieldModeButton, showConditions && placeholderCondition, showConditions && placeholderCondition);
+        setWidgetState(this.conditionFieldManualField, showConditions && manualPlaceholder, showConditions && manualPlaceholder);
         setWidgetState(this.conditionOperatorButton, showConditions && hasCondition, showConditions && hasCondition);
         setWidgetState(this.conditionIgnoreCaseButton, showConditions && hasCondition, showConditions && hasCondition);
         setWidgetState(this.conditionValueField, showConditions && hasCondition, showConditions && hasCondition);
@@ -1543,13 +1595,17 @@ final class MacroWorkbenchAutomationTab {
             case TICK_INTERVAL -> "Tick rules use an event filter like field=intervalTicks value=20.";
             case PLAYER_MOVE -> "Move rules can filter on distance or destination coordinates.";
             case WORLD_JOIN -> "Join rules usually need no filters.";
+            case WORLD_LEAVE -> "Leave rules trigger when unloading/disconnecting from a world.";
             case DIMENSION_CHANGE -> "Dimension rules often use toDimension or fromDimension.";
             case CHAT_RECEIVED_REGEX -> "Chat rules usually use field=message with REGEX.";
             case SCREEN_CHANGED -> "Screen rules can match fromScreen, toScreen, or screen presence changes.";
+            case WEATHER_CHANGED -> "Weather rules can detect rain/thunder starts and stops.";
             case HOTBAR_SLOT_CHANGED -> "Hotbar rules can match fromSlot or toSlot.";
             case HELD_ITEM_CHANGED -> "Held-item rules can match item ids or display names.";
+            case PLAYER_LEVEL_CHANGED -> "Level rules can react to level-ups or XP progress changes.";
             case PLAYER_HEALTH_CHANGED -> "Health rules can match toHealth or deltaHealth.";
             case PLAYER_FOOD_CHANGED -> "Food rules can match toFood or deltaFood.";
+            case PLAYER_DEATH -> "Death rules run once when the client player dies.";
         };
     }
 
@@ -1572,6 +1628,11 @@ final class MacroWorkbenchAutomationTab {
                 filter.operator = AutomationRule.Operator.EXISTS;
                 filter.value = "";
             }
+            case WORLD_LEAVE -> {
+                filter.field = "fromDimension";
+                filter.operator = AutomationRule.Operator.EXISTS;
+                filter.value = "";
+            }
             case DIMENSION_CHANGE -> {
                 filter.field = "toDimension";
                 filter.operator = AutomationRule.Operator.EQUALS;
@@ -1587,6 +1648,11 @@ final class MacroWorkbenchAutomationTab {
                 filter.operator = AutomationRule.Operator.EQUALS;
                 filter.value = "InventoryScreen";
             }
+            case WEATHER_CHANGED -> {
+                filter.field = "startedRaining";
+                filter.operator = AutomationRule.Operator.EQUALS;
+                filter.value = "true";
+            }
             case HOTBAR_SLOT_CHANGED -> {
                 filter.field = "toSlot";
                 filter.operator = AutomationRule.Operator.EQUALS;
@@ -1597,6 +1663,11 @@ final class MacroWorkbenchAutomationTab {
                 filter.operator = AutomationRule.Operator.EQUALS;
                 filter.value = "minecraft:diamond_sword";
             }
+            case PLAYER_LEVEL_CHANGED -> {
+                filter.field = "deltaLevel";
+                filter.operator = AutomationRule.Operator.GREATER_THAN;
+                filter.value = "0";
+            }
             case PLAYER_HEALTH_CHANGED -> {
                 filter.field = "deltaHealth";
                 filter.operator = AutomationRule.Operator.LESS_THAN;
@@ -1605,6 +1676,11 @@ final class MacroWorkbenchAutomationTab {
             case PLAYER_FOOD_CHANGED -> {
                 filter.field = "deltaFood";
                 filter.operator = AutomationRule.Operator.LESS_THAN;
+                filter.value = "0";
+            }
+            case PLAYER_DEATH -> {
+                filter.field = "health";
+                filter.operator = AutomationRule.Operator.LESS_OR_EQUAL;
                 filter.value = "0";
             }
         }
@@ -1620,16 +1696,20 @@ final class MacroWorkbenchAutomationTab {
             case TICK_INTERVAL -> condition.field = "worldLoaded";
             case PLAYER_MOVE -> condition.field = "distance";
             case WORLD_JOIN -> condition.field = "dimension";
+            case WORLD_LEAVE -> condition.field = "fromDimension";
             case DIMENSION_CHANGE -> condition.field = "toDimension";
             case CHAT_RECEIVED_REGEX -> {
                 condition.field = "message";
                 condition.operator = AutomationRule.Operator.CONTAINS;
             }
             case SCREEN_CHANGED -> condition.field = "toScreen";
+            case WEATHER_CHANGED -> condition.field = "startedRaining";
             case HOTBAR_SLOT_CHANGED -> condition.field = "toSlot";
             case HELD_ITEM_CHANGED -> condition.field = "toItemId";
+            case PLAYER_LEVEL_CHANGED -> condition.field = "toLevel";
             case PLAYER_HEALTH_CHANGED -> condition.field = "toHealth";
             case PLAYER_FOOD_CHANGED -> condition.field = "toFood";
+            case PLAYER_DEATH -> condition.field = "health";
         }
         condition.value = "";
         return condition;
@@ -1675,6 +1755,9 @@ final class MacroWorkbenchAutomationTab {
         }
         AutomationFieldCatalog.FieldOption option = AutomationFieldCatalog.findConditionField(condition.source, rule.eventType, condition.field);
         if (option == null) {
+            if (condition.source == AutomationRule.ConditionSource.PLACEHOLDER) {
+                return "Use Pick for known tokens, or Manual to enter any placeholder token.";
+            }
             return "Choose a field from the picker to see what the selected source exposes.";
         }
         return displayConditionField(condition.source, option.key()) + ": " + option.description();
@@ -1687,6 +1770,13 @@ final class MacroWorkbenchAutomationTab {
         }
         if (AutomationFieldCatalog.findConditionField(condition.source, rule.eventType, condition.field) != null) {
             return;
+        }
+        if (condition.source == AutomationRule.ConditionSource.PLACEHOLDER) {
+            String normalized = normalizePlaceholderField(condition.field);
+            if (!normalized.isBlank()) {
+                condition.field = normalized;
+                return;
+            }
         }
         if (condition.source == AutomationRule.ConditionSource.EVENT) {
             condition.field = defaultConditionFor(rule.eventType).field;

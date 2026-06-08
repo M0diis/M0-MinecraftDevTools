@@ -115,6 +115,57 @@
       "rateLimitCount": 0,
       "rateLimitWindowMs": 0,
       "priority": 5
+    },
+    {
+      "id": "rain_start_notice",
+      "name": "Rain Start Notice",
+      "enabled": true,
+      "eventType": "WEATHER_CHANGED",
+      "eventFilters": [
+        {
+          "field": "startedRaining",
+          "operator": "EQUALS",
+          "value": "true",
+          "ignoreCase": true
+        }
+      ],
+      "conditions": [],
+      "actions": [
+        {
+          "type": "SEND_CLIENT_COMMAND",
+          "target": "/say weather changed",
+          "argument": "",
+          "enabled": true,
+          "parameters": {}
+        }
+      ],
+      "cooldownMs": 0,
+      "debounceMs": 0,
+      "rateLimitCount": 0,
+      "rateLimitWindowMs": 0,
+      "priority": 5
+    },
+    {
+      "id": "death_recovery_macro",
+      "name": "Death Recovery Macro",
+      "enabled": true,
+      "eventType": "PLAYER_DEATH",
+      "eventFilters": [],
+      "conditions": [],
+      "actions": [
+        {
+          "type": "RUN_MACRO",
+          "target": "death_recovery",
+          "argument": "",
+          "enabled": true,
+          "parameters": {}
+        }
+      ],
+      "cooldownMs": 0,
+      "debounceMs": 0,
+      "rateLimitCount": 0,
+      "rateLimitWindowMs": 0,
+      "priority": 5
     }
   ]
 }

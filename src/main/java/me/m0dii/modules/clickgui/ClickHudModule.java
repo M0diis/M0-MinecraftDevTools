@@ -18,7 +18,7 @@ public class ClickHudModule extends Module {
     public static final ClickHudModule INSTANCE = new ClickHudModule();
 
     @Getter
-    private ClickGuiRenderer renderer;
+    private ClickHudRenderer renderer;
 
     private ClickHudModule() {
         super("click_hud", "ClickHUD", true);
@@ -26,7 +26,7 @@ public class ClickHudModule extends Module {
 
     @Override
     public void register() {
-        this.renderer = new ClickGuiRenderer();
+        this.renderer = new ClickHudRenderer();
 
         HudElementRegistry.attachElementBefore(VanillaHudElements.CHAT,
                 Identifier.of(M0DevToolsClient.MOD_ID, "click_hud"),

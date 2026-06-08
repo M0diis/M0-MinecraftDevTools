@@ -161,7 +161,7 @@ public class ActionRunnerModule {
         }
     }
 
-    public Iterable<? extends Action> getActions() {
+    public Iterable<Action> getActions() {
         return queue;
     }
 

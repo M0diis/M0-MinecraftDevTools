@@ -300,7 +300,20 @@ public final class DataHandler {
         screenRule.eventFilters = List.of(equalsFilter("toScreen", "InventoryScreen"));
         screenRule.actions = List.of(AutomationRule.Action.script("heartbeat.kts"));
 
-        example.rules = List.of(joinRule, chatRule, tickRule, screenRule);
+        AutomationRule weatherRule = AutomationRule.createDefault();
+        weatherRule.id = "rain_start_notice";
+        weatherRule.name = "Rain Start Notice";
+        weatherRule.eventType = AutomationEventType.WEATHER_CHANGED;
+        weatherRule.eventFilters = List.of(equalsFilter("startedRaining", "true"));
+        weatherRule.actions = List.of(AutomationRule.Action.command("/say weather changed"));
+
+        AutomationRule deathRule = AutomationRule.createDefault();
+        deathRule.id = "death_recovery_macro";
+        deathRule.name = "Death Recovery Macro";
+        deathRule.eventType = AutomationEventType.PLAYER_DEATH;
+        deathRule.actions = List.of(AutomationRule.Action.macro("death_recovery"));
+
+        example.rules = List.of(joinRule, chatRule, tickRule, screenRule, weatherRule, deathRule);
         return example;
     }
 

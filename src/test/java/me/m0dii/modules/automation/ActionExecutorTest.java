@@ -1,5 +1,6 @@
 package me.m0dii.modules.automation;
 
+import org.jspecify.annotations.NonNull;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -57,26 +58,26 @@ class ActionExecutorTest {
         private Map<String, Object> lastScriptContext = Map.of();
 
         @Override
-        public boolean runMacro(String macroId) {
+        public boolean runMacro(@NonNull String macroId) {
             calls.add("macro:" + macroId);
             return true;
         }
 
         @Override
-        public ActionExecutor.ActionResult runScript(String scriptFile, Map<String, Object> context) {
+        public ActionExecutor.ActionResult runScript(@NonNull String scriptFile, @NonNull Map<String, Object> context) {
             calls.add("script:" + scriptFile);
             lastScriptContext = context;
             return ActionExecutor.ActionResult.ok("script ok");
         }
 
         @Override
-        public boolean sendClientCommand(String command) {
+        public boolean sendClientCommand(@NonNull String command) {
             calls.add("command:" + command);
             return true;
         }
 
         @Override
-        public boolean toggleModule(String moduleId, Boolean enabledState) {
+        public boolean toggleModule(@NonNull String moduleId, Boolean enabledState) {
             calls.add("toggle:" + moduleId + ":" + enabledState);
             return true;
         }
