@@ -50,8 +50,8 @@ public class SimpleConfig {
      *  If any error occurred during loading or reading from the config
      *  a 'broken' flag is set, indicating that the config's state
      *  is undefined and should be discarded using `delete()`
-     *
-     * @return the 'broken' flag of the configuration
+     * <p>
+     * return the 'broken' flag of the configuration
      */
     @Getter
     private boolean broken = false;
@@ -184,12 +184,12 @@ public class SimpleConfig {
         String identifier = "Config '" + request.filename + "'";
 
         if (!request.file.exists()) {
-            LOGGER.info(identifier + " is missing, generating default one...");
+            LOGGER.info("{} is missing, generating default one...", identifier);
 
             try {
                 createConfig();
             } catch (IOException e) {
-                LOGGER.error(identifier + " failed to generate!");
+                LOGGER.error("{} failed to generate!", identifier);
                 LOGGER.trace(e);
                 broken = true;
             }
@@ -199,7 +199,7 @@ public class SimpleConfig {
             try {
                 loadConfig();
             } catch (Exception e) {
-                LOGGER.error(identifier + " failed to load!");
+                LOGGER.error("{} failed to load!", identifier);
                 LOGGER.trace(e);
                 broken = true;
             }
@@ -237,7 +237,7 @@ public class SimpleConfig {
             writeConfig();
             modified = false;
         } catch (IOException e) {
-            LOGGER.error("Failed to write to config file '" + request.filename + "'!");
+            LOGGER.error("Failed to write to config file '{}'!", request.filename);
         }
     }
 
@@ -252,7 +252,7 @@ public class SimpleConfig {
             loadConfig();
             broken = false;
         } catch (IOException e) {
-            LOGGER.error("Failed to reconstruct config file '" + request.filename + "'!");
+            LOGGER.error("Failed to reconstruct config file '{}'!", request.filename);
         }
     }
 

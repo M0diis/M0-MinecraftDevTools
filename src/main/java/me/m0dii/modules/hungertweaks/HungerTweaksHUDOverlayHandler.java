@@ -57,10 +57,10 @@ public class HungerTweaksHUDOverlayHandler {
             return;
         }
 
-        int foodHunger = result.modifiedFoodComponent.nutrition();
-        float foodSaturationIncrement = result.modifiedFoodComponent.saturation();
+        int foodHunger = result.modifiedFoodComponent().nutrition();
+        float foodSaturationIncrement = result.modifiedFoodComponent().saturation();
         drawHungerOverlay(context, foodHunger, stats.getFoodLevel(), right, top, flashAlpha,
-                HungerTweaksFoodHelper.isRotten(result.modifiedFoodComponent), client.inGameHud.getTicks());
+                HungerTweaksFoodHelper.isRotten(result.modifiedFoodComponent()), client.inGameHud.getTicks());
 
         if (HungerTweaksModule.INSTANCE.showSaturationHudOverlay()) {
             int newFoodValue = stats.getFoodLevel() + foodHunger;
@@ -89,7 +89,7 @@ public class HungerTweaksHUDOverlayHandler {
             return;
         }
 
-        float foodHealthIncrement = HungerTweaksFoodHelper.getEstimatedHealthIncrement(player, result.modifiedFoodComponent);
+        float foodHealthIncrement = HungerTweaksFoodHelper.getEstimatedHealthIncrement(player, result.modifiedFoodComponent());
         float currentHealth = player.getHealth();
         float modifiedHealth = Math.min(currentHealth + foodHealthIncrement, player.getMaxHealth());
         if (currentHealth < modifiedHealth) {
@@ -102,7 +102,7 @@ public class HungerTweaksHUDOverlayHandler {
             return;
         }
 
-        float modifiedSaturation = Math.max(0, Math.min(saturationLevel + saturationGained, 20));
+        float modifiedSaturation = Math.clamp(saturationLevel + saturationGained, 0, 20);
         int startSaturationBar = saturationGained != 0 ? (int) Math.max(saturationLevel / 2.0F, 0) : 0;
         int endSaturationBar = (int) Math.ceil(modifiedSaturation / 2.0F);
         int iconSize = 9;
@@ -124,7 +124,7 @@ public class HungerTweaksHUDOverlayHandler {
             return;
         }
 
-        int modifiedFood = Math.max(0, Math.min(20, foodLevel + hungerRestored));
+        int modifiedFood = Math.clamp(foodLevel + hungerRestored, 0, 20);
         int startFoodBars = Math.max(0, foodLevel / 2);
         int endFoodBars = (int) Math.ceil(modifiedFood / 2.0F);
         int iconSize = 9;
@@ -170,7 +170,7 @@ public class HungerTweaksHUDOverlayHandler {
     }
 
     public void drawExhaustionOverlay(DrawContext context, float exhaustion, int right, int top) {
-        float ratio = Math.min(1, Math.max(0, exhaustion / HungerTweaksFoodHelper.MAX_EXHAUSTION));
+        float ratio = Math.clamp(exhaustion / HungerTweaksFoodHelper.MAX_EXHAUSTION, 0, 1);
         int width = (int) (ratio * 81);
         context.drawTexture(RenderPipelines.GUI_TEXTURED, HungerTweaksTextureHelper.MOD_ICONS, right - width, top, (float) (81 - width), 18f, width, 9, 256, 256);
     }
@@ -182,7 +182,7 @@ public class HungerTweaksHUDOverlayHandler {
         } else if (unclampedFlashAlpha <= -0.5F) {
             alphaDir = 1;
         }
-        flashAlpha = Math.max(0F, Math.min(1F, unclampedFlashAlpha)) * HungerTweaksModule.INSTANCE.getMaxHudOverlayFlashAlpha();
+        flashAlpha = Math.clamp(unclampedFlashAlpha, 0F, 1F) * HungerTweaksModule.INSTANCE.getMaxHudOverlayFlashAlpha();
     }
 
     public void resetFlash() {
@@ -309,11 +309,11 @@ public class HungerTweaksHUDOverlayHandler {
         protected void query(PlayerEntity player) {
             ItemStack heldItem = player.getMainHandStack();
             HungerTweaksFoodHelper.QueriedFoodResult heldFood = HungerTweaksFoodHelper.query(heldItem, player);
-            boolean canConsume = heldFood != null && HungerTweaksFoodHelper.canConsume(player, heldFood.modifiedFoodComponent);
+            boolean canConsume = heldFood != null && HungerTweaksFoodHelper.canConsume(player, heldFood.modifiedFoodComponent());
             if (HungerTweaksModule.INSTANCE.showFoodValuesHudOverlayWhenOffhand() && !canConsume) {
                 heldItem = player.getOffHandStack();
                 heldFood = HungerTweaksFoodHelper.query(heldItem, player);
-                canConsume = heldFood != null && HungerTweaksFoodHelper.canConsume(player, heldFood.modifiedFoodComponent);
+                canConsume = heldFood != null && HungerTweaksFoodHelper.canConsume(player, heldFood.modifiedFoodComponent());
             }
 
             if (heldItem.isEmpty() || !canConsume) {

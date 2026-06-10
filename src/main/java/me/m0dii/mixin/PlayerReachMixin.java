@@ -4,6 +4,7 @@ import me.m0dii.modules.reach.ReachModule;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.entity.player.PlayerEntity;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
@@ -31,6 +32,7 @@ public class PlayerReachMixin {
         cir.setReturnValue(adjusted);
     }
 
+    @Unique
     private static boolean isSingleplayerLike() {
         MinecraftClient client = MinecraftClient.getInstance();
         if (client == null) {

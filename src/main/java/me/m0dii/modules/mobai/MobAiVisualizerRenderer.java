@@ -829,11 +829,11 @@ final class MobAiVisualizerRenderer {
     }
 
     private static int clamp(int value, int min, int max) {
-        return Math.max(min, Math.min(max, value));
+        return Math.clamp(max, min, value);
     }
 
     private static double clamp(double value, double min, double max) {
-        return Math.max(min, Math.min(max, value));
+        return Math.clamp(max, min, value);
     }
 
     private static float scaleWidth(float width) {

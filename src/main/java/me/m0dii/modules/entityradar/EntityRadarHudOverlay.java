@@ -34,7 +34,6 @@ public class EntityRadarHudOverlay implements Toggleable {
         int totalCount = entities.size();
 
         float scale = 0.75f;
-        scale = Math.clamp(scale, 0.5f, 3.0f);
 
         context.getMatrices().pushMatrix();
         context.getMatrices().scale(scale, scale);

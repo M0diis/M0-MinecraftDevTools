@@ -138,7 +138,7 @@ public class HungerTweaksTooltipOverlayHandler {
             return;
         }
 
-        FoodOverlay foodOverlay = new FoodOverlay(queriedFoodResult.defaultFoodComponent, queriedFoodResult.modifiedFoodComponent);
+        FoodOverlay foodOverlay = new FoodOverlay(queriedFoodResult.defaultFoodComponent(), queriedFoodResult.modifiedFoodComponent());
         if (foodOverlay.shouldRenderHungerBars()) {
             tooltip.add(new FoodOverlayTextComponent(foodOverlay));
         }

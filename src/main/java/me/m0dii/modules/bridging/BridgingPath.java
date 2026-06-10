@@ -118,7 +118,7 @@ final class BridgingPath {
             return List.of();
         }
 
-        BlockPos lastPoint = points.get(points.size() - 1);
+        BlockPos lastPoint = points.getLast();
         BlockPos delta = newPoint.subtract(lastPoint);
         int distance = newPoint.getManhattanDistance(lastPoint);
 

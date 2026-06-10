@@ -10,7 +10,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(MinecraftClient.class)
 public class MinecraftClientMixin {
 
-    @Inject(method = "Lnet/minecraft/client/MinecraftClient;close()V", at = @At("HEAD"))
+    @Inject(method = "close()V", at = @At("HEAD"))
     public void closeMixin(CallbackInfo ci) {
         BetterCommandBlockUI.writeConfig();
     }

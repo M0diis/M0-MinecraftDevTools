@@ -76,7 +76,7 @@ public class SideWindow implements Drawable, Element {
         );
         this.piFractionInput.setChangedListener((input) -> {
             try {
-                piFraction = Math.min(Math.max(Integer.parseInt(input), 1), 16);
+                piFraction = Math.clamp(Integer.parseInt(input), 1, 16);
                 this.piSlider.setSubdivisions(piFraction);
             } catch (NumberFormatException e) {
                 this.piSlider.setSubdivisions(4);

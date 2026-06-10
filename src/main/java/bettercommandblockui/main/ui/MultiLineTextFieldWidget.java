@@ -255,7 +255,7 @@ public class MultiLineTextFieldWidget extends TextFieldWidget implements Element
 
     private void drawRawText(DrawContext context, String content, int x, int y, int color) {
         TextRenderer textRenderer = accessor.getTextRenderer();
-        String line = content.substring(Math.max(Math.min(horizontalOffset, content.length() - 1), 0));
+        String line = content.substring(Math.clamp(horizontalOffset, 0, content.length() - 1));
         String trimmedLine = textRenderer.trimToWidth(line, this.getInnerWidth());
         context.drawTextWithShadow(textRenderer, trimmedLine, x, y, color);
     }
@@ -1065,7 +1065,7 @@ public class MultiLineTextFieldWidget extends TextFieldWidget implements Element
     }
 
     private int clamp(int i, int min, int max) {
-        return Math.max(Math.min(i, max), min);
+        return Math.clamp(i, min, max);
     }
 
 }

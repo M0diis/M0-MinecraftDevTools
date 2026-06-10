@@ -181,7 +181,7 @@ public final class MacroInventoryWidgetSupport {
         int contentH = Math.max(1, height - padding * 2);
         int cellW = Math.max(1, (contentW - gap * Math.max(0, contents.columns() - 1)) / Math.max(1, contents.columns()));
         int cellH = Math.max(1, (contentH - gap * Math.max(0, contents.rows() - 1)) / Math.max(1, contents.rows()));
-        int cell = Math.max(1, Math.min(cellW, cellH));
+        int cell = Math.clamp(cellW, 1, cellH);
         int gridW = contents.columns() * cell + gap * Math.max(0, contents.columns() - 1);
         int gridH = contents.rows() * cell + gap * Math.max(0, contents.rows() - 1);
         int startX = x + padding + Math.max(0, (contentW - gridW) / 2);

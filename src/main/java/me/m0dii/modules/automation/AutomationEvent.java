@@ -8,12 +8,8 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 
-public final class AutomationEvent {
-    private final AutomationEventType type;
-    private final long timestampMs;
-    private final long clientTick;
-    private final Map<String, Object> attributes;
-
+public record AutomationEvent(AutomationEventType type, long timestampMs, long clientTick,
+                              Map<String, Object> attributes) {
     public AutomationEvent(@NotNull AutomationEventType type,
                            long timestampMs,
                            long clientTick,
@@ -24,37 +20,25 @@ public final class AutomationEvent {
         this.attributes = attributes == null ? Map.of() : Collections.unmodifiableMap(new LinkedHashMap<>(attributes));
     }
 
-    public AutomationEventType type() {
-        return type;
-    }
-
-    public long timestampMs() {
-        return timestampMs;
-    }
-
-    public long clientTick() {
-        return clientTick;
-    }
-
-    public Map<String, Object> attributes() {
-        return attributes;
-    }
-
     public @Nullable Object attribute(String key) {
         if (key == null || key.isBlank()) {
             return null;
         }
-        if (key.equals("type") || key.equals("eventType")) {
-            return type.name();
-        }
-        if (key.equals("timestampMs")) {
-            return timestampMs;
-        }
-        if (key.equals("clientTick")) {
-            return clientTick;
-        }
-        if (attributes.containsKey(key)) {
-            return attributes.get(key);
+        switch (key) {
+            case "type", "eventType" -> {
+                return type.name();
+            }
+            case "timestampMs" -> {
+                return timestampMs;
+            }
+            case "clientTick" -> {
+                return clientTick;
+            }
+            default -> {
+                if (attributes.containsKey(key)) {
+                    return attributes.get(key);
+                }
+            }
         }
 
         Object current = attributes;

@@ -830,22 +830,28 @@ public final class DebugDrawManager {
             double a0 = (Math.PI * 2.0 * i) / sphere.segments;
             double a1 = (Math.PI * 2.0 * (i + 1)) / sphere.segments;
 
+            double x1 = sphere.centerX + Math.cos(a0) * sphere.radius - cameraX;
+            double x2 = sphere.centerX + Math.cos(a1) * sphere.radius - cameraX;
+
+            double z1 = sphere.centerZ + Math.sin(a0) * sphere.radius - cameraZ;
+            double z2 = sphere.centerZ + Math.sin(a1) * sphere.radius - cameraZ;
+
             DrawUtil.drawLineSafe(buffer,
-                    sphere.centerX + Math.cos(a0) * sphere.radius - cameraX, sphere.centerY - cameraY, sphere.centerZ + Math.sin(a0) * sphere.radius - cameraZ,
-                    sphere.centerX + Math.cos(a1) * sphere.radius - cameraX, sphere.centerY - cameraY, sphere.centerZ + Math.sin(a1) * sphere.radius - cameraZ,
+                    x1, sphere.centerY - cameraY, z1,
+                    x2, sphere.centerY - cameraY, z2,
                     color[0], color[1], color[2], color[3], 1.25f);
             DrawUtil.drawLineSafe(buffer,
-                    sphere.centerX - cameraX, sphere.centerY + Math.cos(a0) * sphere.radius - cameraY, sphere.centerZ + Math.sin(a0) * sphere.radius - cameraZ,
-                    sphere.centerX - cameraX, sphere.centerY + Math.cos(a1) * sphere.radius - cameraY, sphere.centerZ + Math.sin(a1) * sphere.radius - cameraZ,
+                    sphere.centerX - cameraX, sphere.centerY + Math.cos(a0) * sphere.radius - cameraY, z1,
+                    sphere.centerX - cameraX, sphere.centerY + Math.cos(a1) * sphere.radius - cameraY, z2,
                     color[0], color[1], color[2], color[3], 1.25f);
             DrawUtil.drawLineSafe(buffer,
-                    sphere.centerX + Math.cos(a0) * sphere.radius - cameraX, sphere.centerY + Math.sin(a0) * sphere.radius - cameraY, sphere.centerZ - cameraZ,
-                    sphere.centerX + Math.cos(a1) * sphere.radius - cameraX, sphere.centerY + Math.sin(a1) * sphere.radius - cameraY, sphere.centerZ - cameraZ,
+                    x1, sphere.centerY + Math.sin(a0) * sphere.radius - cameraY, sphere.centerZ - cameraZ,
+                    x2, sphere.centerY + Math.sin(a1) * sphere.radius - cameraY, sphere.centerZ - cameraZ,
                     color[0], color[1], color[2], color[3], 1.25f);
         }
     }
 
-    private static abstract sealed class DrawShape permits LineShape, BoxShape, CircleShape, CylinderShape, SphereShape {
+    private abstract static sealed class DrawShape {
         protected final int id;
         protected final long expiresAtMillis;
         protected final int rgb;

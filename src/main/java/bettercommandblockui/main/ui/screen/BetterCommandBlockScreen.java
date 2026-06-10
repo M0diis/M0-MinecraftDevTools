@@ -145,7 +145,7 @@ public class BetterCommandBlockScreen extends AbstractBetterCommandBlockScreen {
                                 moveAlongChain(entry.getRight());
                             }), Text.of(""))
                     ));
-                    chainPrior.get(chainPrior.size() - 1).setTooltip(Tooltip.of(directionToText(entry.getRight())));
+                    chainPrior.getLast().setTooltip(Tooltip.of(directionToText(entry.getRight())));
                     y += 22;
                 }
             }

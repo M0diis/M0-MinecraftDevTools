@@ -96,14 +96,18 @@ public final class NbtEditorUtils {
     }
 
     public static String summary(NbtElement element) {
-        if (element == null) {
-            return "(missing)";
-        }
-        if (element instanceof NbtCompound compound) {
-            return "compound (" + compound.getKeys().size() + " keys)";
-        }
-        if (element instanceof NbtList list) {
-            return "list (" + list.size() + " entries)";
+        switch (element) {
+            case null -> {
+                return "(missing)";
+            }
+            case NbtCompound compound -> {
+                return "compound (" + compound.getKeys().size() + " keys)";
+            }
+            case NbtList list -> {
+                return "list (" + list.size() + " entries)";
+            }
+            default -> {
+            }
         }
         String raw = element.toString();
         if (raw.length() <= 56) {

@@ -84,6 +84,6 @@ public class CyclingTexturedButtonWidget<T> extends PressableWidget {
     }
 
     public interface PressAction {
-        void onPress(CyclingTexturedButtonWidget button);
+        void onPress(CyclingTexturedButtonWidget<?> button);
     }
 }

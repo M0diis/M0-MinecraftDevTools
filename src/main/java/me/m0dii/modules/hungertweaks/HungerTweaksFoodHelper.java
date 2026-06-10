@@ -97,15 +97,8 @@ public final class HungerTweaksFoodHelper {
         return health;
     }
 
-    public static final class QueriedFoodResult {
-        public final FoodComponent defaultFoodComponent;
-        public final FoodComponent modifiedFoodComponent;
-        public final ItemStack itemStack;
-
-        public QueriedFoodResult(FoodComponent defaultFoodComponent, FoodComponent modifiedFoodComponent, ItemStack itemStack) {
-            this.defaultFoodComponent = defaultFoodComponent;
-            this.modifiedFoodComponent = modifiedFoodComponent;
-            this.itemStack = itemStack;
-        }
+    public record QueriedFoodResult(FoodComponent defaultFoodComponent,
+                                    FoodComponent modifiedFoodComponent,
+                                    ItemStack itemStack) {
     }
 }

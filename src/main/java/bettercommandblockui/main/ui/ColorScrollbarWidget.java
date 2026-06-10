@@ -61,7 +61,7 @@ public class ColorScrollbarWidget extends ScrollbarWidget {
         if (!this.visible) {
             return;
         }
-        pos = Math.min(Math.max((click.x() - getX()) / width, 0), 1);
+        pos = Math.clamp((click.x() - getX()) / width, 0, 1);
         if ((changedListener != null)) {
             changedListener.accept(pos);
         }
@@ -74,7 +74,7 @@ public class ColorScrollbarWidget extends ScrollbarWidget {
     public void onDrag(Click click, double distX, double distY) {
         if (dragging) {
             double posBefore = pos;
-            pos = Math.min(Math.max(pos + distX / (length - barLength), 0), 1);
+            pos = Math.clamp(pos + distX / (length - barLength), 0, 1);
             if ((changedListener != null) && (Math.abs(posBefore - pos) > 0.0d)) {
                 changedListener.accept(pos);
             }

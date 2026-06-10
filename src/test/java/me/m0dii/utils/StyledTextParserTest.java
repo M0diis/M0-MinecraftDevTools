@@ -13,8 +13,8 @@ class StyledTextParserTest {
         List<StyledTextParser.StyledFragment> fragments = StyledTextParser.parseFragments("&cRed &lBold&r Plain");
 
         assertEquals(3, fragments.size());
-        assertEquals("Red ", fragments.get(0).text());
-        assertEquals(0xFFFF5555, fragments.get(0).colorArgb());
+        assertEquals("Red ", fragments.getFirst().text());
+        assertEquals(0xFFFF5555, fragments.getFirst().colorArgb());
         assertFalse(fragments.get(0).bold());
 
         assertEquals("Bold", fragments.get(1).text());

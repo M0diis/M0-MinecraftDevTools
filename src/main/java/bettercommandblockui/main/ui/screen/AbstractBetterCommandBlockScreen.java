@@ -7,6 +7,7 @@ import bettercommandblockui.main.ui.MultiLineCommandSuggestor;
 import bettercommandblockui.main.ui.MultiLineTextFieldWidget;
 import bettercommandblockui.main.ui.SideWindow;
 import bettercommandblockui.mixin.ScreenAccessor;
+import lombok.AllArgsConstructor;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.block.entity.CommandBlockBlockEntity;
@@ -37,18 +38,12 @@ import static bettercommandblockui.main.BetterCommandBlockUI.*;
 @Environment(EnvType.CLIENT)
 public abstract class AbstractBetterCommandBlockScreen extends Screen {
 
-    protected class CommandBlockState {
+    @AllArgsConstructor
+    protected static class CommandBlockState {
         public CommandBlockBlockEntity.Type type;
         boolean conditional;
         public boolean needsRedstone;
         public boolean trackOutput;
-
-        public CommandBlockState(CommandBlockBlockEntity.Type type, boolean conditional, boolean needsRedstone, boolean trackOutput) {
-            this.type = type;
-            this.conditional = conditional;
-            this.needsRedstone = needsRedstone;
-            this.trackOutput = trackOutput;
-        }
     }
 
     protected static final Text SET_COMMAND_TEXT = Text.translatable("advMode.setCommand");
@@ -129,7 +124,7 @@ public abstract class AbstractBetterCommandBlockScreen extends Screen {
                 Text.translatable("bcbui.trackOutput.false")
         };
 
-        this.toggleTrackingOutputButton = this.addDrawableChild(new CyclingTexturedButtonWidget<Boolean>(this.width / 2 + (textBoxWidth / 2 + buttonMargin + buttonMargin / 2), this.height / 2 - (buttonHeight + buttonMargin), cycleButtonWidth, buttonHeight, Text.of(""), (button) -> {
+        this.toggleTrackingOutputButton = this.addDrawableChild(new CyclingTexturedButtonWidget<>(this.width / 2 + (textBoxWidth / 2 + buttonMargin + buttonMargin / 2), this.height / 2 - (buttonHeight + buttonMargin), cycleButtonWidth, buttonHeight, Text.of(""), (button) -> {
             this.trackOutput = ((CyclingTexturedButtonWidget<Boolean>) button).getValue();
             this.commandExecutor.setTrackOutput(trackOutput);
             this.setPreviousOutputText(trackOutput);
@@ -141,12 +136,9 @@ public abstract class AbstractBetterCommandBlockScreen extends Screen {
                 CheckboxWidget.builder(Text.of(""), textRenderer)
                         .pos(toggleTrackingOutputButton.getX() + toggleTrackingOutputButton.getWidth() + 2, toggleTrackingOutputButton.getY() + 2)
                         .checked(TRACK_OUTPUT_DEFAULT_USED)
-                        .callback(new CheckboxWidget.Callback() {
-                            @Override
-                            public void onValueChange(CheckboxWidget checkbox, boolean checked) {
-                                BetterCommandBlockUI.setConfig(VAR_TRACK_OUTPUT_DEFAULT_USED, "" + checked);
-                                BetterCommandBlockUI.setConfig(VAR_TRACK_OUTPUT_DEFAULT_VALUE, "" + trackOutput);
-                            }
+                        .callback((checkbox, checked) -> {
+                            BetterCommandBlockUI.setConfig(VAR_TRACK_OUTPUT_DEFAULT_USED, "" + checked);
+                            BetterCommandBlockUI.setConfig(VAR_TRACK_OUTPUT_DEFAULT_VALUE, "" + trackOutput);
                         })
                         .tooltip(Tooltip.of(Text.translatable("bcbui.trackOutput.setDefault")))
                         .build());
@@ -157,7 +149,7 @@ public abstract class AbstractBetterCommandBlockScreen extends Screen {
                 Text.translatable("bcbui.view.command"),
                 Text.translatable("bcbui.view.output")
         };
-        this.showOutputButton = this.addDrawableChild(new CyclingTexturedButtonWidget<Boolean>(this.width / 2 + (textBoxWidth / 2 + buttonMargin + buttonMargin / 2), this.height / 2, cycleButtonWidth, buttonHeight, Text.of(""), (button) -> {
+        this.showOutputButton = this.addDrawableChild(new CyclingTexturedButtonWidget<>(this.width / 2 + (textBoxWidth / 2 + buttonMargin + buttonMargin / 2), this.height / 2, cycleButtonWidth, buttonHeight, Text.of(""), (button) -> {
             this.showOutput = ((CyclingTexturedButtonWidget<Boolean>) button).getValue();
             this.consoleCommandTextField.setVisible(!showOutput);
             this.previousOutputTextField.setVisible(showOutput);

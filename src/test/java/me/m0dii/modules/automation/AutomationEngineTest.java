@@ -199,7 +199,7 @@ class AutomationEngineTest {
         }
 
         @Override
-        public ActionResult execute(AutomationRule rule, AutomationEvent event) {
+        public ActionResult execute(@NonNull AutomationRule rule, @NonNull AutomationEvent event) {
             executions.add(rule.id + "@" + event.type().name());
             return ActionResult.ok("executed");
         }
