@@ -22,6 +22,8 @@ import java.util.function.Consumer;
  * Base class with common module utilities.
  */
 public abstract class Module {
+    private static final String SERVER_SIDE_OPT_IN_DEBUG_BYPASS_PROPERTY = "m0dev.debug.bypassServerSideOptIn";
+
     @Getter
     private final MinecraftClient client = MinecraftClient.getInstance();
 
@@ -65,6 +67,10 @@ public abstract class Module {
             return true;
         }
 
+        if (isServerSideOptInDebugBypassEnabled()) {
+            return true;
+        }
+
         MinecraftClient mc = getClient();
         if (mc == null) {
             return false;
@@ -77,6 +83,17 @@ public abstract class Module {
 
         Identifier channel = getRequiredServerOptInChannel();
         return channel != null && ClientPlayNetworking.canSend(channel);
+    }
+
+    protected boolean isServerSideOptInDebugBypassEnabled() {
+        return Boolean.getBoolean(SERVER_SIDE_OPT_IN_DEBUG_BYPASS_PROPERTY);
+    }
+
+    protected String getServerSideOptInStatus() {
+        if (isServerSideOptInDebugBypassEnabled()) {
+            return "DEBUG BYPASS";
+        }
+        return hasRequiredServerSideOptIn() ? "OK" : "MISSING";
     }
 
     protected void notifyMissingServerSideOptIn() {
@@ -177,7 +194,7 @@ public abstract class Module {
         settings.add("Key: " + (keyBinding != null ? keyBinding.getBoundKeyTranslationKey() : "None"));
         settings.add("Toggle: " + (isEnabled() ? "ON" : "OFF"));
         if (requiresServerSideOptIn()) {
-            settings.add("Server Opt-In: " + (hasRequiredServerSideOptIn() ? "OK" : "MISSING"));
+            settings.add("Server Opt-In: " + getServerSideOptInStatus());
         }
         return settings;
     }

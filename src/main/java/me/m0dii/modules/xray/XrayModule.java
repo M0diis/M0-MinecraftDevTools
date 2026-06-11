@@ -47,7 +47,7 @@ public class XrayModule extends Module {
     public List<String> getSettingsDisplay() {
         List<String> settings = new ArrayList<>();
         settings.add("Toggle: " + (isEnabled() ? "ON" : "OFF"));
-        settings.add("Server Opt-In: " + (hasRequiredServerSideOptIn() ? "OK" : "MISSING"));
+        settings.add("Server Opt-In: " + getServerSideOptInStatus());
         settings.add("Range +4: " + XrayManager.getDisplayRange());
         settings.add("Range -4: " + XrayManager.getDisplayRange());
         settings.add("Tracked Blocks: " + XrayManager.getBlockIds().size());
