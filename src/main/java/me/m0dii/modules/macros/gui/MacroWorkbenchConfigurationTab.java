@@ -171,6 +171,13 @@ final class MacroWorkbenchConfigurationTab {
         return handled;
     }
 
+    boolean handleMouseClickBeforeWidgets(double mouseX, double mouseY, int button) {
+        if (this.category != Category.HUD_TWEAKS) {
+            return false;
+        }
+        return handleMouseClick(mouseX, mouseY, button);
+    }
+
     boolean handleMouseScroll(double mouseX, double mouseY, double verticalAmount) {
         ControlSection section = activeSection();
         return section != null && section.handleMouseScroll(mouseX, mouseY, verticalAmount);
@@ -645,27 +652,44 @@ final class MacroWorkbenchConfigurationTab {
 
         @Override
         protected boolean handleMouseClick(double mouseX, double mouseY, int button) {
-            if (button != 1) {
+            if (button != 0 && button != 1) {
                 return false;
             }
+            int direction = button == 0 ? 1 : -1;
+            if (contains(mouseX, mouseY, this.moduleToggleButton)) {
+                HudTweaksModule.INSTANCE.setEnabled(!HudTweaksModule.INSTANCE.isEnabled());
+                return true;
+            }
             if (contains(mouseX, mouseY, this.elementButton)) {
-                cycleSelectedElement(-1);
+                cycleSelectedElement(direction);
+                return true;
+            }
+            if (contains(mouseX, mouseY, this.displayButton)) {
+                toggleDisplay();
                 return true;
             }
             if (contains(mouseX, mouseY, this.scaleButton)) {
-                adjustScale(-1);
+                adjustScale(direction);
                 return true;
             }
             if (contains(mouseX, mouseY, this.opacityButton)) {
-                adjustOpacity(-1);
+                adjustOpacity(direction);
                 return true;
             }
             if (contains(mouseX, mouseY, this.offsetXButton)) {
-                adjustOffsetX(-1);
+                adjustOffsetX(direction);
                 return true;
             }
             if (contains(mouseX, mouseY, this.offsetYButton)) {
-                adjustOffsetY(-1);
+                adjustOffsetY(direction);
+                return true;
+            }
+            if (contains(mouseX, mouseY, this.resetElementButton)) {
+                HudTweaksSettings.resetElement(this.selectedElement);
+                return true;
+            }
+            if (contains(mouseX, mouseY, this.resetAllButton)) {
+                HudTweaksSettings.resetAll();
                 return true;
             }
             return false;
@@ -1349,4 +1373,3 @@ final class MacroWorkbenchConfigurationTab {
                 : MouseTweaksScrollItemScaling.PROPORTIONAL;
     }
 }
-

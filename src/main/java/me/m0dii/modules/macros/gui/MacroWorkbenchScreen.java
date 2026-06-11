@@ -10,6 +10,8 @@ import me.m0dii.modules.chat.SecondaryChatSettings;
 import me.m0dii.modules.commandhistory.CommandHistoryManager;
 import me.m0dii.modules.entityradar.EntityRadarModule;
 import me.m0dii.modules.hudcanvas.HudCanvasDataHandler;
+import me.m0dii.modules.hudtweaks.HudTweaksSettings;
+import me.m0dii.modules.hungertweaks.HungerTweaksTextureHelper;
 import me.m0dii.modules.macros.CommandMacros;
 import me.m0dii.modules.macros.MacroDataHandler;
 import me.m0dii.modules.macros.MacroPlaceholderCatalog;
@@ -27,6 +29,7 @@ import me.m0dii.modules.pickup.ItemPickupNotifierModule;
 import me.m0dii.modules.pickup.PickupFeedSettings;
 import me.m0dii.utils.*;
 import net.minecraft.client.font.TextRenderer;
+import net.minecraft.client.gl.RenderPipelines;
 import net.minecraft.client.gui.Click;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
@@ -40,6 +43,7 @@ import net.minecraft.client.util.InputUtil;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.mob.HostileEntity;
 import net.minecraft.entity.passive.PassiveEntity;
+import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.registry.Registries;
@@ -65,6 +69,16 @@ public class MacroWorkbenchScreen extends Screen {
         CONFIGURATION
     }
 
+    private enum CanvasMode {
+        CUSTOM,
+        VANILLA
+    }
+
+    private enum VanillaPreviewMode {
+        VIRTUAL,
+        ACTUAL
+    }
+
     private static final int TOP_BAR_H = 54;
     private static final int BOTTOM_BAR_H = 44;
     private static final int CANVAS_CONTENT_TOP = 0;
@@ -74,6 +88,20 @@ public class MacroWorkbenchScreen extends Screen {
     private static final String EXTERNAL_SECONDARY_CHAT_ID = "__ext_secondary_chat";
     private static final String EXTERNAL_MACRO_KEYBINDS_ID = "__ext_macro_keybinds";
     private static final String EXTERNAL_PICKUP_NOTIFIER_ID = "__ext_pickup_notifier";
+    private static final String VANILLA_HUD_PROXY_PREFIX = "__vanilla_hud_";
+    private static final Identifier HUD_HOTBAR_TEXTURE = Identifier.ofVanilla("hud/hotbar");
+    private static final Identifier HUD_HOTBAR_SELECTION_TEXTURE = Identifier.ofVanilla("hud/hotbar_selection");
+    private static final Identifier HUD_CROSSHAIR_TEXTURE = Identifier.ofVanilla("hud/crosshair");
+    private static final Identifier HUD_ARMOR_EMPTY_TEXTURE = Identifier.ofVanilla("hud/armor_empty");
+    private static final Identifier HUD_ARMOR_HALF_TEXTURE = Identifier.ofVanilla("hud/armor_half");
+    private static final Identifier HUD_ARMOR_FULL_TEXTURE = Identifier.ofVanilla("hud/armor_full");
+    private static final Identifier HUD_EXPERIENCE_BAR_BACKGROUND_TEXTURE = Identifier.ofVanilla("hud/experience_bar_background");
+    private static final Identifier HUD_EXPERIENCE_BAR_PROGRESS_TEXTURE = Identifier.ofVanilla("hud/experience_bar_progress");
+    private static final Identifier HUD_EFFECT_BACKGROUND_TEXTURE = Identifier.ofVanilla("hud/effect_background");
+    private static final Identifier HUD_EFFECT_BACKGROUND_AMBIENT_TEXTURE = Identifier.ofVanilla("hud/effect_background_ambient");
+    private static final Identifier TOAST_SYSTEM_TEXTURE = Identifier.ofVanilla("toast/system");
+    private static final Identifier BOSS_BAR_PINK_BACKGROUND_TEXTURE = Identifier.ofVanilla("boss_bar/pink_background");
+    private static final Identifier BOSS_BAR_PINK_PROGRESS_TEXTURE = Identifier.ofVanilla("boss_bar/pink_progress");
     private static boolean GRID_ENABLED_PREF = false;
     private static int GRID_ROWS_PREF = 12;
     private static int GRID_COLS_PREF = 16;
@@ -91,6 +119,8 @@ public class MacroWorkbenchScreen extends Screen {
 
     private final Screen parent;
     private Tab tab;
+    private CanvasMode canvasMode = CanvasMode.CUSTOM;
+    private VanillaPreviewMode vanillaPreviewMode = VanillaPreviewMode.VIRTUAL;
 
     private MacroHudDataHandler.HudConfig working;
     private MacroHudDataHandler.HudElement selected;
@@ -108,6 +138,9 @@ public class MacroWorkbenchScreen extends Screen {
     private final Deque<List<ElementSnapshot>> moveUndoStack = new ArrayDeque<>();
     private final LinkedHashSet<String> selectedElementIds = new LinkedHashSet<>();
     private final List<MacroHudDataHandler.HudElement> elementClipboard = new ArrayList<>();
+    private final List<MacroHudDataHandler.HudElement> vanillaCanvasElements = new ArrayList<>();
+    private final EnumMap<HudTweaksSettings.ElementType, HudTweaksSettings.ElementConfig> vanillaCanvasConfigs =
+            new EnumMap<>(HudTweaksSettings.ElementType.class);
     private int clipboardWidth = -1;
     private int clipboardHeight = -1;
     private final MacroWorkbenchCustomWidgetAdvancedClickHandler.Ops customWidgetAdvancedClickOpsBridge =
@@ -126,6 +159,7 @@ public class MacroWorkbenchScreen extends Screen {
     private ButtonWidget gridColsMinusButton;
     private ButtonWidget gridColsPlusButton;
     private ButtonWidget centerLinesToggleButton;
+    private ButtonWidget canvasModeToggleButton;
     private ButtonWidget presetPrevButton;
     private ButtonWidget presetNextButton;
     private ButtonWidget presetNewButton;
@@ -295,6 +329,7 @@ public class MacroWorkbenchScreen extends Screen {
             this.working = MacroHudDataHandler.getConfigCopy();
         }
         syncExternalCanvasElementsFromSources();
+        syncVanillaCanvasElementsFromSettings();
 
         rebuildBindingMaps();
         rebuildKeyboardGrid();
@@ -351,25 +386,40 @@ public class MacroWorkbenchScreen extends Screen {
         int canvasControlH = 20;
         UiRect canvasControlRow = FormPanels.panel(8, canvasControlY, Math.max(320, this.width - 16), canvasControlH);
         List<UiRect> canvasControlSlots = FormPanels.row(canvasControlRow, 4, UiFlexLayout.Align.START,
-                UiFlexLayout.Item.flex(90, 1), // Add Element
-                UiFlexLayout.Item.flex(70, 1),  // Grid
-                UiFlexLayout.Item.flex(26, 1),  // R-
-                UiFlexLayout.Item.flex(26, 1),  // R+
-                UiFlexLayout.Item.flex(26, 1),  // C-
-                UiFlexLayout.Item.flex(26, 1),  // C+
-                UiFlexLayout.Item.flex(90, 1),  // Center
-                UiFlexLayout.Item.flex(22, 1),  // <
-                UiFlexLayout.Item.flex(22, 1),  // >
-                UiFlexLayout.Item.flex(120, 1), // Preset Name
-                UiFlexLayout.Item.flex(42, 1),  // New
-                UiFlexLayout.Item.flex(60, 1),  // Rename
-                UiFlexLayout.Item.flex(54, 1)   // Delete
+                UiFlexLayout.Item.flex(112, 1), // Canvas Mode
+                UiFlexLayout.Item.flex(90, 1),  // Add Element
+                UiFlexLayout.Item.flex(62, 1),  // Grid
+                UiFlexLayout.Item.flex(24, 1),  // R-
+                UiFlexLayout.Item.flex(24, 1),  // R+
+                UiFlexLayout.Item.flex(24, 1),  // C-
+                UiFlexLayout.Item.flex(24, 1),  // C+
+                UiFlexLayout.Item.flex(78, 1),  // Center
+                UiFlexLayout.Item.flex(20, 1),  // <
+                UiFlexLayout.Item.flex(20, 1),  // >
+                UiFlexLayout.Item.flex(104, 1), // Preset Name
+                UiFlexLayout.Item.flex(38, 1),  // New
+                UiFlexLayout.Item.flex(54, 1),  // Rename
+                UiFlexLayout.Item.flex(52, 1)   // Delete
         );
-        ButtonWidget addElement = ButtonWidget.builder(Text.literal("Add Element"), b -> addElementModalOpen = true)
+        this.canvasModeToggleButton = ButtonWidget.builder(Text.literal("Custom Elements"), b -> toggleCanvasMode())
                 .dimensions(canvasControlSlots.get(0).x(), canvasControlSlots.get(0).y(), canvasControlSlots.get(0).width(), canvasControlSlots.get(0).height()).build();
+        ButtonWidget addElement = ButtonWidget.builder(Text.literal("Add Element"), b -> {
+            if (!isVanillaCanvasMode()) {
+                addElementModalOpen = true;
+            }
+        }).dimensions(canvasControlSlots.get(1).x(), canvasControlSlots.get(1).y(), canvasControlSlots.get(1).width(), canvasControlSlots.get(1).height()).build();
 
         this.deleteButton = ButtonWidget.builder(Text.literal("Delete"), b -> {
-            if (selected != null) {
+            if (isVanillaCanvasMode()) {
+                if (selected != null && isVanillaHudProxy(selected)) {
+                    resetVanillaProxy(selected);
+                } else {
+                    resetAllVanillaProxies();
+                }
+                syncCanvasFields();
+                return;
+            }
+            if (!isVanillaCanvasMode() && selected != null) {
                 Set<String> ids = selectedElementIds.isEmpty() ? Set.of(selected.id) : new HashSet<>(selectedElementIds);
                 this.working.elements.removeIf(e -> ids.contains(e.id));
                 selectedElementIds.clear();
@@ -383,7 +433,7 @@ public class MacroWorkbenchScreen extends Screen {
             gridOverlayTicks = 120;
             persistGridPrefs();
             syncGridButtons();
-        }).dimensions(canvasControlSlots.get(1).x(), canvasControlSlots.get(1).y(), canvasControlSlots.get(1).width(), canvasControlSlots.get(1).height()).build();
+        }).dimensions(canvasControlSlots.get(2).x(), canvasControlSlots.get(2).y(), canvasControlSlots.get(2).width(), canvasControlSlots.get(2).height()).build();
 
         this.gridRowsMinusButton = ButtonWidget.builder(Text.literal("R-"), b -> {
             int step = isShiftDown() ? 5 : 1;
@@ -391,41 +441,41 @@ public class MacroWorkbenchScreen extends Screen {
             gridOverlayTicks = 120;
             persistGridPrefs();
             syncGridButtons();
-        }).dimensions(canvasControlSlots.get(2).x(), canvasControlSlots.get(2).y(), canvasControlSlots.get(2).width(), canvasControlSlots.get(2).height()).build();
+        }).dimensions(canvasControlSlots.get(3).x(), canvasControlSlots.get(3).y(), canvasControlSlots.get(3).width(), canvasControlSlots.get(3).height()).build();
         this.gridRowsPlusButton = ButtonWidget.builder(Text.literal("R+"), b -> {
             int step = isShiftDown() ? 5 : 1;
             gridRows = Math.min(80, gridRows + step);
             gridOverlayTicks = 120;
             persistGridPrefs();
             syncGridButtons();
-        }).dimensions(canvasControlSlots.get(3).x(), canvasControlSlots.get(3).y(), canvasControlSlots.get(3).width(), canvasControlSlots.get(3).height()).build();
+        }).dimensions(canvasControlSlots.get(4).x(), canvasControlSlots.get(4).y(), canvasControlSlots.get(4).width(), canvasControlSlots.get(4).height()).build();
         this.gridColsMinusButton = ButtonWidget.builder(Text.literal("C-"), b -> {
             int step = isShiftDown() ? 5 : 1;
             gridCols = Math.max(2, gridCols - step);
             gridOverlayTicks = 120;
             persistGridPrefs();
             syncGridButtons();
-        }).dimensions(canvasControlSlots.get(4).x(), canvasControlSlots.get(4).y(), canvasControlSlots.get(4).width(), canvasControlSlots.get(4).height()).build();
+        }).dimensions(canvasControlSlots.get(5).x(), canvasControlSlots.get(5).y(), canvasControlSlots.get(5).width(), canvasControlSlots.get(5).height()).build();
         this.gridColsPlusButton = ButtonWidget.builder(Text.literal("C+"), b -> {
             int step = isShiftDown() ? 5 : 1;
             gridCols = Math.min(80, gridCols + step);
             gridOverlayTicks = 120;
             persistGridPrefs();
             syncGridButtons();
-        }).dimensions(canvasControlSlots.get(5).x(), canvasControlSlots.get(5).y(), canvasControlSlots.get(5).width(), canvasControlSlots.get(5).height()).build();
+        }).dimensions(canvasControlSlots.get(6).x(), canvasControlSlots.get(6).y(), canvasControlSlots.get(6).width(), canvasControlSlots.get(6).height()).build();
 
         this.centerLinesToggleButton = ButtonWidget.builder(Text.literal("Center: OFF"), b -> {
             centerLinesEnabled = !centerLinesEnabled;
             persistGridPrefs();
             syncGridButtons();
-        }).dimensions(canvasControlSlots.get(6).x(), canvasControlSlots.get(6).y(), canvasControlSlots.get(6).width(), canvasControlSlots.get(6).height()).build();
+        }).dimensions(canvasControlSlots.get(7).x(), canvasControlSlots.get(7).y(), canvasControlSlots.get(7).width(), canvasControlSlots.get(7).height()).build();
 
-        this.presetPrevButton = ButtonWidget.builder(Text.literal("<"), b -> cyclePreset(false)).dimensions(canvasControlSlots.get(7).x(), canvasControlSlots.get(7).y(), canvasControlSlots.get(7).width(), canvasControlSlots.get(7).height()).build();
-        this.presetNextButton = ButtonWidget.builder(Text.literal(">"), b -> cyclePreset(true)).dimensions(canvasControlSlots.get(8).x(), canvasControlSlots.get(8).y(), canvasControlSlots.get(8).width(), canvasControlSlots.get(8).height()).build();
-        this.presetNameField = new TextFieldWidget(this.textRenderer, canvasControlSlots.get(9).x(), canvasControlSlots.get(9).y(), canvasControlSlots.get(9).width(), canvasControlSlots.get(9).height(), Text.literal("Preset"));
+        this.presetPrevButton = ButtonWidget.builder(Text.literal("<"), b -> cyclePreset(false)).dimensions(canvasControlSlots.get(8).x(), canvasControlSlots.get(8).y(), canvasControlSlots.get(8).width(), canvasControlSlots.get(8).height()).build();
+        this.presetNextButton = ButtonWidget.builder(Text.literal(">"), b -> cyclePreset(true)).dimensions(canvasControlSlots.get(9).x(), canvasControlSlots.get(9).y(), canvasControlSlots.get(9).width(), canvasControlSlots.get(9).height()).build();
+        this.presetNameField = new TextFieldWidget(this.textRenderer, canvasControlSlots.get(10).x(), canvasControlSlots.get(10).y(), canvasControlSlots.get(10).width(), canvasControlSlots.get(10).height(), Text.literal("Preset"));
         this.presetNameField.setMaxLength(40);
-        this.presetNewButton = ButtonWidget.builder(Text.literal("New"), b -> createPresetFromField()).dimensions(canvasControlSlots.get(10).x(), canvasControlSlots.get(10).y(), canvasControlSlots.get(10).width(), canvasControlSlots.get(10).height()).build();
-        this.presetRenameButton = ButtonWidget.builder(Text.literal("Rename"), b -> renamePresetFromField()).dimensions(canvasControlSlots.get(11).x(), canvasControlSlots.get(11).y(), canvasControlSlots.get(11).width(), canvasControlSlots.get(11).height()).build();
+        this.presetNewButton = ButtonWidget.builder(Text.literal("New"), b -> createPresetFromField()).dimensions(canvasControlSlots.get(11).x(), canvasControlSlots.get(11).y(), canvasControlSlots.get(11).width(), canvasControlSlots.get(11).height()).build();
+        this.presetRenameButton = ButtonWidget.builder(Text.literal("Rename"), b -> renamePresetFromField()).dimensions(canvasControlSlots.get(12).x(), canvasControlSlots.get(12).y(), canvasControlSlots.get(12).width(), canvasControlSlots.get(12).height()).build();
         this.presetDeleteButton = ButtonWidget.builder(Text.literal("Delete"), b -> {
             MacroHudDataHandler.deletePreset(MacroHudDataHandler.getActivePresetId());
             this.working = MacroHudDataHandler.getConfigCopy();
@@ -433,7 +483,7 @@ public class MacroWorkbenchScreen extends Screen {
             syncCanvasFields();
             syncGridButtons();
             syncPresetControls();
-        }).dimensions(canvasControlSlots.get(12).x(), canvasControlSlots.get(12).y(), canvasControlSlots.get(12).width(), canvasControlSlots.get(12).height()).build();
+        }).dimensions(canvasControlSlots.get(13).x(), canvasControlSlots.get(13).y(), canvasControlSlots.get(13).width(), canvasControlSlots.get(13).height()).build();
 
         this.quickField = new TextFieldWidget(this.textRenderer, 8, this.height - 38, 280, 18, Text.literal("Quick Edit"));
         this.quickField.setMaxLength(300);
@@ -443,6 +493,10 @@ public class MacroWorkbenchScreen extends Screen {
         this.actionField.setMaxLength(32767);
 
         this.backgroundToggle = ButtonWidget.builder(Text.literal("BG: OFF"), b -> {
+            if (isVanillaCanvasMode()) {
+                toggleVanillaPreviewMode();
+                return;
+            }
             if (selected != null) {
                 selected.drawBackground = !selected.drawBackground;
                 ensureVisibleBackground(selected);
@@ -451,15 +505,23 @@ public class MacroWorkbenchScreen extends Screen {
         }).dimensions(this.width - 316, this.height - 38, 74, 18).build();
 
         this.borderToggle = ButtonWidget.builder(Text.literal("Border: OFF"), b -> {
+            if (isVanillaCanvasMode()) {
+                return;
+            }
             if (selected != null) {
                 cycleBorderSetting(selected, true);
                 syncStyleButtons();
             }
         }).dimensions(this.width - 238, this.height - 38, 78, 18).build();
 
-        this.editButton = ButtonWidget.builder(Text.literal("Edit"), b -> openAdvancedModal())
+        this.editButton = ButtonWidget.builder(Text.literal("Edit"), b -> {
+                    if (!isVanillaCanvasMode()) {
+                        openAdvancedModal();
+                    }
+                })
                 .dimensions(this.width - 80, this.height - 38, 72, 18).build();
 
+        this.canvasWidgets.add(canvasModeToggleButton);
         this.canvasWidgets.add(addElement);
         this.canvasWidgets.add(deleteButton);
         this.canvasWidgets.add(gridToggleButton);
@@ -481,6 +543,7 @@ public class MacroWorkbenchScreen extends Screen {
         this.canvasWidgets.add(borderToggle);
         this.canvasWidgets.add(editButton);
         addDrawableChild(addElement);
+        addDrawableChild(canvasModeToggleButton);
         addDrawableChild(deleteButton);
         addDrawableChild(gridToggleButton);
         addDrawableChild(gridRowsMinusButton);
@@ -593,6 +656,9 @@ public class MacroWorkbenchScreen extends Screen {
     }
 
     private void setTab(Tab next) {
+        if (this.tab == Tab.CANVAS && next != Tab.CANVAS) {
+            persistVanillaCanvasElements();
+        }
         if (this.tab == Tab.KEYBOARD && next != Tab.KEYBOARD) {
             saveKeyboardMacro();
         }
@@ -613,6 +679,9 @@ public class MacroWorkbenchScreen extends Screen {
         refreshTabWidgetVisibility();
 
         if (canvas) {
+            if (isVanillaCanvasMode()) {
+                syncVanillaCanvasElementsFromSettings();
+            }
             refreshCanvasChromeVisibility();
             syncCanvasFields();
         } else if (keyboard) {
@@ -786,10 +855,14 @@ public class MacroWorkbenchScreen extends Screen {
         updateDragging(mouseX, mouseY);
 
         context.drawTextWithShadow(this.textRenderer,
-                "Press F1 to turn on/off placement mode: " + (canvasChromeVisible ? "OFF" : "ON"),
+                "Canvas Mode: " + (isVanillaCanvasMode() ? "Vanilla Elements" : "Custom Elements")
+                        + (isVanillaCanvasMode() ? "  |  Preview: " + (vanillaPreviewMode == VanillaPreviewMode.ACTUAL ? "Actual" : "Virtual") : "")
+                        + "  |  Press F1 to turn on/off placement mode: " + (canvasChromeVisible ? "OFF" : "ON"),
                 8, TOP_BAR_H + 4, 0xFF9FCFCF);
         context.drawTextWithShadow(this.textRenderer,
-                "Ctrl+Click multi-select, Ctrl+C/V copy/paste element, Ctrl+Shift+C/V dimensions, Ctrl+Z undo move",
+                isVanillaCanvasMode()
+                        ? "Drag to move, resize handle changes scale, BG toggles virtual/actual preview, Reset restores vanilla position."
+                        : "Ctrl+Click multi-select, Ctrl+C/V copy/paste element, Ctrl+Shift+C/V dimensions, Ctrl+Z undo move",
                 8, TOP_BAR_H + 16, 0xFF9FBFBF);
         int canvasHeight = canvasHeightBound();
         int cellW = Math.max(1, Math.round(this.width / (float) Math.max(1, gridCols)));
@@ -808,7 +881,7 @@ public class MacroWorkbenchScreen extends Screen {
             drawCenterLinesOverlay(context);
         }
 
-        for (MacroHudDataHandler.HudElement element : HudElementUtils.sortedByLayer(this.working.elements)) {
+        for (MacroHudDataHandler.HudElement element : HudElementUtils.sortedByLayer(activeCanvasElements())) {
             if (element.visible) {
                 drawCanvasElement(context, element);
             }
@@ -816,8 +889,9 @@ public class MacroWorkbenchScreen extends Screen {
         drawSnapGuides(context);
 
         int y = this.height - BOTTOM_BAR_H;
-//        context.fill(0, y, this.width, this.height, 0xA0000000);
-        context.drawTextWithShadow(this.textRenderer, "Quick Edit (first line)", 8, y - 10, 0xFFAAAAAA);
+        context.drawTextWithShadow(this.textRenderer,
+                isVanillaCanvasMode() ? "Selected Vanilla HUD Element" : "Quick Edit (first line)",
+                8, y - 10, 0xFFAAAAAA);
         if (this.macroField.visible) {
             context.drawTextWithShadow(this.textRenderer, "Macro Id (optional)", 292, y - 10, 0xFFAAAAAA);
             String actionLabel = "Action (optional)";
@@ -828,9 +902,10 @@ public class MacroWorkbenchScreen extends Screen {
             context.drawTextWithShadow(this.textRenderer, actionLabel, 416, y - 10, 0xFFAAAAAA);
         }
         if (selected != null) {
-            context.drawTextWithShadow(this.textRenderer,
-                    "Selected: " + selected.type + " Pos: " + selected.x + "," + selected.y + " Size: " + selected.width + "x" + selected.height,
-                    8, this.height - 18, 0xFFCCCCCC);
+            String summary = isVanillaHudProxy(selected)
+                    ? vanillaSelectionSummary(selected)
+                    : "Selected: " + selected.type + " Pos: " + selected.x + "," + selected.y + " Size: " + selected.width + "x" + selected.height;
+            context.drawTextWithShadow(this.textRenderer, summary, 8, this.height - 18, 0xFFCCCCCC);
         }
     }
 
@@ -1290,6 +1365,12 @@ public class MacroWorkbenchScreen extends Screen {
             return this.automationTabController.handleMouseClick(click.x(), click.y(), click.button());
         }
 
+        if (this.tab == Tab.CONFIGURATION
+                && this.configurationTabController != null
+                && this.configurationTabController.handleMouseClickBeforeWidgets(click.x(), click.y(), click.button())) {
+            return true;
+        }
+
         // Configuration tab has right-click decrement controls.
         if (this.tab == Tab.CONFIGURATION && this.configurationTabController != null && click.button() != 0) {
             return this.configurationTabController.handleMouseClick(click.x(), click.y(), click.button());
@@ -1315,7 +1396,7 @@ public class MacroWorkbenchScreen extends Screen {
 
         if (this.tab == Tab.CANVAS) {
             boolean hit = onCanvasClick(click.x(), click.y());
-            if (hit && doubled && selected != null) {
+            if (hit && doubled && selected != null && !isVanillaCanvasMode()) {
                 openAdvancedModal();
                 return true;
             }
@@ -1492,7 +1573,8 @@ public class MacroWorkbenchScreen extends Screen {
             return true;
         }
 
-        if (this.tab == Tab.CANVAS && !advancedOpen && !kbCommandsModalOpen && keyCode == GLFW.GLFW_KEY_DELETE && selected != null) {
+        if (this.tab == Tab.CANVAS && !advancedOpen && !kbCommandsModalOpen && keyCode == GLFW.GLFW_KEY_DELETE
+                && selected != null && !isVanillaCanvasMode()) {
             Set<String> ids = selectedElementIds.isEmpty() ? Set.of(selected.id) : new HashSet<>(selectedElementIds);
             this.working.elements.removeIf(e -> ids.contains(e.id));
             selectedElementIds.clear();
@@ -1505,6 +1587,9 @@ public class MacroWorkbenchScreen extends Screen {
             if (keyCode == GLFW.GLFW_KEY_Z) {
                 undoLastMove();
                 return true;
+            }
+            if (isVanillaCanvasMode()) {
+                return false;
             }
             if (keyCode == GLFW.GLFW_KEY_C) {
                 if (isShiftDown()) {
@@ -1576,7 +1661,7 @@ public class MacroWorkbenchScreen extends Screen {
 
         boolean ctrl = isCtrlDown();
 
-        List<MacroHudDataHandler.HudElement> layeredElements = HudElementUtils.sortedByLayer(this.working.elements);
+        List<MacroHudDataHandler.HudElement> layeredElements = HudElementUtils.sortedByLayer(activeCanvasElements());
         for (int i = layeredElements.size() - 1; i >= 0; i--) {
             MacroHudDataHandler.HudElement e = layeredElements.get(i);
             int ex = resolveElementX(e);
@@ -2219,6 +2304,13 @@ public class MacroWorkbenchScreen extends Screen {
             int nextHeight = Math.clamp(resizeStartHeight + (mouseY - resizeStartMouseY), 1, 1200);
             int baseX = resolveElementX(selected);
             int baseY = resolveElementY(selected);
+            if (isVanillaHudProxy(selected)) {
+                snapGuideX = Integer.MIN_VALUE;
+                snapGuideY = Integer.MIN_VALUE;
+                applyVanillaProxyResize(selected, nextWidth, nextHeight);
+                clampElementToCanvas(selected);
+                return;
+            }
             if (isShiftDown()) {
                 int[] snapped = snapResizeToNeighbors(selected, baseX, baseY, nextWidth, nextHeight);
                 nextWidth = snapped[0];
@@ -2270,6 +2362,7 @@ public class MacroWorkbenchScreen extends Screen {
 
         if (selectedElementIds.size() <= 1 || dragPrimaryElementId == null || !dragStartScreenPositions.containsKey(dragPrimaryElementId)) {
             setElementScreenPosition(selected, screenX, screenY);
+            refreshVanillaProxyPreview(selected);
             return;
         }
 
@@ -2299,6 +2392,7 @@ public class MacroWorkbenchScreen extends Screen {
                 continue;
             }
             setElementScreenPosition(e, start[0] + boundedDx, start[1] + boundedDy);
+            refreshVanillaProxyPreview(e);
         }
     }
 
@@ -2329,7 +2423,7 @@ public class MacroWorkbenchScreen extends Screen {
                 screenX,
                 screenY,
                 excludedIds,
-                this.working.elements,
+                activeCanvasElements(),
                 this::resolveElementX,
                 this::resolveElementY,
                 this.width,
@@ -2348,7 +2442,7 @@ public class MacroWorkbenchScreen extends Screen {
                 baseY,
                 width,
                 height,
-                this.working.elements,
+                activeCanvasElements(),
                 this::resolveElementX,
                 this::resolveElementY,
                 this.width,
@@ -2398,6 +2492,12 @@ public class MacroWorkbenchScreen extends Screen {
         int y1 = resolveElementY(element);
         int x2 = x1 + element.width;
         int y2 = y1 + element.height;
+
+        if (isVanillaHudProxy(element) && vanillaPreviewMode == VanillaPreviewMode.ACTUAL) {
+            drawVanillaHudActualPreview(context, element, x1, y1, x2, y2);
+            drawSelectedOutline(context, x1, y1, x2, y2, selectedElementIds.contains(element.id));
+            return;
+        }
 
         boolean customWidget = element.type == MacroHudDataHandler.ElementType.ICON
                 || element.type == MacroHudDataHandler.ElementType.BAR
@@ -2681,6 +2781,271 @@ public class MacroWorkbenchScreen extends Screen {
         drawStyledTextLine(context, label, tx, ty, e.textColor, scale);
     }
 
+    private void drawVanillaHudActualPreview(DrawContext context, MacroHudDataHandler.HudElement element, int x1, int y1, int x2, int y2) {
+        HudTweaksSettings.ElementType type = vanillaHudElementType(element);
+        if (type == null) {
+            return;
+        }
+        float scale = vanillaScaleForProxy(type, element);
+        HudTweaksSettings.ElementConfig config = currentVanillaHudConfig(type, scale, element);
+        VanillaHudDescriptor descriptor = vanillaHudDescriptor(type);
+        float sx = Math.max(0.01f, element.width / (float) Math.max(1, descriptor.baseWidth()));
+        float sy = Math.max(0.01f, element.height / (float) Math.max(1, descriptor.baseHeight()));
+
+        context.getMatrices().pushMatrix();
+        context.getMatrices().translate(x1, y1);
+        context.getMatrices().scale(sx, sy);
+        switch (type) {
+            case ACTION_BAR -> drawActualActionBarPreview(context, descriptor.baseWidth(), descriptor.baseHeight());
+            case BOSS_BAR -> drawActualBossBarPreview(context);
+            case CROSSHAIR -> drawActualCrosshairPreview(context);
+            case DEBUG_SCREEN -> drawActualDebugScreenPreview(context);
+            case HOTBAR_GROUP -> drawActualHotbarGroupPreview(context);
+            case PLAYER_LIST -> drawActualPlayerListPreview(context, descriptor.baseWidth(), descriptor.baseHeight());
+            case SCOREBOARD -> drawActualScoreboardPreview(context, descriptor.baseWidth(), descriptor.baseHeight());
+            case SCREEN_TITLE -> drawActualScreenTitlePreview(context, descriptor.baseWidth());
+            case STATUS_EFFECT -> drawActualStatusEffectPreview(context, descriptor.baseWidth());
+            case SUBTITLES -> drawActualSubtitlesPreview(context, descriptor.baseWidth(), descriptor.baseHeight());
+            case TOAST -> drawActualToastPreview(context);
+            case TOOLTIP -> drawActualTooltipPreview(context, descriptor.baseWidth(), descriptor.baseHeight());
+        }
+        context.getMatrices().popMatrix();
+
+        drawVanillaPreviewOverlay(context, type, config, x1, y1, x2, y2);
+    }
+
+    private void drawActualActionBarPreview(DrawContext context, int width, int height) {
+        String text = "Sample Action Bar";
+        int tw = this.textRenderer.getWidth(text);
+        int tx = Math.max(0, (width - tw) / 2);
+        int ty = Math.max(0, (height - 9) / 2);
+        context.drawTextWithBackground(this.textRenderer, Text.literal(text), tx, ty, tw, 0xFFFFFFFF);
+    }
+
+    private void drawActualBossBarPreview(DrawContext context) {
+        String title = "Boss Name";
+        int tw = this.textRenderer.getWidth(title);
+        context.drawTextWithShadow(this.textRenderer, title, Math.max(0, (182 - tw) / 2), 0, 0xFFFFFFFF);
+        context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, BOSS_BAR_PINK_BACKGROUND_TEXTURE, 182, 5, 0, 0, 0, 12, 182, 5);
+        context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, BOSS_BAR_PINK_PROGRESS_TEXTURE, 182, 5, 0, 0, 0, 12, 118, 5);
+    }
+
+    private void drawActualCrosshairPreview(DrawContext context) {
+        context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, HUD_CROSSHAIR_TEXTURE, 0, 0, 15, 15);
+    }
+
+    private void drawActualDebugScreenPreview(DrawContext context) {
+        String[] lines = {
+                "Minecraft 1.21.11/Fabric",
+                "XYZ: 123.45 / 64.00 / -78.90",
+                "Block: 123 64 -79",
+                "Facing: north",
+                "Biome: minecraft:plains",
+                "FPS: 144"
+        };
+        for (int i = 0; i < lines.length; i++) {
+            context.drawTextWithShadow(this.textRenderer, lines[i], 2, 2 + i * 10, 0xFFE0E0E0);
+        }
+    }
+
+    private void drawActualHotbarGroupPreview(DrawContext context) {
+        PlayerEntity player = this.client == null ? null : this.client.player;
+        int health = player == null ? 18 : Math.clamp(Math.round(player.getHealth()), 1, 20);
+        int food = player == null ? 18 : Math.clamp(player.getHungerManager().getFoodLevel(), 0, 20);
+        int selectedSlot = player == null ? 0 : Math.clamp(player.getInventory().getSelectedSlot(), 0, 8);
+        int experience = player == null ? 12 : Math.max(1, player.experienceLevel);
+
+        for (int i = 0; i < 10; i++) {
+            int heartX = i * 8;
+            int foodX = 182 - 9 - i * 8;
+            context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, HungerTweaksTextureHelper.getHeartTexture(false, HungerTweaksTextureHelper.HeartType.CONTAINER),
+                    heartX, 0, 9, 9);
+            context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, HungerTweaksTextureHelper.getFoodTexture(false, HungerTweaksTextureHelper.FoodType.EMPTY),
+                    foodX, 0, 9, 9);
+
+            int heartValue = i * 2 + 2;
+            if (health >= heartValue) {
+                context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, HungerTweaksTextureHelper.getHeartTexture(false, HungerTweaksTextureHelper.HeartType.FULL),
+                        heartX, 0, 9, 9);
+            } else if (health == heartValue - 1) {
+                context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, HungerTweaksTextureHelper.getHeartTexture(false, HungerTweaksTextureHelper.HeartType.HALF),
+                        heartX, 0, 9, 9);
+            }
+
+            int foodValue = i * 2 + 2;
+            if (food >= foodValue) {
+                context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, HungerTweaksTextureHelper.getFoodTexture(false, HungerTweaksTextureHelper.FoodType.FULL),
+                        foodX, 0, 9, 9);
+            } else if (food == foodValue - 1) {
+                context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, HungerTweaksTextureHelper.getFoodTexture(false, HungerTweaksTextureHelper.FoodType.HALF),
+                        foodX, 0, 9, 9);
+            }
+        }
+
+        for (int i = 0; i < 10; i++) {
+            int armorValue = player == null ? 14 : Math.clamp(player.getArmor(), 0, 20);
+            int armorX = i * 8;
+            context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, HUD_ARMOR_EMPTY_TEXTURE, armorX, 8, 9, 9);
+            int armorTarget = i * 2 + 2;
+            if (armorValue >= armorTarget) {
+                context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, HUD_ARMOR_FULL_TEXTURE, armorX, 8, 9, 9);
+            } else if (armorValue == armorTarget - 1) {
+                context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, HUD_ARMOR_HALF_TEXTURE, armorX, 8, 9, 9);
+            }
+        }
+
+        context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, HUD_EXPERIENCE_BAR_BACKGROUND_TEXTURE, 182, 5, 0, 0, 0, 12, 182, 5);
+        context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, HUD_EXPERIENCE_BAR_PROGRESS_TEXTURE, 182, 5, 0, 0, 0, 12, 124, 5);
+        String level = Integer.toString(experience);
+        context.drawTextWithShadow(this.textRenderer, level, Math.max(0, (182 - this.textRenderer.getWidth(level)) / 2), 8, 0xFF80FF20);
+
+        context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, HUD_HOTBAR_TEXTURE, 182, 22, 0, 0, 0, 17, 182, 22);
+        context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, HUD_HOTBAR_SELECTION_TEXTURE, selectedSlot * 20 - 1, 16, 24, 24);
+        for (int slot = 0; slot < 9; slot++) {
+            ItemStack stack = previewHotbarStack(player, slot);
+            if (!stack.isEmpty()) {
+                context.drawItem(stack, 3 + slot * 20, 20);
+                context.drawStackOverlay(this.textRenderer, stack, 3 + slot * 20, 20);
+            }
+        }
+    }
+
+    private void drawActualPlayerListPreview(DrawContext context, int width, int height) {
+        int panelColor = 0xA0202020;
+        context.fill(20, 0, width - 20, height, panelColor);
+        String[] rows = {
+                playerPreviewName(),
+                "Alex",
+                "Builder42",
+                "Spectator",
+                "NetherRunner"
+        };
+        int y = 8;
+        for (int i = 0; i < rows.length; i++) {
+            context.fill(24, y - 2, width - 24, y + 9, (i & 1) == 0 ? 0x402F2F2F : 0x30202020);
+            context.drawTextWithShadow(this.textRenderer, rows[i], 30, y, 0xFFFFFFFF);
+            context.drawTextWithShadow(this.textRenderer, "||||", width - 48, y, 0xFF7CFF7C);
+            y += 12;
+        }
+    }
+
+    private void drawActualScoreboardPreview(DrawContext context, int width, int height) {
+        context.fill(0, 0, width, height, 0x70101010);
+        context.fill(0, 0, width, 10, 0x90404040);
+        String title = "Objectives";
+        context.drawTextWithShadow(this.textRenderer, title, Math.max(0, (width - this.textRenderer.getWidth(title)) / 2), 1, 0xFFFFFFFF);
+        String[] rows = {"Kills: 12", "Beds: 3", "Ping: 42", "Coins: 256"};
+        for (int i = 0; i < rows.length; i++) {
+            int yy = 14 + i * 10;
+            context.fill(2, yy - 1, width - 2, yy + 8, 0x40202020);
+            context.drawTextWithShadow(this.textRenderer, rows[i], 4, yy, 0xFFEAEAEA);
+        }
+    }
+
+    private void drawActualScreenTitlePreview(DrawContext context, int width) {
+        String title = "Title";
+        String subtitle = "Subtitle text";
+        int titleWidth = this.textRenderer.getWidth(title);
+        context.getMatrices().pushMatrix();
+        context.getMatrices().translate(Math.max(0, (width - titleWidth * 2) / 2), 6);
+        context.getMatrices().scale(2.0f, 2.0f);
+        context.drawTextWithShadow(this.textRenderer, title, 0, 0, 0xFFFFFFFF);
+        context.getMatrices().popMatrix();
+        int subtitleWidth = this.textRenderer.getWidth(subtitle);
+        context.drawTextWithShadow(this.textRenderer, subtitle, Math.max(0, (width - subtitleWidth) / 2), 44, 0xFFE0E0E0);
+    }
+
+    private void drawActualStatusEffectPreview(DrawContext context, int width) {
+        ItemStack[] icons = {
+                new ItemStack(Items.POTION),
+                new ItemStack(Items.GOLDEN_APPLE),
+                new ItemStack(Items.FEATHER),
+                new ItemStack(Items.TURTLE_HELMET)
+        };
+        for (int i = 0; i < icons.length; i++) {
+            int row = i / 2;
+            int col = i % 2;
+            int x = width - 25 - col * 25;
+            int y = 1 + row * 25;
+            context.drawGuiTexture(RenderPipelines.GUI_TEXTURED,
+                    i == 0 ? HUD_EFFECT_BACKGROUND_AMBIENT_TEXTURE : HUD_EFFECT_BACKGROUND_TEXTURE,
+                    x, y, 24, 24);
+            context.drawItem(icons[i], x + 4, y + 4);
+        }
+    }
+
+    private void drawActualSubtitlesPreview(DrawContext context, int width, int height) {
+        String[] lines = {"< Footsteps", "> Zombie groans"};
+        for (int i = 0; i < lines.length; i++) {
+            int yy = height - 20 - i * 10;
+            int lineWidth = this.textRenderer.getWidth(lines[i]);
+            int x = Math.max(0, width - lineWidth - 8);
+            context.fill(x - 2, yy - 1, width, yy + 9, 0x80000000);
+            context.drawTextWithShadow(this.textRenderer, lines[i], x, yy, 0xFFFFFFFF);
+        }
+    }
+
+    private void drawActualToastPreview(DrawContext context) {
+        context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, TOAST_SYSTEM_TEXTURE, 160, 32, 0, 0, 0, 0, 160, 32);
+        context.drawItem(new ItemStack(Items.DIAMOND), 8, 8);
+        context.drawTextWithShadow(this.textRenderer, "Advancement Made!", 30, 7, 0xFFFFFF00);
+        context.drawTextWithShadow(this.textRenderer, "Shiny Preview", 30, 18, 0xFFFFFFFF);
+    }
+
+    private void drawActualTooltipPreview(DrawContext context, int width, int height) {
+        context.fill(0, 0, width, height, 0xF0100010);
+        context.fill(0, 0, width, 1, 0x50A0A0FF);
+        context.fill(0, height - 1, width, height, 0x505050AA);
+        context.fill(0, 0, 1, height, 0x50A0A0FF);
+        context.fill(width - 1, 0, width, height, 0x505050AA);
+        context.drawTextWithShadow(this.textRenderer, "Diamond Sword", 4, 4, 0xFF55FFFF);
+        context.drawTextWithShadow(this.textRenderer, "+7 Attack Damage", 4, 16, 0xFFAAAAFF);
+    }
+
+    private void drawVanillaPreviewOverlay(DrawContext context,
+                                           HudTweaksSettings.ElementType type,
+                                           HudTweaksSettings.ElementConfig config,
+                                           int x1,
+                                           int y1,
+                                           int x2,
+                                           int y2) {
+        float opacity = Math.clamp(config.opacity, 0.0f, 1.0f);
+        if (opacity < 0.99f) {
+            int alpha = Math.clamp(Math.round((1.0f - opacity) * 180.0f), 0, 220);
+            context.fill(x1, y1, x2, y2, alpha << 24);
+        }
+        if (!config.display) {
+            context.fill(x1, y1, x2, y2, 0x88000000);
+            String hidden = vanillaPreviewLabel(type) + " [Hidden]";
+            context.drawTextWithShadow(this.textRenderer, hidden, x1 + 4, y1 + 4, 0xFFFFA0A0);
+        }
+    }
+
+    private ItemStack previewHotbarStack(PlayerEntity player, int slot) {
+        if (player != null && slot >= 0 && slot < 9) {
+            return player.getInventory().getStack(slot);
+        }
+        return switch (slot) {
+            case 0 -> new ItemStack(Items.DIAMOND_SWORD);
+            case 1 -> new ItemStack(Items.BOW);
+            case 2 -> new ItemStack(Items.COOKED_BEEF, 16);
+            case 3 -> new ItemStack(Items.COBBLESTONE, 64);
+            case 4 -> new ItemStack(Items.TORCH, 32);
+            case 5 -> new ItemStack(Items.WATER_BUCKET);
+            case 6 -> new ItemStack(Items.GOLDEN_APPLE, 3);
+            case 7 -> new ItemStack(Items.ENDER_PEARL, 8);
+            case 8 -> new ItemStack(Items.CLOCK);
+            default -> ItemStack.EMPTY;
+        };
+    }
+
+    private String playerPreviewName() {
+        if (this.client != null && this.client.player != null) {
+            return this.client.player.getName().getString();
+        }
+        return "Player";
+    }
+
     private void drawSelectedOutline(DrawContext context, int x1, int y1, int x2, int y2, boolean isSelected) {
         if (!isSelected) {
             return;
@@ -2701,7 +3066,9 @@ public class MacroWorkbenchScreen extends Screen {
             return;
         }
         if (deleteButton != null) {
-            deleteButton.active = selected != null;
+            deleteButton.active = isVanillaCanvasMode()
+                    ? !this.vanillaCanvasElements.isEmpty()
+                    : selected != null;
         }
 
         if (selected == null) {
@@ -2717,6 +3084,23 @@ public class MacroWorkbenchScreen extends Screen {
             actionField.visible = false;
             actionField.active = false;
             syncStyleButtons();
+            syncCanvasModeControls();
+            return;
+        }
+
+        if (isVanillaHudProxy(selected)) {
+            quickField.setEditable(false);
+            quickField.setText(vanillaQuickFieldText(selected));
+            macroField.setEditable(false);
+            macroField.setText("");
+            macroField.visible = false;
+            macroField.active = false;
+            actionField.setEditable(false);
+            actionField.setText("");
+            actionField.visible = false;
+            actionField.active = false;
+            syncStyleButtons();
+            syncCanvasModeControls();
             return;
         }
 
@@ -2738,6 +3122,7 @@ public class MacroWorkbenchScreen extends Screen {
             actionField.visible = false;
             actionField.active = false;
             syncStyleButtons();
+            syncCanvasModeControls();
             return;
         }
 
@@ -2756,13 +3141,14 @@ public class MacroWorkbenchScreen extends Screen {
         actionField.setText(selected.buttonAction == null ? "" : selected.buttonAction);
 
         syncStyleButtons();
+        syncCanvasModeControls();
     }
 
     private void applyQuickEdit() {
         if (selected == null || quickField == null || macroField == null || actionField == null) {
             return;
         }
-        if (isExternalCanvasProxy(selected)) {
+        if (isExternalCanvasProxy(selected) || isVanillaHudProxy(selected)) {
             return;
         }
 
@@ -2797,15 +3183,42 @@ public class MacroWorkbenchScreen extends Screen {
         }
 
         if (selected == null) {
+            if (isVanillaCanvasMode()) {
+                backgroundToggle.active = true;
+                borderToggle.active = false;
+                if (editButton != null) {
+                    editButton.active = false;
+                }
+                backgroundToggle.setMessage(Text.literal(vanillaPreviewMode == VanillaPreviewMode.ACTUAL ? "Preview: Actual" : "Preview: Virtual"));
+                borderToggle.setMessage(Text.literal("Resize = Scale"));
+                return;
+            }
             backgroundToggle.active = false;
             borderToggle.active = false;
+            if (editButton != null) {
+                editButton.active = !isVanillaCanvasMode();
+            }
             backgroundToggle.setMessage(Text.literal("BG: OFF"));
             borderToggle.setMessage(Text.literal("Border: OFF"));
             return;
         }
 
+        if (isVanillaHudProxy(selected)) {
+            backgroundToggle.active = true;
+            borderToggle.active = false;
+            if (editButton != null) {
+                editButton.active = false;
+            }
+            backgroundToggle.setMessage(Text.literal(vanillaPreviewMode == VanillaPreviewMode.ACTUAL ? "Preview: Actual" : "Preview: Virtual"));
+            borderToggle.setMessage(Text.literal("Resize = Scale"));
+            return;
+        }
+
         backgroundToggle.active = true;
         borderToggle.active = true;
+        if (editButton != null) {
+            editButton.active = true;
+        }
         backgroundToggle.setMessage(Text.literal(backgroundLabel(selected)));
         borderToggle.setMessage(Text.literal(borderModeLabel(selected)));
     }
@@ -2827,16 +3240,55 @@ public class MacroWorkbenchScreen extends Screen {
         if (presetNameField == null || presetDeleteButton == null || presetPrevButton == null || presetNextButton == null) {
             return;
         }
+        if (isVanillaCanvasMode()) {
+            presetNameField.setText("vanilla");
+            presetNameField.setEditable(false);
+            presetPrevButton.active = false;
+            presetNextButton.active = false;
+            presetDeleteButton.active = false;
+            if (presetNewButton != null) {
+                presetNewButton.active = false;
+            }
+            if (presetRenameButton != null) {
+                presetRenameButton.active = false;
+            }
+            return;
+        }
         String active = this.working == null ? "default" : StringUtils.safe(this.working.activePresetId);
         presetNameField.setText(active);
+        presetNameField.setEditable(true);
         List<String> ids = MacroHudDataHandler.listPresetIds();
         int idx = activePresetIndex(ids, active);
         presetDeleteButton.active = ids.size() > 1;
         presetPrevButton.active = idx > 0;
         presetNextButton.active = idx >= 0 && idx < ids.size() - 1;
+        if (presetNewButton != null) {
+            presetNewButton.active = true;
+        }
+        if (presetRenameButton != null) {
+            presetRenameButton.active = true;
+        }
+    }
+
+    private void syncCanvasModeControls() {
+        if (this.canvasModeToggleButton != null) {
+            this.canvasModeToggleButton.setMessage(Text.literal(
+                    isVanillaCanvasMode() ? "Vanilla Elements" : "Custom Elements"
+            ));
+        }
+        if (this.deleteButton != null) {
+            this.deleteButton.setMessage(Text.literal(
+                    isVanillaCanvasMode()
+                            ? (selected != null && isVanillaHudProxy(selected) ? "Reset Selected" : "Reset All")
+                            : "Delete"
+            ));
+        }
     }
 
     private void cyclePreset(boolean forward) {
+        if (isVanillaCanvasMode()) {
+            return;
+        }
         if (this.working == null) {
             return;
         }
@@ -2872,6 +3324,9 @@ public class MacroWorkbenchScreen extends Screen {
     }
 
     private void createPresetFromField() {
+        if (isVanillaCanvasMode()) {
+            return;
+        }
         String name = StringUtils.safe(presetNameField == null ? null : presetNameField.getText());
         if (name.isBlank()) {
             name = "preset_" + (MacroHudDataHandler.listPresetIds().size() + 1);
@@ -2887,6 +3342,9 @@ public class MacroWorkbenchScreen extends Screen {
     }
 
     private void renamePresetFromField() {
+        if (isVanillaCanvasMode()) {
+            return;
+        }
         String target = StringUtils.safe(presetNameField == null ? null : presetNameField.getText());
         if (target.isBlank()) {
             return;
@@ -2898,6 +3356,34 @@ public class MacroWorkbenchScreen extends Screen {
         this.selected = null;
         syncCanvasFields();
         syncPresetControls();
+    }
+
+    private void toggleCanvasMode() {
+        applyQuickEdit();
+        if (isVanillaCanvasMode()) {
+            persistVanillaCanvasElements();
+            this.canvasMode = CanvasMode.CUSTOM;
+        } else {
+            this.canvasMode = CanvasMode.VANILLA;
+            syncVanillaCanvasElementsFromSettings();
+        }
+        this.selected = null;
+        this.selectedElementIds.clear();
+        this.dragging = false;
+        this.resizing = false;
+        closeAdvancedModal();
+        syncCanvasFields();
+        syncPresetControls();
+    }
+
+    private void toggleVanillaPreviewMode() {
+        if (!isVanillaCanvasMode()) {
+            return;
+        }
+        this.vanillaPreviewMode = this.vanillaPreviewMode == VanillaPreviewMode.ACTUAL
+                ? VanillaPreviewMode.VIRTUAL
+                : VanillaPreviewMode.ACTUAL;
+        syncCanvasFields();
     }
 
     private String uniquePresetName(String base) {
@@ -2913,6 +3399,7 @@ public class MacroWorkbenchScreen extends Screen {
 
     private void refreshCanvasChromeVisibility() {
         refreshTabWidgetVisibility();
+        syncCanvasModeControls();
     }
 
     private void persistGridPrefs() {
@@ -2923,7 +3410,7 @@ public class MacroWorkbenchScreen extends Screen {
     }
 
     private void openAdvancedModal() {
-        if (selected == null) {
+        if (selected == null || isVanillaHudProxy(selected)) {
             return;
         }
 
@@ -5286,6 +5773,7 @@ public class MacroWorkbenchScreen extends Screen {
         if (advancedOpen) {
             applyAdvancedAndClose();
         }
+        persistVanillaCanvasElements();
         if (this.tab == Tab.KEYBOARD) {
             saveKeyboardMacro();
         }
@@ -5316,6 +5804,8 @@ public class MacroWorkbenchScreen extends Screen {
         MacroHudDataHandler.setConfig(next);
         this.working = MacroHudDataHandler.getConfigCopy();
         syncExternalCanvasElementsFromSources();
+        syncVanillaCanvasElementsFromSettings();
+        syncCanvasFields();
         syncPresetControls();
     }
 
@@ -5344,6 +5834,294 @@ public class MacroWorkbenchScreen extends Screen {
                 "Pick-up Notifier",
                 this::defaultPickupNotifierCanvas
         );
+    }
+
+    private void syncVanillaCanvasElementsFromSettings() {
+        HudTweaksSettings.ElementType selectedType = vanillaHudElementType(this.selected);
+        this.vanillaCanvasElements.clear();
+        this.vanillaCanvasConfigs.clear();
+        for (HudTweaksSettings.ElementType type : HudTweaksSettings.ElementType.values()) {
+            HudTweaksSettings.ElementConfig copy = copyHudTweaksConfig(HudTweaksSettings.getElement(type));
+            this.vanillaCanvasConfigs.put(type, copy);
+            this.vanillaCanvasElements.add(buildVanillaHudProxy(type, copy));
+        }
+        if (selectedType != null) {
+            this.selected = findVanillaHudProxy(selectedType);
+            this.selectedElementIds.clear();
+            if (this.selected != null) {
+                this.selectedElementIds.add(this.selected.id);
+            }
+        }
+    }
+
+    private void persistVanillaCanvasElements() {
+        if (this.vanillaCanvasElements.isEmpty()) {
+            return;
+        }
+
+        EnumMap<HudTweaksSettings.ElementType, HudTweaksSettings.ElementConfig> updated =
+                new EnumMap<>(HudTweaksSettings.ElementType.class);
+        for (HudTweaksSettings.ElementType type : HudTweaksSettings.ElementType.values()) {
+            HudTweaksSettings.ElementConfig baseConfig = copyHudTweaksConfig(this.vanillaCanvasConfigs.get(type));
+            MacroHudDataHandler.HudElement proxy = findVanillaHudProxy(type);
+            if (proxy != null) {
+                float scale = vanillaScaleForProxy(type, proxy);
+                baseConfig.scale = scale;
+                baseConfig.offsetX = Math.clamp(resolveElementX(proxy) - defaultVanillaElementX(type, scale), -500, 500);
+                baseConfig.offsetY = Math.clamp(resolveElementY(proxy) - defaultVanillaElementY(type, scale), -500, 500);
+            }
+            updated.put(type, baseConfig);
+        }
+
+        HudTweaksSettings.updateAndSave(() -> {
+            for (Map.Entry<HudTweaksSettings.ElementType, HudTweaksSettings.ElementConfig> entry : updated.entrySet()) {
+                HudTweaksSettings.get().elements.put(entry.getKey(), copyHudTweaksConfig(entry.getValue()));
+            }
+        });
+
+        this.vanillaCanvasConfigs.clear();
+        this.vanillaCanvasConfigs.putAll(updated);
+    }
+
+    private List<MacroHudDataHandler.HudElement> activeCanvasElements() {
+        return isVanillaCanvasMode() ? this.vanillaCanvasElements : this.working.elements;
+    }
+
+    private boolean isVanillaCanvasMode() {
+        return this.canvasMode == CanvasMode.VANILLA;
+    }
+
+    private boolean isVanillaHudProxy(MacroHudDataHandler.HudElement element) {
+        return vanillaHudElementType(element) != null;
+    }
+
+    private MacroHudDataHandler.HudElement findVanillaHudProxy(HudTweaksSettings.ElementType type) {
+        String id = vanillaHudProxyId(type);
+        for (MacroHudDataHandler.HudElement element : this.vanillaCanvasElements) {
+            if (element != null && id.equals(element.id)) {
+                return element;
+            }
+        }
+        return null;
+    }
+
+    private HudTweaksSettings.ElementType vanillaHudElementType(MacroHudDataHandler.HudElement element) {
+        if (element == null || element.id == null || !element.id.startsWith(VANILLA_HUD_PROXY_PREFIX)) {
+            return null;
+        }
+        String raw = element.id.substring(VANILLA_HUD_PROXY_PREFIX.length());
+        try {
+            return HudTweaksSettings.ElementType.valueOf(raw);
+        } catch (IllegalArgumentException ignored) {
+            return null;
+        }
+    }
+
+    private String vanillaHudProxyId(HudTweaksSettings.ElementType type) {
+        return VANILLA_HUD_PROXY_PREFIX + type.name();
+    }
+
+    private MacroHudDataHandler.HudElement buildVanillaHudProxy(HudTweaksSettings.ElementType type,
+                                                                HudTweaksSettings.ElementConfig config) {
+        MacroHudDataHandler.HudElement proxy = MacroHudDataHandler.createElement(MacroHudDataHandler.ElementType.TEXT);
+        proxy.id = vanillaHudProxyId(type);
+        proxy.anchor = MacroHudDataHandler.Anchor.TOP_LEFT;
+        proxy.horizontalAlign = MacroHudDataHandler.HorizontalAlign.LEFT;
+        proxy.verticalAlign = MacroHudDataHandler.VerticalAlign.TOP;
+        proxy.drawBackground = true;
+        proxy.drawBorder = true;
+        proxy.backgroundColor = config.display ? 0x5A101820 : 0x44303030;
+        proxy.borderColor = config.display ? 0xFFFFFFFF : 0xFF888888;
+        proxy.textColor = config.display ? 0xFFFFFFFF : 0xFFB8B8B8;
+        proxy.fontScale = 0.9f;
+        proxy.lineHeight = 9;
+        proxy.zIndex = vanillaHudDescriptor(type).baseZ();
+        proxy.width = vanillaScaledWidth(type, config.scale);
+        proxy.height = vanillaScaledHeight(type, config.scale);
+        proxy.x = defaultVanillaElementX(type, config.scale) + config.offsetX;
+        proxy.y = defaultVanillaElementY(type, config.scale) + config.offsetY;
+        proxy.label = vanillaPreviewLabel(type);
+        proxy.text = vanillaPreviewText(type, config);
+        return proxy;
+    }
+
+    private HudTweaksSettings.ElementConfig copyHudTweaksConfig(HudTweaksSettings.ElementConfig source) {
+        HudTweaksSettings.ElementConfig copy = new HudTweaksSettings.ElementConfig();
+        if (source == null) {
+            return copy;
+        }
+        copy.display = source.display;
+        copy.scale = Math.clamp(source.scale, 0.25f, 3.0f);
+        copy.opacity = Math.clamp(source.opacity, 0.0f, 1.0f);
+        copy.offsetX = Math.clamp(source.offsetX, -500, 500);
+        copy.offsetY = Math.clamp(source.offsetY, -500, 500);
+        return copy;
+    }
+
+    private record VanillaHudDescriptor(String label,
+                                        int baseWidth,
+                                        int baseHeight,
+                                        int baseZ) {
+    }
+
+    private VanillaHudDescriptor vanillaHudDescriptor(HudTweaksSettings.ElementType type) {
+        return switch (type) {
+            case ACTION_BAR -> new VanillaHudDescriptor("Action Bar", 182, 20, 20);
+            case BOSS_BAR -> new VanillaHudDescriptor("Boss Bar", 182, 20, 30);
+            case CROSSHAIR -> new VanillaHudDescriptor("Crosshair", 15, 15, 50);
+            case DEBUG_SCREEN -> new VanillaHudDescriptor("Debug Screen", 220, 120, 60);
+            case HOTBAR_GROUP -> new VanillaHudDescriptor("Hotbar Group", 182, 39, 10);
+            case PLAYER_LIST -> new VanillaHudDescriptor("Player List", 240, 140, 40);
+            case SCOREBOARD -> new VanillaHudDescriptor("Scoreboard", 140, 90, 35);
+            case SCREEN_TITLE -> new VanillaHudDescriptor("Screen Title", 240, 68, 25);
+            case STATUS_EFFECT -> new VanillaHudDescriptor("Status Effect", 120, 72, 45);
+            case SUBTITLES -> new VanillaHudDescriptor("Subtitles", 180, 48, 15);
+            case TOAST -> new VanillaHudDescriptor("Toast", 160, 32, 55);
+            case TOOLTIP -> new VanillaHudDescriptor("Tooltip", 160, 40, 65);
+        };
+    }
+
+    private String vanillaPreviewLabel(HudTweaksSettings.ElementType type) {
+        return vanillaHudDescriptor(type).label();
+    }
+
+    private String vanillaPreviewText(HudTweaksSettings.ElementType type, HudTweaksSettings.ElementConfig config) {
+        return vanillaPreviewLabel(type)
+                + "\nScale " + String.format(Locale.ROOT, "%.2f", Math.clamp(config.scale, 0.25f, 3.0f))
+                + "  Opacity " + String.format(Locale.ROOT, "%.2f", Math.clamp(config.opacity, 0.0f, 1.0f))
+                + (config.display ? "" : "  Hidden");
+    }
+
+    private int vanillaScaledWidth(HudTweaksSettings.ElementType type, float scale) {
+        return Math.max(12, Math.round(vanillaHudDescriptor(type).baseWidth() * Math.clamp(scale, 0.25f, 3.0f)));
+    }
+
+    private int vanillaScaledHeight(HudTweaksSettings.ElementType type, float scale) {
+        return Math.max(12, Math.round(vanillaHudDescriptor(type).baseHeight() * Math.clamp(scale, 0.25f, 3.0f)));
+    }
+
+    private int vanillaScaledOffset(int value, float scale) {
+        return Math.round(value * Math.clamp(scale, 0.25f, 3.0f));
+    }
+
+    private int defaultVanillaElementX(HudTweaksSettings.ElementType type, float scale) {
+        int width = vanillaScaledWidth(type, scale);
+        return switch (type) {
+            case ACTION_BAR, BOSS_BAR, CROSSHAIR, HOTBAR_GROUP, PLAYER_LIST, SCREEN_TITLE, TOOLTIP ->
+                    Math.round((this.width - width) / 2.0f);
+            case DEBUG_SCREEN -> vanillaScaledOffset(2, scale);
+            case SCOREBOARD -> this.width - width - vanillaScaledOffset(3, scale);
+            case STATUS_EFFECT -> this.width - width - vanillaScaledOffset(1, scale);
+            case SUBTITLES -> this.width - width - vanillaScaledOffset(8, scale);
+            case TOAST -> this.width - width;
+        };
+    }
+
+    private int defaultVanillaElementY(HudTweaksSettings.ElementType type, float scale) {
+        int height = vanillaScaledHeight(type, scale);
+        int canvasHeight = canvasHeightBound();
+        int canvasBottom = canvasBottomBound();
+        int canvasCenter = canvasTopBound() + canvasHeight / 2;
+        return switch (type) {
+            case ACTION_BAR -> canvasBottom - vanillaScaledOffset(72, scale);
+            case BOSS_BAR -> vanillaScaledOffset(3, scale);
+            case CROSSHAIR -> canvasTopBound() + Math.round((canvasHeight - height) / 2.0f);
+            case DEBUG_SCREEN -> vanillaScaledOffset(2, scale);
+            case HOTBAR_GROUP -> canvasBottom - height;
+            case PLAYER_LIST -> vanillaScaledOffset(10, scale);
+            case SCOREBOARD -> canvasCenter - Math.round(height * (2.0f / 3.0f));
+            case SCREEN_TITLE -> canvasCenter - vanillaScaledOffset(40, scale);
+            case STATUS_EFFECT -> vanillaScaledOffset(1, scale);
+            case SUBTITLES -> canvasBottom - height - vanillaScaledOffset(30, scale);
+            case TOAST -> vanillaScaledOffset(16, scale);
+            case TOOLTIP -> canvasTopBound() + Math.round((canvasHeight - height) / 2.0f) + vanillaScaledOffset(20, scale);
+        };
+    }
+
+    private float vanillaScaleForProxy(HudTweaksSettings.ElementType type, MacroHudDataHandler.HudElement proxy) {
+        VanillaHudDescriptor descriptor = vanillaHudDescriptor(type);
+        float widthScale = Math.max(0.01f, proxy.width / (float) descriptor.baseWidth());
+        float heightScale = Math.max(0.01f, proxy.height / (float) descriptor.baseHeight());
+        return Math.clamp(Math.max(widthScale, heightScale), 0.25f, 3.0f);
+    }
+
+    private void applyVanillaProxyResize(MacroHudDataHandler.HudElement proxy, int nextWidth, int nextHeight) {
+        HudTweaksSettings.ElementType type = vanillaHudElementType(proxy);
+        if (type == null) {
+            return;
+        }
+        VanillaHudDescriptor descriptor = vanillaHudDescriptor(type);
+        float widthScale = Math.max(0.01f, nextWidth / (float) descriptor.baseWidth());
+        float heightScale = Math.max(0.01f, nextHeight / (float) descriptor.baseHeight());
+        float scale = Math.clamp(Math.max(widthScale, heightScale), 0.25f, 3.0f);
+        proxy.width = vanillaScaledWidth(type, scale);
+        proxy.height = vanillaScaledHeight(type, scale);
+        proxy.text = vanillaPreviewText(type, currentVanillaHudConfig(type, scale, proxy));
+    }
+
+    private HudTweaksSettings.ElementConfig currentVanillaHudConfig(HudTweaksSettings.ElementType type,
+                                                                    float scale,
+                                                                    MacroHudDataHandler.HudElement proxy) {
+        HudTweaksSettings.ElementConfig config = copyHudTweaksConfig(this.vanillaCanvasConfigs.get(type));
+        config.scale = scale;
+        config.offsetX = Math.clamp(resolveElementX(proxy) - defaultVanillaElementX(type, scale), -500, 500);
+        config.offsetY = Math.clamp(resolveElementY(proxy) - defaultVanillaElementY(type, scale), -500, 500);
+        return config;
+    }
+
+    private String vanillaQuickFieldText(MacroHudDataHandler.HudElement proxy) {
+        HudTweaksSettings.ElementType type = vanillaHudElementType(proxy);
+        if (type == null) {
+            return "";
+        }
+        HudTweaksSettings.ElementConfig config = currentVanillaHudConfig(type, vanillaScaleForProxy(type, proxy), proxy);
+        return vanillaPreviewLabel(type) + "  scale " + String.format(Locale.ROOT, "%.2f", config.scale)
+                + "  offset " + config.offsetX + "," + config.offsetY;
+    }
+
+    private String vanillaSelectionSummary(MacroHudDataHandler.HudElement proxy) {
+        HudTweaksSettings.ElementType type = vanillaHudElementType(proxy);
+        if (type == null) {
+            return "Selected: Vanilla HUD";
+        }
+        HudTweaksSettings.ElementConfig config = currentVanillaHudConfig(type, vanillaScaleForProxy(type, proxy), proxy);
+        return "Selected: " + vanillaPreviewLabel(type)
+                + "  Scale: " + String.format(Locale.ROOT, "%.2f", config.scale)
+                + "  Opacity: " + String.format(Locale.ROOT, "%.2f", config.opacity)
+                + "  Offset: " + config.offsetX + "," + config.offsetY;
+    }
+
+    private void refreshVanillaProxyPreview(MacroHudDataHandler.HudElement proxy) {
+        HudTweaksSettings.ElementType type = vanillaHudElementType(proxy);
+        if (type == null) {
+            return;
+        }
+        float scale = vanillaScaleForProxy(type, proxy);
+        proxy.text = vanillaPreviewText(type, currentVanillaHudConfig(type, scale, proxy));
+    }
+
+    private void resetVanillaProxy(MacroHudDataHandler.HudElement proxy) {
+        HudTweaksSettings.ElementType type = vanillaHudElementType(proxy);
+        if (type == null) {
+            return;
+        }
+        HudTweaksSettings.ElementConfig config = copyHudTweaksConfig(this.vanillaCanvasConfigs.get(type));
+        config.scale = 1.0f;
+        config.offsetX = 0;
+        config.offsetY = 0;
+        this.vanillaCanvasConfigs.put(type, config);
+        proxy.width = vanillaScaledWidth(type, config.scale);
+        proxy.height = vanillaScaledHeight(type, config.scale);
+        proxy.x = defaultVanillaElementX(type, config.scale);
+        proxy.y = defaultVanillaElementY(type, config.scale);
+        proxy.text = vanillaPreviewText(type, config);
+        clampElementToCanvas(proxy);
+    }
+
+    private void resetAllVanillaProxies() {
+        for (MacroHudDataHandler.HudElement proxy : this.vanillaCanvasElements) {
+            resetVanillaProxy(proxy);
+        }
     }
 
     private void persistExternalCanvasElements() {
@@ -5618,6 +6396,21 @@ public class MacroWorkbenchScreen extends Screen {
         if (element == null) {
             return;
         }
+        if (isVanillaHudProxy(element)) {
+            HudTweaksSettings.ElementType type = vanillaHudElementType(element);
+            if (type == null) {
+                return;
+            }
+            float scale = vanillaScaleForProxy(type, element);
+            element.width = vanillaScaledWidth(type, scale);
+            element.height = vanillaScaledHeight(type, scale);
+            int screenX = Math.clamp(resolveElementX(element), 0, Math.max(0, this.width - element.width));
+            int screenY = Math.clamp(resolveElementY(element), canvasTopBound(),
+                    Math.max(canvasTopBound(), canvasBottomBound() - element.height));
+            setElementScreenPosition(element, screenX, screenY);
+            refreshVanillaProxyPreview(element);
+            return;
+        }
         element.width = Math.clamp(element.width, 1, Math.max(1, this.width));
         element.height = Math.clamp(element.height, 1, Math.max(1, canvasHeightBound()));
         int screenX = Math.clamp(resolveElementX(element), 0, Math.max(0, this.width - element.width));
@@ -5630,7 +6423,7 @@ public class MacroWorkbenchScreen extends Screen {
         return (quickField != null && quickField.isFocused())
                 || (macroField != null && macroField.isFocused())
                 || (actionField != null && actionField.isFocused())
-                || (presetNameField != null && presetNameField.isFocused());
+                || (!isVanillaCanvasMode() && presetNameField != null && presetNameField.isFocused());
     }
 
     private List<MacroHudDataHandler.HudElement> getSelectedElements() {
@@ -5638,7 +6431,7 @@ public class MacroWorkbenchScreen extends Screen {
             selectedElementIds.add(selected.id);
         }
         List<MacroHudDataHandler.HudElement> out = new ArrayList<>();
-        for (MacroHudDataHandler.HudElement e : this.working.elements) {
+        for (MacroHudDataHandler.HudElement e : activeCanvasElements()) {
             if (e != null && selectedElementIds.contains(e.id)) {
                 out.add(e);
             }
@@ -5650,7 +6443,7 @@ public class MacroWorkbenchScreen extends Screen {
         if (id == null || this.working == null) {
             return null;
         }
-        for (MacroHudDataHandler.HudElement e : this.working.elements) {
+        for (MacroHudDataHandler.HudElement e : activeCanvasElements()) {
             if (e != null && id.equals(e.id)) {
                 return e;
             }
@@ -5694,11 +6487,15 @@ public class MacroWorkbenchScreen extends Screen {
             e.width = snapshot.width();
             e.height = snapshot.height();
             clampElementToCanvas(e);
+            refreshVanillaProxyPreview(e);
         }
         syncCanvasFields();
     }
 
     private void copySelectedElements() {
+        if (isVanillaCanvasMode()) {
+            return;
+        }
         elementClipboard.clear();
         for (MacroHudDataHandler.HudElement e : getSelectedElements()) {
             elementClipboard.add(HudElementUtils.cloneElement(e));
@@ -5706,6 +6503,9 @@ public class MacroWorkbenchScreen extends Screen {
     }
 
     private void pasteElementsFromClipboard() {
+        if (isVanillaCanvasMode()) {
+            return;
+        }
         if (elementClipboard.isEmpty()) {
             return;
         }
@@ -5729,7 +6529,7 @@ public class MacroWorkbenchScreen extends Screen {
     }
 
     private void copySelectedDimensions() {
-        if (selected == null) {
+        if (selected == null || isVanillaCanvasMode()) {
             return;
         }
         clipboardWidth = Math.max(1, selected.width);
@@ -5737,7 +6537,7 @@ public class MacroWorkbenchScreen extends Screen {
     }
 
     private void pasteDimensionsToSelection() {
-        if (clipboardWidth <= 0 || clipboardHeight <= 0) {
+        if (clipboardWidth <= 0 || clipboardHeight <= 0 || isVanillaCanvasMode()) {
             return;
         }
         for (MacroHudDataHandler.HudElement e : getSelectedElements()) {
