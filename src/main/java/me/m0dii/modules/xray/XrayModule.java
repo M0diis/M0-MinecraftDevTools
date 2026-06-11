@@ -34,6 +34,11 @@ public class XrayModule extends Module {
     }
 
     @Override
+    protected void onDisable() {
+        XrayOutlineRenderer.clearCache();
+    }
+
+    @Override
     public boolean requiresServerSideOptIn() {
         return true;
     }
