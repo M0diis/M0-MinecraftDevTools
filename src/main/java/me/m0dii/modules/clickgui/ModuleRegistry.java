@@ -12,6 +12,7 @@ import me.m0dii.modules.freecam.FreecamModule;
 import me.m0dii.modules.fullbright.FullbrightModule;
 import me.m0dii.modules.healthbars.EntityHealthBarsModule;
 import me.m0dii.modules.heldlight.HeldLightModule;
+import me.m0dii.modules.hudtweaks.HudTweaksModule;
 import me.m0dii.modules.hungertweaks.HungerTweaksModule;
 import me.m0dii.modules.instantbreak.InstantBreakModule;
 import me.m0dii.modules.inventorymove.InventoryMoveModule;
@@ -84,6 +85,7 @@ public class ModuleRegistry {
         safeAdd(hud, NBTInfoHudModule.INSTANCE);
         safeAdd(hud, ItemPickupNotifierModule.INSTANCE);
         safeAdd(hud, EntityRadarModule.INSTANCE);
+        safeAdd(hud, HudTweaksModule.INSTANCE);
         safeAdd(hud, ClickHudModule.INSTANCE);
         categories.add(hud);
 

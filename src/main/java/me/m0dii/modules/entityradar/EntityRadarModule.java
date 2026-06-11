@@ -2,6 +2,7 @@ package me.m0dii.modules.entityradar;
 
 import me.m0dii.M0DevToolsClient;
 import me.m0dii.modules.Module;
+import me.m0dii.modules.optin.RestrictedModuleOptInNetworking;
 import me.m0dii.utils.KeybindCatalog;
 import me.m0dii.utils.ModConfig;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
@@ -46,6 +47,15 @@ public class EntityRadarModule extends Module {
                 client -> client.setScreen(EntityRadarScreen.create(client.currentScreen)));
     }
 
+    @Override
+    public boolean requiresServerSideOptIn() {
+        return true;
+    }
+
+    @Override
+    protected Identifier getRequiredServerOptInChannel() {
+        return RestrictedModuleOptInNetworking.ENTITY_RADAR_CHANNEL_ID;
+    }
 
     @Override
     public List<String> getSettingsDisplay() {
@@ -118,4 +128,3 @@ public class EntityRadarModule extends Module {
         return total - passive - hostile;
     }
 }
-

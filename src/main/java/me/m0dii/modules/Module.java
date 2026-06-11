@@ -2,13 +2,16 @@ package me.m0dii.modules;
 
 import lombok.Getter;
 import me.m0dii.utils.KeybindManager;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
 import net.minecraft.client.world.ClientWorld;
 import net.minecraft.text.Text;
+import net.minecraft.util.Identifier;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -49,8 +52,49 @@ public abstract class Module {
         return getClient() == null || getClient().player == null || getClient().world == null;
     }
 
+    public boolean requiresServerSideOptIn() {
+        return false;
+    }
+
+    protected @Nullable Identifier getRequiredServerOptInChannel() {
+        return null;
+    }
+
+    public boolean hasRequiredServerSideOptIn() {
+        if (!requiresServerSideOptIn()) {
+            return true;
+        }
+
+        MinecraftClient mc = getClient();
+        if (mc == null) {
+            return false;
+        }
+
+        // Singleplayer worlds are local, so no server handshake is required.
+        if (mc.isInSingleplayer()) {
+            return true;
+        }
+
+        Identifier channel = getRequiredServerOptInChannel();
+        return channel != null && ClientPlayNetworking.canSend(channel);
+    }
+
+    protected void notifyMissingServerSideOptIn() {
+        if (getClient().player != null) {
+            getClient().player.sendMessage(
+                    Text.literal(displayName + " requires server-side opt-in and is disabled on this server."),
+                    true
+            );
+        }
+    }
+
     public void setEnabled(boolean enabled) {
         if (this.enabled == enabled) {
+            return;
+        }
+
+        if (enabled && !hasRequiredServerSideOptIn()) {
+            notifyMissingServerSideOptIn();
             return;
         }
 
@@ -64,9 +108,10 @@ public abstract class Module {
     }
 
     public void toggleEnabled() {
-        setEnabled(!isEnabled());
+        boolean wasEnabled = isEnabled();
+        setEnabled(!wasEnabled);
 
-        if (getClient().player != null) {
+        if (getClient().player != null && wasEnabled != isEnabled()) {
             getClient().player.sendMessage(Text.literal(displayName + " " + (isEnabled() ? "enabled" : "disabled")), true);
         }
     }
@@ -131,6 +176,9 @@ public abstract class Module {
         List<String> settings = new ArrayList<>();
         settings.add("Key: " + (keyBinding != null ? keyBinding.getBoundKeyTranslationKey() : "None"));
         settings.add("Toggle: " + (isEnabled() ? "ON" : "OFF"));
+        if (requiresServerSideOptIn()) {
+            settings.add("Server Opt-In: " + (hasRequiredServerSideOptIn() ? "OK" : "MISSING"));
+        }
         return settings;
     }
 
@@ -147,4 +195,3 @@ public abstract class Module {
     }
 
 }
-

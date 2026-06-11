@@ -8,6 +8,8 @@ import me.m0dii.modules.fastblockplacement.FastBlockPlacementModule;
 import me.m0dii.modules.freecam.FreecamModule;
 import me.m0dii.modules.fullbright.FullbrightModule;
 import me.m0dii.modules.heldlight.HeldLightModule;
+import me.m0dii.modules.hudtweaks.HudTweaksModule;
+import me.m0dii.modules.hudtweaks.HudTweaksSettings;
 import me.m0dii.modules.hungertweaks.HungerTweaksModule;
 import me.m0dii.modules.instantbreak.InstantBreakModule;
 import me.m0dii.modules.inventorymove.InventoryMoveModule;
@@ -54,7 +56,8 @@ final class MacroWorkbenchConfigurationTab {
         TWEAKS("Tweaks", "Visual and gameplay tweaks, plus reach controls."),
         MOUSE_TWEAKS("Mouse Tweaks", "Inventory mouse drag and wheel-transfer tweaks."),
         HUNGER_TWEAKS("Hunger Tweaks", "Food tooltip, saturation, exhaustion, and healing prediction overlays."),
-        BRIDGING_TWEAKS("Bridging Tweaks", "Reacharound block placement, outline, crosshair, and targeting rules.");
+        BRIDGING_TWEAKS("Bridging Tweaks", "Reacharound block placement, outline, crosshair, and targeting rules."),
+        HUD_TWEAKS("HUD Tweaks", "Per-element scale, opacity, and offset controls for vanilla HUD parts.");
 
         private final String label;
         private final String description;
@@ -82,6 +85,7 @@ final class MacroWorkbenchConfigurationTab {
     private final MouseTweaksControls mouseTweaksControls = new MouseTweaksControls();
     private final HungerTweaksControls hungerTweaksControls = new HungerTweaksControls();
     private final BridgingTweaksControls bridgingTweaksControls = new BridgingTweaksControls();
+    private final HudTweaksControls hudTweaksControls = new HudTweaksControls();
 
     private int selectedRegexIndex = -1;
     private int regexScroll = 0;
@@ -112,6 +116,7 @@ final class MacroWorkbenchConfigurationTab {
         this.mouseTweaksControls.init(rightX, settingW);
         this.hungerTweaksControls.init(rightX, settingW);
         this.bridgingTweaksControls.init(rightX, settingW);
+        this.hudTweaksControls.init(rightX, settingW);
         initCategoryWidgetGroups();
         register(this.categoryButtons.values().toArray(new ClickableWidget[0]));
         for (List<ClickableWidget> widgets : this.categoryWidgets.values()) {
@@ -137,6 +142,7 @@ final class MacroWorkbenchConfigurationTab {
         this.mouseTweaksControls.sync();
         this.hungerTweaksControls.sync();
         this.bridgingTweaksControls.sync();
+        this.hudTweaksControls.sync();
         syncCategoryVisibility();
     }
 
@@ -248,6 +254,7 @@ final class MacroWorkbenchConfigurationTab {
         addCategoryWidgets(Category.MOUSE_TWEAKS, this.mouseTweaksControls.widgets());
         addCategoryWidgets(Category.HUNGER_TWEAKS, this.hungerTweaksControls.widgets());
         addCategoryWidgets(Category.BRIDGING_TWEAKS, this.bridgingTweaksControls.widgets());
+        addCategoryWidgets(Category.HUD_TWEAKS, this.hudTweaksControls.widgets());
     }
 
     private void addCategoryWidgets(Category category, ClickableWidget... widgets) {
@@ -571,6 +578,156 @@ final class MacroWorkbenchConfigurationTab {
                 return true;
             }
             return super.handleMouseScroll(mouseX, mouseY, verticalAmount);
+        }
+    }
+
+    private final class HudTweaksControls extends ControlSection {
+        private HudTweaksSettings.ElementType selectedElement = HudTweaksSettings.ElementType.CROSSHAIR;
+
+        private ButtonWidget moduleToggleButton;
+        private ButtonWidget elementButton;
+        private ButtonWidget displayButton;
+        private ButtonWidget scaleButton;
+        private ButtonWidget opacityButton;
+        private ButtonWidget offsetXButton;
+        private ButtonWidget offsetYButton;
+        private ButtonWidget resetElementButton;
+        private ButtonWidget resetAllButton;
+
+        @Override
+        protected void init(int rightX, int settingW) {
+            this.moduleToggleButton = addButton(
+                    () -> Text.literal("HUD Tweaks Module: " + (HudTweaksModule.INSTANCE.isEnabled() ? "ON" : "OFF")),
+                    () -> HudTweaksModule.INSTANCE.setEnabled(!HudTweaksModule.INSTANCE.isEnabled()),
+                    rightX, settingW, 0
+            );
+            this.elementButton = addButton(
+                    () -> Text.literal("Element: " + label(this.selectedElement)),
+                    () -> cycleSelectedElement(1),
+                    rightX, settingW, 1
+            );
+            this.displayButton = addButton(
+                    () -> Text.literal("Display: " + (selectedConfig().display ? "ON" : "OFF")),
+                    this::toggleDisplay,
+                    rightX, settingW, 2
+            );
+            this.scaleButton = addButton(
+                    () -> Text.literal("Scale: " + String.format(Locale.ROOT, "%.2f", selectedConfig().scale)),
+                    () -> adjustScale(1),
+                    rightX, settingW, 3
+            );
+            this.opacityButton = addButton(
+                    () -> Text.literal("Opacity: " + String.format(Locale.ROOT, "%.2f", selectedConfig().opacity)),
+                    () -> adjustOpacity(1),
+                    rightX, settingW, 4
+            );
+            this.offsetXButton = addButton(
+                    () -> Text.literal("Offset X: " + selectedConfig().offsetX),
+                    () -> adjustOffsetX(1),
+                    rightX, settingW, 5
+            );
+            this.offsetYButton = addButton(
+                    () -> Text.literal("Offset Y: " + selectedConfig().offsetY),
+                    () -> adjustOffsetY(1),
+                    rightX, settingW, 6
+            );
+            this.resetElementButton = addButton(
+                    () -> Text.literal("Reset Selected Element"),
+                    () -> HudTweaksSettings.resetElement(this.selectedElement),
+                    rightX, settingW, 7
+            );
+            this.resetAllButton = addButton(
+                    () -> Text.literal("Reset All HUD Tweaks"),
+                    HudTweaksSettings::resetAll,
+                    rightX, settingW, 8
+            );
+        }
+
+        @Override
+        protected boolean handleMouseClick(double mouseX, double mouseY, int button) {
+            if (button != 1) {
+                return false;
+            }
+            if (contains(mouseX, mouseY, this.elementButton)) {
+                cycleSelectedElement(-1);
+                return true;
+            }
+            if (contains(mouseX, mouseY, this.scaleButton)) {
+                adjustScale(-1);
+                return true;
+            }
+            if (contains(mouseX, mouseY, this.opacityButton)) {
+                adjustOpacity(-1);
+                return true;
+            }
+            if (contains(mouseX, mouseY, this.offsetXButton)) {
+                adjustOffsetX(-1);
+                return true;
+            }
+            if (contains(mouseX, mouseY, this.offsetYButton)) {
+                adjustOffsetY(-1);
+                return true;
+            }
+            return false;
+        }
+
+        private HudTweaksSettings.ElementConfig selectedConfig() {
+            return HudTweaksSettings.getElement(this.selectedElement);
+        }
+
+        private void cycleSelectedElement(int direction) {
+            HudTweaksSettings.ElementType[] values = HudTweaksSettings.ElementType.values();
+            int next = (this.selectedElement.ordinal() + (direction > 0 ? 1 : -1) + values.length) % values.length;
+            this.selectedElement = values[next];
+        }
+
+        private void toggleDisplay() {
+            HudTweaksSettings.updateAndSave(() -> selectedConfig().display = !selectedConfig().display);
+        }
+
+        private void adjustScale(int direction) {
+            HudTweaksSettings.updateAndSave(() -> {
+                float step = shiftDown.getAsBoolean() ? 0.05f : 0.10f;
+                selectedConfig().scale = Math.clamp(selectedConfig().scale + (direction * step), 0.25f, 3.0f);
+            });
+        }
+
+        private void adjustOpacity(int direction) {
+            HudTweaksSettings.updateAndSave(() -> {
+                float step = shiftDown.getAsBoolean() ? 0.02f : 0.05f;
+                selectedConfig().opacity = Math.clamp(selectedConfig().opacity + (direction * step), 0.0f, 1.0f);
+            });
+        }
+
+        private void adjustOffsetX(int direction) {
+            HudTweaksSettings.updateAndSave(() -> {
+                int step = shiftDown.getAsBoolean() ? 1 : 5;
+                selectedConfig().offsetX = Math.clamp(selectedConfig().offsetX + (direction * step), -500, 500);
+            });
+        }
+
+        private void adjustOffsetY(int direction) {
+            HudTweaksSettings.updateAndSave(() -> {
+                int step = shiftDown.getAsBoolean() ? 1 : 5;
+                selectedConfig().offsetY = Math.clamp(selectedConfig().offsetY + (direction * step), -500, 500);
+            });
+        }
+
+        private String label(HudTweaksSettings.ElementType type) {
+            return switch (type) {
+                case ACTION_BAR -> "Action Bar";
+                case BOSS_BAR -> "Boss Bar";
+                case CROSSHAIR -> "Crosshair";
+                case DEBUG_SCREEN -> "Debug Screen";
+                case HOTBAR_GROUP -> "Hotbar Group";
+                case PLAYER_LIST -> "Player List";
+                case SCOREBOARD -> "Scoreboard";
+                case SCREEN_TITLE -> "Screen Title";
+                case STATUS_EFFECT -> "Status Effect";
+                case SUBTITLES -> "Subtitles";
+                case TOAST -> "Toast";
+                case TOOLTIP -> "Tooltip";
+            };
         }
     }
 
@@ -1094,6 +1251,7 @@ final class MacroWorkbenchConfigurationTab {
             case MOUSE_TWEAKS -> this.mouseTweaksControls;
             case HUNGER_TWEAKS -> this.hungerTweaksControls;
             case BRIDGING_TWEAKS -> this.bridgingTweaksControls;
+            case HUD_TWEAKS -> this.hudTweaksControls;
         };
     }
 

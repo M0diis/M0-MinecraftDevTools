@@ -18,6 +18,7 @@ import me.m0dii.modules.getdata.GetDataClientCommand;
 import me.m0dii.modules.getdata.GetDataSyncClient;
 import me.m0dii.modules.healthbars.EntityHealthBarsModule;
 import me.m0dii.modules.heldlight.HeldLightModule;
+import me.m0dii.modules.hudtweaks.HudTweaksModule;
 import me.m0dii.modules.hungertweaks.HungerTweaksModule;
 import me.m0dii.modules.instantbreak.InstantBreakModule;
 import me.m0dii.modules.inventorymove.InventoryMoveModule;
@@ -89,6 +90,7 @@ public class M0DevToolsClient implements ClientModInitializer {
         ItemPickupNotifierModule.INSTANCE.register();
         FullbrightModule.INSTANCE.register();
         HeldLightModule.INSTANCE.register();
+        HudTweaksModule.INSTANCE.register();
         HungerTweaksModule.INSTANCE.register();
         BridgingTweaksModule.INSTANCE.register();
         InventoryMoveModule.INSTANCE.register();

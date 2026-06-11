@@ -39,6 +39,18 @@
     "SimpleOptionMixin",
     "WorldRendererHeldLightMixin",
     "WorldRendererMixin",
+    "hudtweaks.BossBarHudMixin",
+    "hudtweaks.ContextualBarMixin",
+    "hudtweaks.DebugHudMixin",
+    "hudtweaks.DrawContextMixin",
+    "hudtweaks.GuiRendererMixin",
+    "hudtweaks.GuiRenderStateMixin",
+    "hudtweaks.ItemGuiElementRenderStateMixin",
+    "hudtweaks.OversizedItemRendererMixin",
+    "hudtweaks.SubtitlesHudMixin",
+    "hudtweaks.TextGuiElementRenderStateMixin",
+    "hudtweaks.ToastManagerMixin",
+    "hudtweaks.WidgetTooltipPositionerMixin",
     "hungertweaks.DebugHudMixin",
     "hungertweaks.HungerManagerAccessor",
     "hungertweaks.InGameHudMixin",
@@ -63,7 +75,6 @@
     "uiutilities.HandledScreenMixin",
     "uiutilities.MultiplayerScreenMixin",
     "uiutilities.SignEditScreenMixin",
-    "uiutilities.SleepingChatScreenMixin",
-    "uiutilities.SplashOverlayMixin"
+    "uiutilities.SleepingChatScreenMixin"
   ]
 }
