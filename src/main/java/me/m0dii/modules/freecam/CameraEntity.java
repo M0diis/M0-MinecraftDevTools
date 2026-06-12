@@ -16,12 +16,23 @@ import net.minecraft.util.math.Vec3d;
 import org.jetbrains.annotations.NotNull;
 
 public class CameraEntity extends ClientPlayerEntity {
+    public interface CameraController {
+        void tick(CameraEntity camera);
+
+        boolean isActive();
+
+        default boolean blocksManualControl() {
+            return false;
+        }
+    }
 
     @Nullable
     private static CameraEntity camera;
 
     @Nullable
     private static Entity originalCameraEntity;
+    @Nullable
+    private static CameraController controller;
     private static Vec3d cameraMotion = new Vec3d(0.0, 0.0, 0.0);
 
     private static boolean cullChunksOriginal;
@@ -47,6 +58,16 @@ public class CameraEntity extends ClientPlayerEntity {
         CameraEntity camera = getCamera();
 
         if (camera != null) {
+            if (controller != null) {
+                camera.updateLastTickPosition();
+                controller.tick(camera);
+                if (controller.isActive()) {
+                    return;
+                }
+                controller = null;
+                return;
+            }
+
             GameOptions options = MinecraftClient.getInstance().options;
 
             camera.updateLastTickPosition();
@@ -160,6 +181,26 @@ public class CameraEntity extends ClientPlayerEntity {
         this.headYaw = yaw;
     }
 
+    public void setScriptedPose(Vec3d position, float yaw, float pitch) {
+        this.setPosition(position.x, position.y, position.z);
+        this.setRotation(yaw, pitch);
+        this.setCameraRotations(yaw, pitch);
+        this.setVelocity(Vec3d.ZERO);
+    }
+
+    public void setRenderPoseExact(Vec3d position, float yaw, float pitch) {
+        this.lastX = position.x;
+        this.lastY = position.y;
+        this.lastZ = position.z;
+        this.lastRenderX = position.x;
+        this.lastRenderY = position.y;
+        this.lastRenderZ = position.z;
+        this.lastYaw = yaw;
+        this.lastPitch = pitch;
+        this.lastHeadYaw = yaw;
+        this.setScriptedPose(position, yaw, pitch);
+    }
+
     public void updateCameraRotations(float yawChange, float pitchChange) {
         float yaw = this.getYaw() + yawChange * 0.15F;
         float pitch = MathHelper.clamp(this.getPitch() + pitchChange * 0.15F, -90F, 90F);
@@ -190,6 +231,22 @@ public class CameraEntity extends ClientPlayerEntity {
     @Nullable
     public static CameraEntity getCamera() {
         return camera;
+    }
+
+    public static boolean hasController() {
+        return controller != null && controller.isActive();
+    }
+
+    public static boolean blocksManualControl() {
+        return controller != null && controller.isActive() && controller.blocksManualControl();
+    }
+
+    public static void setController(@Nullable CameraController nextController) {
+        controller = nextController;
+    }
+
+    public static void clearController() {
+        controller = null;
     }
 
     public static void setCameraState(boolean enabled) {
@@ -236,6 +293,7 @@ public class CameraEntity extends ClientPlayerEntity {
         originalCameraEntity = null;
         originalCameraWasPlayer = false;
         camera = null;
+        controller = null;
         cameraMotion = Vec3d.ZERO;
         sprinting = false;
     }

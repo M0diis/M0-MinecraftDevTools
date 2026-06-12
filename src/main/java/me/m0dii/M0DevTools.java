@@ -8,6 +8,8 @@ import me.m0dii.modules.itemdata.ItemDataPayloads;
 import me.m0dii.modules.itemdata.ItemDataSyncServer;
 import me.m0dii.modules.mobai.MobAiDebugCommands;
 import me.m0dii.modules.mobai.MobAiDebugPayloads;
+import me.m0dii.modules.mobdrops.MobDropTrackerPayloads;
+import me.m0dii.modules.mobdrops.MobDropTrackerServer;
 import me.m0dii.modules.optin.RestrictedModuleOptInNetworking;
 import me.m0dii.modules.utilitycommands.ConvenienceServerCommands;
 import me.m0dii.modules.xray.network.XrayOptInNetworking;
@@ -24,6 +26,7 @@ public class M0DevTools implements ModInitializer {
         GetDataSyncPayloads.registerPayloadTypes();
         ItemDataPayloads.registerPayloadTypes();
         MobAiDebugPayloads.registerPayloadTypes();
+        MobDropTrackerPayloads.registerPayloadTypes();
         HungerTweaksSyncHandler.registerPayloadTypes();
         XrayOptInNetworking.registerPayloadTypes();
         RestrictedModuleOptInNetworking.registerPayloadTypes();
@@ -32,6 +35,7 @@ public class M0DevTools implements ModInitializer {
         XrayOptInNetworking.registerReceivers();
         RestrictedModuleOptInNetworking.registerReceivers();
         MobAiDebugCommands.register();
+        MobDropTrackerServer.register();
         ConvenienceServerCommands.register();
     }
 }

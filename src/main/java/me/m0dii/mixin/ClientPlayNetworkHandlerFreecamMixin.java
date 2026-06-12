@@ -1,5 +1,7 @@
 package me.m0dii.mixin;
 
+import me.m0dii.modules.camera.CameraPathManager;
+import me.m0dii.modules.freecam.CameraEntity;
 import me.m0dii.modules.freecam.FreecamModule;
 import net.minecraft.client.network.ClientPlayNetworkHandler;
 import net.minecraft.network.packet.s2c.play.PlayerRespawnS2CPacket;
@@ -16,6 +18,10 @@ public class ClientPlayNetworkHandlerFreecamMixin {
 
     @Inject(method = "onPlayerRespawn", at = @At("HEAD"))
     private void disableFreecamOnRespawn(PlayerRespawnS2CPacket packet, CallbackInfo ci) {
+        if (CameraEntity.hasController()) {
+            CameraPathManager.onClientWorldUnavailable();
+            CameraEntity.clearController();
+        }
         if (FreecamModule.INSTANCE.isEnabled()) {
             FreecamModule.INSTANCE.setEnabled(false);
         }

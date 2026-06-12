@@ -177,6 +177,9 @@ public final class DebugDrawScreen extends Screen {
             case "cylinder" ->
                     DebugDrawManager.addCylinder(d.x1, d.y1, d.z1, d.radius, d.height, d.rgb, d.seconds, d.segments);
             case "sphere" -> DebugDrawManager.addSphere(d.x1, d.y1, d.z1, d.radius, d.rgb, d.seconds, d.segments);
+            case "diamond" -> DebugDrawManager.addDiamond(d.x1, d.y1, d.z1, d.radius, d.rgb, d.seconds);
+            case "pyramid" -> DebugDrawManager.addPyramid(d.x1, d.y1, d.z1, d.radius, d.height, d.rgb, d.seconds);
+            case "cone" -> DebugDrawManager.addCone(d.x1, d.y1, d.z1, d.radius, d.height, d.rgb, d.seconds, d.segments);
             default -> -1;
         };
         if (id < 0) {
@@ -331,7 +334,7 @@ public final class DebugDrawScreen extends Screen {
     }
 
     private void stepType(int delta) {
-        String[] types = {"line", "box", "circle", "cylinder", "sphere"};
+        String[] types = {"line", "box", "circle", "cylinder", "sphere", "diamond", "pyramid", "cone"};
         String current = this.typeField.getText().trim().toLowerCase();
         int idx = 0;
         for (int i = 0; i < types.length; i++) {

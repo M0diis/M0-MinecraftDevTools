@@ -24,14 +24,17 @@ public class CameraUtils {
     }
 
     public static boolean shouldPreventPlayerInputs() {
-        return FreecamModule.INSTANCE.isEnabled();
+        return FreecamModule.INSTANCE.isEnabled() || CameraEntity.hasController();
     }
 
     public static boolean shouldPreventPlayerMovement() {
-        return FreecamModule.INSTANCE.isEnabled();
+        return FreecamModule.INSTANCE.isEnabled() || CameraEntity.hasController();
     }
 
     public static void updateCameraRotations(float yawChange, float pitchChange) {
+        if (CameraEntity.blocksManualControl()) {
+            return;
+        }
         CameraEntity camera = CameraEntity.getCamera();
 
         if (camera != null) {

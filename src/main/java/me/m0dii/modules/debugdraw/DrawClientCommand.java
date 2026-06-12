@@ -53,6 +53,10 @@ public final class DrawClientCommand {
         send(context, "/draw circle <x> <y> <z> <radius> [color] [seconds] [segments]");
         send(context, "/draw cylinder <x> <y> <z> <radius> <height> [color] [seconds] [segments]");
         send(context, "/draw sphere <x> <y> <z> <radius> [color] [seconds] [segments]");
+        send(context, "/draw diamond <x> <y> <z> <radius> [color] [seconds]");
+        send(context, "/draw pyramid <x> <y> <z> <radius> <height> [color] [seconds]");
+        send(context, "/draw cone <x> <y> <z> <radius> <height> [color] [seconds] [segments]");
+        send(context, "/draw cuboid <x> <y> <z> <radius> <height> [color] [seconds]");
         send(context, "/draw boxlook [color] [seconds]");
         send(context, "/draw select on|off|toggle|status|save|load|clear");
         send(context, "/draw select mode <wand|any>");
@@ -78,6 +82,10 @@ public final class DrawClientCommand {
             case "circle" -> circle(context, tokens);
             case "cylinder" -> cylinder(context, tokens);
             case "sphere" -> sphere(context, tokens);
+            case "diamond" -> diamond(context, tokens);
+            case "pyramid" -> pyramid(context, tokens);
+            case "cone" -> cone(context, tokens);
+            case "cuboid" -> cuboid(context, tokens);
             case "boxlook" -> boxLook(context, tokens);
             case "select", "sel" -> selection(context, tokens);
             case "list" -> list(context);
@@ -224,6 +232,114 @@ public final class DrawClientCommand {
             return 1;
         } catch (Exception e) {
             send(context, "Invalid sphere args: " + e.getMessage());
+            return 0;
+        }
+    }
+
+    private static int diamond(CommandContext<FabricClientCommandSource> context, String[] t) {
+        if (t.length < 5) {
+            send(context, "Expected: /draw diamond <x> <y> <z> <radius> [color] [seconds]");
+            return 0;
+        }
+        MinecraftClient client = context.getSource().getClient();
+        if (client.player == null) {
+            return 0;
+        }
+
+        try {
+            double x = parseCoord(t[1], client.player.getX());
+            double y = parseCoord(t[2], client.player.getY());
+            double z = parseCoord(t[3], client.player.getZ());
+            double radius = Double.parseDouble(t[4]);
+            int color = t.length >= 6 ? parseColorToken(t[5]) : DEFAULT_COLOR;
+            double seconds = t.length >= 7 ? parseSeconds(t[6]) : DEFAULT_SECONDS;
+            int id = DebugDrawManager.addDiamond(x, y, z, radius, color, seconds);
+            send(context, "Added diamond #" + id + " color=" + DebugDrawManager.formatColor(color));
+            return 1;
+        } catch (Exception e) {
+            send(context, "Invalid diamond args: " + e.getMessage());
+            return 0;
+        }
+    }
+
+    private static int pyramid(CommandContext<FabricClientCommandSource> context, String[] t) {
+        if (t.length < 6) {
+            send(context, "Expected: /draw pyramid <x> <y> <z> <radius> <height> [color] [seconds]");
+            return 0;
+        }
+        MinecraftClient client = context.getSource().getClient();
+        if (client.player == null) {
+            return 0;
+        }
+
+        try {
+            double x = parseCoord(t[1], client.player.getX());
+            double y = parseCoord(t[2], client.player.getY());
+            double z = parseCoord(t[3], client.player.getZ());
+            double radius = Double.parseDouble(t[4]);
+            double height = Double.parseDouble(t[5]);
+            int color = t.length >= 7 ? parseColorToken(t[6]) : DEFAULT_COLOR;
+            double seconds = t.length >= 8 ? parseSeconds(t[7]) : DEFAULT_SECONDS;
+            int id = DebugDrawManager.addPyramid(x, y, z, radius, height, color, seconds);
+            send(context, "Added pyramid #" + id + " color=" + DebugDrawManager.formatColor(color));
+            return 1;
+        } catch (Exception e) {
+            send(context, "Invalid pyramid args: " + e.getMessage());
+            return 0;
+        }
+    }
+
+    private static int cone(CommandContext<FabricClientCommandSource> context, String[] t) {
+        if (t.length < 6) {
+            send(context, "Expected: /draw cone <x> <y> <z> <radius> <height> [color] [seconds] [segments]");
+            return 0;
+        }
+        MinecraftClient client = context.getSource().getClient();
+        if (client.player == null) {
+            return 0;
+        }
+
+        try {
+            double x = parseCoord(t[1], client.player.getX());
+            double y = parseCoord(t[2], client.player.getY());
+            double z = parseCoord(t[3], client.player.getZ());
+            double radius = Double.parseDouble(t[4]);
+            double height = Double.parseDouble(t[5]);
+            int color = t.length >= 7 ? parseColorToken(t[6]) : DEFAULT_COLOR;
+            double seconds = t.length >= 8 ? parseSeconds(t[7]) : DEFAULT_SECONDS;
+            int segments = t.length >= 9 ? Integer.parseInt(t[8]) : 36;
+            int id = DebugDrawManager.addCone(x, y, z, radius, height, color, seconds, segments);
+            send(context, "Added cone #" + id + " color=" + DebugDrawManager.formatColor(color));
+            return 1;
+        } catch (Exception e) {
+            send(context, "Invalid cone args: " + e.getMessage());
+            return 0;
+        }
+    }
+
+    private static int cuboid(CommandContext<FabricClientCommandSource> context, String[] t) {
+        if (t.length < 6) {
+            send(context, "Expected: /draw cuboid <x> <y> <z> <radius> <height> [color] [seconds]");
+            return 0;
+        }
+        MinecraftClient client = context.getSource().getClient();
+        if (client.player == null) {
+            return 0;
+        }
+
+        try {
+            double x = parseCoord(t[1], client.player.getX());
+            double y = parseCoord(t[2], client.player.getY());
+            double z = parseCoord(t[3], client.player.getZ());
+            double radius = Double.parseDouble(t[4]);
+            double height = Double.parseDouble(t[5]);
+            int color = t.length >= 7 ? parseColorToken(t[6]) : DEFAULT_COLOR;
+            double seconds = t.length >= 8 ? parseSeconds(t[7]) : DEFAULT_SECONDS;
+            int id = DebugDrawManager.addBox(x - radius, y, z - radius, x + radius, y + height, z + radius, color, seconds);
+            send(context, "Added cuboid #" + id + " color=" + DebugDrawManager.formatColor(color));
+            return 1;
+        } catch (Exception e) {
+            send(context, "Invalid cuboid args: " + e.getMessage());
             return 0;
         }
     }
@@ -585,7 +701,7 @@ public final class DrawClientCommand {
 
         if (rawTokens.length == 0 || (rawTokens.length == 1 && !trailingSpace)) {
             String prefix = rawTokens.length == 0 ? "" : rawTokens[0].toLowerCase(Locale.ROOT);
-            for (String sub : List.of("line", "box", "circle", "cylinder", "sphere", "boxlook", "select", "sel", "list", "remove", "clear", "save", "load", "ui")) {
+            for (String sub : List.of("line", "box", "circle", "cylinder", "sphere", "diamond", "pyramid", "cone", "cuboid", "boxlook", "select", "sel", "list", "remove", "clear", "save", "load", "ui")) {
                 if (sub.startsWith(prefix)) {
                     builder.suggest(sub);
                 }
@@ -622,12 +738,42 @@ public final class DrawClientCommand {
             return builder.buildFuture();
         }
 
+        if ("diamond".equals(sub)) {
+            if (index <= 4) {
+                builder.suggest("diamond ~ ~ ~ 3");
+            }
+            if (index >= 5) {
+                builder.suggest("diamond ~ ~ ~ 3 #00FFFF 20");
+            }
+            return builder.buildFuture();
+        }
+
         if ("cylinder".equals(sub)) {
             if (index <= 5) {
                 builder.suggest("cylinder ~ ~ ~ 3 4");
             }
             if (index >= 6) {
                 builder.suggest("cylinder ~ ~ ~ 3 4 #00FFFF 20 36");
+            }
+            return builder.buildFuture();
+        }
+
+        if (List.of("pyramid", "cuboid").contains(sub)) {
+            if (index <= 5) {
+                builder.suggest(sub + " ~ ~ ~ 3 4");
+            }
+            if (index >= 6) {
+                builder.suggest(sub + " ~ ~ ~ 3 4 #00FFFF 20");
+            }
+            return builder.buildFuture();
+        }
+
+        if ("cone".equals(sub)) {
+            if (index <= 5) {
+                builder.suggest("cone ~ ~ ~ 3 4");
+            }
+            if (index >= 6) {
+                builder.suggest("cone ~ ~ ~ 3 4 #00FFFF 20 36");
             }
             return builder.buildFuture();
         }

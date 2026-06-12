@@ -16,6 +16,7 @@ import net.minecraft.util.Identifier;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Vec3d;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -107,6 +108,15 @@ public final class DebugDrawManager {
                     } else if (shape instanceof SphereShape sphere) {
                         drawSphere(visible, sphere, cameraX, cameraY, cameraZ, 1.0f);
                         drawSphere(through, sphere, cameraX, cameraY, cameraZ, 0.45f);
+                    } else if (shape instanceof DiamondShape diamond) {
+                        drawDiamond(visible, diamond, cameraX, cameraY, cameraZ, 1.0f);
+                        drawDiamond(through, diamond, cameraX, cameraY, cameraZ, 0.45f);
+                    } else if (shape instanceof PyramidShape pyramid) {
+                        drawPyramid(visible, pyramid, cameraX, cameraY, cameraZ, 1.0f);
+                        drawPyramid(through, pyramid, cameraX, cameraY, cameraZ, 0.45f);
+                    } else if (shape instanceof ConeShape cone) {
+                        drawCone(visible, cone, cameraX, cameraY, cameraZ, 1.0f);
+                        drawCone(through, cone, cameraX, cameraY, cameraZ, 0.45f);
                     }
                 }
             }
@@ -420,6 +430,51 @@ public final class DebugDrawManager {
         return id;
     }
 
+    public static synchronized int addDiamond(double centerX,
+                                              double centerY,
+                                              double centerZ,
+                                              double radius,
+                                              int rgb,
+                                              double seconds) {
+        int id = NEXT_ID.getAndIncrement();
+        SHAPES.add(new DiamondShape(id, expiryFromSeconds(seconds), rgb,
+                centerX, centerY, centerZ,
+                Math.max(0.05, radius)));
+        return id;
+    }
+
+    public static synchronized int addPyramid(double centerX,
+                                              double baseY,
+                                              double centerZ,
+                                              double radius,
+                                              double height,
+                                              int rgb,
+                                              double seconds) {
+        int id = NEXT_ID.getAndIncrement();
+        SHAPES.add(new PyramidShape(id, expiryFromSeconds(seconds), rgb,
+                centerX, baseY, centerZ,
+                Math.max(0.05, radius),
+                Math.max(0.05, height)));
+        return id;
+    }
+
+    public static synchronized int addCone(double centerX,
+                                           double baseY,
+                                           double centerZ,
+                                           double radius,
+                                           double height,
+                                           int rgb,
+                                           double seconds,
+                                           int segments) {
+        int id = NEXT_ID.getAndIncrement();
+        SHAPES.add(new ConeShape(id, expiryFromSeconds(seconds), rgb,
+                centerX, baseY, centerZ,
+                Math.max(0.05, radius),
+                Math.max(0.05, height),
+                clampSegments(segments)));
+        return id;
+    }
+
     public static synchronized List<String> describeActive() {
         long now = System.currentTimeMillis();
         pruneExpired(now);
@@ -449,6 +504,15 @@ public final class DebugDrawManager {
                 case SphereShape sphere -> out.add(String.format("#%d sphere (%.2f %.2f %.2f r=%.2f s=%d) %s %.1fs",
                         sphere.id, sphere.centerX, sphere.centerY, sphere.centerZ,
                         sphere.radius, sphere.segments, formatColor(sphere.rgb), remaining));
+                case DiamondShape diamond -> out.add(String.format("#%d diamond (%.2f %.2f %.2f r=%.2f) %s %.1fs",
+                        diamond.id, diamond.centerX, diamond.centerY, diamond.centerZ,
+                        diamond.radius, formatColor(diamond.rgb), remaining));
+                case PyramidShape pyramid -> out.add(String.format("#%d pyramid (%.2f %.2f %.2f r=%.2f h=%.2f) %s %.1fs",
+                        pyramid.id, pyramid.centerX, pyramid.baseY, pyramid.centerZ,
+                        pyramid.radius, pyramid.height, formatColor(pyramid.rgb), remaining));
+                case ConeShape cone -> out.add(String.format("#%d cone (%.2f %.2f %.2f r=%.2f h=%.2f s=%d) %s %.1fs",
+                        cone.id, cone.centerX, cone.baseY, cone.centerZ,
+                        cone.radius, cone.height, cone.segments, formatColor(cone.rgb), remaining));
                 default -> {
                 }
             }
@@ -579,6 +643,18 @@ public final class DebugDrawManager {
                     sphere.centerX, sphere.centerY, sphere.centerZ,
                     0.0, 0.0, 0.0,
                     sphere.radius, 0.0);
+            case DiamondShape diamond -> new ShapeDescriptor(diamond.id, "diamond", diamond.rgb, seconds, 0,
+                    diamond.centerX, diamond.centerY, diamond.centerZ,
+                    0.0, 0.0, 0.0,
+                    diamond.radius, 0.0);
+            case PyramidShape pyramid -> new ShapeDescriptor(pyramid.id, "pyramid", pyramid.rgb, seconds, 0,
+                    pyramid.centerX, pyramid.baseY, pyramid.centerZ,
+                    0.0, 0.0, 0.0,
+                    pyramid.radius, pyramid.height);
+            case ConeShape cone -> new ShapeDescriptor(cone.id, "cone", cone.rgb, seconds, cone.segments,
+                    cone.centerX, cone.baseY, cone.centerZ,
+                    0.0, 0.0, 0.0,
+                    cone.radius, cone.height);
             default -> new ShapeDescriptor(shape.id, "unknown", shape.rgb, seconds, 0,
                     0.0, 0.0, 0.0,
                     0.0, 0.0, 0.0,
@@ -601,6 +677,12 @@ public final class DebugDrawManager {
                     new CylinderShape(d.id, expiresAt, rgb, d.x1, d.y1, d.z1, Math.max(0.05, d.radius), Math.max(0.05, d.height), segments);
             case "sphere" ->
                     new SphereShape(d.id, expiresAt, rgb, d.x1, d.y1, d.z1, Math.max(0.05, d.radius), segments);
+            case "diamond" ->
+                    new DiamondShape(d.id, expiresAt, rgb, d.x1, d.y1, d.z1, Math.max(0.05, d.radius));
+            case "pyramid" ->
+                    new PyramidShape(d.id, expiresAt, rgb, d.x1, d.y1, d.z1, Math.max(0.05, d.radius), Math.max(0.05, d.height));
+            case "cone" ->
+                    new ConeShape(d.id, expiresAt, rgb, d.x1, d.y1, d.z1, Math.max(0.05, d.radius), Math.max(0.05, d.height), segments);
             default -> null;
         };
     }
@@ -851,6 +933,94 @@ public final class DebugDrawManager {
         }
     }
 
+    private static void drawDiamond(VertexConsumer buffer,
+                                    DiamondShape diamond,
+                                    double cameraX,
+                                    double cameraY,
+                                    double cameraZ,
+                                    float alphaMul) {
+        float[] color = toColor(diamond.rgb, alphaMul);
+        double cx = diamond.centerX - cameraX;
+        double cy = diamond.centerY - cameraY;
+        double cz = diamond.centerZ - cameraZ;
+        double r = diamond.radius;
+
+        Vec3d top = new Vec3d(cx, cy + r, cz);
+        Vec3d bottom = new Vec3d(cx, cy - r, cz);
+        Vec3d east = new Vec3d(cx + r, cy, cz);
+        Vec3d west = new Vec3d(cx - r, cy, cz);
+        Vec3d south = new Vec3d(cx, cy, cz + r);
+        Vec3d north = new Vec3d(cx, cy, cz - r);
+
+        drawShapeLine(buffer, top, east, color);
+        drawShapeLine(buffer, top, west, color);
+        drawShapeLine(buffer, top, south, color);
+        drawShapeLine(buffer, top, north, color);
+        drawShapeLine(buffer, bottom, east, color);
+        drawShapeLine(buffer, bottom, west, color);
+        drawShapeLine(buffer, bottom, south, color);
+        drawShapeLine(buffer, bottom, north, color);
+        drawShapeLine(buffer, east, south, color);
+        drawShapeLine(buffer, south, west, color);
+        drawShapeLine(buffer, west, north, color);
+        drawShapeLine(buffer, north, east, color);
+    }
+
+    private static void drawPyramid(VertexConsumer buffer,
+                                    PyramidShape pyramid,
+                                    double cameraX,
+                                    double cameraY,
+                                    double cameraZ,
+                                    float alphaMul) {
+        float[] color = toColor(pyramid.rgb, alphaMul);
+        double cx = pyramid.centerX - cameraX;
+        double baseY = pyramid.baseY - cameraY;
+        double cz = pyramid.centerZ - cameraZ;
+        double r = pyramid.radius;
+
+        Vec3d c1 = new Vec3d(cx - r, baseY, cz - r);
+        Vec3d c2 = new Vec3d(cx + r, baseY, cz - r);
+        Vec3d c3 = new Vec3d(cx + r, baseY, cz + r);
+        Vec3d c4 = new Vec3d(cx - r, baseY, cz + r);
+        Vec3d apex = new Vec3d(cx, baseY + pyramid.height, cz);
+
+        drawShapeLine(buffer, c1, c2, color);
+        drawShapeLine(buffer, c2, c3, color);
+        drawShapeLine(buffer, c3, c4, color);
+        drawShapeLine(buffer, c4, c1, color);
+        drawShapeLine(buffer, c1, apex, color);
+        drawShapeLine(buffer, c2, apex, color);
+        drawShapeLine(buffer, c3, apex, color);
+        drawShapeLine(buffer, c4, apex, color);
+    }
+
+    private static void drawCone(VertexConsumer buffer,
+                                 ConeShape cone,
+                                 double cameraX,
+                                 double cameraY,
+                                 double cameraZ,
+                                 float alphaMul) {
+        float[] color = toColor(cone.rgb, alphaMul);
+        CircleShape base = new CircleShape(-1, Long.MAX_VALUE, cone.rgb, cone.centerX, cone.baseY, cone.centerZ, cone.radius, cone.segments);
+        drawCircle(buffer, base, cameraX, cameraY, cameraZ, alphaMul);
+
+        Vec3d apex = new Vec3d(cone.centerX - cameraX, cone.baseY + cone.height - cameraY, cone.centerZ - cameraZ);
+        int sideStep = Math.max(1, cone.segments / 8);
+        for (int i = 0; i < cone.segments; i += sideStep) {
+            double angle = (Math.PI * 2.0 * i) / cone.segments;
+            Vec3d edge = new Vec3d(
+                    cone.centerX + Math.cos(angle) * cone.radius - cameraX,
+                    cone.baseY - cameraY,
+                    cone.centerZ + Math.sin(angle) * cone.radius - cameraZ
+            );
+            drawShapeLine(buffer, edge, apex, color);
+        }
+    }
+
+    private static void drawShapeLine(VertexConsumer buffer, Vec3d from, Vec3d to, float[] color) {
+        DrawUtil.drawLineSafe(buffer, from.x, from.y, from.z, to.x, to.y, to.z, color[0], color[1], color[2], color[3], 1.25f);
+    }
+
     private abstract static sealed class DrawShape {
         protected final int id;
         protected final long expiresAtMillis;
@@ -897,6 +1067,15 @@ public final class DebugDrawManager {
                     case "sphere" -> new SphereShape(id, expires, rgb,
                             json.get("centerX").getAsDouble(), json.get("centerY").getAsDouble(), json.get("centerZ").getAsDouble(),
                             json.get("radius").getAsDouble(), clampSegments(json.get("segments").getAsInt()));
+                    case "diamond" -> new DiamondShape(id, expires, rgb,
+                            json.get("centerX").getAsDouble(), json.get("centerY").getAsDouble(), json.get("centerZ").getAsDouble(),
+                            json.get("radius").getAsDouble());
+                    case "pyramid" -> new PyramidShape(id, expires, rgb,
+                            json.get("centerX").getAsDouble(), json.get("baseY").getAsDouble(), json.get("centerZ").getAsDouble(),
+                            json.get("radius").getAsDouble(), json.get("height").getAsDouble());
+                    case "cone" -> new ConeShape(id, expires, rgb,
+                            json.get("centerX").getAsDouble(), json.get("baseY").getAsDouble(), json.get("centerZ").getAsDouble(),
+                            json.get("radius").getAsDouble(), json.get("height").getAsDouble(), clampSegments(json.get("segments").getAsInt()));
                     default -> null;
                 };
             } catch (Exception ignored) {
@@ -1071,6 +1250,96 @@ public final class DebugDrawManager {
             json.addProperty("centerY", this.centerY);
             json.addProperty("centerZ", this.centerZ);
             json.addProperty("radius", this.radius);
+            json.addProperty("segments", this.segments);
+            return json;
+        }
+    }
+
+    private static final class DiamondShape extends DrawShape {
+        private final double centerX;
+        private final double centerY;
+        private final double centerZ;
+        private final double radius;
+
+        private DiamondShape(int id, long expiresAtMillis, int rgb,
+                             double centerX, double centerY, double centerZ,
+                             double radius) {
+            super(id, expiresAtMillis, rgb);
+            this.centerX = centerX;
+            this.centerY = centerY;
+            this.centerZ = centerZ;
+            this.radius = radius;
+        }
+
+        @Override
+        protected JsonObject toJson(long now) {
+            JsonObject json = baseJson(now, "diamond");
+            json.addProperty("centerX", this.centerX);
+            json.addProperty("centerY", this.centerY);
+            json.addProperty("centerZ", this.centerZ);
+            json.addProperty("radius", this.radius);
+            return json;
+        }
+    }
+
+    private static final class PyramidShape extends DrawShape {
+        private final double centerX;
+        private final double baseY;
+        private final double centerZ;
+        private final double radius;
+        private final double height;
+
+        private PyramidShape(int id, long expiresAtMillis, int rgb,
+                             double centerX, double baseY, double centerZ,
+                             double radius, double height) {
+            super(id, expiresAtMillis, rgb);
+            this.centerX = centerX;
+            this.baseY = baseY;
+            this.centerZ = centerZ;
+            this.radius = radius;
+            this.height = height;
+        }
+
+        @Override
+        protected JsonObject toJson(long now) {
+            JsonObject json = baseJson(now, "pyramid");
+            json.addProperty("centerX", this.centerX);
+            json.addProperty("baseY", this.baseY);
+            json.addProperty("centerZ", this.centerZ);
+            json.addProperty("radius", this.radius);
+            json.addProperty("height", this.height);
+            return json;
+        }
+    }
+
+    private static final class ConeShape extends DrawShape {
+        private final double centerX;
+        private final double baseY;
+        private final double centerZ;
+        private final double radius;
+        private final double height;
+        private final int segments;
+
+        private ConeShape(int id, long expiresAtMillis, int rgb,
+                          double centerX, double baseY, double centerZ,
+                          double radius, double height, int segments) {
+            super(id, expiresAtMillis, rgb);
+            this.centerX = centerX;
+            this.baseY = baseY;
+            this.centerZ = centerZ;
+            this.radius = radius;
+            this.height = height;
+            this.segments = segments;
+        }
+
+        @Override
+        protected JsonObject toJson(long now) {
+            JsonObject json = baseJson(now, "cone");
+            json.addProperty("centerX", this.centerX);
+            json.addProperty("baseY", this.baseY);
+            json.addProperty("centerZ", this.centerZ);
+            json.addProperty("radius", this.radius);
+            json.addProperty("height", this.height);
             json.addProperty("segments", this.segments);
             return json;
         }

@@ -12,6 +12,7 @@ import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.client.render.VertexConsumerProvider;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.entity.Entity;
+import net.minecraft.entity.ItemEntity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.ai.brain.*;
 import net.minecraft.entity.ai.brain.task.Task;
@@ -19,6 +20,10 @@ import net.minecraft.entity.ai.pathing.Path;
 import net.minecraft.entity.ai.pathing.PathNode;
 import net.minecraft.entity.ai.pathing.TargetPathNode;
 import net.minecraft.entity.mob.MobEntity;
+import net.minecraft.entity.passive.VillagerEntity;
+import net.minecraft.item.ItemStack;
+import net.minecraft.registry.Registries;
+import net.minecraft.util.Identifier;
 import net.minecraft.util.math.*;
 import net.minecraft.world.debug.DebugDataStore;
 import net.minecraft.world.debug.DebugSubscriptionTypes;
@@ -29,6 +34,26 @@ import java.util.*;
 
 final class MobAiVisualizerRenderer {
     private static final float WIDTH_MULTIPLIER = 1.55f;
+    private static final Map<String, Integer> TRACKER_HOSTILE_RANGES = Map.ofEntries(
+            Map.entry("all", 15),
+            Map.entry("drowned", 8),
+            Map.entry("evoker", 12),
+            Map.entry("husk", 8),
+            Map.entry("illusioner", 12),
+            Map.entry("pillager", 15),
+            Map.entry("ravager", 12),
+            Map.entry("vex", 8),
+            Map.entry("vindicator", 10),
+            Map.entry("zoglin", 10),
+            Map.entry("zombie", 8),
+            Map.entry("zombie_villager", 8)
+    );
+    private static final Map<String, Integer> VILLAGER_FOOD_POINTS = Map.of(
+            "bread", 4,
+            "potato", 1,
+            "carrot", 1,
+            "beetroot", 1
+    );
 
     private boolean registered;
 
@@ -43,7 +68,9 @@ final class MobAiVisualizerRenderer {
     private void onAfterEntities(WorldRenderContext context) {
         MobAiVisualizerModule module = MobAiVisualizerModule.INSTANCE;
         boolean hasCommandData = MobAiDebugClientState.hasActiveData();
-        if (!module.isEnabled() && !hasCommandData) {
+        MobAiDebugClientState.TrackerConfig trackerConfig = MobAiDebugClientState.getTrackerConfig();
+        boolean hasTrackerData = trackerConfig != null && trackerConfig.isActive();
+        if (!module.isEnabled() && !hasCommandData && !hasTrackerData) {
             return;
         }
 
@@ -82,9 +109,10 @@ final class MobAiVisualizerRenderer {
             renderClientFallbackData(client, cameraPos, tickDelta, radiusSq, visible, occluded, overlays, debugPathEntities, debugBrainEntities);
         }
 
+        renderTrackerData(client, debugDataStore, trackerConfig, cameraPos, tickDelta, visible, occluded, overlays);
         renderCommandDebugData(client, cameraPos, tickDelta, visible, occluded, overlays);
 
-        if (module.showLabels() || hasCommandData) {
+        if (module.showLabels() || hasCommandData || hasTrackerData) {
             renderLabels(context, consumers, cameraPos, tickDelta, overlays.values());
         }
 
@@ -255,6 +283,274 @@ final class MobAiVisualizerRenderer {
                 }
             }
         }
+    }
+
+    private void renderTrackerData(MinecraftClient client,
+                                   DebugDataStore debugDataStore,
+                                   MobAiDebugClientState.TrackerConfig trackerConfig,
+                                   Vec3d cameraPos,
+                                   float tickDelta,
+                                   VertexConsumer visible,
+                                   VertexConsumer occluded,
+                                   Map<Integer, EntityOverlayInfo> overlays) {
+        if (trackerConfig == null || !trackerConfig.isActive() || client.player == null || client.world == null) {
+            return;
+        }
+
+        double radiusSq = (double) trackerConfig.radius() * (double) trackerConfig.radius();
+        List<Entity> nearbyEntities = client.world.getOtherEntities(client.player,
+                client.player.getBoundingBox().expand(trackerConfig.radius()),
+                entity -> entity instanceof LivingEntity);
+        for (Entity entity : nearbyEntities) {
+            if (!(entity instanceof LivingEntity living) || entity.squaredDistanceTo(client.player) > radiusSq) {
+                continue;
+            }
+
+            EntityOverlayInfo overlay = overlays.computeIfAbsent(entity.getId(), id -> new EntityOverlayInfo(entity));
+            overlay.focused = overlay.focused || entity == client.targetedEntity;
+
+            boolean tracked = false;
+            if (trackerConfig.hasDisplay("health")) {
+                tracked |= applyHealthTracker(living, overlay);
+            }
+            if (trackerConfig.hasDisplay("velocity")) {
+                tracked |= applyVelocityTracker(entity, overlay, visible, occluded, cameraPos, tickDelta);
+            }
+            if (trackerConfig.hasDisplay("item_pickup")) {
+                tracked |= applyItemPickupTracker(client, living, overlay, visible, occluded, cameraPos, tickDelta, trackerConfig);
+            }
+            if (trackerConfig.hasDisplay("pathfinding") && entity instanceof MobEntity mob) {
+                tracked |= applyPathfindingTracker(mob, overlay, visible, occluded, cameraPos);
+            }
+            if (entity instanceof VillagerEntity villager) {
+                if (trackerConfig.hasDisplay("villager_buddy_detection")) {
+                    tracked |= applyVillagerBuddyTracker(client, villager, overlay, visible, occluded, cameraPos, tickDelta, trackerConfig);
+                }
+                if (trackerConfig.hasDisplay("villager_hostile_detection")) {
+                    tracked |= applyVillagerHostileTracker(client, villager, overlay, visible, occluded, cameraPos, tickDelta, trackerConfig);
+                }
+                if (trackerConfig.hasDisplay("villager_breeding")) {
+                    tracked |= applyVillagerBreedingTracker(client, villager, overlay, visible, occluded, cameraPos, tickDelta);
+                }
+                if (trackerConfig.hasDisplay("villager_iron_golem_spawning")) {
+                    tracked |= applyVillagerGolemTracker(client, debugDataStore, villager, overlay, visible, occluded, cameraPos, tickDelta, trackerConfig);
+                }
+            }
+
+            if (tracked) {
+                overlay.tracker = true;
+            }
+        }
+    }
+
+    private boolean applyHealthTracker(LivingEntity living, EntityOverlayInfo overlay) {
+        overlay.addLine(formatHealthLine(living.getHealth(), living.getMaxHealth()),
+                living.getHealth() < living.getMaxHealth() ? 0xFFFFB1B1 : 0xFFF4F4F4);
+        return true;
+    }
+
+    private boolean applyVelocityTracker(Entity entity,
+                                         EntityOverlayInfo overlay,
+                                         VertexConsumer visible,
+                                         VertexConsumer occluded,
+                                         Vec3d cameraPos,
+                                         float tickDelta) {
+        Vec3d velocityPerSecond = entity.getVelocity().multiply(20.0);
+        double horizontal = Math.sqrt(velocityPerSecond.x * velocityPerSecond.x + velocityPerSecond.z * velocityPerSecond.z);
+        double total = velocityPerSecond.length();
+        overlay.addLine(String.format(Locale.ROOT, "Vel: %.3f | H %.3f", total, horizontal), 0xFF9BE7FF);
+        overlay.addLine(String.format(Locale.ROOT, "XYZ: %.3f %.3f %.3f", velocityPerSecond.x, velocityPerSecond.y, velocityPerSecond.z), 0xFF8FD0F0);
+
+        if (total < 0.01) {
+            return true;
+        }
+
+        Vec3d source = entityCenter(entity, tickDelta);
+        double length = Math.min(2.5, Math.max(0.35, total * 0.12));
+        Vec3d target = source.add(velocityPerSecond.normalize().multiply(length));
+        drawLineBetween(visible, occluded, source, target, cameraPos, 0.38f, 0.88f, 1.0f, 0.92f, 0.30f, 1.25f);
+        return true;
+    }
+
+    private boolean applyItemPickupTracker(MinecraftClient client,
+                                           LivingEntity living,
+                                           EntityOverlayInfo overlay,
+                                           VertexConsumer visible,
+                                           VertexConsumer occluded,
+                                           Vec3d cameraPos,
+                                           float tickDelta,
+                                           MobAiDebugClientState.TrackerConfig trackerConfig) {
+        Box pickupBox = living.getBoundingBox().expand(1.0, 0.0, 1.0);
+        if (trackerConfig.showBoxes()) {
+            drawWorldBox(visible, occluded, pickupBox, cameraPos, 1.0f, 0.33f, 0.33f, alphaFromByte(trackerConfig.alpha(), 0.95f), alphaFromByte(trackerConfig.alpha(), 0.30f), 1.15f);
+        }
+
+        List<ItemEntity> items = client.world.getEntitiesByClass(ItemEntity.class, pickupBox, item -> !item.isRemoved());
+        Vec3d source = entityCenter(living, tickDelta);
+        for (ItemEntity item : items) {
+            drawLineBetween(visible, occluded, source, entityCenter(item, tickDelta), cameraPos, 1.0f, 0.30f, 0.85f, 0.88f, 0.24f, 0.95f);
+        }
+        overlay.addLine("Pickup: " + items.size() + " item(s)", items.isEmpty() ? 0xFFD8DDE8 : 0xFFFFB0E7);
+        return true;
+    }
+
+    private boolean applyPathfindingTracker(MobEntity mob,
+                                            EntityOverlayInfo overlay,
+                                            VertexConsumer visible,
+                                            VertexConsumer occluded,
+                                            Vec3d cameraPos) {
+        Path path = mob.getNavigation().getCurrentPath();
+        if (path == null || path.getLength() <= 0) {
+            overlay.addLine("Path: idle", 0xFFD8DDE8);
+            return true;
+        }
+        drawPath(visible, occluded, path, cameraPos, 0.18, true);
+        addPathLine(overlay, "Path", path, 0xFFF0BE66);
+        return true;
+    }
+
+    private boolean applyVillagerBuddyTracker(MinecraftClient client,
+                                              VillagerEntity villager,
+                                              EntityOverlayInfo overlay,
+                                              VertexConsumer visible,
+                                              VertexConsumer occluded,
+                                              Vec3d cameraPos,
+                                              float tickDelta,
+                                              MobAiDebugClientState.TrackerConfig trackerConfig) {
+        Box detectionBox = villager.getBoundingBox().expand(10.0, 10.0, 10.0);
+        if (trackerConfig.showBoxes()) {
+            drawWorldBox(visible, occluded, detectionBox, cameraPos, 0.40f, 0.22f, 0.08f, alphaFromByte(trackerConfig.alpha(), 0.92f), alphaFromByte(trackerConfig.alpha(), 0.24f), 1.05f);
+        }
+
+        List<VillagerEntity> buddies = client.world.getEntitiesByClass(VillagerEntity.class, detectionBox, other -> other != villager && !other.isRemoved());
+        Vec3d source = entityCenter(villager, tickDelta);
+        for (VillagerEntity buddy : buddies) {
+            drawLineBetween(visible, occluded, source, entityCenter(buddy, tickDelta), cameraPos, 1.0f, 0.35f, 0.92f, 0.82f, 0.26f, 0.95f);
+        }
+        overlay.addLine("Buddies: " + buddies.size(), buddies.size() == 3 ? 0xFFFFD89A : buddies.size() > 3 ? 0xFFFFB36B : 0xFFB9D6FF);
+        return true;
+    }
+
+    private boolean applyVillagerHostileTracker(MinecraftClient client,
+                                                VillagerEntity villager,
+                                                EntityOverlayInfo overlay,
+                                                VertexConsumer visible,
+                                                VertexConsumer occluded,
+                                                Vec3d cameraPos,
+                                                float tickDelta,
+                                                MobAiDebugClientState.TrackerConfig trackerConfig) {
+        String hostileFocus = trackerConfig.hostileFocus();
+        int displayRadius = TRACKER_HOSTILE_RANGES.getOrDefault(hostileFocus, TRACKER_HOSTILE_RANGES.get("all"));
+        if (trackerConfig.showBoxes()) {
+            drawEntityRadiusSphere(visible, occluded, villager, cameraPos, tickDelta, displayRadius, 0.34f, 0.20f, 0.66f, alphaFromByte(trackerConfig.alpha(), 0.76f), alphaFromByte(trackerConfig.alpha(), 0.18f), 0.95f);
+        }
+
+        List<LivingEntity> hostiles = client.world.getEntitiesByClass(LivingEntity.class,
+                villager.getBoundingBox().expand(16.0, 16.0, 16.0),
+                other -> other != villager && isTrackedVillagerHostile(villager, other, hostileFocus));
+        hostiles.sort(Comparator.comparingDouble(villager::squaredDistanceTo));
+
+        LivingEntity nearest = hostiles.isEmpty() ? null : hostiles.getFirst();
+        Vec3d source = entityCenter(villager, tickDelta);
+        for (LivingEntity hostile : hostiles) {
+            Vec3d target = entityCenter(hostile, tickDelta);
+            if (hostile == nearest) {
+                drawLineBetween(visible, occluded, source, target, cameraPos, 1.0f, 0.22f, 0.22f, 0.95f, 0.34f, 1.2f);
+                drawEntityOutline(visible, occluded, hostile, cameraPos, tickDelta, 1.0f, 0.24f, 0.24f, 0.82f, 0.28f, 1.2f, 0.04);
+            } else {
+                drawEntityOutline(visible, occluded, hostile, cameraPos, tickDelta, 0.70f, 0.16f, 0.16f, 0.48f, 0.18f, 0.95f, 0.02);
+            }
+        }
+
+        overlay.addLine(nearest == null
+                        ? "Hostile: peaceful"
+                        : "Hostile: " + compactId(Registries.ENTITY_TYPE.getId(nearest.getType())),
+                nearest == null ? 0xFF9FD6A3 : 0xFFFFA3A3);
+        if (hostileFocus != null && !"all".equals(hostileFocus)) {
+            overlay.addLine("Focus: " + hostileFocus, 0xFFD9C0FF);
+        }
+        return true;
+    }
+
+    private boolean applyVillagerBreedingTracker(MinecraftClient client,
+                                                 VillagerEntity villager,
+                                                 EntityOverlayInfo overlay,
+                                                 VertexConsumer visible,
+                                                 VertexConsumer occluded,
+                                                 Vec3d cameraPos,
+                                                 float tickDelta) {
+        Optional<GlobalPos> home = getOptionalMemory(villager.getBrain(), MemoryModuleType.HOME);
+        if (home.isPresent() && client.world.getRegistryKey().equals(home.get().dimension())) {
+            drawTargetLineAndBox(visible, occluded, entityCenter(villager, tickDelta), home.get().pos(), cameraPos, 1.0f, 0.66f, 0.86f, 0.88f, 0.26f, 1.0f);
+        }
+
+        int foodPortions = countVillagerFoodPoints(villager) / 12;
+        int breedingAge = villager.getBreedingAge();
+        overlay.addLine("Bed: " + (home.isPresent() ? "yes" : "no"), home.isPresent() ? 0xFFD8A8FF : 0xFFFFA3A3);
+        overlay.addLine("Food: " + foodPortions + " portion(s)", foodPortions > 0 ? 0xFFFFD89A : 0xFFFFA3A3);
+        overlay.addLine("Breed: " + breedingAge + "t", breedingAge == 0 ? 0xFF9FD6A3 : 0xFFFFB36B);
+        return true;
+    }
+
+    private boolean applyVillagerGolemTracker(MinecraftClient client,
+                                              DebugDataStore debugDataStore,
+                                              VillagerEntity villager,
+                                              EntityOverlayInfo overlay,
+                                              VertexConsumer visible,
+                                              VertexConsumer occluded,
+                                              Vec3d cameraPos,
+                                              float tickDelta,
+                                              MobAiDebugClientState.TrackerConfig trackerConfig) {
+        double villagerHalfWidth = villager.getWidth() * 0.5;
+        if (trackerConfig.showBoxes()) {
+            drawRelativeBox(visible, occluded, villager, cameraPos, tickDelta,
+                    -8.0, -6.0, -8.0,
+                    9.0, 7.0, 9.0,
+                    0.86f, 0.22f, 0.22f, alphaFromByte(trackerConfig.alpha(), 0.92f), alphaFromByte(trackerConfig.alpha(), 0.22f), 1.05f);
+            drawRelativeBox(visible, occluded, villager, cameraPos, tickDelta,
+                    -16.0 - villagerHalfWidth, -16.0, -16.0 - villagerHalfWidth,
+                    16.0 + villagerHalfWidth, 16.0 + villager.getHeight(), 16.0 + villagerHalfWidth,
+                    0.88f, 0.86f, 0.26f, alphaFromByte(trackerConfig.alpha(), 0.78f), alphaFromByte(trackerConfig.alpha(), 0.20f), 0.95f);
+        }
+
+        long golemTimer = 0L;
+        Optional<Boolean> recentlyDetected = getOptionalMemory(villager.getBrain(), MemoryModuleType.GOLEM_DETECTED_RECENTLY);
+        if (recentlyDetected.isPresent()) {
+            golemTimer = villager.getBrain().getMemoryExpiry(MemoryModuleType.GOLEM_DETECTED_RECENTLY);
+        }
+
+        long worldTime = client.world.getTime();
+        long lastSleptAgo = -1L;
+        Optional<Long> lastSlept = getOptionalMemory(villager.getBrain(), MemoryModuleType.LAST_SLEPT);
+        if (lastSlept.isPresent()) {
+            lastSleptAgo = Math.max(0L, worldTime - lastSlept.get());
+        }
+
+        List<LivingEntity> golems = client.world.getEntitiesByClass(LivingEntity.class,
+                villager.getBoundingBox().expand(16.0, 16.0, 16.0),
+                other -> compactId(Registries.ENTITY_TYPE.getId(other.getType())).equals("iron_golem"));
+        Vec3d source = entityCenter(villager, tickDelta);
+        for (LivingEntity golem : golems) {
+            drawEntityOutline(visible, occluded, golem, cameraPos, tickDelta, 0.85f, 0.85f, 1.0f, 0.64f, 0.20f, 1.0f, 0.03);
+            drawLineBetween(visible, occluded, source, entityCenter(golem, tickDelta), cameraPos, 0.85f, 0.85f, 1.0f, 0.72f, 0.20f, 0.95f);
+        }
+
+        overlay.addLine("Golem: " + (golemTimer > 0 ? golemTimer + "t" : "clear"), golemTimer > 0 ? 0xFFFF8F8F : 0xFF9FD6A3);
+        if (lastSleptAgo >= 0) {
+            overlay.addLine("Slept: " + lastSleptAgo + "t", lastSleptAgo < 24000L ? 0xFF9FD6A3 : 0xFFFFB36B);
+            if (lastSleptAgo < 24000L && golemTimer == 0L) {
+                overlay.addLine("Attempt: " + (100 - Math.floorMod(worldTime, 100L)) + "t", 0xFFFFD89A);
+            }
+        }
+        overlay.addLine("Golems: " + golems.size(), 0xFFE0DD99);
+        if (debugDataStore != null) {
+            debugDataStore.forEachEntityData(DebugSubscriptionTypes.BRAINS, (entity, debugData) -> {
+                if (entity == villager && debugData.wantsGolem()) {
+                    overlay.addLine("Status: wants golem", 0xFFFFB36B);
+                }
+            });
+        }
+        return true;
     }
 
     private void addClientBrainLines(MobEntity mob,
@@ -661,6 +957,117 @@ final class MobAiVisualizerRenderer {
         );
     }
 
+    private void drawWorldBox(VertexConsumer visible,
+                              VertexConsumer occluded,
+                              Box box,
+                              Vec3d cameraPos,
+                              float r,
+                              float g,
+                              float b,
+                              float alpha,
+                              float occludedAlpha,
+                              float width) {
+        float scaledWidth = scaleWidth(width);
+        DrawUtil.drawOutlinedBoxSafe(visible,
+                box.minX - cameraPos.x,
+                box.minY - cameraPos.y,
+                box.minZ - cameraPos.z,
+                box.maxX - cameraPos.x,
+                box.maxY - cameraPos.y,
+                box.maxZ - cameraPos.z,
+                r, g, b, alpha, scaledWidth);
+        DrawUtil.drawOutlinedBoxSafe(occluded,
+                box.minX - cameraPos.x,
+                box.minY - cameraPos.y,
+                box.minZ - cameraPos.z,
+                box.maxX - cameraPos.x,
+                box.maxY - cameraPos.y,
+                box.maxZ - cameraPos.z,
+                r, g, b, occludedAlpha, scaledWidth);
+    }
+
+    private void drawRelativeBox(VertexConsumer visible,
+                                 VertexConsumer occluded,
+                                 Entity entity,
+                                 Vec3d cameraPos,
+                                 float tickDelta,
+                                 double minX,
+                                 double minY,
+                                 double minZ,
+                                 double maxX,
+                                 double maxY,
+                                 double maxZ,
+                                 float r,
+                                 float g,
+                                 float b,
+                                 float alpha,
+                                 float occludedAlpha,
+                                 float width) {
+        Vec3d renderPos = lerpedPosition(entity, tickDelta);
+        drawWorldBox(visible, occluded, new Box(
+                        renderPos.x + minX,
+                        renderPos.y + minY,
+                        renderPos.z + minZ,
+                        renderPos.x + maxX,
+                        renderPos.y + maxY,
+                        renderPos.z + maxZ),
+                cameraPos, r, g, b, alpha, occludedAlpha, width);
+    }
+
+    private void drawEntityRadiusSphere(VertexConsumer visible,
+                                        VertexConsumer occluded,
+                                        Entity entity,
+                                        Vec3d cameraPos,
+                                        float tickDelta,
+                                        double radius,
+                                        float r,
+                                        float g,
+                                        float b,
+                                        float alpha,
+                                        float occludedAlpha,
+                                        float width) {
+        Vec3d center = entityCenter(entity, tickDelta);
+        drawCirclePlane(visible, center, cameraPos, radius, 42, 0, 1, 0, r, g, b, alpha, width);
+        drawCirclePlane(visible, center, cameraPos, radius, 42, 1, 0, 0, r, g, b, alpha, width);
+        drawCirclePlane(visible, center, cameraPos, radius, 42, 0, 0, 1, r, g, b, alpha, width);
+        drawCirclePlane(occluded, center, cameraPos, radius, 42, 0, 1, 0, r, g, b, occludedAlpha, width);
+        drawCirclePlane(occluded, center, cameraPos, radius, 42, 1, 0, 0, r, g, b, occludedAlpha, width);
+        drawCirclePlane(occluded, center, cameraPos, radius, 42, 0, 0, 1, r, g, b, occludedAlpha, width);
+    }
+
+    private void drawCirclePlane(VertexConsumer buffer,
+                                 Vec3d center,
+                                 Vec3d cameraPos,
+                                 double radius,
+                                 int segments,
+                                 int axisX,
+                                 int axisY,
+                                 int axisZ,
+                                 float r,
+                                 float g,
+                                 float b,
+                                 float alpha,
+                                 float width) {
+        for (int i = 0; i < segments; i++) {
+            double angle0 = (Math.PI * 2.0 * i) / segments;
+            double angle1 = (Math.PI * 2.0 * (i + 1)) / segments;
+            Vec3d p0 = switch (axisX + axisY * 2 + axisZ * 4) {
+                case 2 -> new Vec3d(center.x + Math.cos(angle0) * radius, center.y, center.z + Math.sin(angle0) * radius);
+                case 1 -> new Vec3d(center.x, center.y + Math.cos(angle0) * radius, center.z + Math.sin(angle0) * radius);
+                default -> new Vec3d(center.x + Math.cos(angle0) * radius, center.y + Math.sin(angle0) * radius, center.z);
+            };
+            Vec3d p1 = switch (axisX + axisY * 2 + axisZ * 4) {
+                case 2 -> new Vec3d(center.x + Math.cos(angle1) * radius, center.y, center.z + Math.sin(angle1) * radius);
+                case 1 -> new Vec3d(center.x, center.y + Math.cos(angle1) * radius, center.z + Math.sin(angle1) * radius);
+                default -> new Vec3d(center.x + Math.cos(angle1) * radius, center.y + Math.sin(angle1) * radius, center.z);
+            };
+            DrawUtil.drawLineSafe(buffer,
+                    p0.x - cameraPos.x, p0.y - cameraPos.y, p0.z - cameraPos.z,
+                    p1.x - cameraPos.x, p1.y - cameraPos.y, p1.z - cameraPos.z,
+                    r, g, b, alpha, scaleWidth(width));
+        }
+    }
+
     private void renderLabels(WorldRenderContext context,
                               VertexConsumerProvider consumers,
                               Vec3d cameraPos,
@@ -782,6 +1189,13 @@ final class MobAiVisualizerRenderer {
         return pos.getX() + " " + pos.getY() + " " + pos.getZ();
     }
 
+    private static String compactId(Identifier id) {
+        if (id == null) {
+            return "?";
+        }
+        return id.getNamespace().equals("minecraft") ? id.getPath() : id.toString();
+    }
+
     private static String compactToken(String value) {
         if (value == null || value.isBlank()) {
             return "";
@@ -828,12 +1242,41 @@ final class MobAiVisualizerRenderer {
         return new Vec3d(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5);
     }
 
+    private static boolean isTrackedVillagerHostile(VillagerEntity villager, LivingEntity entity, String hostileFocus) {
+        String type = compactId(Registries.ENTITY_TYPE.getId(entity.getType()));
+        if ("all".equals(hostileFocus)) {
+            Integer radius = TRACKER_HOSTILE_RANGES.get(type);
+            return radius != null && villager.squaredDistanceTo(entity) <= (double) radius * (double) radius;
+        }
+        Integer radius = TRACKER_HOSTILE_RANGES.get(hostileFocus);
+        return radius != null && hostileFocus.equals(type) && villager.squaredDistanceTo(entity) <= (double) radius * (double) radius;
+    }
+
+    private static int countVillagerFoodPoints(VillagerEntity villager) {
+        int foodPoints = 0;
+        for (int slot = 0; slot < villager.getInventory().size(); slot++) {
+            ItemStack stack = villager.getInventory().getStack(slot);
+            if (stack == null || stack.isEmpty()) {
+                continue;
+            }
+            Integer points = VILLAGER_FOOD_POINTS.get(compactId(Registries.ITEM.getId(stack.getItem())));
+            if (points != null) {
+                foodPoints += points * stack.getCount();
+            }
+        }
+        return foodPoints;
+    }
+
+    private static float alphaFromByte(int alpha, float multiplier) {
+        return Math.clamp((alpha / 255.0f) * multiplier, 0.05f, 1.0f);
+    }
+
     private static int clamp(int value, int min, int max) {
-        return Math.clamp(max, min, value);
+        return Math.clamp(value, min, max);
     }
 
     private static double clamp(double value, double min, double max) {
-        return Math.clamp(max, min, value);
+        return Math.clamp(value, min, max);
     }
 
     private static float scaleWidth(float width) {
@@ -853,6 +1296,7 @@ final class MobAiVisualizerRenderer {
         private boolean clientBrain;
         private boolean previewPath;
         private boolean inspected;
+        private boolean tracker;
         private boolean idleVisual;
 
         private EntityOverlayInfo(Entity entity) {
@@ -863,7 +1307,7 @@ final class MobAiVisualizerRenderer {
             if (text == null || text.isBlank()) {
                 return;
             }
-            int limit = inspected ? 16 : previewPath ? 12 : focused ? 8 : 5;
+            int limit = inspected ? 16 : previewPath ? 12 : (focused || tracker) ? 10 : 6;
             if (lines.size() >= limit) {
                 return;
             }
@@ -871,7 +1315,7 @@ final class MobAiVisualizerRenderer {
         }
 
         private boolean hasVisualMarker() {
-            return pathDebug || brainDebug || clientPath || clientBrain || previewPath || inspected || idleVisual;
+            return pathDebug || brainDebug || clientPath || clientBrain || previewPath || inspected || tracker || idleVisual;
         }
 
         private List<LabelLine> buildLines() {
@@ -893,6 +1337,9 @@ final class MobAiVisualizerRenderer {
             }
             if (inspected) {
                 badges.add("D");
+            }
+            if (tracker) {
+                badges.add("T");
             }
             if (idleVisual && badges.isEmpty()) {
                 badges.add("I");

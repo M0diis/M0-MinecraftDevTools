@@ -3,6 +3,8 @@ package me.m0dii;
 import eu.midnightdust.lib.config.MidnightConfig;
 import me.m0dii.modules.automation.AutomationModule;
 import me.m0dii.modules.bridging.BridgingTweaksModule;
+import me.m0dii.modules.camera.CameraClientCommand;
+import me.m0dii.modules.camera.CameraPathManager;
 import me.m0dii.modules.chat.SecondaryChatModule;
 import me.m0dii.modules.clickgui.ClickHudModule;
 import me.m0dii.modules.clickgui.ModuleRegistry;
@@ -28,6 +30,8 @@ import me.m0dii.modules.macros.MacrosModule;
 import me.m0dii.modules.messagehistory.MessageHistoryModule;
 import me.m0dii.modules.mobai.MobAiDebugClient;
 import me.m0dii.modules.mobai.MobAiVisualizerModule;
+import me.m0dii.modules.mobdrops.MobDropTrackerClient;
+import me.m0dii.modules.mobdrops.MobDropTrackerRenderer;
 import me.m0dii.modules.mousetweaks.MouseTweaksModule;
 import me.m0dii.modules.nbthud.NBTInfoHudModule;
 import me.m0dii.modules.nbttooltip.NBTTooltipModule;
@@ -83,6 +87,7 @@ public class M0DevToolsClient implements ClientModInitializer {
         QuickTeleportModule.INSTANCE.register();
         MacrosModule.INSTANCE.register();
         FreecamModule.INSTANCE.register();
+        CameraPathManager.register();
         ZoomModule.INSTANCE.register();
         InstantBreakModule.INSTANCE.register();
         NBTTooltipModule.INSTANCE.register();
@@ -122,12 +127,15 @@ public class M0DevToolsClient implements ClientModInitializer {
         ItemDataClientCommand.register();
         ItemDataSyncClient.registerReceivers();
         MobAiDebugClient.registerReceivers();
+        MobDropTrackerClient.registerReceivers();
         DrawClientCommand.register();
+        CameraClientCommand.register();
         MathClientCommand.register();
         BlockScannerClientCommand.register();
         ConvenienceClientCommands.register();
         InGameScriptingKeybinds.register();
         DebugDrawManager.registerRenderer();
+        MobDropTrackerRenderer.register();
 
         if (!SETTINGS_FOLDER.exists()) {
             SETTINGS_FOLDER.mkdir();

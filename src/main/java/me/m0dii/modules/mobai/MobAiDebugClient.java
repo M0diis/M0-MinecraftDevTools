@@ -22,5 +22,12 @@ public final class MobAiDebugClient {
 
         ClientPlayNetworking.registerGlobalReceiver(MobAiDebugPayloads.ClearPayload.ID, (payload, context) ->
                 context.client().execute(() -> MobAiDebugClientState.clear(payload.clearInspect(), payload.clearPathPreview())));
+
+        ClientPlayNetworking.registerGlobalReceiver(MobAiDebugPayloads.TrackerConfigPayload.ID, (payload, context) ->
+                context.client().execute(() -> MobAiDebugClientState.setTrackerConfig(payload.enabledDisplays(),
+                        payload.showBoxes(),
+                        payload.alpha(),
+                        payload.radius(),
+                        payload.hostileFocus())));
     }
 }

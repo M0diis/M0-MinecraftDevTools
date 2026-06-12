@@ -57,7 +57,7 @@ public class MobAiVisualizerModule extends Module {
     }
 
     public boolean shouldRequestServerDebugData() {
-        return isEnabled() && useDebugSubscriptions;
+        return (isEnabled() && useDebugSubscriptions) || MobAiDebugClientState.requiresServerDebugSubscriptions();
     }
 
     @Override
