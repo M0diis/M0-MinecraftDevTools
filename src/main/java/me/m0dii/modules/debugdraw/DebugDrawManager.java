@@ -16,6 +16,7 @@ import net.minecraft.util.Identifier;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
 
 import java.nio.file.Files;
@@ -47,6 +48,36 @@ public final class DebugDrawManager {
     private static SelectionShape selectionShape = SelectionShape.BOX;
     private static String selectionWandItemId = DEFAULT_WAND_ITEM_ID;
     private static Item selectionWandItem;
+
+    public record SelectionBounds(BlockPos min, BlockPos max) {
+        public int sizeX() {
+            return this.max.getX() - this.min.getX() + 1;
+        }
+
+        public int sizeY() {
+            return this.max.getY() - this.min.getY() + 1;
+        }
+
+        public int sizeZ() {
+            return this.max.getZ() - this.min.getZ() + 1;
+        }
+
+        public long volume() {
+            return (long) sizeX() * sizeY() * sizeZ();
+        }
+
+        public double centerX() {
+            return (this.min.getX() + this.max.getX() + 1.0) * 0.5;
+        }
+
+        public double centerY() {
+            return (this.min.getY() + this.max.getY() + 1.0) * 0.5;
+        }
+
+        public double centerZ() {
+            return (this.min.getZ() + this.max.getZ() + 1.0) * 0.5;
+        }
+    }
 
     public record ShapeDescriptor(int id,
                                   String type,
@@ -194,6 +225,24 @@ public final class DebugDrawManager {
         return selectionPos2;
     }
 
+    public static synchronized SelectionBounds getSelectionBounds() {
+        if (selectionPos1 == null || selectionPos2 == null) {
+            return null;
+        }
+        return new SelectionBounds(
+                new BlockPos(
+                        Math.min(selectionPos1.getX(), selectionPos2.getX()),
+                        Math.min(selectionPos1.getY(), selectionPos2.getY()),
+                        Math.min(selectionPos1.getZ(), selectionPos2.getZ())
+                ),
+                new BlockPos(
+                        Math.max(selectionPos1.getX(), selectionPos2.getX()),
+                        Math.max(selectionPos1.getY(), selectionPos2.getY()),
+                        Math.max(selectionPos1.getZ(), selectionPos2.getZ())
+                )
+        );
+    }
+
     public static synchronized void setSelectionPos(boolean rightClick, BlockPos pos) {
         if (rightClick) {
             selectionPos2 = pos;
@@ -277,12 +326,14 @@ public final class DebugDrawManager {
         String left = selectionPos1 == null ? "-" : selectionPos1.getX() + " " + selectionPos1.getY() + " " + selectionPos1.getZ();
         String right = selectionPos2 == null ? "-" : selectionPos2.getX() + " " + selectionPos2.getY() + " " + selectionPos2.getZ();
         String mode = selectionUseAnyClick ? "any-click" : "wand";
+        SelectionBounds bounds = getSelectionBounds();
         return "enabled=" + selectionEnabled
                 + " mode=" + mode
                 + " wand=" + selectionWandItemId
                 + " shape=" + selectionShape.name().toLowerCase(Locale.ROOT)
                 + " pos1=" + left
-                + " pos2=" + right;
+                + " pos2=" + right
+                + (bounds == null ? "" : " size=" + bounds.sizeX() + "x" + bounds.sizeY() + "x" + bounds.sizeZ() + " volume=" + bounds.volume());
     }
 
     public static synchronized boolean saveSelection() {
@@ -727,68 +778,180 @@ public final class DebugDrawManager {
                                                double cameraX,
                                                double cameraY,
                                                double cameraZ) {
-        if (!selectionEnabled || selectionPos1 == null) {
-            return;
-        }
-        if (selectionPos2 == null) {
-            double x = selectionPos1.getX();
-            double y = selectionPos1.getY();
-            double z = selectionPos1.getZ();
-            DrawUtil.drawOutlinedBoxSafe(visible,
-                    x - cameraX, y - cameraY, z - cameraZ,
-                    x + 1.0 - cameraX, y + 1.0 - cameraY, z + 1.0 - cameraZ,
-                    0.2f, 1.0f, 0.2f, 0.95f, 2.0f);
-            DrawUtil.drawOutlinedBoxSafe(through,
-                    x - cameraX, y - cameraY, z - cameraZ,
-                    x + 1.0 - cameraX, y + 1.0 - cameraY, z + 1.0 - cameraZ,
-                    0.2f, 1.0f, 0.2f, 0.35f, 2.0f);
+        if (selectionPos1 == null) {
             return;
         }
 
+        drawSelectionAnchor(visible, through, selectionPos1, cameraX, cameraY, cameraZ, 0.35f, 1.0f, 0.35f);
+        if (selectionPos2 == null) {
+            return;
+        }
+
+        drawSelectionAnchor(visible, through, selectionPos2, cameraX, cameraY, cameraZ, 1.0f, 0.35f, 0.35f);
+        drawSelectionConnector(visible, through, selectionPos1, selectionPos2, cameraX, cameraY, cameraZ);
+
+        SelectionBounds bounds = getSelectionBounds();
+        if (bounds == null) {
+            return;
+        }
+
+        drawSelectionBox(visible, through, bounds, cameraX, cameraY, cameraZ, 1.0f, 0.95f, 0.30f, 1.0f, 0.40f);
+
         switch (selectionShape) {
             case CIRCLE -> {
-                double radius = selectionRadius(selectionPos1, selectionPos2, false);
-                CircleShape circle = new CircleShape(-1, Long.MAX_VALUE, 0x33FFAA,
-                        selectionPos1.getX() + 0.5, selectionPos1.getY() + 0.05, selectionPos1.getZ() + 0.5,
-                        radius, 36);
-                drawCircle(visible, circle, cameraX, cameraY, cameraZ, 0.95f);
-                drawCircle(through, circle, cameraX, cameraY, cameraZ, 0.35f);
+                renderSelectionCirclePreview(visible, through, bounds, cameraX, cameraY, cameraZ);
             }
             case CYLINDER -> {
-                double radius = selectionRadius(selectionPos1, selectionPos2, false);
-                double baseY = Math.min(selectionPos1.getY(), selectionPos2.getY());
-                double height = Math.max(1.0, Math.abs(selectionPos1.getY() - selectionPos2.getY()) + 1.0);
+                double radius = Math.max(0.5, Math.min(bounds.sizeX(), bounds.sizeZ()) * 0.5);
+                double baseY = bounds.min.getY();
+                double height = bounds.sizeY();
                 CylinderShape cylinder = new CylinderShape(-1, Long.MAX_VALUE, 0x33FFAA,
-                        selectionPos1.getX() + 0.5, baseY, selectionPos1.getZ() + 0.5,
+                        bounds.centerX(), baseY, bounds.centerZ(),
                         radius, height, 36);
                 drawCylinder(visible, cylinder, cameraX, cameraY, cameraZ, 0.95f);
                 drawCylinder(through, cylinder, cameraX, cameraY, cameraZ, 0.35f);
             }
             case SPHERE -> {
-                double radius = selectionRadius(selectionPos1, selectionPos2, true);
+                double radius = Math.max(0.5, Math.min(bounds.sizeX(), Math.min(bounds.sizeY(), bounds.sizeZ())) * 0.5);
                 SphereShape sphere = new SphereShape(-1, Long.MAX_VALUE, 0x33FFAA,
-                        selectionPos1.getX() + 0.5, selectionPos1.getY() + 0.5, selectionPos1.getZ() + 0.5,
+                        bounds.centerX(), bounds.centerY(), bounds.centerZ(),
                         radius, 32);
                 drawSphere(visible, sphere, cameraX, cameraY, cameraZ, 0.95f);
                 drawSphere(through, sphere, cameraX, cameraY, cameraZ, 0.35f);
             }
             case BOX -> {
-                double minX = Math.min(selectionPos1.getX(), selectionPos2.getX());
-                double minY = Math.min(selectionPos1.getY(), selectionPos2.getY());
-                double minZ = Math.min(selectionPos1.getZ(), selectionPos2.getZ());
-                double maxX = Math.max(selectionPos1.getX(), selectionPos2.getX()) + 1.0;
-                double maxY = Math.max(selectionPos1.getY(), selectionPos2.getY()) + 1.0;
-                double maxZ = Math.max(selectionPos1.getZ(), selectionPos2.getZ()) + 1.0;
-                DrawUtil.drawOutlinedBoxSafe(visible,
-                        minX - cameraX, minY - cameraY, minZ - cameraZ,
-                        maxX - cameraX, maxY - cameraY, maxZ - cameraZ,
-                        0.2f, 1.0f, 0.2f, 0.95f, 2.0f);
-                DrawUtil.drawOutlinedBoxSafe(through,
-                        minX - cameraX, minY - cameraY, minZ - cameraZ,
-                        maxX - cameraX, maxY - cameraY, maxZ - cameraZ,
-                        0.2f, 1.0f, 0.2f, 0.35f, 2.0f);
+                drawSelectionBox(visible, through, bounds, cameraX, cameraY, cameraZ, 0.35f, 1.0f, 0.35f, 0.98f, 0.45f);
             }
         }
+    }
+
+    private static void drawSelectionAnchor(VertexConsumer visible,
+                                            VertexConsumer through,
+                                            BlockPos pos,
+                                            double cameraX,
+                                            double cameraY,
+                                            double cameraZ,
+                                            float r,
+                                            float g,
+                                            float b) {
+        double inset = -0.02;
+        double x1 = pos.getX() + inset - cameraX;
+        double y1 = pos.getY() + inset - cameraY;
+        double z1 = pos.getZ() + inset - cameraZ;
+        double x2 = pos.getX() + 1.0 - inset - cameraX;
+        double y2 = pos.getY() + 1.0 - inset - cameraY;
+        double z2 = pos.getZ() + 1.0 - inset - cameraZ;
+        DrawUtil.drawOutlinedBoxSafe(visible, x1, y1, z1, x2, y2, z2, r, g, b, 1.0f, 2.5f);
+        DrawUtil.drawOutlinedBoxSafe(through, x1, y1, z1, x2, y2, z2, r, g, b, 0.45f, 2.5f);
+    }
+
+    private static void drawSelectionConnector(VertexConsumer visible,
+                                               VertexConsumer through,
+                                               BlockPos pos1,
+                                               BlockPos pos2,
+                                               double cameraX,
+                                               double cameraY,
+                                               double cameraZ) {
+        double x1 = pos1.getX() + 0.5 - cameraX;
+        double y1 = pos1.getY() + 0.5 - cameraY;
+        double z1 = pos1.getZ() + 0.5 - cameraZ;
+        double x2 = pos2.getX() + 0.5 - cameraX;
+        double y2 = pos2.getY() + 0.5 - cameraY;
+        double z2 = pos2.getZ() + 0.5 - cameraZ;
+        DrawUtil.drawLineSafe(visible, x1, y1, z1, x2, y2, z2, 1.0f, 1.0f, 1.0f, 0.9f, 1.75f);
+        DrawUtil.drawLineSafe(through, x1, y1, z1, x2, y2, z2, 1.0f, 1.0f, 1.0f, 0.35f, 1.75f);
+    }
+
+    private static void drawSelectionBox(VertexConsumer visible,
+                                         VertexConsumer through,
+                                         SelectionBounds bounds,
+                                         double cameraX,
+                                         double cameraY,
+                                         double cameraZ,
+                                         float r,
+                                         float g,
+                                         float b,
+                                         float visibleAlpha,
+                                         float throughAlpha) {
+        DrawUtil.drawOutlinedBoxSafe(visible,
+                bounds.min.getX() - cameraX, bounds.min.getY() - cameraY, bounds.min.getZ() - cameraZ,
+                bounds.max.getX() + 1.0 - cameraX, bounds.max.getY() + 1.0 - cameraY, bounds.max.getZ() + 1.0 - cameraZ,
+                r, g, b, visibleAlpha, 2.25f);
+        DrawUtil.drawOutlinedBoxSafe(through,
+                bounds.min.getX() - cameraX, bounds.min.getY() - cameraY, bounds.min.getZ() - cameraZ,
+                bounds.max.getX() + 1.0 - cameraX, bounds.max.getY() + 1.0 - cameraY, bounds.max.getZ() + 1.0 - cameraZ,
+                r, g, b, throughAlpha, 2.25f);
+    }
+
+    private static void renderSelectionCirclePreview(VertexConsumer visible,
+                                                     VertexConsumer through,
+                                                     SelectionBounds bounds,
+                                                     double cameraX,
+                                                     double cameraY,
+                                                     double cameraZ) {
+        Direction.Axis normalAxis = smallestAxis(bounds);
+        double radius = switch (normalAxis) {
+            case X -> Math.max(0.5, Math.min(bounds.sizeY(), bounds.sizeZ()) * 0.5);
+            case Y -> Math.max(0.5, Math.min(bounds.sizeX(), bounds.sizeZ()) * 0.5);
+            case Z -> Math.max(0.5, Math.min(bounds.sizeX(), bounds.sizeY()) * 0.5);
+        };
+        drawOrientedCircle(visible, bounds.centerX(), bounds.centerY(), bounds.centerZ(), radius, normalAxis, cameraX, cameraY, cameraZ, 0.20f, 1.0f, 0.67f, 0.95f);
+        drawOrientedCircle(through, bounds.centerX(), bounds.centerY(), bounds.centerZ(), radius, normalAxis, cameraX, cameraY, cameraZ, 0.20f, 1.0f, 0.67f, 0.35f);
+    }
+
+    private static Direction.Axis smallestAxis(SelectionBounds bounds) {
+        int x = bounds.sizeX();
+        int y = bounds.sizeY();
+        int z = bounds.sizeZ();
+        if (x <= y && x <= z) {
+            return Direction.Axis.X;
+        }
+        if (y <= x && y <= z) {
+            return Direction.Axis.Y;
+        }
+        return Direction.Axis.Z;
+    }
+
+    private static void drawOrientedCircle(VertexConsumer buffer,
+                                           double centerX,
+                                           double centerY,
+                                           double centerZ,
+                                           double radius,
+                                           Direction.Axis normalAxis,
+                                           double cameraX,
+                                           double cameraY,
+                                           double cameraZ,
+                                           float r,
+                                           float g,
+                                           float b,
+                                           float a) {
+        int segments = 48;
+        for (int i = 0; i < segments; i++) {
+            double a0 = (Math.PI * 2.0 * i) / segments;
+            double a1 = (Math.PI * 2.0 * (i + 1)) / segments;
+
+            Vec3d p0 = orientedCirclePoint(centerX, centerY, centerZ, radius, normalAxis, a0);
+            Vec3d p1 = orientedCirclePoint(centerX, centerY, centerZ, radius, normalAxis, a1);
+            DrawUtil.drawLineSafe(buffer,
+                    p0.x - cameraX, p0.y - cameraY, p0.z - cameraZ,
+                    p1.x - cameraX, p1.y - cameraY, p1.z - cameraZ,
+                    r, g, b, a, 1.75f);
+        }
+    }
+
+    private static Vec3d orientedCirclePoint(double centerX,
+                                             double centerY,
+                                             double centerZ,
+                                             double radius,
+                                             Direction.Axis normalAxis,
+                                             double angle) {
+        double cos = Math.cos(angle) * radius;
+        double sin = Math.sin(angle) * radius;
+        return switch (normalAxis) {
+            case X -> new Vec3d(centerX, centerY + cos, centerZ + sin);
+            case Y -> new Vec3d(centerX + cos, centerY, centerZ + sin);
+            case Z -> new Vec3d(centerX + cos, centerY + sin, centerZ);
+        };
     }
 
     private static double selectionRadius(BlockPos center, BlockPos edge, boolean includeY) {

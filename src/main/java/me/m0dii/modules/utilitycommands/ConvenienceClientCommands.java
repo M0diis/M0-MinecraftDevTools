@@ -2,12 +2,19 @@ package me.m0dii.modules.utilitycommands;
 
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
+import com.mojang.brigadier.arguments.StringArgumentType;
+import com.mojang.brigadier.context.CommandContext;
+import com.mojang.brigadier.suggestion.Suggestions;
+import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
+import net.minecraft.block.Block;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayerEntity;
+import net.minecraft.registry.Registries;
 import net.minecraft.text.Text;
+import net.minecraft.util.Identifier;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.BlockPos;
@@ -20,6 +27,8 @@ import net.minecraft.world.RaycastContext;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.concurrent.CompletableFuture;
 
 public final class ConvenienceClientCommands {
     private static final int MAX_UP_BLOCKS = 512;
@@ -27,6 +36,7 @@ public final class ConvenienceClientCommands {
     private static final double THRU_DISTANCE = 128.0;
     private static final double STEP_DISTANCE = 0.5;
     private static final int SAFE_SEARCH_VERTICAL = 4;
+    private static final String DEFAULT_UP_BLOCK = "minecraft:glass";
 
     private ConvenienceClientCommands() {
     }
@@ -46,13 +56,29 @@ public final class ConvenienceClientCommands {
                 .executes(context -> teleportThru(context.getSource())));
         dispatcher.register(ClientCommandManager.literal("jumpto")
                 .executes(context -> teleportJumpTo(context.getSource())));
-        dispatcher.register(ClientCommandManager.literal("up")
-                .executes(context -> teleportUp(context.getSource(), 1))
-                .then(ClientCommandManager.argument("blocks", IntegerArgumentType.integer(1, MAX_UP_BLOCKS))
-                        .executes(context -> teleportUp(
-                                context.getSource(),
-                                IntegerArgumentType.getInteger(context, "blocks")
-                        ))));
+        dispatcher.register(
+                ClientCommandManager.literal("up")
+                        .executes(context -> teleportUp(context.getSource(), 1, null))
+                        .then(ClientCommandManager.argument("blocks", IntegerArgumentType.integer(1, MAX_UP_BLOCKS))
+                                .executes(context -> teleportUp(
+                                        context.getSource(),
+                                        IntegerArgumentType.getInteger(context, "blocks"),
+                                        null
+                                ))
+                                .then(ClientCommandManager.literal("-b")
+                                        .executes(context -> teleportUp(
+                                                context.getSource(),
+                                                IntegerArgumentType.getInteger(context, "blocks"),
+                                                DEFAULT_UP_BLOCK
+                                        ))
+                                        .then(ClientCommandManager.argument("block", StringArgumentType.word())
+                                                .suggests(ConvenienceClientCommands::suggestBlockArgument)
+                                                .executes(context -> teleportUp(
+                                                        context.getSource(),
+                                                        IntegerArgumentType.getInteger(context, "blocks"),
+                                                        StringArgumentType.getString(context, "block")
+                                                )))))
+        );
     }
 
     private static int teleportTop(FabricClientCommandSource source) {
@@ -157,15 +183,36 @@ public final class ConvenienceClientCommands {
         return 0;
     }
 
-    private static int teleportUp(FabricClientCommandSource source, int blocks) {
+    private static int teleportUp(FabricClientCommandSource source, int blocks, String supportBlockRaw) {
         MinecraftClient client = source.getClient();
         if (!ensureReady(client, source)) {
             return 0;
         }
 
         ClientPlayerEntity player = client.player;
-        teleportTo(player, new Vec3d(player.getX(), player.getY() + blocks, player.getZ()));
-        source.sendFeedback(Text.literal("Teleported up " + blocks + " block" + (blocks == 1 ? "" : "s") + "."));
+        double centeredX = Math.floor(player.getX()) + 0.5;
+        double centeredZ = Math.floor(player.getZ()) + 0.5;
+        double targetY = Math.floor(player.getY()) + blocks;
+
+        String supportBlockId = resolveBlockId(supportBlockRaw);
+        if (supportBlockRaw != null && supportBlockId == null) {
+            source.sendError(Text.literal("Unknown block '" + supportBlockRaw + "'."));
+            return 0;
+        }
+
+        if (supportBlockId != null && client.getNetworkHandler() != null) {
+            BlockPos supportPos = BlockPos.ofFloored(centeredX, targetY - 1.0, centeredZ);
+            client.getNetworkHandler().sendChatCommand("setblock "
+                    + supportPos.getX() + " "
+                    + supportPos.getY() + " "
+                    + supportPos.getZ() + " "
+                    + supportBlockId);
+        }
+
+        teleportTo(player, new Vec3d(centeredX, targetY, centeredZ));
+        source.sendFeedback(Text.literal(supportBlockId == null
+                ? "Teleported up " + blocks + " block" + (blocks == 1 ? "" : "s") + "."
+                : "Teleported up " + blocks + " block" + (blocks == 1 ? "" : "s") + " and requested " + supportBlockId + " below you."));
         return 1;
     }
 
@@ -293,5 +340,53 @@ public final class ConvenienceClientCommands {
             return false;
         }
         return true;
+    }
+
+    private static CompletableFuture<Suggestions> suggestBlockArgument(CommandContext<FabricClientCommandSource> context, SuggestionsBuilder builder) {
+        String prefix = builder.getRemaining().toLowerCase(Locale.ROOT);
+        for (Identifier id : Registries.BLOCK.getIds()) {
+            String full = id.toString();
+            String path = id.getPath();
+            if (prefix.contains(":")) {
+                if (full.toLowerCase(Locale.ROOT).startsWith(prefix)) {
+                    builder.suggest(full);
+                }
+            } else if (path.toLowerCase(Locale.ROOT).startsWith(prefix)) {
+                builder.suggest(path);
+            } else if (full.toLowerCase(Locale.ROOT).startsWith(prefix)) {
+                builder.suggest(full);
+            }
+        }
+        return builder.buildFuture();
+    }
+
+    private static String resolveBlockId(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        String query = raw.trim().toLowerCase(Locale.ROOT);
+        Identifier direct = query.contains(":") ? Identifier.tryParse(query) : Identifier.tryParse("minecraft:" + query);
+        if (direct != null && Registries.BLOCK.containsId(direct)) {
+            return direct.toString();
+        }
+
+        Block match = null;
+        for (Identifier id : Registries.BLOCK.getIds()) {
+            String full = id.toString().toLowerCase(Locale.ROOT);
+            String path = id.getPath().toLowerCase(Locale.ROOT);
+            if (path.equals(query) || full.equals(query)) {
+                return id.toString();
+            }
+            if (path.startsWith(query) || full.startsWith(query)) {
+                if (match != null) {
+                    return null;
+                }
+                match = Registries.BLOCK.get(id);
+            }
+        }
+        if (match == null) {
+            return null;
+        }
+        return String.valueOf(Registries.BLOCK.getId(match));
     }
 }

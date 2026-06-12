@@ -693,151 +693,180 @@ public final class DrawClientCommand {
     }
 
     private static CompletableFuture<Suggestions> suggestArgs(CommandContext<FabricClientCommandSource> context, SuggestionsBuilder builder) {
-        String remaining = builder.getRemaining();
-        String trimmed = remaining.trim();
-        boolean trailingSpace = remaining.endsWith(" ");
-        String[] rawTokens = trimmed.isEmpty() ? new String[0] : trimmed.split("\\s+");
-        int index = trailingSpace ? rawTokens.length : Math.max(0, rawTokens.length - 1);
+        String[] tokens = tokenizeSuggestionInput(builder.getRemaining());
+        int index = suggestionTokenIndex(builder.getRemaining());
+        String prefix = suggestionTokenPrefix(builder.getRemaining());
 
-        if (rawTokens.length == 0 || (rawTokens.length == 1 && !trailingSpace)) {
-            String prefix = rawTokens.length == 0 ? "" : rawTokens[0].toLowerCase(Locale.ROOT);
-            for (String sub : List.of("line", "box", "circle", "cylinder", "sphere", "diamond", "pyramid", "cone", "cuboid", "boxlook", "select", "sel", "list", "remove", "clear", "save", "load", "ui")) {
-                if (sub.startsWith(prefix)) {
-                    builder.suggest(sub);
-                }
-            }
-            return builder.buildFuture();
+        if (tokens.length == 0 || index == 0) {
+            return suggestToken(builder, prefix, List.of("line", "box", "circle", "cylinder", "sphere", "diamond", "pyramid", "cone", "cuboid", "boxlook", "select", "sel", "list", "remove", "clear", "save", "load", "ui"));
         }
 
-        String sub = rawTokens[0].toLowerCase(Locale.ROOT);
-        if ("remove".equals(sub) && index >= 1) {
+        String sub = tokens[0].toLowerCase(Locale.ROOT);
+        if ("remove".equals(sub) && index == 1) {
+            SuggestionsBuilder tokenBuilder = tokenBuilder(builder);
             for (DebugDrawManager.ShapeDescriptor shape : DebugDrawManager.getActiveShapeDescriptors()) {
-                builder.suggest("remove " + shape.id());
+                String id = Integer.toString(shape.id());
+                if (id.startsWith(prefix)) {
+                    tokenBuilder.suggest(id);
+                }
             }
-            return builder.buildFuture();
+            return tokenBuilder.buildFuture();
         }
 
         if (List.of("line", "box").contains(sub)) {
-            if (index <= 6) {
-                builder.suggest(sub + " ~ ~ ~ ~ ~ ~");
-            }
-            if (index == 7 || index == 8) {
-                builder.suggest(sub + " ~ ~ ~ ~ ~ ~ #00FFFF 20");
-                builder.suggest(sub + " ~ ~ ~ ~ ~ ~ red 20");
+            if (index >= 1 && index <= 6) {
+                return suggestToken(builder, prefix, List.of("~"));
+            } else if (index == 7) {
+                return suggestToken(builder, prefix, colorSuggestions());
+            } else if (index == 8) {
+                return suggestToken(builder, prefix, List.of("20", "60"));
             }
             return builder.buildFuture();
         }
 
         if (List.of("circle", "sphere").contains(sub)) {
-            if (index <= 4) {
-                builder.suggest(sub + " ~ ~ ~ 3");
-            }
-            if (index >= 5) {
-                builder.suggest(sub + " ~ ~ ~ 3 #00FFFF 20 36");
+            if (index >= 1 && index <= 3) {
+                return suggestToken(builder, prefix, List.of("~"));
+            } else if (index == 4) {
+                return suggestToken(builder, prefix, List.of("3", "5", "8"));
+            } else if (index == 5) {
+                return suggestToken(builder, prefix, colorSuggestions());
+            } else if (index == 6) {
+                return suggestToken(builder, prefix, List.of("20", "60"));
+            } else if (index == 7) {
+                return suggestToken(builder, prefix, List.of("36", "48"));
             }
             return builder.buildFuture();
         }
 
         if ("diamond".equals(sub)) {
-            if (index <= 4) {
-                builder.suggest("diamond ~ ~ ~ 3");
-            }
-            if (index >= 5) {
-                builder.suggest("diamond ~ ~ ~ 3 #00FFFF 20");
+            if (index >= 1 && index <= 3) {
+                return suggestToken(builder, prefix, List.of("~"));
+            } else if (index == 4) {
+                return suggestToken(builder, prefix, List.of("3", "5", "8"));
+            } else if (index == 5) {
+                return suggestToken(builder, prefix, colorSuggestions());
+            } else if (index == 6) {
+                return suggestToken(builder, prefix, List.of("20", "60"));
             }
             return builder.buildFuture();
         }
 
         if ("cylinder".equals(sub)) {
-            if (index <= 5) {
-                builder.suggest("cylinder ~ ~ ~ 3 4");
-            }
-            if (index >= 6) {
-                builder.suggest("cylinder ~ ~ ~ 3 4 #00FFFF 20 36");
-            }
-            return builder.buildFuture();
-        }
-
-        if (List.of("pyramid", "cuboid").contains(sub)) {
-            if (index <= 5) {
-                builder.suggest(sub + " ~ ~ ~ 3 4");
-            }
-            if (index >= 6) {
-                builder.suggest(sub + " ~ ~ ~ 3 4 #00FFFF 20");
+            if (index >= 1 && index <= 3) {
+                return suggestToken(builder, prefix, List.of("~"));
+            } else if (index == 4 || index == 5) {
+                return suggestToken(builder, prefix, List.of("3", "4", "8"));
+            } else if (index == 6) {
+                return suggestToken(builder, prefix, colorSuggestions());
+            } else if (index == 7) {
+                return suggestToken(builder, prefix, List.of("20", "60"));
+            } else if (index == 8) {
+                return suggestToken(builder, prefix, List.of("36", "48"));
             }
             return builder.buildFuture();
         }
 
-        if ("cone".equals(sub)) {
-            if (index <= 5) {
-                builder.suggest("cone ~ ~ ~ 3 4");
-            }
-            if (index >= 6) {
-                builder.suggest("cone ~ ~ ~ 3 4 #00FFFF 20 36");
+        if (List.of("pyramid", "cuboid", "cone").contains(sub)) {
+            if (index >= 1 && index <= 3) {
+                return suggestToken(builder, prefix, List.of("~"));
+            } else if (index == 4 || index == 5) {
+                return suggestToken(builder, prefix, List.of("3", "4", "8"));
+            } else if (index == 6) {
+                return suggestToken(builder, prefix, colorSuggestions());
+            } else if (index == 7) {
+                return suggestToken(builder, prefix, List.of("20", "60"));
+            } else if ("cone".equals(sub) && index == 8) {
+                return suggestToken(builder, prefix, List.of("36", "48"));
             }
             return builder.buildFuture();
         }
 
         if ("boxlook".equals(sub)) {
-            builder.suggest("boxlook #00FFFF 20");
+            if (index == 1) {
+                return suggestToken(builder, prefix, colorSuggestions());
+            } else if (index == 2) {
+                return suggestToken(builder, prefix, List.of("20", "60"));
+            }
+            return builder.buildFuture();
         }
 
         if ("select".equals(sub) || "sel".equals(sub)) {
-            if (index <= 1) {
-                builder.suggest("select on");
-                builder.suggest("select off");
-                builder.suggest("select toggle");
-                builder.suggest("select status");
-                builder.suggest("select clear");
-                builder.suggest("select mode wand");
-                builder.suggest("select mode any");
-                builder.suggest("select wand hand");
-                builder.suggest("select wand minecraft:wooden_axe");
-                builder.suggest("select shape box");
-                builder.suggest("select shape circle");
-                builder.suggest("select shape cylinder");
-                builder.suggest("select shape sphere");
-                builder.suggest("select pos1 look");
-                builder.suggest("select pos2 look");
-                builder.suggest("select pos1 here");
-                builder.suggest("select pos2 here");
-                builder.suggest("select set ~ ~ ~ ~ ~ ~");
-                builder.suggest("select add #00FFFF 20");
-                builder.suggest("select save");
-                builder.suggest("select load");
-                return builder.buildFuture();
+            if (index == 1) {
+                return suggestToken(builder, prefix, List.of("on", "off", "toggle", "status", "clear", "mode", "wand", "shape", "pos1", "pos2", "set", "add", "save", "load"));
             }
 
-            if (rawTokens.length >= 2) {
-                String selectSub = rawTokens[1].toLowerCase(Locale.ROOT);
-                if ("shape".equals(selectSub)) {
-                    builder.suggest("select shape box");
-                    builder.suggest("select shape circle");
-                    builder.suggest("select shape cylinder");
-                    builder.suggest("select shape sphere");
-                } else if ("mode".equals(selectSub)) {
-                    builder.suggest("select mode wand");
-                    builder.suggest("select mode any");
-                } else if ("wand".equals(selectSub)) {
-                    builder.suggest("select wand hand");
-                    builder.suggest("select wand default");
-                    builder.suggest("select wand minecraft:wooden_axe");
-                    builder.suggest("select wand minecraft:blaze_rod");
-                    builder.suggest("select wand minecraft:stick");
+            if (tokens.length >= 2) {
+                String selectSub = tokens[1].toLowerCase(Locale.ROOT);
+                if ("shape".equals(selectSub) && index == 2) {
+                    return suggestToken(builder, prefix, List.of("box", "circle", "cylinder", "sphere"));
+                } else if ("mode".equals(selectSub) && index == 2) {
+                    return suggestToken(builder, prefix, List.of("wand", "any"));
+                } else if ("wand".equals(selectSub) && index == 2) {
+                    return suggestToken(builder, prefix, List.of("hand", "default", "minecraft:wooden_axe", "minecraft:blaze_rod", "minecraft:stick"));
                 } else if (List.of("left", "right", "pos1", "pos2", "p1", "p2").contains(selectSub)) {
-                    builder.suggest("select " + selectSub + " look");
-                    builder.suggest("select " + selectSub + " here");
-                    builder.suggest("select " + selectSub + " ~ ~ ~");
+                    if (index == 2) {
+                        return suggestToken(builder, prefix, List.of("look", "here", "~"));
+                    } else if (index <= 4) {
+                        return suggestToken(builder, prefix, List.of("~"));
+                    }
                 } else if ("set".equals(selectSub)) {
-                    builder.suggest("select set ~ ~ ~ ~ ~ ~");
+                    if (index >= 2 && index <= 7) {
+                        return suggestToken(builder, prefix, List.of("~"));
+                    }
                 } else if ("add".equals(selectSub)) {
-                    builder.suggest("select add #00FFFF 20");
-                    builder.suggest("select add green 60");
+                    if (index == 2) {
+                        return suggestToken(builder, prefix, colorSuggestions());
+                    } else if (index == 3) {
+                        return suggestToken(builder, prefix, List.of("20", "60"));
+                    }
                 }
             }
         }
 
         return builder.buildFuture();
+    }
+
+    private static String[] tokenizeSuggestionInput(String remaining) {
+        String trimmed = remaining.trim();
+        return trimmed.isEmpty() ? new String[0] : trimmed.split("\\s+");
+    }
+
+    private static int suggestionTokenIndex(String remaining) {
+        String[] tokens = tokenizeSuggestionInput(remaining);
+        if (tokens.length == 0) {
+            return 0;
+        }
+        return remaining.endsWith(" ") ? tokens.length : tokens.length - 1;
+    }
+
+    private static String suggestionTokenPrefix(String remaining) {
+        if (remaining.isEmpty() || remaining.endsWith(" ")) {
+            return "";
+        }
+        int lastSpace = remaining.lastIndexOf(' ');
+        return (lastSpace >= 0 ? remaining.substring(lastSpace + 1) : remaining).toLowerCase(Locale.ROOT);
+    }
+
+    private static SuggestionsBuilder tokenBuilder(SuggestionsBuilder builder) {
+        String remaining = builder.getRemaining();
+        int lastSpace = remaining.lastIndexOf(' ');
+        int offset = lastSpace < 0 ? builder.getStart() : builder.getStart() + lastSpace + 1;
+        return builder.createOffset(offset);
+    }
+
+    private static CompletableFuture<Suggestions> suggestToken(SuggestionsBuilder builder, String prefix, List<String> candidates) {
+        SuggestionsBuilder tokenBuilder = tokenBuilder(builder);
+        for (String candidate : candidates) {
+            if (candidate.toLowerCase(Locale.ROOT).startsWith(prefix)) {
+                tokenBuilder.suggest(candidate);
+            }
+        }
+        return tokenBuilder.buildFuture();
+    }
+
+    private static List<String> colorSuggestions() {
+        return List.of("#00FFFF", "red", "green", "blue", "cyan", "magenta", "yellow", "orange", "white", "gray");
     }
 
     private static DebugDrawManager.SelectionShape parseSelectionShape(String token) {
