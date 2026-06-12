@@ -31,6 +31,15 @@ public final class DebugDrawManager {
     private static final Path SAVE_PATH = M0DevToolsClient.SETTINGS_FOLDER.toPath().resolve("debugdraw-shapes.json");
     private static final Path SELECTION_SAVE_PATH = M0DevToolsClient.SETTINGS_FOLDER.toPath().resolve("debugdraw-selection.json");
     private static final String DEFAULT_WAND_ITEM_ID = "minecraft:wooden_axe";
+    private static final int DEFAULT_SELECTION_POS1_COLOR = 0x59FF59;
+    private static final int DEFAULT_SELECTION_POS2_COLOR = 0xFF5959;
+    private static final int DEFAULT_SELECTION_CONNECTOR_COLOR = 0xFFFFFF;
+    private static final int DEFAULT_SELECTION_BOX_COLOR = 0xFFF24D;
+    private static final int DEFAULT_SELECTION_GRID_COLOR = 0x73FF73;
+    private static final int DEFAULT_SELECTION_SHAPE_COLOR = 0x33FFAA;
+    private static final double SELECTION_GRID_FACE_OFFSET = 0.002;
+    private static final int MAX_SELECTION_GRID_DIVISIONS = 96;
+    private static final float SELECTION_GRID_LINE_WIDTH = 1.4f;
     private static final AtomicInteger NEXT_ID = new AtomicInteger(1);
     private static final List<DrawShape> SHAPES = new ArrayList<>();
 
@@ -41,6 +50,15 @@ public final class DebugDrawManager {
         SPHERE
     }
 
+    public enum SelectionColorSlot {
+        POS1,
+        POS2,
+        CONNECTOR,
+        BOX,
+        GRID,
+        SHAPE
+    }
+
     private static boolean selectionEnabled = false;
     private static boolean selectionUseAnyClick = false;
     private static BlockPos selectionPos1;
@@ -48,6 +66,12 @@ public final class DebugDrawManager {
     private static SelectionShape selectionShape = SelectionShape.BOX;
     private static String selectionWandItemId = DEFAULT_WAND_ITEM_ID;
     private static Item selectionWandItem;
+    private static int selectionPos1Color = DEFAULT_SELECTION_POS1_COLOR;
+    private static int selectionPos2Color = DEFAULT_SELECTION_POS2_COLOR;
+    private static int selectionConnectorColor = DEFAULT_SELECTION_CONNECTOR_COLOR;
+    private static int selectionBoxColor = DEFAULT_SELECTION_BOX_COLOR;
+    private static int selectionGridColor = DEFAULT_SELECTION_GRID_COLOR;
+    private static int selectionShapeColor = DEFAULT_SELECTION_SHAPE_COLOR;
 
     public record SelectionBounds(BlockPos min, BlockPos max) {
         public int sizeX() {
@@ -212,6 +236,38 @@ public final class DebugDrawManager {
         selectionShape = shape == null ? SelectionShape.BOX : shape;
     }
 
+    public static synchronized int getSelectionColor(SelectionColorSlot slot) {
+        return switch (slot) {
+            case POS1 -> selectionPos1Color;
+            case POS2 -> selectionPos2Color;
+            case CONNECTOR -> selectionConnectorColor;
+            case BOX -> selectionBoxColor;
+            case GRID -> selectionGridColor;
+            case SHAPE -> selectionShapeColor;
+        };
+    }
+
+    public static synchronized void setSelectionColor(SelectionColorSlot slot, int rgb) {
+        int color = rgb & 0xFFFFFF;
+        switch (slot) {
+            case POS1 -> selectionPos1Color = color;
+            case POS2 -> selectionPos2Color = color;
+            case CONNECTOR -> selectionConnectorColor = color;
+            case BOX -> selectionBoxColor = color;
+            case GRID -> selectionGridColor = color;
+            case SHAPE -> selectionShapeColor = color;
+        }
+    }
+
+    public static synchronized void resetSelectionColors() {
+        selectionPos1Color = DEFAULT_SELECTION_POS1_COLOR;
+        selectionPos2Color = DEFAULT_SELECTION_POS2_COLOR;
+        selectionConnectorColor = DEFAULT_SELECTION_CONNECTOR_COLOR;
+        selectionBoxColor = DEFAULT_SELECTION_BOX_COLOR;
+        selectionGridColor = DEFAULT_SELECTION_GRID_COLOR;
+        selectionShapeColor = DEFAULT_SELECTION_SHAPE_COLOR;
+    }
+
     public static synchronized void clearSelectionPositions() {
         selectionPos1 = null;
         selectionPos2 = null;
@@ -342,6 +398,12 @@ public final class DebugDrawManager {
         json.addProperty("useAnyClick", selectionUseAnyClick);
         json.addProperty("wandItem", selectionWandItemId);
         json.addProperty("shape", selectionShape.name());
+        json.addProperty("pos1Color", selectionPos1Color);
+        json.addProperty("pos2Color", selectionPos2Color);
+        json.addProperty("connectorColor", selectionConnectorColor);
+        json.addProperty("boxColor", selectionBoxColor);
+        json.addProperty("gridColor", selectionGridColor);
+        json.addProperty("shapeColor", selectionShapeColor);
         if (selectionPos1 != null) {
             json.addProperty("x1", selectionPos1.getX());
             json.addProperty("y1", selectionPos1.getY());
@@ -386,6 +448,12 @@ public final class DebugDrawManager {
                     selectionShape = SelectionShape.BOX;
                 }
             }
+            selectionPos1Color = readColor(json, "pos1Color", DEFAULT_SELECTION_POS1_COLOR);
+            selectionPos2Color = readColor(json, "pos2Color", DEFAULT_SELECTION_POS2_COLOR);
+            selectionConnectorColor = readColor(json, "connectorColor", DEFAULT_SELECTION_CONNECTOR_COLOR);
+            selectionBoxColor = readColor(json, "boxColor", DEFAULT_SELECTION_BOX_COLOR);
+            selectionGridColor = readColor(json, "gridColor", DEFAULT_SELECTION_GRID_COLOR);
+            selectionShapeColor = readColor(json, "shapeColor", DEFAULT_SELECTION_SHAPE_COLOR);
             selectionPos1 = readPos(json, "x1", "y1", "z1");
             selectionPos2 = readPos(json, "x2", "y2", "z2");
             return true;
@@ -782,20 +850,20 @@ public final class DebugDrawManager {
             return;
         }
 
-        drawSelectionAnchor(visible, through, selectionPos1, cameraX, cameraY, cameraZ, 0.35f, 1.0f, 0.35f);
+        drawSelectionAnchor(visible, through, selectionPos1, cameraX, cameraY, cameraZ, selectionPos1Color);
         if (selectionPos2 == null) {
             return;
         }
 
-        drawSelectionAnchor(visible, through, selectionPos2, cameraX, cameraY, cameraZ, 1.0f, 0.35f, 0.35f);
-        drawSelectionConnector(visible, through, selectionPos1, selectionPos2, cameraX, cameraY, cameraZ);
+        drawSelectionAnchor(visible, through, selectionPos2, cameraX, cameraY, cameraZ, selectionPos2Color);
+        drawSelectionConnector(visible, through, selectionPos1, selectionPos2, cameraX, cameraY, cameraZ, selectionConnectorColor);
 
         SelectionBounds bounds = getSelectionBounds();
         if (bounds == null) {
             return;
         }
 
-        drawSelectionBox(visible, through, bounds, cameraX, cameraY, cameraZ, 1.0f, 0.95f, 0.30f, 1.0f, 0.40f);
+        drawSelectionBox(visible, through, bounds, cameraX, cameraY, cameraZ, selectionBoxColor, 1.0f, 0.40f);
 
         switch (selectionShape) {
             case CIRCLE -> {
@@ -805,7 +873,7 @@ public final class DebugDrawManager {
                 double radius = Math.max(0.5, Math.min(bounds.sizeX(), bounds.sizeZ()) * 0.5);
                 double baseY = bounds.min.getY();
                 double height = bounds.sizeY();
-                CylinderShape cylinder = new CylinderShape(-1, Long.MAX_VALUE, 0x33FFAA,
+                CylinderShape cylinder = new CylinderShape(-1, Long.MAX_VALUE, selectionShapeColor,
                         bounds.centerX(), baseY, bounds.centerZ(),
                         radius, height, 36);
                 drawCylinder(visible, cylinder, cameraX, cameraY, cameraZ, 0.95f);
@@ -813,14 +881,15 @@ public final class DebugDrawManager {
             }
             case SPHERE -> {
                 double radius = Math.max(0.5, Math.min(bounds.sizeX(), Math.min(bounds.sizeY(), bounds.sizeZ())) * 0.5);
-                SphereShape sphere = new SphereShape(-1, Long.MAX_VALUE, 0x33FFAA,
+                SphereShape sphere = new SphereShape(-1, Long.MAX_VALUE, selectionShapeColor,
                         bounds.centerX(), bounds.centerY(), bounds.centerZ(),
                         radius, 32);
                 drawSphere(visible, sphere, cameraX, cameraY, cameraZ, 0.95f);
                 drawSphere(through, sphere, cameraX, cameraY, cameraZ, 0.35f);
             }
             case BOX -> {
-                drawSelectionBox(visible, through, bounds, cameraX, cameraY, cameraZ, 0.35f, 1.0f, 0.35f, 0.98f, 0.45f);
+                drawSelectionBox(visible, through, bounds, cameraX, cameraY, cameraZ, selectionShapeColor, 0.98f, 0.45f);
+                drawSelectionGrid(visible, through, bounds, cameraX, cameraY, cameraZ, selectionGridColor, 0.72f, 0.34f);
             }
         }
     }
@@ -831,9 +900,7 @@ public final class DebugDrawManager {
                                             double cameraX,
                                             double cameraY,
                                             double cameraZ,
-                                            float r,
-                                            float g,
-                                            float b) {
+                                            int rgb) {
         double inset = -0.02;
         double x1 = pos.getX() + inset - cameraX;
         double y1 = pos.getY() + inset - cameraY;
@@ -841,8 +908,12 @@ public final class DebugDrawManager {
         double x2 = pos.getX() + 1.0 - inset - cameraX;
         double y2 = pos.getY() + 1.0 - inset - cameraY;
         double z2 = pos.getZ() + 1.0 - inset - cameraZ;
-        DrawUtil.drawOutlinedBoxSafe(visible, x1, y1, z1, x2, y2, z2, r, g, b, 1.0f, 2.5f);
-        DrawUtil.drawOutlinedBoxSafe(through, x1, y1, z1, x2, y2, z2, r, g, b, 0.45f, 2.5f);
+        float[] visibleColor = toColor(rgb, 1.0f);
+        float[] throughColor = toColor(rgb, 0.45f);
+        DrawUtil.drawOutlinedBoxSafe(visible, x1, y1, z1, x2, y2, z2,
+                visibleColor[0], visibleColor[1], visibleColor[2], visibleColor[3], 2.5f);
+        DrawUtil.drawOutlinedBoxSafe(through, x1, y1, z1, x2, y2, z2,
+                throughColor[0], throughColor[1], throughColor[2], throughColor[3], 2.5f);
     }
 
     private static void drawSelectionConnector(VertexConsumer visible,
@@ -851,15 +922,20 @@ public final class DebugDrawManager {
                                                BlockPos pos2,
                                                double cameraX,
                                                double cameraY,
-                                               double cameraZ) {
+                                               double cameraZ,
+                                               int rgb) {
         double x1 = pos1.getX() + 0.5 - cameraX;
         double y1 = pos1.getY() + 0.5 - cameraY;
         double z1 = pos1.getZ() + 0.5 - cameraZ;
         double x2 = pos2.getX() + 0.5 - cameraX;
         double y2 = pos2.getY() + 0.5 - cameraY;
         double z2 = pos2.getZ() + 0.5 - cameraZ;
-        DrawUtil.drawLineSafe(visible, x1, y1, z1, x2, y2, z2, 1.0f, 1.0f, 1.0f, 0.9f, 1.75f);
-        DrawUtil.drawLineSafe(through, x1, y1, z1, x2, y2, z2, 1.0f, 1.0f, 1.0f, 0.35f, 1.75f);
+        float[] visibleColor = toColor(rgb, 0.9f);
+        float[] throughColor = toColor(rgb, 0.35f);
+        DrawUtil.drawLineSafe(visible, x1, y1, z1, x2, y2, z2,
+                visibleColor[0], visibleColor[1], visibleColor[2], visibleColor[3], 1.75f);
+        DrawUtil.drawLineSafe(through, x1, y1, z1, x2, y2, z2,
+                throughColor[0], throughColor[1], throughColor[2], throughColor[3], 1.75f);
     }
 
     private static void drawSelectionBox(VertexConsumer visible,
@@ -868,19 +944,115 @@ public final class DebugDrawManager {
                                          double cameraX,
                                          double cameraY,
                                          double cameraZ,
-                                         float r,
-                                         float g,
-                                         float b,
+                                         int rgb,
                                          float visibleAlpha,
                                          float throughAlpha) {
+        float[] visibleColor = toColor(rgb, visibleAlpha);
+        float[] throughColor = toColor(rgb, throughAlpha);
         DrawUtil.drawOutlinedBoxSafe(visible,
                 bounds.min.getX() - cameraX, bounds.min.getY() - cameraY, bounds.min.getZ() - cameraZ,
                 bounds.max.getX() + 1.0 - cameraX, bounds.max.getY() + 1.0 - cameraY, bounds.max.getZ() + 1.0 - cameraZ,
-                r, g, b, visibleAlpha, 2.25f);
+                visibleColor[0], visibleColor[1], visibleColor[2], visibleColor[3], 2.25f);
         DrawUtil.drawOutlinedBoxSafe(through,
                 bounds.min.getX() - cameraX, bounds.min.getY() - cameraY, bounds.min.getZ() - cameraZ,
                 bounds.max.getX() + 1.0 - cameraX, bounds.max.getY() + 1.0 - cameraY, bounds.max.getZ() + 1.0 - cameraZ,
-                r, g, b, throughAlpha, 2.25f);
+                throughColor[0], throughColor[1], throughColor[2], throughColor[3], 2.25f);
+    }
+
+    private static void drawSelectionGrid(VertexConsumer visible,
+                                          VertexConsumer through,
+                                          SelectionBounds bounds,
+                                          double cameraX,
+                                          double cameraY,
+                                          double cameraZ,
+                                          int rgb,
+                                          float visibleAlpha,
+                                          float throughAlpha) {
+        drawSelectionGridFaces(visible, bounds, cameraX, cameraY, cameraZ, rgb, visibleAlpha);
+        drawSelectionGridFaces(through, bounds, cameraX, cameraY, cameraZ, rgb, throughAlpha);
+    }
+
+    private static void drawSelectionGridFaces(VertexConsumer buffer,
+                                               SelectionBounds bounds,
+                                               double cameraX,
+                                               double cameraY,
+                                               double cameraZ,
+                                               int rgb,
+                                               float alpha) {
+        int stepX = selectionGridStep(bounds.sizeX());
+        int stepY = selectionGridStep(bounds.sizeY());
+        int stepZ = selectionGridStep(bounds.sizeZ());
+
+        double minX = bounds.min.getX();
+        double minY = bounds.min.getY();
+        double minZ = bounds.min.getZ();
+        double maxX = bounds.max.getX() + 1.0;
+        double maxY = bounds.max.getY() + 1.0;
+        double maxZ = bounds.max.getZ() + 1.0;
+
+        double leftX = minX - SELECTION_GRID_FACE_OFFSET;
+        double rightX = maxX + SELECTION_GRID_FACE_OFFSET;
+        double bottomY = minY - SELECTION_GRID_FACE_OFFSET;
+        double topY = maxY + SELECTION_GRID_FACE_OFFSET;
+        double frontZ = minZ - SELECTION_GRID_FACE_OFFSET;
+        double backZ = maxZ + SELECTION_GRID_FACE_OFFSET;
+
+        for (int z = bounds.min.getZ() + stepZ; z < bounds.max.getZ() + 1; z += stepZ) {
+            double lineZ = z - cameraZ;
+            drawGridLine(buffer, leftX - cameraX, minY - cameraY, lineZ, leftX - cameraX, maxY - cameraY, lineZ, rgb, alpha);
+            drawGridLine(buffer, rightX - cameraX, minY - cameraY, lineZ, rightX - cameraX, maxY - cameraY, lineZ, rgb, alpha);
+        }
+
+        for (int y = bounds.min.getY() + stepY; y < bounds.max.getY() + 1; y += stepY) {
+            double lineY = y - cameraY;
+            drawGridLine(buffer, leftX - cameraX, lineY, minZ - cameraZ, leftX - cameraX, lineY, maxZ - cameraZ, rgb, alpha);
+            drawGridLine(buffer, rightX - cameraX, lineY, minZ - cameraZ, rightX - cameraX, lineY, maxZ - cameraZ, rgb, alpha);
+        }
+
+        for (int x = bounds.min.getX() + stepX; x < bounds.max.getX() + 1; x += stepX) {
+            double lineX = x - cameraX;
+            drawGridLine(buffer, lineX, bottomY - cameraY, minZ - cameraZ, lineX, bottomY - cameraY, maxZ - cameraZ, rgb, alpha);
+            drawGridLine(buffer, lineX, topY - cameraY, minZ - cameraZ, lineX, topY - cameraY, maxZ - cameraZ, rgb, alpha);
+        }
+
+        for (int z = bounds.min.getZ() + stepZ; z < bounds.max.getZ() + 1; z += stepZ) {
+            double lineZ = z - cameraZ;
+            drawGridLine(buffer, minX - cameraX, bottomY - cameraY, lineZ, maxX - cameraX, bottomY - cameraY, lineZ, rgb, alpha);
+            drawGridLine(buffer, minX - cameraX, topY - cameraY, lineZ, maxX - cameraX, topY - cameraY, lineZ, rgb, alpha);
+        }
+
+        for (int x = bounds.min.getX() + stepX; x < bounds.max.getX() + 1; x += stepX) {
+            double lineX = x - cameraX;
+            drawGridLine(buffer, lineX, minY - cameraY, frontZ - cameraZ, lineX, maxY - cameraY, frontZ - cameraZ, rgb, alpha);
+            drawGridLine(buffer, lineX, minY - cameraY, backZ - cameraZ, lineX, maxY - cameraY, backZ - cameraZ, rgb, alpha);
+        }
+
+        for (int y = bounds.min.getY() + stepY; y < bounds.max.getY() + 1; y += stepY) {
+            double lineY = y - cameraY;
+            drawGridLine(buffer, minX - cameraX, lineY, frontZ - cameraZ, maxX - cameraX, lineY, frontZ - cameraZ, rgb, alpha);
+            drawGridLine(buffer, minX - cameraX, lineY, backZ - cameraZ, maxX - cameraX, lineY, backZ - cameraZ, rgb, alpha);
+        }
+    }
+
+    private static int selectionGridStep(int size) {
+        if (size <= 1) {
+            return Integer.MAX_VALUE;
+        }
+        return Math.max(1, Math.ceilDiv(size - 1, MAX_SELECTION_GRID_DIVISIONS));
+    }
+
+    private static void drawGridLine(VertexConsumer buffer,
+                                     double x1,
+                                     double y1,
+                                     double z1,
+                                     double x2,
+                                     double y2,
+                                     double z2,
+                                     int rgb,
+                                     float alpha) {
+        float[] color = toColor(rgb, alpha);
+        DrawUtil.drawLineSafe(buffer, x1, y1, z1, x2, y2, z2,
+                color[0], color[1], color[2], color[3], SELECTION_GRID_LINE_WIDTH);
     }
 
     private static void renderSelectionCirclePreview(VertexConsumer visible,
@@ -895,8 +1067,8 @@ public final class DebugDrawManager {
             case Y -> Math.max(0.5, Math.min(bounds.sizeX(), bounds.sizeZ()) * 0.5);
             case Z -> Math.max(0.5, Math.min(bounds.sizeX(), bounds.sizeY()) * 0.5);
         };
-        drawOrientedCircle(visible, bounds.centerX(), bounds.centerY(), bounds.centerZ(), radius, normalAxis, cameraX, cameraY, cameraZ, 0.20f, 1.0f, 0.67f, 0.95f);
-        drawOrientedCircle(through, bounds.centerX(), bounds.centerY(), bounds.centerZ(), radius, normalAxis, cameraX, cameraY, cameraZ, 0.20f, 1.0f, 0.67f, 0.35f);
+        drawOrientedCircle(visible, bounds.centerX(), bounds.centerY(), bounds.centerZ(), radius, normalAxis, cameraX, cameraY, cameraZ, selectionShapeColor, 0.95f);
+        drawOrientedCircle(through, bounds.centerX(), bounds.centerY(), bounds.centerZ(), radius, normalAxis, cameraX, cameraY, cameraZ, selectionShapeColor, 0.35f);
     }
 
     private static Direction.Axis smallestAxis(SelectionBounds bounds) {
@@ -921,10 +1093,9 @@ public final class DebugDrawManager {
                                            double cameraX,
                                            double cameraY,
                                            double cameraZ,
-                                           float r,
-                                           float g,
-                                           float b,
+                                           int rgb,
                                            float a) {
+        float[] color = toColor(rgb, a);
         int segments = 48;
         for (int i = 0; i < segments; i++) {
             double a0 = (Math.PI * 2.0 * i) / segments;
@@ -935,7 +1106,7 @@ public final class DebugDrawManager {
             DrawUtil.drawLineSafe(buffer,
                     p0.x - cameraX, p0.y - cameraY, p0.z - cameraZ,
                     p1.x - cameraX, p1.y - cameraY, p1.z - cameraZ,
-                    r, g, b, a, 1.75f);
+                    color[0], color[1], color[2], color[3], 1.75f);
         }
     }
 
@@ -972,6 +1143,17 @@ public final class DebugDrawManager {
             return null;
         }
         return new BlockPos(json.get(x).getAsInt(), json.get(y).getAsInt(), json.get(z).getAsInt());
+    }
+
+    private static int readColor(JsonObject json, String key, int fallback) {
+        if (!json.has(key)) {
+            return fallback;
+        }
+        try {
+            return json.get(key).getAsInt() & 0xFFFFFF;
+        } catch (Exception ignored) {
+            return fallback;
+        }
     }
 
     private static boolean isWandHeld(ItemStack stack) {

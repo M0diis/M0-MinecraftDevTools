@@ -48,6 +48,62 @@ public record WorldEditSelection(BlockPos min, BlockPos max) {
         return new WorldEditSelection(this.min.add(dx, dy, dz), this.max.add(dx, dy, dz));
     }
 
+    public WorldEditSelection shift(Direction direction, int amount) {
+        return shift(
+                direction.getOffsetX() * amount,
+                direction.getOffsetY() * amount,
+                direction.getOffsetZ() * amount
+        );
+    }
+
+    public WorldEditSelection expand(Direction direction, int amount) {
+        return expand(direction, amount, 0);
+    }
+
+    public WorldEditSelection expand(Direction direction, int amount, int reverseAmount) {
+        return moveSide(direction, amount).moveSide(direction.getOpposite(), reverseAmount);
+    }
+
+    public WorldEditSelection contract(Direction direction, int amount) {
+        return contract(direction, amount, 0);
+    }
+
+    public WorldEditSelection contract(Direction direction, int amount, int reverseAmount) {
+        return moveSide(direction, -amount).moveSide(direction.getOpposite(), -reverseAmount);
+    }
+
+    public WorldEditSelection outset(int amount, boolean onlyHorizontal, boolean onlyVertical) {
+        WorldEditSelection selection = this;
+        if (!onlyHorizontal) {
+            selection = selection.moveSide(Direction.UP, amount).moveSide(Direction.DOWN, amount);
+        }
+        if (!onlyVertical) {
+            selection = selection.moveSide(Direction.EAST, amount)
+                    .moveSide(Direction.WEST, amount)
+                    .moveSide(Direction.SOUTH, amount)
+                    .moveSide(Direction.NORTH, amount);
+        }
+        return selection;
+    }
+
+    public WorldEditSelection inset(int amount, boolean onlyHorizontal, boolean onlyVertical) {
+        WorldEditSelection selection = this;
+        if (!onlyHorizontal) {
+            selection = selection.moveSide(Direction.UP, -amount).moveSide(Direction.DOWN, -amount);
+        }
+        if (!onlyVertical) {
+            selection = selection.moveSide(Direction.EAST, -amount)
+                    .moveSide(Direction.WEST, -amount)
+                    .moveSide(Direction.SOUTH, -amount)
+                    .moveSide(Direction.NORTH, -amount);
+        }
+        return selection;
+    }
+
+    public WorldEditSelection verticalColumn(int minY, int maxY) {
+        return checkedSelection(this.min.getX(), minY, this.min.getZ(), this.max.getX(), maxY, this.max.getZ());
+    }
+
     public WorldEditSelection intersection(WorldEditSelection other) {
         if (other == null) {
             return null;
@@ -187,6 +243,39 @@ public record WorldEditSelection(BlockPos min, BlockPos max) {
             case Z -> Comparator.comparingInt(selection -> descending ? selection.max.getZ() : selection.min.getZ());
         };
         return descending ? comparator.reversed() : comparator;
+    }
+
+    private WorldEditSelection moveSide(Direction direction, int amount) {
+        int minX = this.min.getX();
+        int minY = this.min.getY();
+        int minZ = this.min.getZ();
+        int maxX = this.max.getX();
+        int maxY = this.max.getY();
+        int maxZ = this.max.getZ();
+
+        switch (direction) {
+            case EAST -> maxX += amount;
+            case WEST -> minX -= amount;
+            case UP -> maxY += amount;
+            case DOWN -> minY -= amount;
+            case SOUTH -> maxZ += amount;
+            case NORTH -> minZ -= amount;
+        }
+
+        return checkedSelection(minX, minY, minZ, maxX, maxY, maxZ);
+    }
+
+    private static WorldEditSelection checkedSelection(int minX, int minY, int minZ, int maxX, int maxY, int maxZ) {
+        if (minX > maxX) {
+            throw new IllegalArgumentException("Selection would be reduced past zero on the X axis.");
+        }
+        if (minY > maxY) {
+            throw new IllegalArgumentException("Selection would be reduced past zero on the Y axis.");
+        }
+        if (minZ > maxZ) {
+            throw new IllegalArgumentException("Selection would be reduced past zero on the Z axis.");
+        }
+        return new WorldEditSelection(new BlockPos(minX, minY, minZ), new BlockPos(maxX, maxY, maxZ));
     }
 
     private static void addIfValid(List<WorldEditSelection> out,

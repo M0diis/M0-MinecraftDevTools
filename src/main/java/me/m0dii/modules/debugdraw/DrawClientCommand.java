@@ -62,6 +62,7 @@ public final class DrawClientCommand {
         send(context, "/draw select mode <wand|any>");
         send(context, "/draw select wand [item_id|hand|default]");
         send(context, "/draw select shape [box|circle|cylinder|sphere]");
+        send(context, "/draw select color [slot] [color] | /draw select color reset");
         send(context, "/draw select pos1|pos2 [look|here|<x> <y> <z>]");
         send(context, "/draw select set <x1> <y1> <z1> <x2> <y2> <z2>");
         send(context, "/draw select add [color] [seconds]");
@@ -565,6 +566,7 @@ public final class DrawClientCommand {
                 send(context, "Selection shape set to " + shape.name().toLowerCase(Locale.ROOT) + ".");
                 yield 1;
             }
+            case "color", "colors" -> handleSelectionColor(context, t);
             case "add" -> {
                 try {
                     int color = t.length >= 3 ? parseColorToken(t[2]) : DEFAULT_COLOR;
@@ -611,6 +613,73 @@ public final class DrawClientCommand {
             send(context, " - " + line);
         }
         return 1;
+    }
+
+    private static int handleSelectionColor(CommandContext<FabricClientCommandSource> context, String[] t) {
+        if (t.length < 3) {
+            sendSelectionColors(context);
+            send(context, "Usage: /draw select color <pos1|pos2|connector|box|grid|shape|all> <color>");
+            send(context, "Usage: /draw select color reset");
+            return 1;
+        }
+
+        String token = t[2].toLowerCase(Locale.ROOT);
+        if ("reset".equals(token) || "default".equals(token) || "defaults".equals(token)) {
+            DebugDrawManager.resetSelectionColors();
+            send(context, "Reset selection colors to defaults.");
+            sendSelectionColors(context);
+            return 1;
+        }
+
+        if (t.length < 4) {
+            DebugDrawManager.SelectionColorSlot slot = parseSelectionColorSlot(token);
+            if (slot == null && !"all".equals(token)) {
+                send(context, "Unknown selection color slot: " + t[2]);
+                return 0;
+            }
+            if ("all".equals(token)) {
+                sendSelectionColors(context);
+            } else {
+                send(context, "Selection color " + token + "=" + DebugDrawManager.formatColor(DebugDrawManager.getSelectionColor(slot)));
+            }
+            return 1;
+        }
+
+        int color;
+        try {
+            color = parseColorToken(t[3]);
+        } catch (Exception e) {
+            send(context, "Invalid color: " + e.getMessage());
+            return 0;
+        }
+
+        if ("all".equals(token)) {
+            for (DebugDrawManager.SelectionColorSlot slot : DebugDrawManager.SelectionColorSlot.values()) {
+                DebugDrawManager.setSelectionColor(slot, color);
+            }
+            send(context, "Set all selection colors to " + DebugDrawManager.formatColor(color) + ".");
+            return 1;
+        }
+
+        DebugDrawManager.SelectionColorSlot slot = parseSelectionColorSlot(token);
+        if (slot == null) {
+            send(context, "Unknown selection color slot: " + t[2]);
+            return 0;
+        }
+
+        DebugDrawManager.setSelectionColor(slot, color);
+        send(context, "Set selection color " + token + "=" + DebugDrawManager.formatColor(color) + ".");
+        return 1;
+    }
+
+    private static void sendSelectionColors(CommandContext<FabricClientCommandSource> context) {
+        send(context, "Selection colors:"
+                + " pos1=" + DebugDrawManager.formatColor(DebugDrawManager.getSelectionColor(DebugDrawManager.SelectionColorSlot.POS1))
+                + " pos2=" + DebugDrawManager.formatColor(DebugDrawManager.getSelectionColor(DebugDrawManager.SelectionColorSlot.POS2))
+                + " connector=" + DebugDrawManager.formatColor(DebugDrawManager.getSelectionColor(DebugDrawManager.SelectionColorSlot.CONNECTOR))
+                + " box=" + DebugDrawManager.formatColor(DebugDrawManager.getSelectionColor(DebugDrawManager.SelectionColorSlot.BOX))
+                + " grid=" + DebugDrawManager.formatColor(DebugDrawManager.getSelectionColor(DebugDrawManager.SelectionColorSlot.GRID))
+                + " shape=" + DebugDrawManager.formatColor(DebugDrawManager.getSelectionColor(DebugDrawManager.SelectionColorSlot.SHAPE)));
     }
 
     private static int remove(CommandContext<FabricClientCommandSource> context, String[] t) {
@@ -793,7 +862,7 @@ public final class DrawClientCommand {
 
         if ("select".equals(sub) || "sel".equals(sub)) {
             if (index == 1) {
-                return suggestToken(builder, prefix, List.of("on", "off", "toggle", "status", "clear", "mode", "wand", "shape", "pos1", "pos2", "set", "add", "save", "load"));
+                return suggestToken(builder, prefix, List.of("on", "off", "toggle", "status", "clear", "mode", "wand", "shape", "color", "pos1", "pos2", "set", "add", "save", "load"));
             }
 
             if (tokens.length >= 2) {
@@ -802,6 +871,12 @@ public final class DrawClientCommand {
                     return suggestToken(builder, prefix, List.of("box", "circle", "cylinder", "sphere"));
                 } else if ("mode".equals(selectSub) && index == 2) {
                     return suggestToken(builder, prefix, List.of("wand", "any"));
+                } else if ("color".equals(selectSub) || "colors".equals(selectSub)) {
+                    if (index == 2) {
+                        return suggestToken(builder, prefix, List.of("pos1", "pos2", "connector", "box", "grid", "shape", "all", "reset"));
+                    } else if (index == 3 && !"reset".equals(tokens[2].toLowerCase(Locale.ROOT))) {
+                        return suggestToken(builder, prefix, colorSuggestions());
+                    }
                 } else if ("wand".equals(selectSub) && index == 2) {
                     return suggestToken(builder, prefix, List.of("hand", "default", "minecraft:wooden_axe", "minecraft:blaze_rod", "minecraft:stick"));
                 } else if (List.of("left", "right", "pos1", "pos2", "p1", "p2").contains(selectSub)) {
@@ -875,6 +950,18 @@ public final class DrawClientCommand {
             case "circle", "disk" -> DebugDrawManager.SelectionShape.CIRCLE;
             case "cylinder" -> DebugDrawManager.SelectionShape.CYLINDER;
             case "sphere" -> DebugDrawManager.SelectionShape.SPHERE;
+            default -> null;
+        };
+    }
+
+    private static DebugDrawManager.SelectionColorSlot parseSelectionColorSlot(String token) {
+        return switch (token.toLowerCase(Locale.ROOT)) {
+            case "pos1", "p1", "primary" -> DebugDrawManager.SelectionColorSlot.POS1;
+            case "pos2", "p2", "secondary" -> DebugDrawManager.SelectionColorSlot.POS2;
+            case "connector", "line", "link" -> DebugDrawManager.SelectionColorSlot.CONNECTOR;
+            case "box", "bounds", "outline" -> DebugDrawManager.SelectionColorSlot.BOX;
+            case "grid", "subdivides", "subdivisions" -> DebugDrawManager.SelectionColorSlot.GRID;
+            case "shape", "preview" -> DebugDrawManager.SelectionColorSlot.SHAPE;
             default -> null;
         };
     }
