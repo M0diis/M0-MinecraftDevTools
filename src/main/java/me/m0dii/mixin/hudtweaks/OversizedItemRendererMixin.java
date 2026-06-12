@@ -10,6 +10,9 @@ import org.spongepowered.asm.mixin.injection.ModifyVariable;
 public abstract class OversizedItemRendererMixin {
     @ModifyVariable(method = "getYOffset", at = @At("HEAD"), ordinal = 1, argsOnly = true, require = 0)
     private int m0devHudTweaksOversizedYOffset(int original) {
+        if (!HudTweaksRenderState.compensateCoordinates()) {
+            return original;
+        }
         float scale = Math.max(0.01f, HudTweaksRenderState.currentScale());
         return Math.round(original / scale);
     }

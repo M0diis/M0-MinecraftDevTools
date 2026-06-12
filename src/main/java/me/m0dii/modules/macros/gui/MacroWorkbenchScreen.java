@@ -6,6 +6,8 @@ import me.m0dii.gui.local.FormPanels;
 import me.m0dii.gui.local.GuiTextEditingUtils;
 import me.m0dii.gui.local.UiFlexLayout;
 import me.m0dii.gui.local.UiRect;
+import me.m0dii.mixin.InGameHudAccessor;
+import me.m0dii.mixin.PlayerListHudAccessor;
 import me.m0dii.modules.chat.SecondaryChatSettings;
 import me.m0dii.modules.commandhistory.CommandHistoryManager;
 import me.m0dii.modules.entityradar.EntityRadarModule;
@@ -38,6 +40,7 @@ import net.minecraft.client.gui.widget.ClickableWidget;
 import net.minecraft.client.gui.widget.TextFieldWidget;
 import net.minecraft.client.input.CharInput;
 import net.minecraft.client.input.KeyInput;
+import net.minecraft.client.network.PlayerListEntry;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
 import net.minecraft.entity.Entity;
@@ -47,6 +50,8 @@ import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.registry.Registries;
+import net.minecraft.scoreboard.*;
+import net.minecraft.scoreboard.number.StyledNumberFormat;
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
 import org.lwjgl.glfw.GLFW;
@@ -506,6 +511,10 @@ public class MacroWorkbenchScreen extends Screen {
 
         this.borderToggle = ButtonWidget.builder(Text.literal("Border: OFF"), b -> {
             if (isVanillaCanvasMode()) {
+                if (selected != null && isVanillaHudProxy(selected)) {
+                    toggleVanillaProxyDisplay(selected);
+                    syncCanvasFields();
+                }
                 return;
             }
             if (selected != null) {
@@ -2362,6 +2371,7 @@ public class MacroWorkbenchScreen extends Screen {
 
         if (selectedElementIds.size() <= 1 || dragPrimaryElementId == null || !dragStartScreenPositions.containsKey(dragPrimaryElementId)) {
             setElementScreenPosition(selected, screenX, screenY);
+            syncVanillaProxyConfigFromProxy(selected);
             refreshVanillaProxyPreview(selected);
             return;
         }
@@ -2392,6 +2402,7 @@ public class MacroWorkbenchScreen extends Screen {
                 continue;
             }
             setElementScreenPosition(e, start[0] + boundedDx, start[1] + boundedDy);
+            syncVanillaProxyConfigFromProxy(e);
             refreshVanillaProxyPreview(e);
         }
     }
@@ -2488,6 +2499,10 @@ public class MacroWorkbenchScreen extends Screen {
     }
 
     private void drawCanvasElement(DrawContext context, MacroHudDataHandler.HudElement element) {
+        if (isVanillaHudProxy(element)) {
+            refreshVanillaProxyPreview(element);
+        }
+
         int x1 = resolveElementX(element);
         int y1 = resolveElementY(element);
         int x2 = x1 + element.width;
@@ -2788,9 +2803,11 @@ public class MacroWorkbenchScreen extends Screen {
         }
         float scale = vanillaScaleForProxy(type, element);
         HudTweaksSettings.ElementConfig config = currentVanillaHudConfig(type, scale, element);
+        int baseWidth = vanillaBaseWidth(type);
+        int baseHeight = vanillaBaseHeight(type);
         VanillaHudDescriptor descriptor = vanillaHudDescriptor(type);
-        float sx = Math.max(0.01f, element.width / (float) Math.max(1, descriptor.baseWidth()));
-        float sy = Math.max(0.01f, element.height / (float) Math.max(1, descriptor.baseHeight()));
+        float sx = Math.max(0.01f, element.width / (float) Math.max(1, baseWidth));
+        float sy = Math.max(0.01f, element.height / (float) Math.max(1, baseHeight));
 
         context.getMatrices().pushMatrix();
         context.getMatrices().translate(x1, y1);
@@ -2801,8 +2818,8 @@ public class MacroWorkbenchScreen extends Screen {
             case CROSSHAIR -> drawActualCrosshairPreview(context);
             case DEBUG_SCREEN -> drawActualDebugScreenPreview(context);
             case HOTBAR_GROUP -> drawActualHotbarGroupPreview(context);
-            case PLAYER_LIST -> drawActualPlayerListPreview(context, descriptor.baseWidth(), descriptor.baseHeight());
-            case SCOREBOARD -> drawActualScoreboardPreview(context, descriptor.baseWidth(), descriptor.baseHeight());
+            case PLAYER_LIST -> drawActualPlayerListPreview(context, baseWidth, baseHeight);
+            case SCOREBOARD -> drawActualScoreboardPreview(context, baseWidth, baseHeight);
             case SCREEN_TITLE -> drawActualScreenTitlePreview(context, descriptor.baseWidth());
             case STATUS_EFFECT -> drawActualStatusEffectPreview(context, descriptor.baseWidth());
             case SUBTITLES -> drawActualSubtitlesPreview(context, descriptor.baseWidth(), descriptor.baseHeight());
@@ -2911,6 +2928,18 @@ public class MacroWorkbenchScreen extends Screen {
     }
 
     private void drawActualPlayerListPreview(DrawContext context, int width, int height) {
+        if (this.client != null && this.client.world != null && this.client.inGameHud != null) {
+            Scoreboard scoreboard = this.client.world.getScoreboard();
+            ScoreboardObjective objective = scoreboard == null ? null : scoreboard.getObjectiveForSlot(ScoreboardDisplaySlot.LIST);
+            if (scoreboard != null) {
+                VanillaPlayerListMetrics metrics = currentPlayerListMetrics();
+                context.getMatrices().pushMatrix();
+                context.getMatrices().translate(-metrics.left(), -metrics.top());
+                this.client.inGameHud.getPlayerListHud().render(context, metrics.renderWidth(), scoreboard, objective);
+                context.getMatrices().popMatrix();
+                return;
+            }
+        }
         int panelColor = 0xA0202020;
         context.fill(20, 0, width - 20, height, panelColor);
         String[] rows = {
@@ -2930,16 +2959,18 @@ public class MacroWorkbenchScreen extends Screen {
     }
 
     private void drawActualScoreboardPreview(DrawContext context, int width, int height) {
-        context.fill(0, 0, width, height, 0x70101010);
-        context.fill(0, 0, width, 10, 0x90404040);
-        String title = "Objectives";
-        context.drawTextWithShadow(this.textRenderer, title, Math.max(0, (width - this.textRenderer.getWidth(title)) / 2), 1, 0xFFFFFFFF);
-        String[] rows = {"Kills: 12", "Beds: 3", "Ping: 42", "Coins: 256"};
-        for (int i = 0; i < rows.length; i++) {
-            int yy = 14 + i * 10;
-            context.fill(2, yy - 1, width - 2, yy + 8, 0x40202020);
-            context.drawTextWithShadow(this.textRenderer, rows[i], 4, yy, 0xFFEAEAEA);
+        if (this.client != null && this.client.inGameHud != null) {
+            ScoreboardObjective objective = effectiveSidebarObjective();
+            if (objective != null) {
+                VanillaSidebarMetrics metrics = currentSidebarMetrics();
+                context.getMatrices().pushMatrix();
+                context.getMatrices().translate(-metrics.left(), -metrics.top());
+                ((InGameHudAccessor) this.client.inGameHud).m0dev$renderScoreboardSidebar(context, objective);
+                context.getMatrices().popMatrix();
+                return;
+            }
         }
+        context.fill(0, 0, width, height, 0x70101010);
     }
 
     private void drawActualScreenTitlePreview(DrawContext context, int width) {
@@ -3044,6 +3075,181 @@ public class MacroWorkbenchScreen extends Screen {
             return this.client.player.getName().getString();
         }
         return "Player";
+    }
+
+    private VanillaPlayerListMetrics currentPlayerListMetrics() {
+        return currentPlayerListMetrics(1.0f);
+    }
+
+    private VanillaPlayerListMetrics currentPlayerListMetrics(float scale) {
+        float clampedScale = Math.clamp(scale, HudTweaksSettings.MIN_SCALE, HudTweaksSettings.MAX_SCALE);
+        int renderWidth = Math.max(1, Math.round(this.width / clampedScale));
+        int top = 9;
+        if (this.client == null || this.client.inGameHud == null || this.client.player == null || this.client.player.networkHandler == null) {
+            int fallbackWidth = 240;
+            return new VanillaPlayerListMetrics(
+                    Math.round(((renderWidth - fallbackWidth) / 2.0f) * clampedScale),
+                    Math.round(top * clampedScale),
+                    Math.round(fallbackWidth * clampedScale),
+                    Math.round(140 * clampedScale),
+                    renderWidth
+            );
+        }
+
+        var playerListHud = this.client.inGameHud.getPlayerListHud();
+        List<PlayerListEntry> entries = this.client.player.networkHandler.getListedPlayerListEntries().stream().limit(80).toList();
+        int nameWidth = 0;
+        int scoreWidth = 0;
+        Scoreboard scoreboard = this.client.world == null ? null : this.client.world.getScoreboard();
+        ScoreboardObjective objective = scoreboard == null ? null : scoreboard.getObjectiveForSlot(ScoreboardDisplaySlot.LIST);
+        boolean scoreHearts = objective != null && objective.getRenderType() == net.minecraft.scoreboard.ScoreboardCriterion.RenderType.HEARTS;
+        int colonWidth = this.textRenderer.getWidth(":");
+
+        for (PlayerListEntry entry : entries) {
+            nameWidth = Math.max(nameWidth, this.textRenderer.getWidth(playerListHud.getPlayerName(entry)));
+            if (objective != null && scoreboard != null && !scoreHearts) {
+                ReadableScoreboardScore score = scoreboard.getScore(ScoreHolder.fromProfile(entry.getProfile()), objective);
+                if (score != null) {
+                    scoreWidth = Math.max(scoreWidth, colonWidth + this.textRenderer.getWidth(score.getFormattedScore(objective.getNumberFormatOr(net.minecraft.scoreboard.number.StyledNumberFormat.YELLOW))));
+                }
+            }
+        }
+
+        int size = entries.size();
+        int rows = size;
+        int columns = 1;
+        while (rows > 20) {
+            columns++;
+            rows = (size + columns - 1) / columns;
+        }
+
+        boolean showSkins = !this.client.isInSingleplayer()
+                || (this.client.getNetworkHandler() != null && this.client.getNetworkHandler().getConnection().isEncrypted());
+        int scoreAreaWidth = objective == null ? 0 : (scoreHearts ? 90 : scoreWidth);
+        int columnWidth = columns == 0 ? 0 : Math.min(columns * ((showSkins ? 9 : 0) + nameWidth + scoreAreaWidth + 13), renderWidth - 50) / Math.max(1, columns);
+        int tableWidth = columnWidth * Math.max(1, columns) + Math.max(0, columns - 1) * 5;
+        int fullWidth = tableWidth;
+
+        Text header = ((PlayerListHudAccessor) playerListHud).m0dev$getHeader();
+        Text footer = ((PlayerListHudAccessor) playerListHud).m0dev$getFooter();
+        int currentY = 10;
+        if (header != null) {
+            List<?> wrappedHeader = this.textRenderer.wrapLines(header, renderWidth - 50);
+            for (Object line : wrappedHeader) {
+                fullWidth = Math.max(fullWidth, this.textRenderer.getWidth((net.minecraft.text.OrderedText) line));
+            }
+            currentY += wrappedHeader.size() * 9 + 1;
+        }
+        currentY += rows * 9;
+        if (footer != null) {
+            currentY += 1;
+            List<?> wrappedFooter = this.textRenderer.wrapLines(footer, renderWidth - 50);
+            for (Object line : wrappedFooter) {
+                fullWidth = Math.max(fullWidth, this.textRenderer.getWidth((net.minecraft.text.OrderedText) line));
+            }
+            currentY += wrappedFooter.size() * 9;
+        }
+
+        int left = renderWidth / 2 - fullWidth / 2 - 1;
+        int height = Math.max(20, currentY - top);
+        int width = Math.max(20, fullWidth + 2);
+        return new VanillaPlayerListMetrics(
+                Math.round(left * clampedScale),
+                Math.round(top * clampedScale),
+                Math.round(width * clampedScale),
+                Math.round(height * clampedScale),
+                renderWidth
+        );
+    }
+
+    private VanillaSidebarMetrics currentSidebarMetrics() {
+        return currentSidebarMetrics(1.0f);
+    }
+
+    private VanillaSidebarMetrics currentSidebarMetrics(float scale) {
+        float clampedScale = Math.clamp(scale, HudTweaksSettings.MIN_SCALE, HudTweaksSettings.MAX_SCALE);
+        ScoreboardObjective objective = effectiveSidebarObjective();
+        if (objective == null) {
+            int fallbackWidth = 144;
+            int fallbackHeight = 100;
+            int logicalHeight = Math.max(1, Math.round(this.height / clampedScale));
+            int logicalTop = Math.max(0, logicalHeight / 2 - (fallbackHeight * 2 / 3));
+            int logicalLeft = Math.max(0, Math.round(this.width / clampedScale) - fallbackWidth - 5);
+            return new VanillaSidebarMetrics(
+                    Math.round(logicalLeft * clampedScale),
+                    Math.round(logicalTop * clampedScale),
+                    Math.round(fallbackWidth * clampedScale),
+                    Math.round(fallbackHeight * clampedScale)
+            );
+        }
+
+        Scoreboard scoreboard = objective.getScoreboard();
+        int width = this.textRenderer.getWidth(objective.getDisplayName());
+        int colonWidth = this.textRenderer.getWidth(":");
+        List<VanillaSidebarEntryMetrics> entries = scoreboard.getScoreboardEntries(objective).stream()
+                .filter(entry -> !entry.hidden())
+                .sorted(Comparator.comparingInt(ScoreboardEntry::value).reversed().thenComparing(ScoreboardEntry::owner))
+                .limit(15)
+                .map(entry -> measureSidebarEntry(scoreboard, objective, entry))
+                .toList();
+        for (VanillaSidebarEntryMetrics entry : entries) {
+            width = Math.max(width, this.textRenderer.getWidth(entry.name()) + (entry.scoreWidth() > 0 ? colonWidth + entry.scoreWidth() : 0));
+        }
+
+        int listHeight = entries.size() * 9;
+        int logicalHeight = Math.max(1, Math.round(this.height / clampedScale));
+        int logicalWidth = Math.max(1, Math.round(this.width / clampedScale));
+        int bottom = logicalHeight / 2 + listHeight / 3;
+        int top = bottom - listHeight - 10;
+        int scaledWidth = Math.round((width + 4) * clampedScale);
+        int scaledHeight = Math.round((listHeight + 10) * clampedScale);
+        int scaledRight = Math.round((logicalWidth - 1) * clampedScale);
+        int scaledBottom = Math.round(bottom * clampedScale);
+        return new VanillaSidebarMetrics(
+                scaledRight - scaledWidth,
+                scaledBottom - scaledHeight,
+                scaledWidth,
+                scaledHeight
+        );
+    }
+
+    private VanillaSidebarEntryMetrics measureSidebarEntry(Scoreboard scoreboard,
+                                                           ScoreboardObjective objective,
+                                                           ScoreboardEntry entry) {
+        Team team = scoreboard.getScoreHolderTeam(entry.owner());
+        Text decoratedName = Team.decorateName(team, entry.name());
+        Text scoreText = entry.formatted(objective.getNumberFormatOr(StyledNumberFormat.RED));
+        return new VanillaSidebarEntryMetrics(decoratedName, this.textRenderer.getWidth(scoreText));
+    }
+
+    private ScoreboardObjective effectiveSidebarObjective() {
+        Scoreboard scoreboard = this.client == null || this.client.world == null ? null : this.client.world.getScoreboard();
+        ScoreboardObjective live = scoreboard == null ? null : scoreboard.getObjectiveForSlot(ScoreboardDisplaySlot.SIDEBAR);
+        if (live != null) {
+            return live;
+        }
+        return previewSidebarObjective();
+    }
+
+    private ScoreboardObjective previewSidebarObjective() {
+        Scoreboard scoreboard = new Scoreboard();
+        ScoreboardObjective objective = scoreboard.addObjective(
+                "m0dev_preview_sidebar",
+                ScoreboardCriterion.DUMMY,
+                Text.literal("Objectives"),
+                ScoreboardCriterion.RenderType.INTEGER,
+                false,
+                StyledNumberFormat.RED
+        );
+        addPreviewSidebarScore(scoreboard, objective, "Kills", 12);
+        addPreviewSidebarScore(scoreboard, objective, "Beds", 3);
+        addPreviewSidebarScore(scoreboard, objective, "Ping", 42);
+        addPreviewSidebarScore(scoreboard, objective, "Coins", 256);
+        return objective;
+    }
+
+    private void addPreviewSidebarScore(Scoreboard scoreboard, ScoreboardObjective objective, String name, int value) {
+        scoreboard.getOrCreateScore(ScoreHolder.fromName(name), objective).setScore(value);
     }
 
     private void drawSelectedOutline(DrawContext context, int x1, int y1, int x2, int y2, boolean isSelected) {
@@ -3190,7 +3396,7 @@ public class MacroWorkbenchScreen extends Screen {
                     editButton.active = false;
                 }
                 backgroundToggle.setMessage(Text.literal(vanillaPreviewMode == VanillaPreviewMode.ACTUAL ? "Preview: Actual" : "Preview: Virtual"));
-                borderToggle.setMessage(Text.literal("Resize = Scale"));
+                borderToggle.setMessage(Text.literal("Visible"));
                 return;
             }
             backgroundToggle.active = false;
@@ -3205,12 +3411,14 @@ public class MacroWorkbenchScreen extends Screen {
 
         if (isVanillaHudProxy(selected)) {
             backgroundToggle.active = true;
-            borderToggle.active = false;
+            borderToggle.active = true;
             if (editButton != null) {
                 editButton.active = false;
             }
             backgroundToggle.setMessage(Text.literal(vanillaPreviewMode == VanillaPreviewMode.ACTUAL ? "Preview: Actual" : "Preview: Virtual"));
-            borderToggle.setMessage(Text.literal("Resize = Scale"));
+            HudTweaksSettings.ElementType type = vanillaHudElementType(selected);
+            HudTweaksSettings.ElementConfig config = type == null ? null : this.vanillaCanvasConfigs.get(type);
+            borderToggle.setMessage(Text.literal("Visible: " + ((config == null || config.display) ? "ON" : "OFF")));
             return;
         }
 
@@ -5930,9 +6138,7 @@ public class MacroWorkbenchScreen extends Screen {
         proxy.verticalAlign = MacroHudDataHandler.VerticalAlign.TOP;
         proxy.drawBackground = true;
         proxy.drawBorder = true;
-        proxy.backgroundColor = config.display ? 0x5A101820 : 0x44303030;
-        proxy.borderColor = config.display ? 0xFFFFFFFF : 0xFF888888;
-        proxy.textColor = config.display ? 0xFFFFFFFF : 0xFFB8B8B8;
+        applyVanillaProxyStyle(proxy, config);
         proxy.fontScale = 0.9f;
         proxy.lineHeight = 9;
         proxy.zIndex = vanillaHudDescriptor(type).baseZ();
@@ -5942,6 +6148,7 @@ public class MacroWorkbenchScreen extends Screen {
         proxy.y = defaultVanillaElementY(type, config.scale) + config.offsetY;
         proxy.label = vanillaPreviewLabel(type);
         proxy.text = vanillaPreviewText(type, config);
+        normalizeVanillaProxyForCanvas(type, proxy, config);
         return proxy;
     }
 
@@ -5951,17 +6158,70 @@ public class MacroWorkbenchScreen extends Screen {
             return copy;
         }
         copy.display = source.display;
-        copy.scale = Math.clamp(source.scale, 0.25f, 3.0f);
+        copy.scale = Math.clamp(source.scale, HudTweaksSettings.MIN_SCALE, HudTweaksSettings.MAX_SCALE);
         copy.opacity = Math.clamp(source.opacity, 0.0f, 1.0f);
         copy.offsetX = Math.clamp(source.offsetX, -500, 500);
         copy.offsetY = Math.clamp(source.offsetY, -500, 500);
         return copy;
     }
 
+    private void normalizeVanillaProxyForCanvas(HudTweaksSettings.ElementType type,
+                                                MacroHudDataHandler.HudElement proxy,
+                                                HudTweaksSettings.ElementConfig config) {
+        if (type == null || proxy == null || config == null) {
+            return;
+        }
+
+        int canvasWidth = Math.max(40, this.width);
+        int canvasHeight = Math.max(40, canvasHeightBound() - canvasTopBound());
+        int maxWidth = Math.max(40, canvasWidth - 16);
+        int maxHeight = Math.max(40, canvasHeight - 16);
+        int baseWidth = Math.max(1, vanillaBaseWidth(type));
+        int baseHeight = Math.max(1, vanillaBaseHeight(type));
+        float fitScale = Math.clamp(
+                Math.min(maxWidth / (float) baseWidth, maxHeight / (float) baseHeight),
+                HudTweaksSettings.MIN_SCALE,
+                HudTweaksSettings.MAX_SCALE
+        );
+
+        if (proxy.width > maxWidth || proxy.height > maxHeight) {
+            float recoveredScale = Math.min(
+                    Math.clamp(config.scale, HudTweaksSettings.MIN_SCALE, HudTweaksSettings.MAX_SCALE),
+                    fitScale
+            );
+            if (recoveredScale < config.scale) {
+                config.scale = recoveredScale;
+                proxy.width = vanillaScaledWidth(type, recoveredScale);
+                proxy.height = vanillaScaledHeight(type, recoveredScale);
+            }
+        }
+
+        int screenX = resolveElementX(proxy);
+        int screenY = resolveElementY(proxy);
+        int clampedX = Math.clamp(screenX, 0, Math.max(0, this.width - proxy.width));
+        int clampedY = Math.clamp(screenY, canvasTopBound(), Math.max(canvasTopBound(), canvasBottomBound() - proxy.height));
+        if (screenX != clampedX || screenY != clampedY) {
+            setElementScreenPosition(proxy, clampedX, clampedY);
+            config.offsetX = Math.clamp(resolveElementX(proxy) - defaultVanillaElementX(type, config.scale), -500, 500);
+            config.offsetY = Math.clamp(resolveElementY(proxy) - defaultVanillaElementY(type, config.scale), -500, 500);
+        }
+
+        proxy.text = vanillaPreviewText(type, config);
+    }
+
     private record VanillaHudDescriptor(String label,
                                         int baseWidth,
                                         int baseHeight,
                                         int baseZ) {
+    }
+
+    private record VanillaPlayerListMetrics(int left, int top, int width, int height, int renderWidth) {
+    }
+
+    private record VanillaSidebarMetrics(int left, int top, int width, int height) {
+    }
+
+    private record VanillaSidebarEntryMetrics(Text name, int scoreWidth) {
     }
 
     private VanillaHudDescriptor vanillaHudDescriptor(HudTweaksSettings.ElementType type) {
@@ -5987,30 +6247,48 @@ public class MacroWorkbenchScreen extends Screen {
 
     private String vanillaPreviewText(HudTweaksSettings.ElementType type, HudTweaksSettings.ElementConfig config) {
         return vanillaPreviewLabel(type)
-                + "\nScale " + String.format(Locale.ROOT, "%.2f", Math.clamp(config.scale, 0.25f, 3.0f))
+                + "\nScale " + String.format(Locale.ROOT, "%.2f", Math.clamp(config.scale, HudTweaksSettings.MIN_SCALE, HudTweaksSettings.MAX_SCALE))
                 + "  Opacity " + String.format(Locale.ROOT, "%.2f", Math.clamp(config.opacity, 0.0f, 1.0f))
                 + (config.display ? "" : "  Hidden");
     }
 
+    private int vanillaBaseWidth(HudTweaksSettings.ElementType type) {
+        return switch (type) {
+            case PLAYER_LIST -> currentPlayerListMetrics().width();
+            case SCOREBOARD -> currentSidebarMetrics().width();
+            default -> vanillaHudDescriptor(type).baseWidth();
+        };
+    }
+
+    private int vanillaBaseHeight(HudTweaksSettings.ElementType type) {
+        return switch (type) {
+            case PLAYER_LIST -> currentPlayerListMetrics().height();
+            case SCOREBOARD -> currentSidebarMetrics().height();
+            default -> vanillaHudDescriptor(type).baseHeight();
+        };
+    }
+
     private int vanillaScaledWidth(HudTweaksSettings.ElementType type, float scale) {
-        return Math.max(12, Math.round(vanillaHudDescriptor(type).baseWidth() * Math.clamp(scale, 0.25f, 3.0f)));
+        return Math.max(12, Math.round(vanillaBaseWidth(type) * Math.clamp(scale, HudTweaksSettings.MIN_SCALE, HudTweaksSettings.MAX_SCALE)));
     }
 
     private int vanillaScaledHeight(HudTweaksSettings.ElementType type, float scale) {
-        return Math.max(12, Math.round(vanillaHudDescriptor(type).baseHeight() * Math.clamp(scale, 0.25f, 3.0f)));
+        return Math.max(12, Math.round(vanillaBaseHeight(type) * Math.clamp(scale, HudTweaksSettings.MIN_SCALE, HudTweaksSettings.MAX_SCALE)));
     }
 
     private int vanillaScaledOffset(int value, float scale) {
-        return Math.round(value * Math.clamp(scale, 0.25f, 3.0f));
+        return Math.round(value * Math.clamp(scale, HudTweaksSettings.MIN_SCALE, HudTweaksSettings.MAX_SCALE));
     }
 
     private int defaultVanillaElementX(HudTweaksSettings.ElementType type, float scale) {
         int width = vanillaScaledWidth(type, scale);
         return switch (type) {
             case ACTION_BAR, BOSS_BAR, CROSSHAIR, HOTBAR_GROUP, PLAYER_LIST, SCREEN_TITLE, TOOLTIP ->
-                    Math.round((this.width - width) / 2.0f);
+                    type == HudTweaksSettings.ElementType.PLAYER_LIST
+                            ? currentPlayerListMetrics(scale).left()
+                            : Math.round((this.width - width) / 2.0f);
             case DEBUG_SCREEN -> vanillaScaledOffset(2, scale);
-            case SCOREBOARD -> this.width - width - vanillaScaledOffset(3, scale);
+            case SCOREBOARD -> currentSidebarMetrics(scale).left();
             case STATUS_EFFECT -> this.width - width - vanillaScaledOffset(1, scale);
             case SUBTITLES -> this.width - width - vanillaScaledOffset(8, scale);
             case TOAST -> this.width - width;
@@ -6028,8 +6306,8 @@ public class MacroWorkbenchScreen extends Screen {
             case CROSSHAIR -> canvasTopBound() + Math.round((canvasHeight - height) / 2.0f);
             case DEBUG_SCREEN -> vanillaScaledOffset(2, scale);
             case HOTBAR_GROUP -> canvasBottom - height;
-            case PLAYER_LIST -> vanillaScaledOffset(10, scale);
-            case SCOREBOARD -> canvasCenter - Math.round(height * (2.0f / 3.0f));
+            case PLAYER_LIST -> currentPlayerListMetrics(scale).top();
+            case SCOREBOARD -> currentSidebarMetrics(scale).top();
             case SCREEN_TITLE -> canvasCenter - vanillaScaledOffset(40, scale);
             case STATUS_EFFECT -> vanillaScaledOffset(1, scale);
             case SUBTITLES -> canvasBottom - height - vanillaScaledOffset(30, scale);
@@ -6039,10 +6317,9 @@ public class MacroWorkbenchScreen extends Screen {
     }
 
     private float vanillaScaleForProxy(HudTweaksSettings.ElementType type, MacroHudDataHandler.HudElement proxy) {
-        VanillaHudDescriptor descriptor = vanillaHudDescriptor(type);
-        float widthScale = Math.max(0.01f, proxy.width / (float) descriptor.baseWidth());
-        float heightScale = Math.max(0.01f, proxy.height / (float) descriptor.baseHeight());
-        return Math.clamp(Math.max(widthScale, heightScale), 0.25f, 3.0f);
+        float widthScale = Math.max(0.01f, proxy.width / (float) vanillaBaseWidth(type));
+        float heightScale = Math.max(0.01f, proxy.height / (float) vanillaBaseHeight(type));
+        return Math.clamp(Math.min(widthScale, heightScale), HudTweaksSettings.MIN_SCALE, HudTweaksSettings.MAX_SCALE);
     }
 
     private void applyVanillaProxyResize(MacroHudDataHandler.HudElement proxy, int nextWidth, int nextHeight) {
@@ -6050,13 +6327,13 @@ public class MacroWorkbenchScreen extends Screen {
         if (type == null) {
             return;
         }
-        VanillaHudDescriptor descriptor = vanillaHudDescriptor(type);
-        float widthScale = Math.max(0.01f, nextWidth / (float) descriptor.baseWidth());
-        float heightScale = Math.max(0.01f, nextHeight / (float) descriptor.baseHeight());
-        float scale = Math.clamp(Math.max(widthScale, heightScale), 0.25f, 3.0f);
+        float widthScale = Math.max(0.01f, nextWidth / (float) vanillaBaseWidth(type));
+        float heightScale = Math.max(0.01f, nextHeight / (float) vanillaBaseHeight(type));
+        float scale = Math.clamp(Math.min(widthScale, heightScale), HudTweaksSettings.MIN_SCALE, HudTweaksSettings.MAX_SCALE);
         proxy.width = vanillaScaledWidth(type, scale);
         proxy.height = vanillaScaledHeight(type, scale);
-        proxy.text = vanillaPreviewText(type, currentVanillaHudConfig(type, scale, proxy));
+        syncVanillaProxyConfigFromProxy(proxy);
+        refreshVanillaProxyPreview(proxy);
     }
 
     private HudTweaksSettings.ElementConfig currentVanillaHudConfig(HudTweaksSettings.ElementType type,
@@ -6067,6 +6344,40 @@ public class MacroWorkbenchScreen extends Screen {
         config.offsetX = Math.clamp(resolveElementX(proxy) - defaultVanillaElementX(type, scale), -500, 500);
         config.offsetY = Math.clamp(resolveElementY(proxy) - defaultVanillaElementY(type, scale), -500, 500);
         return config;
+    }
+
+    private void syncVanillaProxyConfigFromProxy(MacroHudDataHandler.HudElement proxy) {
+        HudTweaksSettings.ElementType type = vanillaHudElementType(proxy);
+        if (type == null) {
+            return;
+        }
+        float scale = vanillaScaleForProxy(type, proxy);
+        this.vanillaCanvasConfigs.put(type, currentVanillaHudConfig(type, scale, proxy));
+    }
+
+    private void syncVanillaProxyLayoutFromConfig(MacroHudDataHandler.HudElement proxy) {
+        HudTweaksSettings.ElementType type = vanillaHudElementType(proxy);
+        if (type == null) {
+            return;
+        }
+
+        HudTweaksSettings.ElementConfig config = copyHudTweaksConfig(this.vanillaCanvasConfigs.get(type));
+        proxy.width = vanillaScaledWidth(type, config.scale);
+        proxy.height = vanillaScaledHeight(type, config.scale);
+
+        int targetX = defaultVanillaElementX(type, config.scale) + config.offsetX;
+        int targetY = defaultVanillaElementY(type, config.scale) + config.offsetY;
+        int clampedX = Math.clamp(targetX, 0, Math.max(0, this.width - proxy.width));
+        int clampedY = Math.clamp(targetY, canvasTopBound(), Math.max(canvasTopBound(), canvasBottomBound() - proxy.height));
+        setElementScreenPosition(proxy, clampedX, clampedY);
+
+        if (targetX != clampedX || targetY != clampedY) {
+            config.offsetX = Math.clamp(clampedX - defaultVanillaElementX(type, config.scale), -500, 500);
+            config.offsetY = Math.clamp(clampedY - defaultVanillaElementY(type, config.scale), -500, 500);
+            this.vanillaCanvasConfigs.put(type, config);
+        }
+
+        proxy.text = vanillaPreviewText(type, config);
     }
 
     private String vanillaQuickFieldText(MacroHudDataHandler.HudElement proxy) {
@@ -6092,12 +6403,7 @@ public class MacroWorkbenchScreen extends Screen {
     }
 
     private void refreshVanillaProxyPreview(MacroHudDataHandler.HudElement proxy) {
-        HudTweaksSettings.ElementType type = vanillaHudElementType(proxy);
-        if (type == null) {
-            return;
-        }
-        float scale = vanillaScaleForProxy(type, proxy);
-        proxy.text = vanillaPreviewText(type, currentVanillaHudConfig(type, scale, proxy));
+        syncVanillaProxyLayoutFromConfig(proxy);
     }
 
     private void resetVanillaProxy(MacroHudDataHandler.HudElement proxy) {
@@ -6122,6 +6428,27 @@ public class MacroWorkbenchScreen extends Screen {
         for (MacroHudDataHandler.HudElement proxy : this.vanillaCanvasElements) {
             resetVanillaProxy(proxy);
         }
+    }
+
+    private void toggleVanillaProxyDisplay(MacroHudDataHandler.HudElement proxy) {
+        HudTweaksSettings.ElementType type = vanillaHudElementType(proxy);
+        if (type == null) {
+            return;
+        }
+        HudTweaksSettings.ElementConfig config = copyHudTweaksConfig(this.vanillaCanvasConfigs.get(type));
+        config.display = !config.display;
+        this.vanillaCanvasConfigs.put(type, config);
+        applyVanillaProxyStyle(proxy, config);
+        refreshVanillaProxyPreview(proxy);
+    }
+
+    private void applyVanillaProxyStyle(MacroHudDataHandler.HudElement proxy, HudTweaksSettings.ElementConfig config) {
+        if (proxy == null || config == null) {
+            return;
+        }
+        proxy.backgroundColor = config.display ? 0x5A101820 : 0x44303030;
+        proxy.borderColor = config.display ? 0xFFFFFFFF : 0xFF888888;
+        proxy.textColor = config.display ? 0xFFFFFFFF : 0xFFB8B8B8;
     }
 
     private void persistExternalCanvasElements() {
@@ -6408,6 +6735,7 @@ public class MacroWorkbenchScreen extends Screen {
             int screenY = Math.clamp(resolveElementY(element), canvasTopBound(),
                     Math.max(canvasTopBound(), canvasBottomBound() - element.height));
             setElementScreenPosition(element, screenX, screenY);
+            syncVanillaProxyConfigFromProxy(element);
             refreshVanillaProxyPreview(element);
             return;
         }

@@ -1,11 +1,6 @@
 ﻿# M0-Dev Tools
 M0-Dev Tools is a client-side Fabric toolbox for Minecraft modders, builders, and technical players. It combines overlays, HUDs, macros, scripting, movement helpers, command tooling, and debugging utilities in one mod.
-## Quick links
-- Docs/Wiki source: `docs/README.md`
-- Architecture: `docs/architecture.md`
-- Module catalog: `docs/module-catalog.md`
-- Automation deep dive: `docs/automation-engine.md`
-- Macro + placeholder deep dive: `docs/macro-workbench-and-placeholders.md`
+
 ## Feature overview
 ### Visual overlays and inspectors
 - Light level, redstone power, redstone update/BUD overlays

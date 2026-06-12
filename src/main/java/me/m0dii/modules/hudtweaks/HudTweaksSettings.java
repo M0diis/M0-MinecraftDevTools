@@ -13,6 +13,9 @@ import java.util.EnumMap;
 
 public final class HudTweaksSettings {
 
+    public static final float MIN_SCALE = 0.25f;
+    public static final float MAX_SCALE = 6.0f;
+
     public enum ElementType {
         ACTION_BAR,
         BOSS_BAR,
@@ -132,7 +135,7 @@ public final class HudTweaksSettings {
                     continue;
                 }
                 target.display = source.display;
-                target.scale = Math.clamp(source.scale, 0.25f, 3.0f);
+                target.scale = Math.clamp(source.scale, MIN_SCALE, MAX_SCALE);
                 target.opacity = Math.clamp(source.opacity, 0.0f, 1.0f);
                 target.offsetX = Math.clamp(source.offsetX, -500, 500);
                 target.offsetY = Math.clamp(source.offsetY, -500, 500);

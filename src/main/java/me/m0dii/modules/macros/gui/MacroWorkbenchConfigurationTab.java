@@ -712,7 +712,11 @@ final class MacroWorkbenchConfigurationTab {
         private void adjustScale(int direction) {
             HudTweaksSettings.updateAndSave(() -> {
                 float step = shiftDown.getAsBoolean() ? 0.05f : 0.10f;
-                selectedConfig().scale = Math.clamp(selectedConfig().scale + (direction * step), 0.25f, 3.0f);
+                selectedConfig().scale = Math.clamp(
+                        selectedConfig().scale + (direction * step),
+                        HudTweaksSettings.MIN_SCALE,
+                        HudTweaksSettings.MAX_SCALE
+                );
             });
         }
 

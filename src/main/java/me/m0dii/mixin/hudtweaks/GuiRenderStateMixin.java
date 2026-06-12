@@ -13,6 +13,9 @@ public abstract class GuiRenderStateMixin {
 
     @ModifyArg(method = "addSpecialElement", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/render/state/GuiRenderState;onElementAdded(Lnet/minecraft/client/gui/ScreenRect;)V"), index = 0, require = 0)
     private ScreenRect m0devHudTweaksScaleSpecialBounds(ScreenRect original) {
+        if (!HudTweaksRenderState.compensateCoordinates()) {
+            return original;
+        }
         float scale = Math.max(0.01f, HudTweaksRenderState.currentScale());
         return new ScreenRect(
                 Math.round(original.getLeft() / scale),

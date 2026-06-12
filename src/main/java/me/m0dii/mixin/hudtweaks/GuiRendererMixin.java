@@ -10,12 +10,18 @@ import org.spongepowered.asm.mixin.injection.ModifyVariable;
 public abstract class GuiRendererMixin {
     @ModifyVariable(method = "prepareItem(Lnet/minecraft/client/gui/render/state/ItemGuiElementRenderState;FFII)V", at = @At("HEAD"), ordinal = 1, argsOnly = true, require = 0)
     private float m0devHudTweaksItemX(float original) {
+        if (!HudTweaksRenderState.compensateCoordinates()) {
+            return original;
+        }
         float scale = Math.max(0.01f, HudTweaksRenderState.currentScale());
         return original / scale;
     }
 
     @ModifyVariable(method = "prepareItem(Lnet/minecraft/client/gui/render/state/ItemGuiElementRenderState;FFII)V", at = @At("HEAD"), ordinal = 2, argsOnly = true, require = 0)
     private float m0devHudTweaksItemY(float original) {
+        if (!HudTweaksRenderState.compensateCoordinates()) {
+            return original;
+        }
         float scale = Math.max(0.01f, HudTweaksRenderState.currentScale());
         return original / scale;
     }

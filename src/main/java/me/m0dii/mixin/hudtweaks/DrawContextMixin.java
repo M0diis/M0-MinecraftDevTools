@@ -28,12 +28,18 @@ public abstract class DrawContextMixin {
 
     @ModifyReturnValue(method = "getScaledWindowWidth", at = @At("TAIL"), require = 0)
     private int m0devHudTweaksWidth(int original) {
+        if (!HudTweaksRenderState.compensateCoordinates()) {
+            return original;
+        }
         float scale = Math.max(0.01f, HudTweaksRenderState.currentScale());
         return Math.round(original / scale);
     }
 
     @ModifyReturnValue(method = "getScaledWindowHeight", at = @At("TAIL"), require = 0)
     private int m0devHudTweaksHeight(int original) {
+        if (!HudTweaksRenderState.compensateCoordinates()) {
+            return original;
+        }
         float scale = Math.max(0.01f, HudTweaksRenderState.currentScale());
         return Math.round(original / scale);
     }
