@@ -1,6 +1,5 @@
 package me.m0dii.modules.macros.gui;
 
-import io.wispforest.owo.ui.component.ButtonComponent;
 import me.m0dii.gui.GuiSystem;
 import me.m0dii.gui.local.FormPanels;
 import me.m0dii.gui.local.GuiTextEditingUtils;
@@ -375,7 +374,7 @@ public class MacroWorkbenchScreen extends Screen {
         for (int i = 0; i < tabs.size(); i++) {
             Tab tabDef = tabs.get(i);
             String tabLabel = tabWidth < 36 ? tinyLabels.get(i) : (tabWidth < 72 ? compactLabels.get(i) : labels.get(i));
-            ButtonWidget tabButton = ButtonComponent.builder(Text.literal(tabLabel), b -> setTab(tabDef))
+            ButtonWidget tabButton = ButtonWidget.builder(Text.literal(tabLabel), b -> setTab(tabDef))
                     .dimensions(tabX, tabY, tabWidth, 20)
                     .build();
             this.topBarWidgets.add(tabButton);

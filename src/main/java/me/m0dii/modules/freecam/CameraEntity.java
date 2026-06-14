@@ -1,7 +1,6 @@
 package me.m0dii.modules.freecam;
 
 
-import blue.endless.jankson.annotation.Nullable;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayNetworkHandler;
 import net.minecraft.client.network.ClientPlayerEntity;
@@ -14,6 +13,7 @@ import net.minecraft.stat.StatHandler;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 public class CameraEntity extends ClientPlayerEntity {
     public interface CameraController {
