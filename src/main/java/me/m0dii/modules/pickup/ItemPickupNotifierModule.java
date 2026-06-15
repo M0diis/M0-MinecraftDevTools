@@ -199,8 +199,12 @@ public class ItemPickupNotifierModule extends Module {
     }
 
     private static String stackKey(ItemStack stack) {
-        String id = Registries.ITEM.getId(stack.getItem()).toString();
-        return id + "|" + stack.getComponents();
+        ItemStack normalized = stack.copy();
+        if (normalized.isDamageable()) {
+            normalized.setDamage(0);
+        }
+        String id = Registries.ITEM.getId(normalized.getItem()).toString();
+        return id + "|" + normalized.getComponents();
     }
 
     private static int withAlpha(int argb, float alphaFactor) {
