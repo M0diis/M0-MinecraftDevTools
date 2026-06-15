@@ -1,8 +1,11 @@
 package me.m0dii.mixin;
 
+import me.m0dii.utils.PickBlockHotbarSlotResolver;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.item.ItemStack;
 import net.minecraft.network.packet.c2s.play.CreativeInventoryActionC2SPacket;
+import net.minecraft.network.packet.c2s.play.UpdateSelectedSlotC2SPacket;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.EntityHitResult;
 import net.minecraft.util.hit.HitResult;
@@ -36,17 +39,20 @@ public class MiddleClickMixin {
             }
 
             if (!stack.isEmpty()) {
-                // Calculate the correct slot index for creative inventory
-                // Hotbar slots are 36-44 in creative inventory packet (0-8 + 36)
-                int selectedSlot = client.player.getInventory().getSelectedSlot();
-                int creativeSlot = selectedSlot + 36; // Convert to creative inventory slot index
+                PlayerInventory inventory = client.player.getInventory();
+                int selectedSlot = inventory.getSelectedSlot();
+                int targetSlot = PickBlockHotbarSlotResolver.resolveTargetSlot(inventory, stack);
 
-                // Send packet to server first
-                client.player.networkHandler.sendPacket(
-                        new CreativeInventoryActionC2SPacket(creativeSlot, stack)
-                );
+                if (!ItemStack.areItemsAndComponentsEqual(inventory.getStack(targetSlot), stack)) {
+                    int creativeSlot = targetSlot + 36;
+                    client.player.networkHandler.sendPacket(new CreativeInventoryActionC2SPacket(creativeSlot, stack));
+                    inventory.setStack(targetSlot, stack);
+                }
 
-                client.player.getInventory().setStack(selectedSlot, stack);
+                if (selectedSlot != targetSlot) {
+                    inventory.setSelectedSlot(targetSlot);
+                    client.player.networkHandler.sendPacket(new UpdateSelectedSlotC2SPacket(targetSlot));
+                }
             }
         }
     }
