@@ -32,6 +32,7 @@ import me.m0dii.modules.tweaks.TweaksModule;
 import me.m0dii.modules.uiutilities.UiUtilitiesModule;
 import me.m0dii.modules.watson.WatsonCoreProtectModule;
 import me.m0dii.modules.waypoints.WaypointModule;
+import me.m0dii.modules.worldedit.WorldEditModule;
 import me.m0dii.modules.xray.XrayModule;
 import me.m0dii.modules.zoom.ZoomModule;
 import org.jetbrains.annotations.Nullable;
@@ -105,6 +106,7 @@ public class ModuleRegistry {
         safeAdd(utilities, HeldLightModule.INSTANCE);
         safeAdd(utilities, TweaksModule.INSTANCE);
         safeAdd(utilities, WatsonCoreProtectModule.INSTANCE);
+        safeAdd(utilities, WorldEditModule.INSTANCE);
         safeAdd(utilities, MouseTweaksModule.INSTANCE);
         safeAdd(utilities, HungerTweaksModule.INSTANCE);
         safeAdd(utilities, BridgingTweaksModule.INSTANCE);

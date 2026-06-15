@@ -49,7 +49,7 @@ import me.m0dii.modules.utilitycommands.ConvenienceClientCommands;
 import me.m0dii.modules.utilitycommands.MathClientCommand;
 import me.m0dii.modules.watson.WatsonCoreProtectModule;
 import me.m0dii.modules.waypoints.WaypointModule;
-import me.m0dii.modules.worldedit.WorldEditClientCommands;
+import me.m0dii.modules.worldedit.WorldEditModule;
 import me.m0dii.modules.xray.XrayModule;
 import me.m0dii.modules.zoom.ZoomModule;
 import me.m0dii.utils.KeybindCatalog;
@@ -106,6 +106,7 @@ public class M0DevToolsClient implements ClientModInitializer {
         ReachModule.INSTANCE.register();
         BetterCommandBlockUiModule.INSTANCE.register();
         TweaksModule.INSTANCE.register();
+        WorldEditModule.INSTANCE.register();
         ClickHudModule.INSTANCE.register();
         EntityHealthBarsModule.INSTANCE.register();
         CommandBlockOverlayModule.INSTANCE.register();
@@ -130,7 +131,6 @@ public class M0DevToolsClient implements ClientModInitializer {
         MobAiDebugClient.registerReceivers();
         MobDropTrackerClient.registerReceivers();
         DrawClientCommand.register();
-        WorldEditClientCommands.register();
         CameraClientCommand.register();
         MathClientCommand.register();
         BlockScannerClientCommand.register();

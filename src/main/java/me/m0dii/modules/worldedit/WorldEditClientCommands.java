@@ -4,6 +4,7 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.suggestion.Suggestions;
 import com.mojang.brigadier.suggestion.SuggestionsBuilder;
+import com.mojang.brigadier.tree.RootCommandNode;
 import me.m0dii.modules.debugdraw.DebugDrawManager;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
@@ -26,7 +27,14 @@ import java.util.Locale;
 import java.util.concurrent.CompletableFuture;
 
 public final class WorldEditClientCommands {
-    private static final List<String> WORLD_EDIT_SERVER_SIGNATURE = List.of("set", "replace", "pos1", "pos2", "wand");
+    private static final List<List<String>> WORLD_EDIT_SERVER_SIGNATURES = List.of(
+            List.of("/set", "set"),
+            List.of("/replace", "replace"),
+            List.of("/pos1", "pos1"),
+            List.of("/pos2", "pos2"),
+            List.of("/wand", "wand")
+    );
+    private static final List<String> WORLD_EDIT_SERVER_ROOT_ALIASES = List.of("worldedit", "we");
 
     private WorldEditClientCommands() {
     }
@@ -1406,11 +1414,15 @@ public final class WorldEditClientCommands {
     }
 
     private static boolean canUseEditCommands(FabricClientCommandSource source) {
-        return !serverHasNativeWorldEdit(source.getClient());
+        return isClientWorldEditActive(source.getClient());
     }
 
     private static boolean canUseLocalSelectionCommands(FabricClientCommandSource source) {
-        return !serverHasNativeWorldEdit(source.getClient());
+        return isClientWorldEditActive(source.getClient());
+    }
+
+    private static boolean isClientWorldEditActive(MinecraftClient client) {
+        return WorldEditModule.INSTANCE.isEnabled() && !serverHasNativeWorldEdit(client);
     }
 
     private static boolean supportsServerBackedWorldEdit(MinecraftClient client) {
@@ -1423,9 +1435,31 @@ public final class WorldEditClientCommands {
         if (client == null || client.getNetworkHandler() == null || client.getNetworkHandler().getCommandDispatcher() == null) {
             return false;
         }
-        var root = client.getNetworkHandler().getCommandDispatcher().getRoot();
-        for (String signatureCommand : WORLD_EDIT_SERVER_SIGNATURE) {
-            if (root.getChild(signatureCommand) == null) {
+
+        return hasNativeWorldEditCommandSignature(client.getNetworkHandler().getCommandDispatcher().getRoot());
+    }
+
+    static boolean hasNativeWorldEditCommandSignature(RootCommandNode<?> root) {
+        if (root == null) {
+            return false;
+        }
+
+        for (String alias : WORLD_EDIT_SERVER_ROOT_ALIASES) {
+            if (root.getChild(alias) != null) {
+                return true;
+            }
+        }
+
+        // Bukkit/Paper WorldEdit commonly exposes the double-slash aliases as "/set", "/pos1", etc.
+        for (List<String> signatureAliases : WORLD_EDIT_SERVER_SIGNATURES) {
+            boolean matched = false;
+            for (String alias : signatureAliases) {
+                if (root.getChild(alias) != null) {
+                    matched = true;
+                    break;
+                }
+            }
+            if (!matched) {
                 return false;
             }
         }

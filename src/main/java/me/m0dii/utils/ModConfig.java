@@ -244,6 +244,11 @@ public class ModConfig extends MidnightConfig {
     @MidnightConfig.Entry(name = "Multiplayer Entity Reach Extra", category = CATEGORY_REACH, isSlider = true, min = 0, max = 4)
     public static double reachMultiplayerEntityExtra = 1.0;
 
+    public static final String CATEGORY_WORLD_EDIT = "WorldEdit";
+
+    @MidnightConfig.Entry(name = "WorldEdit Module Enabled", category = CATEGORY_WORLD_EDIT)
+    public static boolean worldEditModuleEnabled = true;
+
     public static final String CATEGORY_OVERLAY = "Overlay";
 
     @MidnightConfig.Entry(name = "Entity Radar Radius", category = CATEGORY_OVERLAY, isSlider = true, min = 16, max = 256)
