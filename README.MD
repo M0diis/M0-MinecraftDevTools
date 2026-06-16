@@ -16,7 +16,7 @@ M0-Dev Tools is a client-side Fabric toolbox for Minecraft modders, builders, an
 - Waypoints and quick teleport
 - Hunger tweaks and dynamic FPS
 ### Chat and workflow helpers
-- Secondary chat
+- Secondary chat with addon/replacement render modes, draggable multi-window custom chat, tabs, per-tab regex routing, unread indicators, timestamps, and compact repeated messages
 - Command history and message history
 - Better command block UI integration
 - UI utilities for packet send/delay and screen behavior helpers

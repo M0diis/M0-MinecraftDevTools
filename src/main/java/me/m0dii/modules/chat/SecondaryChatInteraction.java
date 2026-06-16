@@ -8,19 +8,32 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.Click;
 import net.minecraft.client.gui.screen.Screen;
 
+import java.util.List;
+import java.util.Locale;
+
 public final class SecondaryChatInteraction {
     private SecondaryChatInteraction() {
     }
 
-    private static boolean dragging = false;
-    private static boolean resizing = false;
+    private enum DragMode {
+        NONE,
+        MOVE,
+        RESIZE
+    }
+
+    private static DragMode dragMode = DragMode.NONE;
+    private static String activeWindowId = "";
+    private static boolean activeUsesHudCanvas = false;
     private static int dragStartX;
     private static int dragStartY;
-    private static int dragOffsetX;
-    private static int dragOffsetY;
+    private static int dragStartWindowX;
+    private static int dragStartWindowY;
+    private static int dragStartWindowWidth;
+    private static int dragStartWindowHeight;
+    private static String openMenuWindowId = "";
 
-    private static boolean configDirty = false;
-
+    private static boolean hudCanvasDirty = false;
+    private static boolean settingsDirty = false;
     private static Screen lastScreen = null;
 
     public static void register() {
@@ -32,14 +45,10 @@ public final class SecondaryChatInteraction {
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             if (client.currentScreen != lastScreen) {
-                if (configDirty) {
-                    HudCanvasDataHandler.save();
-                    configDirty = false;
-                }
+                saveIfDirty();
 
                 if (client.currentScreen == null) {
-                    dragging = false;
-                    resizing = false;
+                    stopDragging();
                 }
 
                 lastScreen = client.currentScreen;
@@ -53,12 +62,8 @@ public final class SecondaryChatInteraction {
             return;
         }
 
-        int button = click.button();
-        double mouseX = click.x();
-        double mouseY = click.y();
-
-        if (button != 0) {
-            return; // Left
+        if (click.button() != 0) {
+            return;
         }
 
         MinecraftClient client = MinecraftClient.getInstance();
@@ -66,115 +71,325 @@ public final class SecondaryChatInteraction {
             return;
         }
 
-        HudCanvasDataHandler.HudCanvasElement canvas = getCanvas();
-        int x = canvas.x;
-        int y = canvas.y;
-        int w = Math.max(50, canvas.width);
-        int h = Math.max(30, canvas.height);
+        double mouseX = click.x();
+        double mouseY = click.y();
 
-        if (!isInside(mouseX, mouseY, x, y, w, h)) {
+        SecondaryChatWindowLayout.Frame menuFrame = openMenuFrame();
+        if (menuFrame != null && SecondaryChatWindowLayout.containsMenu(menuFrame, mouseX, mouseY)) {
+            handleMenuClick(menuFrame, mouseX, mouseY);
             return;
         }
 
-        int resizeX = x + w - 6;
-        int resizeY = y + h - 6;
-        if (isInside(mouseX, mouseY, resizeX, resizeY, 6, 6)) {
-            resizing = true;
-            dragging = false;
+        for (SecondaryChatWindowLayout.Frame frame : SecondaryChatWindowLayout.framesTopFirst()) {
+            if (!frame.contains(mouseX, mouseY)) {
+                continue;
+            }
+
+            if (SecondaryChatWindowLayout.containsSettingsButton(frame, mouseX, mouseY)) {
+                toggleMenu(frame.window.id);
+                return;
+            }
+
+            openMenuWindowId = "";
+
+            SecondaryChatWindowLayout.TabHit tabHit = SecondaryChatWindowLayout.tabAt(frame, mouseX, mouseY, client.textRenderer);
+            if (tabHit != null) {
+                SecondaryChatManager.selectTab(tabHit.window.id, tabHit.tab.id);
+                return;
+            }
+
+            activeWindowId = frame.window.id;
+            activeUsesHudCanvas = frame.hudCanvasBacked;
             dragStartX = (int) mouseX;
             dragStartY = (int) mouseY;
-            dragOffsetX = w;
-            dragOffsetY = h;
-        } else {
-            dragging = true;
-            resizing = false;
-            dragStartX = (int) mouseX;
-            dragStartY = (int) mouseY;
-            dragOffsetX = x;
-            dragOffsetY = y;
+            dragStartWindowX = frame.x;
+            dragStartWindowY = frame.y;
+            dragStartWindowWidth = frame.width;
+            dragStartWindowHeight = frame.height;
+
+            dragMode = frame.containsResize(mouseX, mouseY) ? DragMode.RESIZE : DragMode.MOVE;
+            return;
         }
+
+        openMenuWindowId = "";
     }
 
     public static void handleMouseMove(double mouseX, double mouseY) {
-        HudCanvasDataHandler.HudCanvasElement canvas = getCanvas();
-        int x = canvas.x;
-        int y = canvas.y;
-        int w = Math.max(50, canvas.width);
-        int h = Math.max(30, canvas.height);
-
-        if (!dragging && !resizing) {
-            if (SecondaryChatSettings.get().resetTransparencyWhenHovered && isInside(mouseX, mouseY, x, y, w, h)) {
-                SecondaryChatManager.setLastAlphaReset(System.currentTimeMillis());
-            }
+        if (dragMode == DragMode.NONE) {
+            maybeResetTransparency(mouseX, mouseY);
             return;
         }
 
-        int mx = (int) mouseX;
-        int my = (int) mouseY;
-        int dx = mx - dragStartX;
-        int dy = my - dragStartY;
+        SecondaryChatSettings.WindowConfig window = SecondaryChatManager.findWindow(activeWindowId);
+        if (window == null) {
+            stopDragging();
+            return;
+        }
 
-        if (dragging) {
-            canvas.x = dragOffsetX + dx;
-            canvas.y = dragOffsetY + dy;
-            configDirty = true;
-        } else if (resizing) {
-            canvas.width = Math.max(100, dragOffsetX + dx);
-            canvas.height = Math.max(50, dragOffsetY + dy);
-            configDirty = true;
+        SecondaryChatWindowLayout.Frame frame = SecondaryChatWindowLayout.frame(window);
+        int dx = (int) mouseX - dragStartX;
+        int dy = (int) mouseY - dragStartY;
+
+        int newX = dragStartWindowX;
+        int newY = dragStartWindowY;
+        int newWidth = dragStartWindowWidth;
+        int newHeight = dragStartWindowHeight;
+        if (dragMode == DragMode.MOVE) {
+            newX += dx;
+            newY += dy;
+        } else if (dragMode == DragMode.RESIZE) {
+            newWidth = Math.max(120, dragStartWindowWidth + dx);
+            newHeight = Math.max(60, dragStartWindowHeight + dy);
+        }
+
+        SecondaryChatWindowLayout.writeFrameBounds(frame, newX, newY, newWidth, newHeight);
+        if (activeUsesHudCanvas) {
+            hudCanvasDirty = true;
+        } else {
+            settingsDirty = true;
         }
     }
 
     private static void handleMouseRelease(Screen screen, Click click) {
-        int button = click.button();
-        if (button != 0) {
-            return;
-        }
-        if (!dragging && !resizing) {
+        if (click.button() != 0 || dragMode == DragMode.NONE) {
             return;
         }
 
-        dragging = false;
-        resizing = false;
-
-        if (configDirty) {
-            HudCanvasDataHandler.save();
-            configDirty = false;
-        }
+        stopDragging();
+        saveIfDirty();
     }
 
-    private static void handleMouseScroll(Screen screen, double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
+    private static void handleMouseScroll(Screen screen,
+                                          double mouseX,
+                                          double mouseY,
+                                          double horizontalAmount,
+                                          double verticalAmount) {
         SecondaryChatSettings.Data settings = SecondaryChatSettings.get();
         if (!settings.enabled || !settings.showOverlay) {
             return;
         }
 
-        HudCanvasDataHandler.HudCanvasElement canvas = getCanvas();
-        int x = canvas.x;
-        int y = canvas.y;
-        int w = Math.max(50, canvas.width);
-        int h = Math.max(30, canvas.height);
+        for (SecondaryChatWindowLayout.Frame frame : SecondaryChatWindowLayout.framesTopFirst()) {
+            if (!frame.contains(mouseX, mouseY)) {
+                continue;
+            }
 
-        if (!isInside(mouseX, mouseY, x, y, w, h)) {
+            SecondaryChatSettings.TabConfig tab = SecondaryChatManager.selectedTab(frame.window);
+            if (tab == null) {
+                return;
+            }
+            int scrollAmount = (int) Math.signum(verticalAmount);
+            SecondaryChatManager.scroll(frame.window.id, tab.id, scrollAmount);
             return;
         }
-
-        int scrollAmount = (int) Math.signum(verticalAmount);
-        SecondaryChatOverlay.scroll(scrollAmount);
     }
 
     public static boolean isDraggingOrResizing() {
-        return dragging || resizing;
+        return dragMode != DragMode.NONE;
     }
 
-    private static boolean isInside(double mx, double my, int x, int y, int w, int h) {
-        return mx >= x && mx <= x + w && my >= y && my <= y + h;
+    public static boolean isDraggingOrResizing(String windowId) {
+        return dragMode != DragMode.NONE && activeWindowId.equals(windowId);
     }
 
-    private static HudCanvasDataHandler.HudCanvasElement getCanvas() {
-        return HudCanvasDataHandler.getMutableElement(
-                HudCanvasDataHandler.ELEMENT_SECONDARY_CHAT,
-                SecondaryChatOverlay::defaultCanvasElement
-        );
+    static boolean isMenuOpen(String windowId) {
+        return openMenuWindowId.equals(windowId);
+    }
+
+    static String menuLabel(int row) {
+        return switch (row) {
+            case 0 -> "New Tab";
+            case 1 -> "Delete Tab";
+            case 2 -> "Clear Tab";
+            case 3 -> "Clear Window";
+            case 4 -> "Editor";
+            default -> "";
+        };
+    }
+
+    static boolean menuItemEnabled(SecondaryChatWindowLayout.Frame frame, int row) {
+        if (frame == null || frame.window == null) {
+            return false;
+        }
+        SecondaryChatSettings.TabConfig selected = SecondaryChatManager.selectedTab(frame.window);
+        return switch (row) {
+            case 0 -> true;
+            case 1 -> frame.window.tabs.size() > 1 && selected != null;
+            case 2 -> selected != null;
+            case 3 -> true;
+            case 4 -> true;
+            default -> false;
+        };
+    }
+
+    private static void maybeResetTransparency(double mouseX, double mouseY) {
+        if (!SecondaryChatSettings.get().resetTransparencyWhenHovered) {
+            return;
+        }
+        for (SecondaryChatWindowLayout.Frame frame : SecondaryChatWindowLayout.framesTopFirst()) {
+            if (frame.contains(mouseX, mouseY)) {
+                SecondaryChatManager.setLastAlphaReset(System.currentTimeMillis());
+                return;
+            }
+        }
+    }
+
+    private static void stopDragging() {
+        dragMode = DragMode.NONE;
+        activeWindowId = "";
+        activeUsesHudCanvas = false;
+    }
+
+    private static void toggleMenu(String windowId) {
+        openMenuWindowId = openMenuWindowId.equals(windowId) ? "" : windowId;
+    }
+
+    private static SecondaryChatWindowLayout.Frame openMenuFrame() {
+        if (openMenuWindowId.isEmpty()) {
+            return null;
+        }
+        for (SecondaryChatWindowLayout.Frame frame : SecondaryChatWindowLayout.framesTopFirst()) {
+            if (frame.window.id.equals(openMenuWindowId)) {
+                return frame;
+            }
+        }
+        openMenuWindowId = "";
+        return null;
+    }
+
+    private static void handleMenuClick(SecondaryChatWindowLayout.Frame frame, double mouseX, double mouseY) {
+        int row = (int) ((mouseY - SecondaryChatWindowLayout.menuY(frame)) / SecondaryChatWindowLayout.MENU_ROW_HEIGHT);
+        if (!menuItemEnabled(frame, row)) {
+            return;
+        }
+
+        switch (row) {
+            case 0 -> addTab(frame.window.id);
+            case 1 -> removeSelectedTab(frame.window.id);
+            case 2 -> clearSelectedTab(frame.window);
+            case 3 -> SecondaryChatManager.clearWindow(frame.window.id);
+            case 4 -> openEditor();
+            default -> {
+                return;
+            }
+        }
+
+        if (row != 4) {
+            openMenuWindowId = "";
+        }
+    }
+
+    private static void addTab(String windowId) {
+        final String[] addedTabId = {null};
+        SecondaryChatSettings.updateAndSave(() -> {
+            SecondaryChatSettings.WindowConfig window = findWindow(windowId, SecondaryChatSettings.get().windows);
+            if (window == null) {
+                return;
+            }
+            int next = window.tabs.size() + 1;
+            SecondaryChatSettings.TabConfig tab = new SecondaryChatSettings.TabConfig();
+            tab.id = uniqueTabId("tab_" + next, window.tabs);
+            tab.name = "Tab " + next;
+            tab.catchAll = false;
+            window.tabs.add(tab);
+            window.selectedTabId = tab.id;
+            addedTabId[0] = tab.id;
+        });
+        if (addedTabId[0] != null) {
+            SecondaryChatManager.clearUnread(windowId, addedTabId[0]);
+            SecondaryChatManager.resetScroll(windowId, addedTabId[0]);
+        }
+    }
+
+    private static void removeSelectedTab(String windowId) {
+        SecondaryChatSettings.WindowConfig currentWindow = SecondaryChatManager.findWindow(windowId);
+        SecondaryChatSettings.TabConfig currentTab = currentWindow == null ? null : SecondaryChatManager.selectedTab(currentWindow);
+        if (currentWindow == null || currentTab == null || currentWindow.tabs.size() <= 1) {
+            return;
+        }
+
+        String removedTabId = currentTab.id;
+        SecondaryChatSettings.updateAndSave(() -> {
+            SecondaryChatSettings.WindowConfig window = findWindow(windowId, SecondaryChatSettings.get().windows);
+            if (window == null || window.tabs.size() <= 1) {
+                return;
+            }
+            window.tabs.removeIf(tab -> tab.id.equals(removedTabId));
+            if (window.tabs.isEmpty()) {
+                SecondaryChatSettings.TabConfig tab = new SecondaryChatSettings.TabConfig();
+                tab.id = "all";
+                tab.name = "All";
+                tab.catchAll = true;
+                window.tabs.add(tab);
+            }
+            window.selectedTabId = window.tabs.getFirst().id;
+        });
+        SecondaryChatManager.clear(windowId, removedTabId);
+    }
+
+    private static void clearSelectedTab(SecondaryChatSettings.WindowConfig window) {
+        SecondaryChatSettings.TabConfig tab = SecondaryChatManager.selectedTab(window);
+        if (tab != null) {
+            SecondaryChatManager.clear(window.id, tab.id);
+        }
+    }
+
+    private static void openEditor() {
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (client != null) {
+            openMenuWindowId = "";
+            client.setScreen(new SecondaryChatConfigScreen(client.currentScreen));
+        }
+    }
+
+    private static SecondaryChatSettings.WindowConfig findWindow(String windowId,
+                                                                 List<SecondaryChatSettings.WindowConfig> windows) {
+        if (windows == null) {
+            return null;
+        }
+        for (SecondaryChatSettings.WindowConfig window : windows) {
+            if (window != null && window.id.equals(windowId)) {
+                return window;
+            }
+        }
+        return null;
+    }
+
+    private static String uniqueTabId(String base, List<SecondaryChatSettings.TabConfig> tabs) {
+        String root = sanitizeId(base);
+        String candidate = root;
+        int suffix = 2;
+        while (containsTabId(tabs, candidate)) {
+            candidate = root + "_" + suffix++;
+        }
+        return candidate;
+    }
+
+    private static boolean containsTabId(List<SecondaryChatSettings.TabConfig> tabs, String id) {
+        if (tabs == null) {
+            return false;
+        }
+        for (SecondaryChatSettings.TabConfig tab : tabs) {
+            if (tab != null && tab.id.equals(id)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static String sanitizeId(String raw) {
+        String value = raw == null ? "" : raw.trim().toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9_.-]", "_");
+        return value.isEmpty() ? "tab" : value;
+    }
+
+    private static void saveIfDirty() {
+        if (hudCanvasDirty) {
+            HudCanvasDataHandler.save();
+            hudCanvasDirty = false;
+        }
+        if (settingsDirty) {
+            SecondaryChatSettings.save();
+            settingsDirty = false;
+        }
     }
 }

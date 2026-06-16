@@ -1,6 +1,7 @@
 package me.m0dii.modules.macros.gui;
 
 import me.m0dii.modules.bridging.BridgingTweaksModule;
+import me.m0dii.modules.chat.SecondaryChatConfigScreen;
 import me.m0dii.modules.chat.SecondaryChatModule;
 import me.m0dii.modules.chat.SecondaryChatSettings;
 import me.m0dii.modules.commandblockui.BetterCommandBlockUiModule;
@@ -27,6 +28,7 @@ import me.m0dii.modules.reach.ReachModule;
 import me.m0dii.modules.tweaks.TweaksModule;
 import me.m0dii.modules.waypoints.WaypointModule;
 import me.m0dii.utils.ModConfig;
+import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.client.gui.widget.ClickableWidget;
@@ -445,8 +447,7 @@ final class MacroWorkbenchConfigurationTab {
 
     private final class SecondaryChatControls extends ControlSection {
         private ButtonWidget secondaryEnabledToggleButton;
-        private ButtonWidget secondaryOverlayToggleButton;
-        private ButtonWidget secondaryInterceptModeButton;
+        private ButtonWidget secondaryEditorButton;
         private ButtonWidget secondaryRegexAddButton;
         private ButtonWidget secondaryRegexApplyButton;
         private ButtonWidget secondaryRegexRemoveButton;
@@ -459,23 +460,25 @@ final class MacroWorkbenchConfigurationTab {
         protected void init(int rightX, int settingW) {
             this.secondaryEnabledToggleButton = addButton(
                     () -> Text.literal("Secondary Chat: " + (SecondaryChatModule.INSTANCE.isEnabled() ? "ON" : "OFF")),
-                    () -> SecondaryChatModule.INSTANCE.setEnabled(!SecondaryChatModule.INSTANCE.isEnabled()),
+                    () -> {
+                        boolean enabled = !SecondaryChatModule.INSTANCE.isEnabled();
+                        SecondaryChatModule.INSTANCE.setEnabled(enabled);
+                        if (enabled) {
+                            SecondaryChatSettings.updateAndSave(() -> {
+                                SecondaryChatSettings.get().showOverlay = true;
+                                SecondaryChatSettings.get().renderMode = SecondaryChatSettings.RenderMode.REPLACE;
+                                SecondaryChatSettings.get().showWhileGuiOpen = true;
+                            });
+                        }
+                    },
                     rightX, settingW, 0
             );
-            this.secondaryOverlayToggleButton = addButton(
-                    () -> Text.literal("Secondary Overlay: " + (SecondaryChatSettings.get().showOverlay ? "ON" : "OFF")),
-                    () -> SecondaryChatSettings.updateAndSave(() -> SecondaryChatSettings.get().showOverlay = !SecondaryChatSettings.get().showOverlay),
+            this.secondaryEditorButton = addButton(
+                    () -> Text.literal("Open Secondary Chat Editor"),
+                    () -> MinecraftClient.getInstance().setScreen(new SecondaryChatConfigScreen(owner)),
                     rightX, settingW, 1
             );
-            this.secondaryInterceptModeButton = addButton(
-                    () -> Text.literal("Intercept Mode: " + (SecondaryChatSettings.get().interceptMode == null ? "COPY" : SecondaryChatSettings.get().interceptMode.name())),
-                    () -> SecondaryChatSettings.updateAndSave(() -> SecondaryChatSettings.get().interceptMode =
-                            SecondaryChatSettings.get().interceptMode == SecondaryChatSettings.InterceptMode.COPY
-                                    ? SecondaryChatSettings.InterceptMode.MOVE
-                                    : SecondaryChatSettings.InterceptMode.COPY),
-                    rightX, settingW, 2
-            );
-            this.secondaryRegexInputField = addTextField(rightX, rowY(3), settingW - 114, ROW_H, "Regex");
+            this.secondaryRegexInputField = addTextField(rightX, rowY(2), settingW - 114, ROW_H, "Regex");
             this.secondaryRegexInputField.setMaxLength(180);
             this.secondaryRegexAddButton = addButton(
                     () -> Text.literal("Add"),
@@ -488,7 +491,7 @@ final class MacroWorkbenchConfigurationTab {
                             ensureRegexSelectionInBounds();
                         }
                     },
-                    rightX + settingW - 110, rowY(3), 110, ROW_H
+                    rightX + settingW - 110, rowY(2), 110, ROW_H
             );
             this.secondaryRegexApplyButton = addButton(
                     () -> Text.literal("Apply Selected"),
@@ -504,7 +507,7 @@ final class MacroWorkbenchConfigurationTab {
                             }
                         });
                     },
-                    rightX, rowY(9), 140, ROW_H
+                    rightX, rowY(8), 140, ROW_H
             );
             this.secondaryRegexRemoveButton = addButton(
                     () -> Text.literal("Remove Selected"),
@@ -520,7 +523,7 @@ final class MacroWorkbenchConfigurationTab {
                         }
                         ensureRegexSelectionInBounds();
                     },
-                    rightX + 144, rowY(9), 140, ROW_H
+                    rightX + 144, rowY(8), 140, ROW_H
             );
             this.secondaryRegexClearButton = addButton(
                     () -> Text.literal("Clear All"),
@@ -529,9 +532,9 @@ final class MacroWorkbenchConfigurationTab {
                         selectedRegexIndex = -1;
                         regexScroll = 0;
                     },
-                    rightX + 288, rowY(9), 100, ROW_H
+                    rightX + 288, rowY(8), 100, ROW_H
             );
-            this.secondaryOutgoingRegexField = addTextField(rightX, rowY(10), settingW - 110, ROW_H, "Outgoing regex");
+            this.secondaryOutgoingRegexField = addTextField(rightX, rowY(9), settingW - 110, ROW_H, "Outgoing regex");
             this.secondaryOutgoingRegexField.setMaxLength(180);
             this.secondaryOutgoingApplyButton = addButton(
                     () -> Text.literal("Apply"),
@@ -539,7 +542,7 @@ final class MacroWorkbenchConfigurationTab {
                         String outgoing = safeField(this.secondaryOutgoingRegexField);
                         SecondaryChatSettings.updateAndSave(() -> SecondaryChatSettings.get().outgoingRegex = outgoing);
                     },
-                    rightX + settingW - 106, rowY(10), 106, ROW_H
+                    rightX + settingW - 106, rowY(9), 106, ROW_H
             );
         }
 
