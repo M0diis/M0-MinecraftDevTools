@@ -41,22 +41,12 @@ public class ChatHudMixin {
         }
     }
 
-    // Hook the simple addMessage(Text) - catches command feedback
-    @Inject(method = "addMessage(Lnet/minecraft/text/Text;)V", at = @At("HEAD"), cancellable = true)
-    private void onAddMessageSecondaryChat(Text message, CallbackInfo ci) {
-        handleMessage(message, ci);
-        MessageHistoryManager.addMessage(message);
-        CoreProtectTracker.onChatMessage(message);
-        AutomationModule.INSTANCE.onChatMessage(message);
-    }
-
-    // Hook the full signature addMessage - catches actual chat messages
     @Inject(
             method = "addMessage(Lnet/minecraft/text/Text;Lnet/minecraft/network/message/MessageSignatureData;Lnet/minecraft/client/gui/hud/MessageIndicator;)V",
             at = @At("HEAD"),
             cancellable = true
     )
-    private void onAddMessageFullSecondaryChat(Text message, MessageSignatureData signature, MessageIndicator indicator, CallbackInfo ci) {
+    private void onAddMessageSecondaryChat(Text message, MessageSignatureData signature, MessageIndicator indicator, CallbackInfo ci) {
         handleMessage(message, ci);
 
         MessageHistoryManager.addMessage(message);
