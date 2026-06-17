@@ -12,9 +12,9 @@ final class SecondaryChatWindowLayout {
     static final int HEADER_HEIGHT = 16;
     static final int RESIZE_HANDLE = 7;
     static final int SETTINGS_BUTTON_SIZE = 12;
-    static final int MENU_WIDTH = 104;
+    static final int MENU_WIDTH = 112;
     static final int MENU_ROW_HEIGHT = 16;
-    static final int MENU_ROWS = 5;
+    static final int MENU_ROWS = 6;
     private static final int TAB_PAD_X = 6;
     private static final int TAB_GAP = 2;
 

@@ -1,17 +1,34 @@
 package me.m0dii.modules.chat;
 
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonElement;
+import com.mojang.serialization.JsonOps;
+import me.m0dii.mixin.ScreenClickEventInvoker;
 import me.m0dii.modules.hudcanvas.HudCanvasDataHandler;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
+import net.fabricmc.fabric.api.client.screen.v1.ScreenKeyboardEvents;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenMouseEvents;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.Click;
 import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.client.input.KeyInput;
+import net.minecraft.client.util.InputUtil;
+import net.minecraft.registry.RegistryWrapper;
+import net.minecraft.text.ClickEvent;
+import net.minecraft.text.Style;
+import net.minecraft.text.Text;
+import net.minecraft.text.TextCodecs;
+import net.minecraft.util.Formatting;
 
 import java.util.List;
 import java.util.Locale;
 
 public final class SecondaryChatInteraction {
+    private static final double WHEEL_LINES_PER_NOTCH = 3.0;
+    private static final Gson PRETTY_GSON = new GsonBuilder().setPrettyPrinting().create();
+
     private SecondaryChatInteraction() {
     }
 
@@ -31,6 +48,11 @@ public final class SecondaryChatInteraction {
     private static int dragStartWindowWidth;
     private static int dragStartWindowHeight;
     private static String openMenuWindowId = "";
+    private static int lastMouseX;
+    private static int lastMouseY;
+    private static String selectedWindowId = "";
+    private static String selectedTabId = "";
+    private static long selectedMessageId = -1L;
 
     private static boolean hudCanvasDirty = false;
     private static boolean settingsDirty = false;
@@ -38,9 +60,10 @@ public final class SecondaryChatInteraction {
 
     public static void register() {
         ScreenEvents.AFTER_INIT.register((client, screen, scaledWidth, scaledHeight) -> {
-            ScreenMouseEvents.beforeMouseClick(screen).register(SecondaryChatInteraction::handleMouseClick);
+            ScreenMouseEvents.allowMouseClick(screen).register(SecondaryChatInteraction::allowMouseClick);
             ScreenMouseEvents.beforeMouseRelease(screen).register(SecondaryChatInteraction::handleMouseRelease);
-            ScreenMouseEvents.beforeMouseScroll(screen).register(SecondaryChatInteraction::handleMouseScroll);
+            ScreenMouseEvents.allowMouseScroll(screen).register(SecondaryChatInteraction::allowMouseScroll);
+            ScreenKeyboardEvents.allowKeyPress(screen).register(SecondaryChatInteraction::allowKeyPress);
         });
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
@@ -56,28 +79,38 @@ public final class SecondaryChatInteraction {
         });
     }
 
-    private static void handleMouseClick(Screen screen, Click click) {
-        SecondaryChatSettings.Data settings = SecondaryChatSettings.get();
-        if (!settings.enabled || !settings.showOverlay) {
-            return;
+    private static boolean allowMouseClick(Screen screen, Click click) {
+        if (screen instanceof SecondaryChatConfigScreen) {
+            return true;
         }
 
-        if (click.button() != 0) {
-            return;
+        SecondaryChatSettings.Data settings = SecondaryChatSettings.get();
+        if (!settings.enabled || !settings.showOverlay) {
+            return true;
+        }
+
+        boolean leftClick = click.button() == 0;
+        boolean rightClick = click.button() == 1;
+        if (!leftClick && !rightClick) {
+            return true;
         }
 
         MinecraftClient client = MinecraftClient.getInstance();
         if (client == null) {
-            return;
+            return true;
         }
 
         double mouseX = click.x();
         double mouseY = click.y();
+        lastMouseX = (int) mouseX;
+        lastMouseY = (int) mouseY;
 
         SecondaryChatWindowLayout.Frame menuFrame = openMenuFrame();
         if (menuFrame != null && SecondaryChatWindowLayout.containsMenu(menuFrame, mouseX, mouseY)) {
-            handleMenuClick(menuFrame, mouseX, mouseY);
-            return;
+            if (leftClick) {
+                handleMenuClick(menuFrame, mouseX, mouseY);
+            }
+            return false;
         }
 
         for (SecondaryChatWindowLayout.Frame frame : SecondaryChatWindowLayout.framesTopFirst()) {
@@ -86,16 +119,37 @@ public final class SecondaryChatInteraction {
             }
 
             if (SecondaryChatWindowLayout.containsSettingsButton(frame, mouseX, mouseY)) {
-                toggleMenu(frame.window.id);
-                return;
+                if (leftClick) {
+                    toggleMenu(frame.window.id);
+                }
+                return false;
             }
 
             openMenuWindowId = "";
 
-            SecondaryChatWindowLayout.TabHit tabHit = SecondaryChatWindowLayout.tabAt(frame, mouseX, mouseY, client.textRenderer);
-            if (tabHit != null) {
-                SecondaryChatManager.selectTab(tabHit.window.id, tabHit.tab.id);
-                return;
+            if (leftClick) {
+                SecondaryChatWindowLayout.TabHit tabHit = SecondaryChatWindowLayout.tabAt(frame, mouseX, mouseY, client.textRenderer);
+                if (tabHit != null) {
+                    SecondaryChatManager.selectTab(tabHit.window.id, tabHit.tab.id);
+                    clearSelectionForWindow(tabHit.window.id);
+                    return false;
+                }
+            }
+
+            SecondaryChatTextLayout.Hit hit = SecondaryChatTextLayout.hitAt(frame, client.textRenderer, mouseX, mouseY);
+            if (hit != null) {
+                selectMessage(frame, hit);
+                if (rightClick) {
+                    copyMessage(hit.line().message());
+                } else {
+                    handleStyledClick(screen, hit.style());
+                }
+                return false;
+            }
+
+            if (rightClick) {
+                copySelectedMessage();
+                return false;
             }
 
             activeWindowId = frame.window.id;
@@ -108,13 +162,17 @@ public final class SecondaryChatInteraction {
             dragStartWindowHeight = frame.height;
 
             dragMode = frame.containsResize(mouseX, mouseY) ? DragMode.RESIZE : DragMode.MOVE;
-            return;
+            return false;
         }
 
         openMenuWindowId = "";
+        return true;
     }
 
     public static void handleMouseMove(double mouseX, double mouseY) {
+        lastMouseX = (int) mouseX;
+        lastMouseY = (int) mouseY;
+
         if (dragMode == DragMode.NONE) {
             maybeResetTransparency(mouseX, mouseY);
             return;
@@ -159,15 +217,22 @@ public final class SecondaryChatInteraction {
         saveIfDirty();
     }
 
-    private static void handleMouseScroll(Screen screen,
+    private static boolean allowMouseScroll(Screen screen,
                                           double mouseX,
                                           double mouseY,
                                           double horizontalAmount,
                                           double verticalAmount) {
+        if (screen instanceof SecondaryChatConfigScreen) {
+            return true;
+        }
+
         SecondaryChatSettings.Data settings = SecondaryChatSettings.get();
         if (!settings.enabled || !settings.showOverlay) {
-            return;
+            return true;
         }
+
+        lastMouseX = (int) mouseX;
+        lastMouseY = (int) mouseY;
 
         for (SecondaryChatWindowLayout.Frame frame : SecondaryChatWindowLayout.framesTopFirst()) {
             if (!frame.contains(mouseX, mouseY)) {
@@ -176,12 +241,31 @@ public final class SecondaryChatInteraction {
 
             SecondaryChatSettings.TabConfig tab = SecondaryChatManager.selectedTab(frame.window);
             if (tab == null) {
-                return;
+                return false;
             }
-            int scrollAmount = (int) Math.signum(verticalAmount);
+            double scrollAmount = verticalAmount * WHEEL_LINES_PER_NOTCH;
             SecondaryChatManager.scroll(frame.window.id, tab.id, scrollAmount);
-            return;
+            return false;
         }
+        return true;
+    }
+
+    private static boolean allowKeyPress(Screen screen, KeyInput key) {
+        if (screen instanceof SecondaryChatConfigScreen) {
+            return true;
+        }
+
+        if (!SecondaryChatSettings.get().enabled || selectedMessageId < 0) {
+            return true;
+        }
+
+        boolean copyShortcut = key.key() == InputUtil.GLFW_KEY_C
+                && (key.modifiers() & (InputUtil.GLFW_MOD_CONTROL | InputUtil.GLFW_MOD_SUPER)) != 0;
+        if (!copyShortcut || !isMouseOverSelectedWindow()) {
+            return true;
+        }
+
+        return !copySelectedMessage();
     }
 
     public static boolean isDraggingOrResizing() {
@@ -196,13 +280,43 @@ public final class SecondaryChatInteraction {
         return openMenuWindowId.equals(windowId);
     }
 
+    static int lastMouseX() {
+        return lastMouseX;
+    }
+
+    static int lastMouseY() {
+        return lastMouseY;
+    }
+
+    static boolean isSelected(String windowId, String tabId, SecondaryChatManager.ChatMessage message) {
+        return message != null
+                && selectedMessageId == message.id()
+                && selectedWindowId.equals(windowId)
+                && selectedTabId.equals(tabId);
+    }
+
+    static SecondaryChatTextLayout.Hit hoveredMessageHit(SecondaryChatWindowLayout.Frame frame,
+                                                         net.minecraft.client.font.TextRenderer textRenderer) {
+        if (frame == null || !isTopmostWindowAtMouse(frame.window.id)) {
+            return null;
+        }
+        if (isMenuOpen(frame.window.id) && SecondaryChatWindowLayout.containsMenu(frame, lastMouseX, lastMouseY)) {
+            return null;
+        }
+        if (SecondaryChatWindowLayout.containsSettingsButton(frame, lastMouseX, lastMouseY)) {
+            return null;
+        }
+        return SecondaryChatTextLayout.hitAt(frame, textRenderer, lastMouseX, lastMouseY);
+    }
+
     static String menuLabel(int row) {
         return switch (row) {
             case 0 -> "New Tab";
             case 1 -> "Delete Tab";
-            case 2 -> "Clear Tab";
-            case 3 -> "Clear Window";
-            case 4 -> "Editor";
+            case 2 -> "Copy JSON";
+            case 3 -> "Clear Tab";
+            case 4 -> "Clear Window";
+            case 5 -> "Editor";
             default -> "";
         };
     }
@@ -215,9 +329,10 @@ public final class SecondaryChatInteraction {
         return switch (row) {
             case 0 -> true;
             case 1 -> frame.window.tabs.size() > 1 && selected != null;
-            case 2 -> selected != null;
-            case 3 -> true;
+            case 2 -> selectedMessage(frame.window.id) != null;
+            case 3 -> selected != null;
             case 4 -> true;
+            case 5 -> true;
             default -> false;
         };
     }
@@ -266,15 +381,19 @@ public final class SecondaryChatInteraction {
         switch (row) {
             case 0 -> addTab(frame.window.id);
             case 1 -> removeSelectedTab(frame.window.id);
-            case 2 -> clearSelectedTab(frame.window);
-            case 3 -> SecondaryChatManager.clearWindow(frame.window.id);
-            case 4 -> openEditor();
+            case 2 -> copySelectedMessageJson(frame.window.id);
+            case 3 -> clearSelectedTab(frame.window);
+            case 4 -> {
+                SecondaryChatManager.clearWindow(frame.window.id);
+                clearSelectionForWindow(frame.window.id);
+            }
+            case 5 -> openEditor();
             default -> {
                 return;
             }
         }
 
-        if (row != 4) {
+        if (row != 5) {
             openMenuWindowId = "";
         }
     }
@@ -325,12 +444,14 @@ public final class SecondaryChatInteraction {
             window.selectedTabId = window.tabs.getFirst().id;
         });
         SecondaryChatManager.clear(windowId, removedTabId);
+        clearSelectionForTab(windowId, removedTabId);
     }
 
     private static void clearSelectedTab(SecondaryChatSettings.WindowConfig window) {
         SecondaryChatSettings.TabConfig tab = SecondaryChatManager.selectedTab(window);
         if (tab != null) {
             SecondaryChatManager.clear(window.id, tab.id);
+            clearSelectionForTab(window.id, tab.id);
         }
     }
 
@@ -380,6 +501,150 @@ public final class SecondaryChatInteraction {
     private static String sanitizeId(String raw) {
         String value = raw == null ? "" : raw.trim().toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9_.-]", "_");
         return value.isEmpty() ? "tab" : value;
+    }
+
+    private static void selectMessage(SecondaryChatWindowLayout.Frame frame, SecondaryChatTextLayout.Hit hit) {
+        SecondaryChatSettings.TabConfig tab = SecondaryChatManager.selectedTab(frame.window);
+        if (tab == null || hit == null || hit.line() == null) {
+            clearSelection();
+            return;
+        }
+
+        selectedWindowId = frame.window.id;
+        selectedTabId = tab.id;
+        selectedMessageId = hit.line().message().id();
+    }
+
+    private static void handleStyledClick(Screen screen, Style style) {
+        if (style == null) {
+            return;
+        }
+
+        ClickEvent clickEvent = style.getClickEvent();
+        if (clickEvent == null) {
+            return;
+        }
+
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (client != null) {
+            ScreenClickEventInvoker.invokeHandleClickEvent(clickEvent, client, screen);
+        }
+    }
+
+    private static boolean copySelectedMessage() {
+        SecondaryChatManager.ChatMessage selected = selectedMessage();
+        if (selected == null) {
+            clearSelection();
+            return false;
+        }
+        copyMessage(selected);
+        return true;
+    }
+
+    private static void copyMessage(SecondaryChatManager.ChatMessage message) {
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (client == null || message == null) {
+            return;
+        }
+
+        client.keyboard.setClipboard(message.plainText());
+        if (client.player != null) {
+            client.player.sendMessage(Text.literal("Copied chat message").formatted(Formatting.GRAY), true);
+        }
+    }
+
+    private static SecondaryChatManager.ChatMessage selectedMessage() {
+        if (selectedMessageId < 0 || selectedWindowId.isEmpty() || selectedTabId.isEmpty()) {
+            return null;
+        }
+        return selectedMessage(selectedWindowId);
+    }
+
+    private static SecondaryChatManager.ChatMessage selectedMessage(String windowId) {
+        if (selectedMessageId < 0 || selectedTabId.isEmpty() || !selectedWindowId.equals(windowId)) {
+            return null;
+        }
+        for (SecondaryChatManager.ChatMessage message : SecondaryChatManager.snapshot(selectedWindowId, selectedTabId)) {
+            if (message.id() == selectedMessageId) {
+                return message;
+            }
+        }
+        return null;
+    }
+
+    private static void copySelectedMessageJson(String windowId) {
+        SecondaryChatManager.ChatMessage selected = selectedMessage(windowId);
+        if (selected == null) {
+            return;
+        }
+
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (client == null) {
+            return;
+        }
+
+        client.keyboard.setClipboard(toComponentJson(selected.text()));
+        if (client.player != null) {
+            client.player.sendMessage(Text.literal("Copied chat component JSON").formatted(Formatting.GRAY), true);
+        }
+    }
+
+    private static String toComponentJson(Text text) {
+        MinecraftClient client = MinecraftClient.getInstance();
+        RegistryWrapper.WrapperLookup registryLookup = client == null || client.world == null
+                ? null
+                : client.world.getRegistryManager();
+
+        return TextCodecs.CODEC.encodeStart(
+                        registryLookup == null ? JsonOps.INSTANCE : registryLookup.getOps(JsonOps.INSTANCE),
+                        text
+                )
+                .result()
+                .map(SecondaryChatInteraction::prettyJson)
+                .orElseGet(() -> PRETTY_GSON.toJson(text.getString()));
+    }
+
+    private static String prettyJson(JsonElement element) {
+        return PRETTY_GSON.toJson(element);
+    }
+
+    private static boolean isMouseOverSelectedWindow() {
+        if (selectedWindowId.isEmpty()) {
+            return false;
+        }
+        for (SecondaryChatWindowLayout.Frame frame : SecondaryChatWindowLayout.framesTopFirst()) {
+            if (frame.window.id.equals(selectedWindowId) && frame.contains(lastMouseX, lastMouseY)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean isTopmostWindowAtMouse(String windowId) {
+        for (SecondaryChatWindowLayout.Frame frame : SecondaryChatWindowLayout.framesTopFirst()) {
+            if (frame.contains(lastMouseX, lastMouseY)) {
+                return frame.window.id.equals(windowId);
+            }
+        }
+        return false;
+    }
+
+    private static void clearSelectionForWindow(String windowId) {
+        if (selectedWindowId.equals(windowId)) {
+            clearSelection();
+        }
+    }
+
+    private static void clearSelectionForTab(String windowId, String tabId) {
+        if (selectedWindowId.equals(windowId) && selectedTabId.equals(tabId)) {
+            clearSelection();
+        }
+    }
+
+    private static void clearSelection() {
+        selectedWindowId = "";
+        selectedTabId = "";
+        selectedMessageId = -1L;
     }
 
     private static void saveIfDirty() {

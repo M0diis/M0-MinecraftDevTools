@@ -8,23 +8,13 @@ import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
+import net.minecraft.client.gui.cursor.StandardCursors;
 import net.minecraft.client.gui.screen.ChatScreen;
 import net.minecraft.client.render.RenderTickCounter;
-import net.minecraft.text.MutableText;
-import net.minecraft.text.OrderedText;
-import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
+import net.minecraft.text.Style;
 import net.minecraft.util.Identifier;
 
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.List;
-
 public final class SecondaryChatOverlay {
-    private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm")
-            .withZone(ZoneId.systemDefault());
-
     private SecondaryChatOverlay() {
     }
 
@@ -137,6 +127,10 @@ public final class SecondaryChatOverlay {
             int y = frame.y + frame.height - SecondaryChatWindowLayout.RESIZE_HANDLE;
             ctx.fill(x, y, x + SecondaryChatWindowLayout.RESIZE_HANDLE, y + SecondaryChatWindowLayout.RESIZE_HANDLE, handleColor);
         }
+
+        if (screenOpen) {
+            renderMessageHover(ctx, textRenderer, frame);
+        }
     }
 
     private static void renderTabs(DrawContext ctx,
@@ -176,8 +170,8 @@ public final class SecondaryChatOverlay {
         int y = SecondaryChatWindowLayout.settingsButtonY(frame);
         int size = SecondaryChatWindowLayout.SETTINGS_BUTTON_SIZE;
         boolean open = SecondaryChatInteraction.isMenuOpen(frame.window.id);
-            int baseFill = open ? 0x00343A44 : 0x0016181C;
-            int fill = baseFill | (Math.max(alpha, 90) << 24);
+        int baseFill = open ? 0x00343A44 : 0x0016181C;
+        int fill = baseFill | (Math.max(alpha, 90) << 24);
         ctx.fill(x, y, x + size, y + size, fill);
 
         int line = 0xDDFFFFFF;
@@ -218,46 +212,33 @@ public final class SecondaryChatOverlay {
             return;
         }
 
-        List<SecondaryChatManager.ChatMessage> messages = SecondaryChatManager.snapshot(frame.window.id, selected.id);
-        List<OrderedText> wrappedLines = new ArrayList<>();
-        int scaledW = Math.max(20, Math.round(frame.contentWidth() / frame.scale));
-        for (SecondaryChatManager.ChatMessage message : messages) {
-            MutableText display = displayText(message, frame.window.showTimestamps, frame.window.compactRepeats);
-            wrappedLines.addAll(textRenderer.wrapLines(display, scaledW));
-        }
+        SecondaryChatTextLayout.Layout layout = SecondaryChatTextLayout.layout(frame, textRenderer);
 
         ctx.getMatrices().pushMatrix();
         ctx.getMatrices().scale(frame.scale, frame.scale);
+        ctx.enableScissor(layout.x(), layout.y(), layout.x() + layout.scaledWidth(), layout.contentBottom());
 
-        int x = Math.round(frame.contentX() / frame.scale);
-        int y = Math.round(frame.contentY() / frame.scale);
-        int contentBottom = Math.round((frame.contentY() + frame.contentHeight()) / frame.scale);
-        int lineHeight = Math.max(6, frame.lineHeight);
-        int maxVisible = Math.max(1, (contentBottom - y) / lineHeight);
-        int maxScroll = Math.max(0, wrappedLines.size() - maxVisible);
-        int scroll = Math.clamp(SecondaryChatManager.scrollOffset(frame.window.id, selected.id), 0, maxScroll);
-
-        if (wrappedLines.isEmpty()) {
+        if (layout.totalLines() == 0) {
             String hint = frame.window.title == null || frame.window.title.isBlank() ? "Waiting for messages..." : frame.window.title;
-            ctx.drawText(textRenderer, hint, x, y, 0x88888888, false);
+            ctx.drawText(textRenderer, hint, layout.x(), layout.y(), 0x88888888, false);
         } else {
-            int start = Math.max(0, wrappedLines.size() - maxVisible - scroll);
-            int end = Math.min(wrappedLines.size(), start + maxVisible);
-            for (int i = start; i < end; i++) {
-                if (y + lineHeight > contentBottom) {
-                    break;
+            for (SecondaryChatTextLayout.VisibleLine line : layout.visibleLines()) {
+                if (SecondaryChatInteraction.isSelected(frame.window.id, selected.id, line.message())) {
+                    int selectionRight = Math.min(layout.x() + layout.scaledWidth(), line.x() + Math.max(1, line.width()));
+                    ctx.fill(line.x() - 1, line.y() - 1, selectionRight + 1, line.y() + layout.lineHeight(), 0x553B82F6);
                 }
-                ctx.drawText(textRenderer, wrappedLines.get(i), x, y, textColor, false);
-                y += lineHeight;
+                ctx.drawText(textRenderer, line.text(), line.x(), line.y(), textColor, false);
             }
         }
 
-        if (wrappedLines.size() > maxVisible && maxScroll > 0) {
+        ctx.disableScissor();
+
+        if (layout.totalLines() > layout.maxVisible() && layout.maxScroll() > 0) {
             int scrollbarX = Math.round((frame.x + frame.width - 5) / frame.scale);
             int scrollbarY = Math.round((frame.contentY()) / frame.scale);
             int scrollbarH = Math.max(12, Math.round((frame.contentHeight() - 10) / frame.scale));
-            int thumbSize = Math.max(8, scrollbarH * maxVisible / wrappedLines.size());
-            float scrollPercent = (float) scroll / maxScroll;
+            int thumbSize = Math.max(8, scrollbarH * layout.maxVisible() / layout.totalLines());
+            float scrollPercent = (float) (layout.scroll() / layout.maxScroll());
             int thumbY = scrollbarY + (int) ((scrollbarH - thumbSize) * (1.0f - scrollPercent));
             ctx.fill(scrollbarX, scrollbarY, scrollbarX + 2, scrollbarY + scrollbarH, 0x40FFFFFF);
             ctx.fill(scrollbarX, thumbY, scrollbarX + 2, thumbY + thumbSize, 0xCCFFFFFF);
@@ -266,19 +247,21 @@ public final class SecondaryChatOverlay {
         ctx.getMatrices().popMatrix();
     }
 
-    private static MutableText displayText(SecondaryChatManager.ChatMessage message,
-                                           boolean showTimestamp,
-                                           boolean compactRepeats) {
-        MutableText display = Text.empty();
-        if (showTimestamp) {
-            display.append(Text.literal("[" + TIME_FORMAT.format(message.receivedAt()) + "] ")
-                    .formatted(Formatting.DARK_GRAY));
+    private static void renderMessageHover(DrawContext ctx,
+                                           TextRenderer textRenderer,
+                                           SecondaryChatWindowLayout.Frame frame) {
+        SecondaryChatTextLayout.Hit hit = SecondaryChatInteraction.hoveredMessageHit(frame, textRenderer);
+        if (hit == null || hit.style() == null) {
+            return;
         }
-        display.append(message.text().copy());
-        if (compactRepeats && message.repeats() > 1) {
-            display.append(Text.literal(" x" + message.repeats()).formatted(Formatting.GRAY));
+
+        Style style = hit.style();
+        if (style.getClickEvent() != null) {
+            ctx.setCursor(StandardCursors.POINTING_HAND);
         }
-        return display;
+        if (style.getHoverEvent() != null) {
+            ctx.drawHoverEvent(textRenderer, style, SecondaryChatInteraction.lastMouseX(), SecondaryChatInteraction.lastMouseY());
+        }
     }
 
     private static String trimToWidth(TextRenderer textRenderer, String raw, int maxWidth) {

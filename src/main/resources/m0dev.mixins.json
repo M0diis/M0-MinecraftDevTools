@@ -40,6 +40,7 @@
     "MultiplayerServerListWidgetMixin",
     "PlayerListHudAccessor",
     "PlayerReachMixin",
+    "ScreenClickEventInvoker",
     "SimpleOptionMixin",
     "WorldRendererHeldLightMixin",
     "WorldRendererMixin",

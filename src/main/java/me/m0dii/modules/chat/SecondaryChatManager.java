@@ -16,15 +16,21 @@ public final class SecondaryChatManager {
     }
 
     public static final class ChatMessage {
+        private final long id;
         private final Text text;
         private final String plainText;
         private final Instant receivedAt;
         private int repeats = 1;
 
-        private ChatMessage(@NotNull Text text) {
-            this.text = text;
-            this.plainText = text.getString();
+        private ChatMessage(long id, @NotNull Text text) {
+            this.id = id;
+            this.text = text.copy();
+            this.plainText = this.text.getString();
             this.receivedAt = Instant.now();
+        }
+
+        public long id() {
+            return id;
         }
 
         public Text text() {
@@ -63,10 +69,11 @@ public final class SecondaryChatManager {
     }
 
     private static final Map<String, Deque<ChatMessage>> buffers = new LinkedHashMap<>();
-    private static final Map<String, Integer> scrollOffsets = new HashMap<>();
+    private static final Map<String, Double> scrollOffsets = new HashMap<>();
     private static final Map<String, Integer> unreadCounts = new HashMap<>();
     private static final Map<String, Pattern> patternCache = new HashMap<>();
     private static final String KEY_SEPARATOR = "\u001F";
+    private static long nextMessageId = 1L;
 
     @Getter
     @Setter
@@ -170,23 +177,23 @@ public final class SecondaryChatManager {
         return settings.enabled && text != null && matchesAnyConfiguredFilter(settings, text);
     }
 
-    public static synchronized int scrollOffset(@NotNull String windowId, @NotNull String tabId) {
-        return scrollOffsets.getOrDefault(key(windowId, tabId), 0);
+    public static synchronized double scrollOffset(@NotNull String windowId, @NotNull String tabId) {
+        return scrollOffsets.getOrDefault(key(windowId, tabId), 0.0);
     }
 
-    public static synchronized void scroll(@NotNull String windowId, @NotNull String tabId, int amount) {
+    public static synchronized void scroll(@NotNull String windowId, @NotNull String tabId, double amount) {
         String key = key(windowId, tabId);
-        int current = scrollOffsets.getOrDefault(key, 0);
-        int max = Math.max(0, SecondaryChatSettings.get().maxLines * 20);
+        double current = scrollOffsets.getOrDefault(key, 0.0);
+        double max = Math.max(0, SecondaryChatSettings.get().maxLines * 20);
         scrollOffsets.put(key, Math.clamp(current + amount, 0, max));
     }
 
     public static synchronized void resetScroll() {
-        scrollOffsets.replaceAll((key, value) -> 0);
+        scrollOffsets.replaceAll((key, value) -> 0.0);
     }
 
     public static synchronized void resetScroll(@NotNull String windowId, @NotNull String tabId) {
-        scrollOffsets.put(key(windowId, tabId), 0);
+        scrollOffsets.put(key(windowId, tabId), 0.0);
     }
 
     public static synchronized int unreadCount(@NotNull String windowId, @NotNull String tabId) {
@@ -241,7 +248,7 @@ public final class SecondaryChatManager {
             }
         }
 
-        buffer.addLast(new ChatMessage(text));
+        buffer.addLast(new ChatMessage(nextMessageId++, text));
         while (buffer.size() > Math.max(1, maxLines)) {
             buffer.removeFirst();
         }
