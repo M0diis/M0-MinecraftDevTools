@@ -2,13 +2,12 @@ package me.m0dii.modules.worldedit;
 
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
-import net.minecraft.server.command.CommandManager;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.text.Text;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Direction;
-
+import net.minecraft.commands.Commands;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -30,12 +29,12 @@ public final class WorldEditSyncServer {
                 context.server().execute(() -> handleRequest(context.player(), payload)));
     }
 
-    private static void handleRequest(ServerPlayerEntity player, WorldEditSyncPayloads.EditRequestPayload payload) {
+    private static void handleRequest(ServerPlayer player, WorldEditSyncPayloads.EditRequestPayload payload) {
         if (player == null) {
             return;
         }
-        if (!CommandManager.requirePermissionLevel(CommandManager.GAMEMASTERS_CHECK).test(player.getCommandSource())) {
-            player.sendMessage(Text.literal("[WE] You need permission level 2 to use mod WorldEdit."), false);
+        if (!Commands.hasPermission(Commands.LEVEL_GAMEMASTERS).test(player.createCommandSourceStack())) {
+            player.sendSystemMessage(Component.literal("[WE] You need permission level 2 to use mod WorldEdit."));
             return;
         }
 
@@ -58,24 +57,24 @@ public final class WorldEditSyncServer {
         }
     }
 
-    private static void executeSurfaceFill(ServerPlayerEntity player,
+    private static void executeSurfaceFill(ServerPlayer player,
                                            String label,
                                            WorldEditRegionMask region,
                                            String rawBlock,
                                            WorldEditRegionSurface surface) {
         runTrackedEdit(player, label, List.of(region.bounds()), changes -> {
-            ServerWorld world = player.getEntityWorld();
+            ServerLevel world = player.level();
             WorldEditParsedBlock target = WorldEditParsedBlock.parse(world, rawBlock);
             applyRegion(world, changes, region, surface, target);
         });
     }
 
-    private static void executeReplace(ServerPlayerEntity player,
+    private static void executeReplace(ServerPlayer player,
                                        WorldEditRegionMask region,
                                        String rawFrom,
                                        String rawTo) {
         runTrackedEdit(player, "//replace", List.of(region.bounds()), changes -> {
-            ServerWorld world = player.getEntityWorld();
+            ServerLevel world = player.level();
             WorldEditParsedBlock from = WorldEditParsedBlock.parse(world, rawFrom);
             WorldEditParsedBlock to = WorldEditParsedBlock.parse(world, rawTo);
             region.forEach(pos -> {
@@ -86,25 +85,25 @@ public final class WorldEditSyncServer {
         });
     }
 
-    private static void executeStack(ServerPlayerEntity player,
+    private static void executeStack(ServerPlayer player,
                                      WorldEditRegionMask region,
                                      int count,
                                      String directionName,
                                      boolean masked) {
-        Direction direction = Direction.byId(directionName);
+        Direction direction = Direction.byName(directionName);
         if (direction == null || count < 1) {
-            player.sendMessage(Text.literal("[WE] Invalid stack request."), false);
+            player.sendSystemMessage(Component.literal("[WE] Invalid stack request."));
             return;
         }
 
         runTrackedEdit(player, "//stack",
                 touchedStackSelections(region, count, direction),
                 changes -> {
-                    ServerWorld world = player.getEntityWorld();
+                    ServerLevel world = player.level();
                     List<PositionedSnapshot> source = captureRegionSnapshots(world, region);
-                    int stepX = direction.getOffsetX() * region.bounds().sizeX();
-                    int stepY = direction.getOffsetY() * region.bounds().sizeY();
-                    int stepZ = direction.getOffsetZ() * region.bounds().sizeZ();
+                    int stepX = direction.getStepX() * region.bounds().sizeX();
+                    int stepY = direction.getStepY() * region.bounds().sizeY();
+                    int stepZ = direction.getStepZ() * region.bounds().sizeZ();
 
                     for (int copyIndex = 1; copyIndex <= count; copyIndex++) {
                         int dx = stepX * copyIndex;
@@ -114,20 +113,20 @@ public final class WorldEditSyncServer {
                             if (masked && block.snapshot.isAir()) {
                                 continue;
                             }
-                            applyTarget(world, changes, block.pos.add(dx, dy, dz), block.snapshot);
+                            applyTarget(world, changes, block.pos.offset(dx, dy, dz), block.snapshot);
                         }
                     }
                 });
     }
 
-    private static void executeMove(ServerPlayerEntity player,
+    private static void executeMove(ServerPlayer player,
                                     WorldEditRegionMask region,
                                     int distance,
                                     String directionName,
                                     boolean masked) {
-        Direction direction = Direction.byId(directionName);
+        Direction direction = Direction.byName(directionName);
         if (direction == null || distance == 0) {
-            player.sendMessage(Text.literal("[WE] Invalid move request."), false);
+            player.sendSystemMessage(Component.literal("[WE] Invalid move request."));
             return;
         }
 
@@ -135,17 +134,17 @@ public final class WorldEditSyncServer {
         runTrackedEdit(player, "//move",
                 List.of(region.bounds(), destination.bounds()),
                 changes -> {
-                    ServerWorld world = player.getEntityWorld();
+                    ServerLevel world = player.level();
                     List<PositionedSnapshot> source = captureRegionSnapshots(world, region);
-                    int dx = direction.getOffsetX() * distance;
-                    int dy = direction.getOffsetY() * distance;
-                    int dz = direction.getOffsetZ() * distance;
+                    int dx = direction.getStepX() * distance;
+                    int dy = direction.getStepY() * distance;
+                    int dz = direction.getStepZ() * distance;
 
                     for (PositionedSnapshot block : source) {
                         if (masked && block.snapshot.isAir()) {
                             continue;
                         }
-                        applyTarget(world, changes, block.pos.add(dx, dy, dz), block.snapshot);
+                        applyTarget(world, changes, block.pos.offset(dx, dy, dz), block.snapshot);
                     }
 
                     region.forEach(pos -> {
@@ -156,14 +155,14 @@ public final class WorldEditSyncServer {
                 });
     }
 
-    private static void executeCylinder(ServerPlayerEntity player,
+    private static void executeCylinder(ServerPlayer player,
                                         BlockPos anchor,
                                         String rawBlock,
                                         String radiiSpec,
                                         int height,
                                         boolean hollow) {
         if (height < 1) {
-            player.sendMessage(Text.literal("[WE] Cylinder height must be >= 1."), false);
+            player.sendSystemMessage(Component.literal("[WE] Cylinder height must be >= 1."));
             return;
         }
 
@@ -171,19 +170,19 @@ public final class WorldEditSyncServer {
         try {
             radii = parseCylinderRadii(radiiSpec);
         } catch (IllegalArgumentException e) {
-            player.sendMessage(Text.literal("[WE] " + e.getMessage()), false);
+            player.sendSystemMessage(Component.literal("[WE] " + e.getMessage()));
             return;
         }
 
         WorldEditRegionMask region = WorldEditRegionMask.cylinder(anchor, radii[0], radii[1], height);
         runTrackedEdit(player, hollow ? "//hcyl" : "//cyl", List.of(region.bounds()), changes -> {
-            ServerWorld world = player.getEntityWorld();
+            ServerLevel world = player.level();
             WorldEditParsedBlock target = WorldEditParsedBlock.parse(world, rawBlock);
             applyRegion(world, changes, region, hollow ? WorldEditRegionSurface.SHELL : WorldEditRegionSurface.SOLID, target);
         });
     }
 
-    private static void executeSphere(ServerPlayerEntity player,
+    private static void executeSphere(ServerPlayer player,
                                       BlockPos anchor,
                                       String rawBlock,
                                       String radiiSpec,
@@ -193,22 +192,22 @@ public final class WorldEditSyncServer {
         try {
             radii = parseSphereRadii(radiiSpec);
         } catch (IllegalArgumentException e) {
-            player.sendMessage(Text.literal("[WE] " + e.getMessage()), false);
+            player.sendSystemMessage(Component.literal("[WE] " + e.getMessage()));
             return;
         }
 
         BlockPos center = raised
-                ? anchor.add(0, (int) Math.floor(radii[1]), 0)
+                ? anchor.offset(0, (int) Math.floor(radii[1]), 0)
                 : anchor;
         WorldEditRegionMask region = WorldEditRegionMask.sphere(center, radii[0], radii[1], radii[2]);
         runTrackedEdit(player, hollow ? "//hsphere" : "//sphere", List.of(region.bounds()), changes -> {
-            ServerWorld world = player.getEntityWorld();
+            ServerLevel world = player.level();
             WorldEditParsedBlock target = WorldEditParsedBlock.parse(world, rawBlock);
             applyRegion(world, changes, region, hollow ? WorldEditRegionSurface.SHELL : WorldEditRegionSurface.SOLID, target);
         });
     }
 
-    private static void applyRegion(ServerWorld world,
+    private static void applyRegion(ServerLevel world,
                                     LinkedHashMap<BlockPos, WorldEditServerHistory.WorldEditServerChange> changes,
                                     WorldEditRegionMask region,
                                     WorldEditRegionSurface surface,
@@ -220,13 +219,13 @@ public final class WorldEditSyncServer {
         });
     }
 
-    private static void runTrackedEdit(ServerPlayerEntity player,
+    private static void runTrackedEdit(ServerPlayer player,
                                        String label,
                                        List<WorldEditSelection> loadedSelections,
                                        EditAction action) {
-        ServerWorld world = player.getEntityWorld();
+        ServerLevel world = player.level();
         if (!areChunksLoaded(world, loadedSelections)) {
-            player.sendMessage(Text.literal("[WE] Load the affected chunks first."), false);
+            player.sendSystemMessage(Component.literal("[WE] Load the affected chunks first."));
             return;
         }
 
@@ -235,29 +234,29 @@ public final class WorldEditSyncServer {
             action.run(changes);
         } catch (CommandSyntaxException e) {
             rollback(world, changes);
-            player.sendMessage(Text.literal("[WE] " + e.getMessage()), false);
+            player.sendSystemMessage(Component.literal("[WE] " + e.getMessage()));
             return;
         } catch (RuntimeException e) {
             rollback(world, changes);
-            player.sendMessage(Text.literal("[WE] " + label + " failed: " + e.getMessage()), false);
+            player.sendSystemMessage(Component.literal("[WE] " + label + " failed: " + e.getMessage()));
             return;
         }
 
         if (changes.isEmpty()) {
-            player.sendMessage(Text.literal("[WE] Nothing changed."), false);
+            player.sendSystemMessage(Component.literal("[WE] Nothing changed."));
             return;
         }
 
         List<WorldEditServerHistory.WorldEditServerChange> changeList = new ArrayList<>(changes.values());
-        WorldEditServerHistory.pushUndo(player, label, world.getRegistryKey(), changeList);
-        player.sendMessage(Text.literal("[WE] " + label + " changed " + changeList.size() + " block(s)."), false);
+        WorldEditServerHistory.pushUndo(player, label, world.dimension(), changeList);
+        player.sendSystemMessage(Component.literal("[WE] " + label + " changed " + changeList.size() + " block(s)."));
     }
 
-    private static void applyTarget(ServerWorld world,
+    private static void applyTarget(ServerLevel world,
                                     LinkedHashMap<BlockPos, WorldEditServerHistory.WorldEditServerChange> changes,
                                     BlockPos pos,
                                     WorldEditBlockTarget target) {
-        BlockPos immutablePos = pos.toImmutable();
+        BlockPos immutablePos = pos.immutable();
         WorldEditServerHistory.WorldEditServerChange existing = changes.get(immutablePos);
         WorldEditBlockSnapshot originalBefore = existing == null ? WorldEditBlockSnapshot.capture(world, immutablePos) : existing.before();
         WorldEditBlockSnapshot currentBefore = WorldEditBlockSnapshot.capture(world, immutablePos);
@@ -279,7 +278,7 @@ public final class WorldEditSyncServer {
         changes.put(immutablePos, new WorldEditServerHistory.WorldEditServerChange(immutablePos, originalBefore, after));
     }
 
-    private static void rollback(ServerWorld world, LinkedHashMap<BlockPos, WorldEditServerHistory.WorldEditServerChange> changes) {
+    private static void rollback(ServerLevel world, LinkedHashMap<BlockPos, WorldEditServerHistory.WorldEditServerChange> changes) {
         List<WorldEditServerHistory.WorldEditServerChange> applied = new ArrayList<>(changes.values());
         for (int i = applied.size() - 1; i >= 0; i--) {
             WorldEditServerHistory.WorldEditServerChange change = applied.get(i);
@@ -287,7 +286,7 @@ public final class WorldEditSyncServer {
         }
     }
 
-    private static boolean areChunksLoaded(ServerWorld world, List<WorldEditSelection> selections) {
+    private static boolean areChunksLoaded(ServerLevel world, List<WorldEditSelection> selections) {
         HashSet<Long> seen = new HashSet<>();
         for (WorldEditSelection selection : selections) {
             int minChunkX = selection.min().getX() >> 4;
@@ -297,7 +296,7 @@ public final class WorldEditSyncServer {
             for (int chunkX = minChunkX; chunkX <= maxChunkX; chunkX++) {
                 for (int chunkZ = minChunkZ; chunkZ <= maxChunkZ; chunkZ++) {
                     long chunkKey = (((long) chunkX) << 32) ^ (chunkZ & 0xffffffffL);
-                    if (seen.add(chunkKey) && !world.isChunkLoaded(chunkX, chunkZ)) {
+                    if (seen.add(chunkKey) && !world.hasChunk(chunkX, chunkZ)) {
                         return false;
                     }
                 }
@@ -309,18 +308,18 @@ public final class WorldEditSyncServer {
     private static List<WorldEditSelection> touchedStackSelections(WorldEditRegionMask region, int count, Direction direction) {
         List<WorldEditSelection> touchedSelections = new ArrayList<>(count + 1);
         touchedSelections.add(region.bounds());
-        int stepX = direction.getOffsetX() * region.bounds().sizeX();
-        int stepY = direction.getOffsetY() * region.bounds().sizeY();
-        int stepZ = direction.getOffsetZ() * region.bounds().sizeZ();
+        int stepX = direction.getStepX() * region.bounds().sizeX();
+        int stepY = direction.getStepY() * region.bounds().sizeY();
+        int stepZ = direction.getStepZ() * region.bounds().sizeZ();
         for (int copyIndex = 1; copyIndex <= count; copyIndex++) {
             touchedSelections.add(region.shifted(stepX * copyIndex, stepY * copyIndex, stepZ * copyIndex).bounds());
         }
         return touchedSelections;
     }
 
-    private static List<PositionedSnapshot> captureRegionSnapshots(ServerWorld world, WorldEditRegionMask region) {
+    private static List<PositionedSnapshot> captureRegionSnapshots(ServerLevel world, WorldEditRegionMask region) {
         List<PositionedSnapshot> out = new ArrayList<>();
-        region.forEach(pos -> out.add(new PositionedSnapshot(pos.toImmutable(), WorldEditBlockSnapshot.capture(world, pos))));
+        region.forEach(pos -> out.add(new PositionedSnapshot(pos.immutable(), WorldEditBlockSnapshot.capture(world, pos))));
         return out;
     }
 

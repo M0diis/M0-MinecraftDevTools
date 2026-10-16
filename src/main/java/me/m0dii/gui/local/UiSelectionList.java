@@ -1,7 +1,10 @@
 package me.m0dii.gui.local;
 
-import net.minecraft.client.font.TextRenderer;
-import net.minecraft.client.gui.DrawContext;
+import me.m0dii.gui.theme.Theme;
+import me.m0dii.gui.theme.ThemeDraw;
+
+import net.minecraft.client.gui.Font;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -61,10 +64,10 @@ public final class UiSelectionList {
         return this.selectedIndex;
     }
 
-    public void render(DrawContext context, TextRenderer textRenderer, int mouseX, int mouseY) {
+    public void extractRenderState(GuiGraphicsExtractor context, Font textRenderer, int mouseX, int mouseY) {
         UiForms.drawPanel(context, this.x, this.y, this.width, this.height);
         if (this.rows.isEmpty()) {
-            context.drawTextWithShadow(textRenderer, this.emptyText, this.x + 6, this.y + 6, UiTheme.TEXT_MUTED);
+            context.text(textRenderer, ThemeDraw.fit(textRenderer, this.emptyText, this.width - 16), this.x + 8, this.y + 8, Theme.TEXT_DIM, false);
             return;
         }
 
@@ -77,25 +80,29 @@ public final class UiSelectionList {
                     && mouseX <= this.x + this.width - 2
                     && mouseY >= drawY - 1
                     && mouseY <= drawY + this.rowHeight - 2;
+            int rowTop = drawY - 1;
+            int rowH = this.rowHeight - 1;
             if (selected) {
-                context.fill(this.x + 2, drawY - 1, this.x + this.width - 2, drawY + this.rowHeight - 2, 0x704A7CC7);
+                ThemeDraw.box(context, this.x + 2, rowTop, this.width - 4, rowH, Theme.ACCENT_SOFT);
+                context.fill(this.x + 2, rowTop + 2, this.x + 4, rowTop + rowH - 2, Theme.ACCENT);
             } else if (hovered) {
-                context.fill(this.x + 2, drawY - 1, this.x + this.width - 2, drawY + this.rowHeight - 2, 0x302B5C85);
+                ThemeDraw.box(context, this.x + 2, rowTop, this.width - 4, rowH, Theme.SURFACE_HOVER);
             }
 
-            String text = trimToWidth(textRenderer, this.rows.get(row), Math.max(8, this.width - 12));
-            context.drawTextWithShadow(textRenderer, text, this.x + 6, drawY, selected ? 0xFFFFFFFF : UiTheme.TEXT_MUTED);
+            int textY = rowTop + (rowH - 8) / 2;
+            String text = ThemeDraw.fit(textRenderer, this.rows.get(row), Math.max(8, this.width - 16));
+            context.text(textRenderer, text, this.x + 8, textY, selected ? Theme.TEXT : Theme.TEXT_MUTED, false);
         }
 
         if (this.rows.size() > visibleRows) {
             int trackX = this.x + this.width - 4;
             int trackY = this.y + 3;
             int trackH = this.height - 6;
-            context.fill(trackX, trackY, trackX + 2, trackY + trackH, 0x40FFFFFF);
+            context.fill(trackX, trackY, trackX + 2, trackY + trackH, Theme.DIVIDER);
             int thumbH = Math.max(10, (trackH * visibleRows) / this.rows.size());
             int maxScroll = Math.max(1, this.rows.size() - visibleRows);
             int thumbY = trackY + ((trackH - thumbH) * this.scroll) / maxScroll;
-            context.fill(trackX, thumbY, trackX + 2, thumbY + thumbH, 0xB0FFFFFF);
+            context.fill(trackX, thumbY, trackX + 2, thumbY + thumbH, Theme.BORDER_STRONG);
         }
     }
 
@@ -167,13 +174,13 @@ public final class UiSelectionList {
         this.scroll = Math.clamp(this.scroll, 0, maxScroll());
     }
 
-    private static String trimToWidth(TextRenderer textRenderer, String raw, int maxWidth) {
+    private static String trimToWidth(Font textRenderer, String raw, int maxWidth) {
         String text = raw == null ? "" : raw;
-        if (textRenderer.getWidth(text) <= maxWidth) {
+        if (textRenderer.width(text) <= maxWidth) {
             return text;
         }
         String ellipsis = "...";
-        while (text.length() > 4 && textRenderer.getWidth(text + ellipsis) > maxWidth) {
+        while (text.length() > 4 && textRenderer.width(text + ellipsis) > maxWidth) {
             text = text.substring(0, text.length() - 1);
         }
         return text + ellipsis;

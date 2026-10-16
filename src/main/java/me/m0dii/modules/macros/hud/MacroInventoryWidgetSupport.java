@@ -1,27 +1,27 @@
 package me.m0dii.modules.macros.hud;
 
-import net.minecraft.client.font.TextRenderer;
-import net.minecraft.client.gl.RenderPipelines;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.entity.EquipmentSlot;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.item.ItemStack;
-import net.minecraft.util.Identifier;
+import net.minecraft.client.gui.Font;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
 
 import java.util.ArrayList;
 import java.util.List;
 
 public final class MacroInventoryWidgetSupport {
-    private static final Identifier SLOT_TEXTURE = Identifier.ofVanilla("container/slot");
-    private static final Identifier SLOT_HIGHLIGHT_BACK_TEXTURE = Identifier.ofVanilla("container/slot_highlight_back");
-    private static final Identifier SLOT_HIGHLIGHT_FRONT_TEXTURE = Identifier.ofVanilla("container/slot_highlight_front");
-    private static final Identifier HOTBAR_TEXTURE = Identifier.ofVanilla("hud/hotbar");
-    private static final Identifier HOTBAR_SELECTION_TEXTURE = Identifier.ofVanilla("hud/hotbar_selection");
-    private static final Identifier HELMET_SLOT_TEXTURE = Identifier.ofVanilla("container/slot/helmet");
-    private static final Identifier CHESTPLATE_SLOT_TEXTURE = Identifier.ofVanilla("container/slot/chestplate");
-    private static final Identifier LEGGINGS_SLOT_TEXTURE = Identifier.ofVanilla("container/slot/leggings");
-    private static final Identifier BOOTS_SLOT_TEXTURE = Identifier.ofVanilla("container/slot/boots");
-    private static final Identifier SHIELD_SLOT_TEXTURE = Identifier.ofVanilla("container/slot/shield");
+    private static final Identifier SLOT_TEXTURE = Identifier.withDefaultNamespace("container/slot");
+    private static final Identifier SLOT_HIGHLIGHT_BACK_TEXTURE = Identifier.withDefaultNamespace("container/slot_highlight_back");
+    private static final Identifier SLOT_HIGHLIGHT_FRONT_TEXTURE = Identifier.withDefaultNamespace("container/slot_highlight_front");
+    private static final Identifier HOTBAR_TEXTURE = Identifier.withDefaultNamespace("hud/hotbar");
+    private static final Identifier HOTBAR_SELECTION_TEXTURE = Identifier.withDefaultNamespace("hud/hotbar_selection");
+    private static final Identifier HELMET_SLOT_TEXTURE = Identifier.withDefaultNamespace("container/slot/helmet");
+    private static final Identifier CHESTPLATE_SLOT_TEXTURE = Identifier.withDefaultNamespace("container/slot/chestplate");
+    private static final Identifier LEGGINGS_SLOT_TEXTURE = Identifier.withDefaultNamespace("container/slot/leggings");
+    private static final Identifier BOOTS_SLOT_TEXTURE = Identifier.withDefaultNamespace("container/slot/boots");
+    private static final Identifier SHIELD_SLOT_TEXTURE = Identifier.withDefaultNamespace("container/slot/shield");
 
     private static final int ITEM_SIZE = 16;
     private static final int HOTBAR_TEXTURE_WIDTH = 182;
@@ -36,7 +36,7 @@ public final class MacroInventoryWidgetSupport {
     public record InventoryContents(List<ItemStack> stacks, List<Identifier> hintSprites, int columns, int rows, int selectedSlot) {
     }
 
-    public static InventoryContents collectContents(PlayerEntity player, MacroHudDataHandler.InventoryDisplayMode mode) {
+    public static InventoryContents collectContents(Player player, MacroHudDataHandler.InventoryDisplayMode mode) {
         if (player == null) {
             return new InventoryContents(List.of(), List.of(), 1, 1, -1);
         }
@@ -50,7 +50,7 @@ public final class MacroInventoryWidgetSupport {
         switch (resolved) {
             case HOTBAR -> {
                 for (int i = 0; i < 9; i++) {
-                    stacks.add(player.getInventory().getStack(i));
+                    stacks.add(player.getInventory().getItem(i));
                     hintSprites.add(null);
                 }
                 selectedSlot = player.getInventory().getSelectedSlot();
@@ -59,7 +59,7 @@ public final class MacroInventoryWidgetSupport {
                 for (int row = 0; row < 3; row++) {
                     for (int col = 0; col < 9; col++) {
                         int index = 9 + row * 9 + col;
-                        stacks.add(player.getInventory().getStack(index));
+                        stacks.add(player.getInventory().getItem(index));
                         hintSprites.add(null);
                     }
                 }
@@ -67,7 +67,7 @@ public final class MacroInventoryWidgetSupport {
             case ARMOR -> addArmorAndOffhand(stacks, hintSprites, player, true);
             case ARMOR_ONLY -> addArmorAndOffhand(stacks, hintSprites, player, false);
             case OFFHAND -> {
-                stacks.add(player.getOffHandStack());
+                stacks.add(player.getOffhandItem());
                 hintSprites.add(SHIELD_SLOT_TEXTURE);
             }
         }
@@ -139,10 +139,10 @@ public final class MacroInventoryWidgetSupport {
         return values[next];
     }
 
-    public static void render(DrawContext context,
-                              TextRenderer textRenderer,
+    public static void extractRenderState(GuiGraphicsExtractor context,
+                              Font textRenderer,
                               MacroHudDataHandler.HudElement element,
-                              PlayerEntity player,
+                              Player player,
                               int x,
                               int y,
                               int width,
@@ -165,8 +165,8 @@ public final class MacroInventoryWidgetSupport {
         renderGrid(context, textRenderer, contents, mode, style, x, y, width, height, showCount);
     }
 
-    private static void renderGrid(DrawContext context,
-                                   TextRenderer textRenderer,
+    private static void renderGrid(GuiGraphicsExtractor context,
+                                   Font textRenderer,
                                    InventoryContents contents,
                                    MacroHudDataHandler.InventoryDisplayMode mode,
                                    MacroHudDataHandler.InventorySlotStyle style,
@@ -197,8 +197,8 @@ public final class MacroInventoryWidgetSupport {
         }
     }
 
-    private static void renderVanillaHotbar(DrawContext context,
-                                            TextRenderer textRenderer,
+    private static void renderVanillaHotbar(GuiGraphicsExtractor context,
+                                            Font textRenderer,
                                             InventoryContents contents,
                                             int x,
                                             int y,
@@ -217,7 +217,7 @@ public final class MacroInventoryWidgetSupport {
 
         if (contents.selectedSlot() >= 0 && contents.selectedSlot() < contents.stacks().size()) {
             int selectedX = startX + contents.selectedSlot() * HOTBAR_SLOT_STEP - 1;
-            context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, HOTBAR_SELECTION_TEXTURE, selectedX, startY - 1, 24, 24);
+            context.blitSprite(RenderPipelines.GUI_TEXTURED, HOTBAR_SELECTION_TEXTURE, selectedX, startY - 1, 24, 24);
         }
 
         for (int i = 0; i < contents.stacks().size(); i++) {
@@ -226,8 +226,8 @@ public final class MacroInventoryWidgetSupport {
         }
     }
 
-    private static void renderHotbarStyle(DrawContext context,
-                                          TextRenderer textRenderer,
+    private static void renderHotbarStyle(GuiGraphicsExtractor context,
+                                          Font textRenderer,
                                           InventoryContents contents,
                                           MacroHudDataHandler.InventoryDisplayMode mode,
                                           int x,
@@ -250,7 +250,7 @@ public final class MacroInventoryWidgetSupport {
             if (mode == MacroHudDataHandler.InventoryDisplayMode.HOTBAR && row == 0
                     && contents.selectedSlot() >= 0 && contents.selectedSlot() < contents.columns()) {
                 int selectedX = startX + contents.selectedSlot() * HOTBAR_SLOT_STEP - 1;
-                context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, HOTBAR_SELECTION_TEXTURE, selectedX, rowY - 1, 24, 24);
+                context.blitSprite(RenderPipelines.GUI_TEXTURED, HOTBAR_SELECTION_TEXTURE, selectedX, rowY - 1, 24, 24);
             }
 
             for (int col = 0; col < contents.columns(); col++) {
@@ -264,8 +264,8 @@ public final class MacroInventoryWidgetSupport {
         }
     }
 
-    private static void drawSlot(DrawContext context,
-                                 TextRenderer textRenderer,
+    private static void drawSlot(GuiGraphicsExtractor context,
+                                 Font textRenderer,
                                  int x,
                                  int y,
                                  int size,
@@ -291,8 +291,8 @@ public final class MacroInventoryWidgetSupport {
         drawSlotContents(context, textRenderer, x, y, size, edge, stack, showCount, style);
     }
 
-    private static void drawSlotContents(DrawContext context,
-                                         TextRenderer textRenderer,
+    private static void drawSlotContents(GuiGraphicsExtractor context,
+                                         Font textRenderer,
                                          int x,
                                          int y,
                                          int size,
@@ -304,7 +304,7 @@ public final class MacroInventoryWidgetSupport {
         if (style != MacroHudDataHandler.InventorySlotStyle.DEFAULT && inner >= ITEM_SIZE) {
             int ix = x + Math.max(0, (size - ITEM_SIZE) / 2);
             int iy = y + Math.max(0, (size - ITEM_SIZE) / 2);
-            context.drawItem(stack, ix, iy);
+            context.item(stack, ix, iy);
             drawNativeOverlay(context, textRenderer, stack, ix, iy, showCount);
             return;
         }
@@ -312,11 +312,11 @@ public final class MacroInventoryWidgetSupport {
         float scale = inner / 16.0f;
         int ix = x + Math.max(0, (size - inner) / 2);
         int iy = y + Math.max(0, (size - inner) / 2);
-        context.getMatrices().pushMatrix();
-        context.getMatrices().translate(ix, iy);
-        context.getMatrices().scale(scale, scale);
-        context.drawItem(stack, 0, 0);
-        context.getMatrices().popMatrix();
+        context.pose().pushMatrix();
+        context.pose().translate(ix, iy);
+        context.pose().scale(scale, scale);
+        context.item(stack, 0, 0);
+        context.pose().popMatrix();
 
         if (showCount && stack.getCount() > 1) {
             drawScaledCountText(context, textRenderer, stack.getCount(), x, y, size, edge);
@@ -324,8 +324,8 @@ public final class MacroInventoryWidgetSupport {
         drawScaledDurabilityBar(context, stack, x, y, size, edge);
     }
 
-    private static void drawNativeHotbarSlotContents(DrawContext context,
-                                                     TextRenderer textRenderer,
+    private static void drawNativeHotbarSlotContents(GuiGraphicsExtractor context,
+                                                     Font textRenderer,
                                                      ItemStack stack,
                                                      Identifier hintSprite,
                                                      int x,
@@ -333,16 +333,16 @@ public final class MacroInventoryWidgetSupport {
                                                      boolean showCount) {
         if (stack.isEmpty()) {
             if (hintSprite != null) {
-                context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, hintSprite, x + 1, y + 1, 14, 14);
+                context.blitSprite(RenderPipelines.GUI_TEXTURED, hintSprite, x + 1, y + 1, 14, 14);
             }
             return;
         }
-        context.drawItem(stack, x, y);
+        context.item(stack, x, y);
         drawNativeOverlay(context, textRenderer, stack, x, y, showCount);
     }
 
-    private static void drawNativeOverlay(DrawContext context,
-                                          TextRenderer textRenderer,
+    private static void drawNativeOverlay(GuiGraphicsExtractor context,
+                                          Font textRenderer,
                                           ItemStack stack,
                                           int x,
                                           int y,
@@ -352,10 +352,10 @@ public final class MacroInventoryWidgetSupport {
             overlayStack = stack.copy();
             overlayStack.setCount(1);
         }
-        context.drawStackOverlay(textRenderer, overlayStack, x, y);
+        context.itemDecorations(textRenderer, overlayStack, x, y);
     }
 
-    private static void drawDefaultSlot(DrawContext context, int x, int y, int size, int edge, boolean selected) {
+    private static void drawDefaultSlot(GuiGraphicsExtractor context, int x, int y, int size, int edge, boolean selected) {
         int bg = selected ? 0xA0785A20 : 0xAA1A1A1A;
         context.fill(x, y, x + size, y + size, bg);
         context.fill(x, y, x + size, y + edge, 0x50FFFFFF);
@@ -364,66 +364,66 @@ public final class MacroInventoryWidgetSupport {
         context.fill(x + size - edge, y, x + size, y + size, 0x50303030);
     }
 
-    private static void drawMinecraftLikeSlot(DrawContext context, int x, int y, int size, boolean selected) {
-        context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, SLOT_TEXTURE, x, y, size, size);
+    private static void drawMinecraftLikeSlot(GuiGraphicsExtractor context, int x, int y, int size, boolean selected) {
+        context.blitSprite(RenderPipelines.GUI_TEXTURED, SLOT_TEXTURE, x, y, size, size);
         if (selected) {
             int pad = Math.max(1, Math.round(size / 18.0f));
-            context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, SLOT_HIGHLIGHT_BACK_TEXTURE, x, y, size, size);
-            context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, HOTBAR_SELECTION_TEXTURE, x - pad, y - pad, size + pad * 2, size + pad * 2);
-            context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, SLOT_HIGHLIGHT_FRONT_TEXTURE, x, y, size, size);
+            context.blitSprite(RenderPipelines.GUI_TEXTURED, SLOT_HIGHLIGHT_BACK_TEXTURE, x, y, size, size);
+            context.blitSprite(RenderPipelines.GUI_TEXTURED, HOTBAR_SELECTION_TEXTURE, x - pad, y - pad, size + pad * 2, size + pad * 2);
+            context.blitSprite(RenderPipelines.GUI_TEXTURED, SLOT_HIGHLIGHT_FRONT_TEXTURE, x, y, size, size);
         }
     }
 
-    private static void drawHotbarLikeSlot(DrawContext context, int x, int y, int size, boolean selected) {
-        context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, HOTBAR_TEXTURE, HOTBAR_TEXTURE_WIDTH, HOTBAR_TEXTURE_HEIGHT, 0, 0, x, y, size, size);
+    private static void drawHotbarLikeSlot(GuiGraphicsExtractor context, int x, int y, int size, boolean selected) {
+        context.blitSprite(RenderPipelines.GUI_TEXTURED, HOTBAR_TEXTURE, HOTBAR_TEXTURE_WIDTH, HOTBAR_TEXTURE_HEIGHT, 0, 0, x, y, size, size);
         if (selected) {
             int pad = Math.max(1, Math.round(size / 22.0f));
-            context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, HOTBAR_SELECTION_TEXTURE, x - pad, y - pad, size + pad * 2, size + pad * 2);
+            context.blitSprite(RenderPipelines.GUI_TEXTURED, HOTBAR_SELECTION_TEXTURE, x - pad, y - pad, size + pad * 2, size + pad * 2);
         }
     }
 
-    private static void drawHintSprite(DrawContext context, Identifier hintSprite, int x, int y, int size) {
+    private static void drawHintSprite(GuiGraphicsExtractor context, Identifier hintSprite, int x, int y, int size) {
         int iconInset = Math.max(1, Math.round(size / 6.0f));
         int iconSize = Math.max(1, size - iconInset * 2);
-        context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, hintSprite, x + iconInset, y + iconInset, iconSize, iconSize);
+        context.blitSprite(RenderPipelines.GUI_TEXTURED, hintSprite, x + iconInset, y + iconInset, iconSize, iconSize);
     }
 
-    private static void drawHotbarStrip(DrawContext context, int x, int y, int columns) {
+    private static void drawHotbarStrip(GuiGraphicsExtractor context, int x, int y, int columns) {
         // Crop the vanilla 9-slot hotbar sprite to the exact number of columns we need.
-        context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, HOTBAR_TEXTURE,
+        context.blitSprite(RenderPipelines.GUI_TEXTURED, HOTBAR_TEXTURE,
                 HOTBAR_TEXTURE_WIDTH, HOTBAR_TEXTURE_HEIGHT, 0, 0, x, y, hotbarStripWidth(columns), HOTBAR_TEXTURE_HEIGHT);
     }
 
-    private static void addArmorAndOffhand(List<ItemStack> stacks, List<Identifier> hintSprites, PlayerEntity player, boolean includeOffhand) {
-        stacks.add(player.getEquippedStack(EquipmentSlot.HEAD));
+    private static void addArmorAndOffhand(List<ItemStack> stacks, List<Identifier> hintSprites, Player player, boolean includeOffhand) {
+        stacks.add(player.getItemBySlot(EquipmentSlot.HEAD));
         hintSprites.add(HELMET_SLOT_TEXTURE);
-        stacks.add(player.getEquippedStack(EquipmentSlot.CHEST));
+        stacks.add(player.getItemBySlot(EquipmentSlot.CHEST));
         hintSprites.add(CHESTPLATE_SLOT_TEXTURE);
-        stacks.add(player.getEquippedStack(EquipmentSlot.LEGS));
+        stacks.add(player.getItemBySlot(EquipmentSlot.LEGS));
         hintSprites.add(LEGGINGS_SLOT_TEXTURE);
-        stacks.add(player.getEquippedStack(EquipmentSlot.FEET));
+        stacks.add(player.getItemBySlot(EquipmentSlot.FEET));
         hintSprites.add(BOOTS_SLOT_TEXTURE);
         if (includeOffhand) {
-            stacks.add(player.getOffHandStack());
+            stacks.add(player.getOffhandItem());
             hintSprites.add(SHIELD_SLOT_TEXTURE);
         }
     }
 
-    private static void drawScaledCountText(DrawContext context, TextRenderer textRenderer, int count, int x, int y, int size, int padding) {
+    private static void drawScaledCountText(GuiGraphicsExtractor context, Font textRenderer, int count, int x, int y, int size, int padding) {
         String text = Integer.toString(count);
         float scale = Math.clamp(size / 18.0f, 0.35f, 4.0f);
-        int textWidth = Math.max(1, Math.round(textRenderer.getWidth(text) * scale));
+        int textWidth = Math.max(1, Math.round(textRenderer.width(text) * scale));
         int textHeight = Math.max(1, Math.round(9 * scale));
         int screenX = x + Math.max(padding, size - textWidth - padding);
         int screenY = y + Math.max(padding, size - textHeight - padding);
-        context.getMatrices().pushMatrix();
-        context.getMatrices().scale(scale, scale);
-        context.drawTextWithShadow(textRenderer, text, Math.round(screenX / scale), Math.round(screenY / scale), 0xFFFFFFFF);
-        context.getMatrices().popMatrix();
+        context.pose().pushMatrix();
+        context.pose().scale(scale, scale);
+        context.text(textRenderer, text, Math.round(screenX / scale), Math.round(screenY / scale), 0xFFFFFFFF);
+        context.pose().popMatrix();
     }
 
-    private static void drawScaledDurabilityBar(DrawContext context, ItemStack stack, int x, int y, int size, int padding) {
-        if (!stack.isItemBarVisible()) {
+    private static void drawScaledDurabilityBar(GuiGraphicsExtractor context, ItemStack stack, int x, int y, int size, int padding) {
+        if (!stack.isBarVisible()) {
             return;
         }
 
@@ -431,11 +431,11 @@ public final class MacroInventoryWidgetSupport {
         int barWidth = Math.max(3, size - Math.max(1, padding) * 2);
         int barHeight = Math.max(1, Math.round(size / 16.0f));
         int barY = y + size - Math.max(1, padding) - barHeight;
-        int filled = Math.clamp(Math.round(barWidth * (stack.getItemBarStep() / 13.0f)), 0, barWidth);
+        int filled = Math.clamp(Math.round(barWidth * (stack.getBarWidth() / 13.0f)), 0, barWidth);
 
         context.fill(barX, barY, barX + barWidth, barY + barHeight, 0xFF000000);
         if (filled > 0) {
-            context.fill(barX, barY, barX + filled, barY + barHeight, 0xFF000000 | stack.getItemBarColor());
+            context.fill(barX, barY, barX + filled, barY + barHeight, 0xFF000000 | stack.getBarColor());
         }
     }
 

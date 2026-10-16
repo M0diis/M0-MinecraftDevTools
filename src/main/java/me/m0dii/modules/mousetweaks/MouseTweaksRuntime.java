@@ -1,20 +1,19 @@
 package me.m0dii.modules.mousetweaks;
 
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.Click;
-import net.minecraft.client.gui.screen.ingame.CreativeInventoryScreen;
-import net.minecraft.client.gui.screen.ingame.HandledScreen;
-import net.minecraft.client.util.InputUtil;
-import net.minecraft.item.BundleItem;
-import net.minecraft.item.ItemStack;
-import net.minecraft.screen.slot.Slot;
-import org.lwjgl.glfw.GLFW;
+import com.mojang.blaze3d.platform.InputConstants;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.client.gui.screens.inventory.CreativeModeInventoryScreen;
+import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.world.inventory.Slot;
+import net.minecraft.world.item.BundleItem;
+import net.minecraft.world.item.ItemStack;
 
 import java.util.ArrayList;
 import java.util.List;
 
 public final class MouseTweaksRuntime {
-    private static HandledScreen<?> openScreen;
+    private static AbstractContainerScreen<?> openScreen;
     private static MouseTweaksScreenHandler handler;
     private static boolean disableWheelForThisContainer;
     private static Slot oldSelectedSlot;
@@ -37,7 +36,7 @@ public final class MouseTweaksRuntime {
         rmbTweakLeftOriginalSlot = false;
     }
 
-    public static boolean onMouseClicked(HandledScreen<?> screen, Click click) {
+    public static boolean onMouseClicked(AbstractContainerScreen<?> screen, MouseButtonEvent click) {
         MouseTweaksButton button = MouseTweaksButton.fromButton(click.button());
         if (button == null) {
             return false;
@@ -66,7 +65,7 @@ public final class MouseTweaksRuntime {
         return false;
     }
 
-    public static boolean onMouseReleased(HandledScreen<?> screen, Click click) {
+    public static boolean onMouseReleased(AbstractContainerScreen<?> screen, MouseButtonEvent click) {
         MouseTweaksButton button = MouseTweaksButton.fromButton(click.button());
         if (button == null) {
             return false;
@@ -86,7 +85,7 @@ public final class MouseTweaksRuntime {
         return false;
     }
 
-    public static boolean onMouseDragged(HandledScreen<?> screen, Click click) {
+    public static boolean onMouseDragged(AbstractContainerScreen<?> screen, MouseButtonEvent click) {
         MouseTweaksButton button = MouseTweaksButton.fromButton(click.button());
         if (button == null) {
             return false;
@@ -119,13 +118,13 @@ public final class MouseTweaksRuntime {
                 return false;
             }
 
-            ItemStack selectedSlotStack = selectedSlot.getStack();
+            ItemStack selectedSlotStack = selectedSlot.getItem();
             if (selectedSlotStack.isEmpty()) {
                 return false;
             }
 
-            boolean shiftIsDown = InputUtil.isKeyPressed(MinecraftClient.getInstance().getWindow(), GLFW.GLFW_KEY_LEFT_SHIFT)
-                    || InputUtil.isKeyPressed(MinecraftClient.getInstance().getWindow(), GLFW.GLFW_KEY_RIGHT_SHIFT);
+            boolean shiftIsDown = InputConstants.isKeyDown(InputConstants.KEY_LSHIFT)
+                    || InputConstants.isKeyDown(InputConstants.KEY_RSHIFT);
             if (stackOnMouse.isEmpty()) {
                 if (!MouseTweaksModule.INSTANCE.lmbTweakWithoutItem() || !shiftIsDown) {
                     return false;
@@ -141,7 +140,7 @@ public final class MouseTweaksRuntime {
                 if (shiftIsDown) {
                     handler.clickSlot(selectedSlot, MouseTweaksButton.LEFT, true);
                 } else {
-                    if (stackOnMouse.getCount() + selectedSlotStack.getCount() > stackOnMouse.getMaxCount()) {
+                    if (stackOnMouse.getCount() + selectedSlotStack.getCount() > stackOnMouse.getMaxStackSize()) {
                         return false;
                     }
                     handler.clickSlot(selectedSlot, MouseTweaksButton.LEFT, false);
@@ -160,7 +159,7 @@ public final class MouseTweaksRuntime {
         return false;
     }
 
-    public static boolean onMouseScrolled(HandledScreen<?> screen, double mouseX, double mouseY, double verticalAmount) {
+    public static boolean onMouseScrolled(AbstractContainerScreen<?> screen, double mouseX, double mouseY, double verticalAmount) {
         updateScreen(screen);
         if (handler == null || !MouseTweaksModule.INSTANCE.isEnabled() || disableWheelForThisContainer || !MouseTweaksModule.INSTANCE.wheelTweak()) {
             return false;
@@ -171,7 +170,7 @@ public final class MouseTweaksRuntime {
             return false;
         }
 
-        ItemStack selectedSlotStack = selectedSlot.getStack();
+        ItemStack selectedSlotStack = selectedSlot.getItem();
         if (selectedSlotStack.getItem() instanceof BundleItem) {
             return false;
         }
@@ -225,7 +224,7 @@ public final class MouseTweaksRuntime {
                         if (i == targetSlots.size() - 1) {
                             handler.clickSlot(slot, MouseTweaksButton.LEFT, false);
                         } else {
-                            int clickTimes = slot.getMaxItemCount(slot.getStack()) - slot.getStack().getCount();
+                            int clickTimes = slot.getMaxStackSize(slot.getItem()) - slot.getItem().getCount();
                             while (clickTimes-- > 0) {
                                 handler.clickSlot(slot, MouseTweaksButton.RIGHT, false);
                             }
@@ -245,7 +244,7 @@ public final class MouseTweaksRuntime {
         }
 
         if (pushItems) {
-            if (!stackOnMouse.isEmpty() && !selectedSlot.canInsert(stackOnMouse)) {
+            if (!stackOnMouse.isEmpty() && !selectedSlot.mayPlace(stackOnMouse)) {
                 return true;
             }
 
@@ -257,7 +256,7 @@ public final class MouseTweaksRuntime {
 
             handler.clickSlot(selectedSlot, MouseTweaksButton.LEFT, false);
             for (Slot slot : targetSlots) {
-                int clickTimes = slot.getMaxItemCount(slot.getStack()) - slot.getStack().getCount();
+                int clickTimes = slot.getMaxStackSize(slot.getItem()) - slot.getItem().getCount();
                 clickTimes = Math.min(clickTimes, numItemsToMove);
                 numItemsToMove -= clickTimes;
                 while (clickTimes-- > 0) {
@@ -268,7 +267,7 @@ public final class MouseTweaksRuntime {
             return true;
         }
 
-        int maxItemsToMove = selectedSlot.getMaxItemCount(selectedSlotStack) - selectedSlotStack.getCount();
+        int maxItemsToMove = selectedSlot.getMaxStackSize(selectedSlotStack) - selectedSlotStack.getCount();
         numItemsToMove = Math.min(numItemsToMove, maxItemsToMove);
 
         while (numItemsToMove > 0) {
@@ -277,7 +276,7 @@ public final class MouseTweaksRuntime {
                 break;
             }
 
-            int numItemsInTargetSlot = targetSlot.getStack().getCount();
+            int numItemsInTargetSlot = targetSlot.getItem().getCount();
             if (handler.isCraftingOutput(targetSlot)) {
                 if (maxItemsToMove < numItemsInTargetSlot) {
                     break;
@@ -285,7 +284,7 @@ public final class MouseTweaksRuntime {
 
                 maxItemsToMove -= numItemsInTargetSlot;
                 numItemsToMove = Math.min(numItemsToMove - 1, maxItemsToMove);
-                if (!stackOnMouse.isEmpty() && !selectedSlot.canInsert(stackOnMouse)) {
+                if (!stackOnMouse.isEmpty() && !selectedSlot.mayPlace(stackOnMouse)) {
                     break;
                 }
 
@@ -299,7 +298,7 @@ public final class MouseTweaksRuntime {
             maxItemsToMove -= numItemsToMoveFromTargetSlot;
             numItemsToMove -= numItemsToMoveFromTargetSlot;
 
-            if (!stackOnMouse.isEmpty() && !targetSlot.canInsert(stackOnMouse)) {
+            if (!stackOnMouse.isEmpty() && !targetSlot.mayPlace(stackOnMouse)) {
                 break;
             }
 
@@ -317,7 +316,7 @@ public final class MouseTweaksRuntime {
         return true;
     }
 
-    private static void updateScreen(HandledScreen<?> newScreen) {
+    private static void updateScreen(AbstractContainerScreen<?> newScreen) {
         if (newScreen == openScreen) {
             return;
         }
@@ -339,16 +338,16 @@ public final class MouseTweaksRuntime {
         }
     }
 
-    private static MouseTweaksScreenHandler findHandler(HandledScreen<?> screen) {
-        if (screen instanceof CreativeInventoryScreen creativeInventoryScreen) {
+    private static MouseTweaksScreenHandler findHandler(AbstractContainerScreen<?> screen) {
+        if (screen instanceof CreativeModeInventoryScreen creativeInventoryScreen) {
             return new CreativeInventoryMouseTweaksHandler(creativeInventoryScreen);
         }
         return new HandledScreenMouseTweaksHandler(screen);
     }
 
     private static ItemStack cursorStack() {
-        MinecraftClient client = MinecraftClient.getInstance();
-        return client.player == null ? ItemStack.EMPTY : client.player.currentScreenHandler.getCursorStack();
+        Minecraft client = Minecraft.getInstance();
+        return client.player == null ? ItemStack.EMPTY : client.player.containerMenu.getCarried();
     }
 
     private static void rmbTweakMaybeClickSlot(Slot slot, ItemStack stackOnMouse) {
@@ -357,11 +356,11 @@ public final class MouseTweaksRuntime {
         }
 
         if (!(stackOnMouse.getItem() instanceof BundleItem)) {
-            ItemStack selectedSlotStack = slot.getStack();
+            ItemStack selectedSlotStack = slot.getItem();
             if (!areStacksCompatible(selectedSlotStack, stackOnMouse)) {
                 return;
             }
-            if (selectedSlotStack.getCount() == slot.getMaxItemCount(selectedSlotStack)) {
+            if (selectedSlotStack.getCount() == slot.getMaxStackSize(selectedSlotStack)) {
                 return;
             }
         }
@@ -370,16 +369,16 @@ public final class MouseTweaksRuntime {
     }
 
     private static boolean otherInventoryIsAbove(Slot selectedSlot, List<Slot> slots) {
-        MinecraftClient client = MinecraftClient.getInstance();
+        Minecraft client = Minecraft.getInstance();
         if (client.player == null) {
             return false;
         }
 
-        boolean selectedIsInPlayerInventory = selectedSlot.inventory == client.player.getInventory();
+        boolean selectedIsInPlayerInventory = selectedSlot.container == client.player.getInventory();
         int otherInventorySlotsBelow = 0;
         int otherInventorySlotsAbove = 0;
         for (Slot slot : slots) {
-            if ((slot.inventory == client.player.getInventory()) != selectedIsInPlayerInventory) {
+            if ((slot.container == client.player.getInventory()) != selectedIsInPlayerInventory) {
                 if (slot.y < selectedSlot.y) {
                     otherInventorySlotsAbove++;
                 } else {
@@ -391,11 +390,11 @@ public final class MouseTweaksRuntime {
     }
 
     private static boolean areStacksCompatible(ItemStack a, ItemStack b) {
-        return a.isEmpty() || b.isEmpty() || ItemStack.areItemsAndComponentsEqual(a, b);
+        return a.isEmpty() || b.isEmpty() || ItemStack.isSameItemSameComponents(a, b);
     }
 
     private static Slot findPullSlot(List<Slot> slots, Slot selectedSlot) {
-        MinecraftClient client = MinecraftClient.getInstance();
+        Minecraft client = Minecraft.getInstance();
         if (client.player == null) {
             return null;
         }
@@ -413,18 +412,18 @@ public final class MouseTweaksRuntime {
             direction = -1;
         }
 
-        ItemStack selectedSlotStack = selectedSlot.getStack();
-        boolean findInPlayerInventory = selectedSlot.inventory != client.player.getInventory();
+        ItemStack selectedSlotStack = selectedSlot.getItem();
+        boolean findInPlayerInventory = selectedSlot.container != client.player.getInventory();
         for (int i = startIndex; i != endIndex; i += direction) {
             Slot slot = slots.get(i);
             if (handler.isIgnored(slot)) {
                 continue;
             }
-            boolean slotInPlayerInventory = slot.inventory == client.player.getInventory();
+            boolean slotInPlayerInventory = slot.container == client.player.getInventory();
             if (findInPlayerInventory != slotInPlayerInventory) {
                 continue;
             }
-            ItemStack stack = slot.getStack();
+            ItemStack stack = slot.getItem();
             if (stack.isEmpty() || !areStacksCompatible(selectedSlotStack, stack)) {
                 continue;
             }
@@ -434,13 +433,13 @@ public final class MouseTweaksRuntime {
     }
 
     private static List<Slot> findPushSlots(List<Slot> slots, Slot selectedSlot, int itemCount, boolean mustDistributeAll) {
-        MinecraftClient client = MinecraftClient.getInstance();
+        Minecraft client = Minecraft.getInstance();
         if (client.player == null) {
             return mustDistributeAll ? null : List.of();
         }
 
-        ItemStack selectedSlotStack = selectedSlot.getStack();
-        boolean findInPlayerInventory = selectedSlot.inventory != client.player.getInventory();
+        ItemStack selectedSlotStack = selectedSlot.getItem();
+        boolean findInPlayerInventory = selectedSlot.container != client.player.getInventory();
 
         List<Slot> targets = new ArrayList<>();
         List<Slot> emptyTargets = new ArrayList<>();
@@ -449,29 +448,29 @@ public final class MouseTweaksRuntime {
             if (handler.isIgnored(slot)) {
                 continue;
             }
-            boolean slotInPlayerInventory = slot.inventory == client.player.getInventory();
+            boolean slotInPlayerInventory = slot.container == client.player.getInventory();
             if (findInPlayerInventory != slotInPlayerInventory || handler.isCraftingOutput(slot)) {
                 continue;
             }
 
-            ItemStack stack = slot.getStack();
+            ItemStack stack = slot.getItem();
             if (stack.isEmpty()) {
-                if (slot.canInsert(selectedSlotStack)) {
+                if (slot.mayPlace(selectedSlotStack)) {
                     emptyTargets.add(slot);
                 }
                 continue;
             }
 
-            if (areStacksCompatible(selectedSlotStack, stack) && stack.getCount() < slot.getMaxItemCount(stack)) {
+            if (areStacksCompatible(selectedSlotStack, stack) && stack.getCount() < slot.getMaxStackSize(stack)) {
                 targets.add(slot);
-                itemCount -= Math.min(itemCount, slot.getMaxItemCount(stack) - stack.getCount());
+                itemCount -= Math.min(itemCount, slot.getMaxStackSize(stack) - stack.getCount());
             }
         }
 
         for (int i = 0; i < emptyTargets.size() && itemCount > 0; i++) {
             Slot slot = emptyTargets.get(i);
             targets.add(slot);
-            itemCount -= Math.min(itemCount, slot.getMaxItemCount());
+            itemCount -= Math.min(itemCount, slot.getMaxStackSize());
         }
 
         if (mustDistributeAll && itemCount > 0) {

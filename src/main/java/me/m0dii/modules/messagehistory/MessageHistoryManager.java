@@ -6,8 +6,7 @@ import com.google.gson.reflect.TypeToken;
 import me.m0dii.M0DevTools;
 import me.m0dii.utils.ModConfig;
 import net.fabricmc.loader.api.FabricLoader;
-import net.minecraft.text.Text;
-
+import net.minecraft.network.chat.Component;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -24,7 +23,7 @@ public class MessageHistoryManager {
     private static final LinkedList<String> messageHistory = new LinkedList<>();
     private static boolean loaded = false;
 
-    public static void addMessage(Text message) {
+    public static void addMessage(Component message) {
         if (!loaded) {
             load();
         }

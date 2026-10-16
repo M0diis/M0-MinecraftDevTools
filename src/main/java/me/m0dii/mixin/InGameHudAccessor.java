@@ -1,13 +1,13 @@
 package me.m0dii.mixin;
 
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.hud.InGameHud;
-import net.minecraft.scoreboard.ScoreboardObjective;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.Hud;
+import net.minecraft.world.scores.Objective;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Invoker;
 
-@Mixin(InGameHud.class)
+@Mixin(Hud.class)
 public interface InGameHudAccessor {
-    @Invoker("renderScoreboardSidebar")
-    void m0dev$renderScoreboardSidebar(DrawContext context, ScoreboardObjective objective);
+    @Invoker("displayScoreboardSidebar")
+    void m0dev$renderScoreboardSidebar(GuiGraphicsExtractor context, Objective objective);
 }

@@ -8,8 +8,7 @@ import com.google.gson.reflect.TypeToken;
 import lombok.Getter;
 import me.m0dii.M0DevTools;
 import net.fabricmc.loader.api.FabricLoader;
-import net.minecraft.util.Identifier;
-
+import net.minecraft.resources.Identifier;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;

@@ -1,16 +1,16 @@
 package me.m0dii.modules.mobdrops;
 
+import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.VertexConsumer;
+import com.mojang.math.Axis;
+import me.m0dii.render.OverlayBufferSource;
+import me.m0dii.render.OverlayRenderEvents;
 import me.m0dii.utils.CustomRenderLayers;
 import me.m0dii.utils.DrawUtil;
-import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.font.TextRenderer;
-import net.minecraft.client.render.RenderLayers;
-import net.minecraft.client.render.VertexConsumer;
-import net.minecraft.client.render.VertexConsumerProvider;
-import net.minecraft.client.util.math.MatrixStack;
-import net.minecraft.util.math.RotationAxis;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Font;
+import net.minecraft.client.renderer.rendertype.RenderTypes;
+import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
 
 import java.awt.*;
@@ -28,43 +28,38 @@ public final class MobDropTrackerRenderer {
         }
         registered = true;
 
-        WorldRenderEvents.AFTER_ENTITIES.register(context -> {
-            MinecraftClient client = MinecraftClient.getInstance();
-            if (client.player == null || client.world == null) {
+        OverlayRenderEvents.AFTER_ENTITIES.register(context -> {
+            Minecraft client = Minecraft.getInstance();
+            if (client.player == null || client.level == null) {
                 return;
             }
 
             List<MobDropTrackerClientState.TrackerEntry> trackers = MobDropTrackerClientState.visibleTrackers(
-                    client.world.getRegistryKey().getValue().toString());
+                    client.level.dimension().identifier().toString());
             if (trackers.isEmpty()) {
                 return;
             }
 
-            VertexConsumerProvider consumers = context.consumers();
+            OverlayBufferSource consumers = context.consumers();
             if (consumers == null) {
-                consumers = client.getBufferBuilders().getEntityVertexConsumers();
+                consumers = OverlayBufferSource.current();
             }
 
-            VertexConsumer visible = consumers.getBuffer(RenderLayers.LINES);
+            VertexConsumer visible = consumers.getBuffer(RenderTypes.LINES);
             VertexConsumer through = consumers.getBuffer(CustomRenderLayers.LINES_NO_DEPTH);
-            Vec3d cameraPos = context.gameRenderer().getCamera().getCameraPos();
+            Vec3 cameraPos = context.gameRenderer().mainCamera().position();
 
             for (MobDropTrackerClientState.TrackerEntry tracker : trackers) {
                 drawTrackerBounds(visible, through, cameraPos, tracker);
             }
 
-            renderLabels(context.matrices(), consumers, context.gameRenderer().getCamera(), cameraPos, client.textRenderer, trackers);
-
-            if (consumers instanceof VertexConsumerProvider.Immediate immediate) {
-                immediate.draw(RenderLayers.LINES);
-                immediate.draw(CustomRenderLayers.LINES_NO_DEPTH);
-            }
+            renderLabels(context.matrices(), consumers, context.gameRenderer().mainCamera(), cameraPos, client.font, trackers);
         });
     }
 
     private static void drawTrackerBounds(VertexConsumer visible,
                                           VertexConsumer through,
-                                          Vec3d cameraPos,
+                                          Vec3 cameraPos,
                                           MobDropTrackerClientState.TrackerEntry tracker) {
         boolean container = "container".equalsIgnoreCase(tracker.kind());
         float[] visibleColor = trackerColor(tracker.name(), container ? 0.95f : 0.92f);
@@ -106,18 +101,18 @@ public final class MobDropTrackerRenderer {
                 1.0f, 1.0f, 1.0f, 0.34f, container ? 3.1f : 2.7f);
     }
 
-    private static void renderLabels(MatrixStack matrices,
-                                     VertexConsumerProvider consumers,
-                                     net.minecraft.client.render.Camera camera,
-                                     Vec3d cameraPos,
-                                     TextRenderer textRenderer,
+    private static void renderLabels(PoseStack matrices,
+                                     OverlayBufferSource consumers,
+                                     net.minecraft.client.Camera camera,
+                                     Vec3 cameraPos,
+                                     Font textRenderer,
                                      List<MobDropTrackerClientState.TrackerEntry> trackers) {
         if (matrices == null) {
             return;
         }
 
         for (MobDropTrackerClientState.TrackerEntry tracker : trackers) {
-            Vec3d labelPos = new Vec3d(
+            Vec3 labelPos = new Vec3(
                     tracker.anchor().getX() + 0.5,
                     tracker.anchor().getY() + 1.25,
                     tracker.anchor().getZ() + 0.5
@@ -127,14 +122,14 @@ public final class MobDropTrackerRenderer {
                 continue;
             }
 
-            matrices.push();
+            matrices.pushPose();
             matrices.translate(labelPos.x - cameraPos.x, labelPos.y - cameraPos.y, labelPos.z - cameraPos.z);
-            matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(-camera.getYaw()));
-            matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(camera.getPitch()));
+            matrices.rotate(Axis.YP.rotationDegrees(-camera.yRot()));
+            matrices.rotate(Axis.XP.rotationDegrees(camera.xRot()));
             float scale = (float) Math.clamp(distance * 0.0025, 0.018, 0.046);
             matrices.scale(-scale, -scale, scale);
 
-            Matrix4f matrix = matrices.peek().getPositionMatrix();
+            Matrix4f matrix = matrices.last().pose();
             String line1 = tracker.name() + " [" + tracker.kind() + "]";
             String line2 = "container".equalsIgnoreCase(tracker.kind())
                     ? "items " + tracker.totalItems() + " | dpm " + tracker.dropsPerMinute()
@@ -146,25 +141,25 @@ public final class MobDropTrackerRenderer {
             drawLine(textRenderer, consumers, matrix, line1, 0, 0xFFFFFFFF);
             drawLine(textRenderer, consumers, matrix, line2, 10, 0xFFD2F7FF);
             drawLine(textRenderer, consumers, matrix, line3, 20, 0xFFFFE38A);
-            matrices.pop();
+            matrices.popPose();
         }
     }
 
-    private static void drawLine(TextRenderer textRenderer,
-                                 VertexConsumerProvider consumers,
+    private static void drawLine(Font textRenderer,
+                                 OverlayBufferSource consumers,
                                  Matrix4f matrix,
                                  String text,
                                  int y,
                                  int color) {
-        int width = textRenderer.getWidth(text);
-        textRenderer.draw(text,
+        int width = textRenderer.width(text);
+        OverlayBufferSource.drawText(textRenderer, text,
                 -width / 2f,
                 y,
                 color,
                 false,
                 matrix,
                 consumers,
-                TextRenderer.TextLayerType.SEE_THROUGH,
+                Font.DisplayMode.SEE_THROUGH,
                 0,
                 0x00F000F0);
     }

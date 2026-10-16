@@ -2,14 +2,14 @@ package bettercommandblockui.mixin;
 
 import bettercommandblockui.main.ui.screen.BetterCommandBlockScreen;
 import me.m0dii.modules.commandblockui.BetterCommandBlockUiModule;
-import net.minecraft.block.CommandBlock;
-import net.minecraft.block.entity.BlockEntity;
-import net.minecraft.block.entity.CommandBlockBlockEntity;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.network.ClientPlayerEntity;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.network.packet.s2c.play.BlockEntityUpdateS2CPacket;
-import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.block.CommandBlock;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.entity.CommandBlockEntity;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
@@ -17,18 +17,18 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 @Mixin(CommandBlock.class)
 public class CommandBlockMixin {
 
-    @Redirect(method = "onUse",
-            at = @At(value = "INVOKE", target = "Lnet/minecraft/entity/player/PlayerEntity;openCommandBlockScreen(Lnet/minecraft/block/entity/CommandBlockBlockEntity;)V"))
-    public void openBetterCommandBlockScreen(PlayerEntity instance, CommandBlockBlockEntity commandBlock) {
+    @Redirect(method = "useWithoutItem",
+            at = @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/player/Player;openCommandBlock(Lnet/minecraft/world/level/block/entity/CommandBlockEntity;)V"))
+    public void openBetterCommandBlockScreen(Player instance, CommandBlockEntity commandBlock) {
         if (!BetterCommandBlockUiModule.INSTANCE.isEnabled()) {
-            instance.openCommandBlockScreen(commandBlock);
+            instance.openCommandBlock(commandBlock);
             return;
         }
-        if (instance instanceof ClientPlayerEntity) {
-            MinecraftClient client = ((ClientPlayerEntityAccessor) instance).getClient();
-            client.setScreen(new BetterCommandBlockScreen(commandBlock, commandBlock.getCommandExecutor()));
-        } else if (instance instanceof ServerPlayerEntity) {
-            ((ServerPlayerEntityAccessor) instance).getNetworkHandler().sendPacket(BlockEntityUpdateS2CPacket.create(commandBlock, BlockEntity::createNbt));
+        if (instance instanceof LocalPlayer) {
+            Minecraft client = ((ClientPlayerEntityAccessor) instance).getMinecraft();
+            client.gui.setScreen(new BetterCommandBlockScreen(commandBlock, commandBlock.getCommandBlock()));
+        } else if (instance instanceof ServerPlayer) {
+            ((ServerPlayerEntityAccessor) instance).getConnection().send(ClientboundBlockEntityDataPacket.create(commandBlock, BlockEntity::saveWithoutMetadata));
         }
     }
 }

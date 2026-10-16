@@ -1,20 +1,24 @@
 package me.m0dii.modules.entityradar;
 
+
+
+import me.m0dii.gui.theme.ThemedScreen;
+import com.mojang.blaze3d.platform.InputConstants;
 import me.m0dii.modules.freecam.CameraEntity;
 import me.m0dii.modules.freecam.FreecamModule;
-import net.minecraft.client.gui.Click;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.mob.HostileEntity;
-import net.minecraft.entity.passive.PassiveEntity;
-import net.minecraft.text.Text;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.entity.AgeableMob;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.monster.Monster;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
 
-public class EntityRadarScreen extends Screen {
+public class EntityRadarScreen extends Screen implements ThemedScreen {
     private static final int ENTRY_HEIGHT = 20;
     private static final int HEADER_HEIGHT = 40;
 
@@ -23,7 +27,7 @@ public class EntityRadarScreen extends Screen {
     private int scrollOffset = 0;
 
     public EntityRadarScreen(Screen parent) {
-        super(Text.literal("Entity Radar"));
+        super(Component.literal("Entity Radar"));
         this.parent = parent;
     }
 
@@ -35,11 +39,11 @@ public class EntityRadarScreen extends Screen {
     protected void init() {
         super.init();
 
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("Close"), button -> {
-            if (this.client != null) {
-                this.client.setScreen(parent);
+        this.addRenderableWidget(Button.builder(Component.literal("Close"), button -> {
+            if (this.minecraft != null) {
+                this.minecraft.gui.setScreen(parent);
             }
-        }).dimensions(this.width / 2 - 50, this.height - 30, 100, 20).build());
+        }).bounds(this.width / 2 - 50, this.height - 30, 100, 20).build());
 
         refreshEntities();
     }
@@ -49,19 +53,19 @@ public class EntityRadarScreen extends Screen {
     }
 
     @Override
-    public void render(@NotNull DrawContext context, int mouseX, int mouseY, float delta) {
-        this.renderBackground(context, mouseX, mouseY, delta);
+    public void extractRenderState(@NotNull GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
+        this.extractBackground(context, mouseX, mouseY, delta);
         drawContents(context, mouseX, mouseY);
-        super.render(context, mouseX, mouseY, delta);
+        super.extractRenderState(context, mouseX, mouseY, delta);
     }
 
     @Override
-    public void renderBackground(@NotNull DrawContext context, int mouseX, int mouseY, float delta) {
+    public void extractBackground(@NotNull GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
         context.fill(0, 0, this.width, this.height, 0xC0101010);
     }
 
-    private void drawContents(@NotNull DrawContext context, int mouseX, int mouseY) {
-        context.drawCenteredTextWithShadow(this.textRenderer, this.title, this.width / 2, 10, 0xFFFFFFFF);
+    private void drawContents(@NotNull GuiGraphicsExtractor context, int mouseX, int mouseY) {
+        context.centeredText(this.font, this.title, this.width / 2, 10, 0xFFFFFFFF);
 
         int passiveCount = EntityRadarModule.INSTANCE.getPassiveCount();
         int hostileCount = EntityRadarModule.INSTANCE.getHostileCount();
@@ -70,7 +74,7 @@ public class EntityRadarScreen extends Screen {
 
         String countText = String.format("Total: %d | §aPassive: %d §7| Neutral: %d §c| Hostile: %d",
                 totalCount, passiveCount, neutralCount, hostileCount);
-        context.drawCenteredTextWithShadow(this.textRenderer, Text.literal(countText), this.width / 2, 25, 0xFFFFFFFF);
+        context.centeredText(this.font, Component.literal(countText), this.width / 2, 25, 0xFFFFFFFF);
 
         int startIndex = scrollOffset / ENTRY_HEIGHT;
         int visibleEntries = (this.height - HEADER_HEIGHT - 40) / ENTRY_HEIGHT;
@@ -90,25 +94,25 @@ public class EntityRadarScreen extends Screen {
             int backgroundColor = isHovered ? 0x80FFFFFF : 0x40000000;
             context.fill(10, entryY, this.width - 10, entryY + ENTRY_HEIGHT, backgroundColor);
 
-            if (client != null && client.player != null) {
+            if (minecraft != null && minecraft.player != null) {
                 String entityName = entity.getName().getString();
-                float distance = entity.distanceTo(client.player);
+                float distance = entity.distanceTo(minecraft.player);
                 String text = String.format("%s - %.2fm", entityName, distance);
 
 
                 int color;
-                if (entity instanceof HostileEntity) {
+                if (entity instanceof Monster) {
                     color = 0xFFFF5555; // Red for hostile
-                } else if (entity instanceof PassiveEntity) {
+                } else if (entity instanceof AgeableMob) {
                     color = 0xFF55FF55; // Green for passive
                 } else {
                     color = 0xFFFFFF55; // Yellow for neutral
                 }
 
-                context.drawTextWithShadow(this.textRenderer, text, 15, entryY + 6, color);
+                context.text(this.font, text, 15, entryY + 6, color);
 
                 if (isHovered) {
-                    context.drawTextWithShadow(this.textRenderer, "Click to teleport",
+                    context.text(this.font, "Click to teleport",
                             this.width - 150, entryY + 6, 0xFFFFFF00);
                 }
             }
@@ -116,12 +120,12 @@ public class EntityRadarScreen extends Screen {
     }
 
     @Override
-    public boolean mouseClicked(Click click, boolean doubled) {
+    public boolean mouseClicked(MouseButtonEvent click, boolean doubled) {
         int button = click.button();
         double mouseY = click.y();
         double mouseX = click.x();
 
-        if (button == 0) { // Left click
+        if (button == InputConstants.MOUSE_BUTTON_LEFT) { // Left click
             int startIndex = scrollOffset / ENTRY_HEIGHT;
             int visibleEntries = (this.height - HEADER_HEIGHT - 40) / ENTRY_HEIGHT;
 
@@ -153,30 +157,30 @@ public class EntityRadarScreen extends Screen {
     }
 
     private void teleportToEntity(Entity entity) {
-        if (client != null && client.player != null) {
+        if (minecraft != null && minecraft.player != null) {
             if (FreecamModule.INSTANCE.isEnabled()) {
                 CameraEntity camera = CameraEntity.getCamera();
                 if (camera != null) {
-                    camera.setPosition(entity.getX(), entity.getY(), entity.getZ());
+                    camera.setPos(entity.getX(), entity.getY(), entity.getZ());
                 }
                 return;
             }
 
             String command = String.format("tp @s %.2f %.2f %.2f", entity.getX(), entity.getY(), entity.getZ());
-            client.player.networkHandler.sendChatCommand(command);
-            client.setScreen(null);
+            minecraft.player.connection.sendCommand(command);
+            minecraft.gui.setScreen(null);
         }
     }
 
     @Override
-    public void close() {
-        if (this.client != null) {
-            this.client.setScreen(parent);
+    public void onClose() {
+        if (this.minecraft != null) {
+            this.minecraft.gui.setScreen(parent);
         }
     }
 
     @Override
-    public boolean shouldPause() {
+    public boolean isPauseScreen() {
         return false;
     }
 }

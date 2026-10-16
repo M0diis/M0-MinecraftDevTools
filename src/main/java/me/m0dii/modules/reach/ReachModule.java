@@ -3,8 +3,7 @@ package me.m0dii.modules.reach;
 import me.m0dii.modules.Module;
 import me.m0dii.modules.optin.RestrictedModuleOptInNetworking;
 import me.m0dii.utils.ModConfig;
-import net.minecraft.util.Identifier;
-
+import net.minecraft.resources.Identifier;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;

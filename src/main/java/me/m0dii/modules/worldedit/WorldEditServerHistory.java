@@ -1,11 +1,11 @@
 package me.m0dii.modules.worldedit;
 
-import net.minecraft.registry.RegistryKey;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.text.Text;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.World;
+import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.level.Level;
 
 import java.util.*;
 
@@ -16,21 +16,21 @@ final class WorldEditServerHistory {
     private WorldEditServerHistory() {
     }
 
-    static void pushUndo(ServerPlayerEntity player, String label, RegistryKey<World> worldKey, List<WorldEditServerChange> changes) {
+    static void pushUndo(ServerPlayer player, String label, ResourceKey<Level> worldKey, List<WorldEditServerChange> changes) {
         if (changes.isEmpty()) {
             return;
         }
 
-        HistoryState state = HISTORIES.computeIfAbsent(player.getUuid(), ignored -> new HistoryState());
+        HistoryState state = HISTORIES.computeIfAbsent(player.getUUID(), ignored -> new HistoryState());
         state.undo.push(new HistoryEntry(label, worldKey, List.copyOf(changes)));
         trim(state.undo);
         state.redo.clear();
     }
 
-    static boolean undo(ServerPlayerEntity player) {
-        HistoryState state = HISTORIES.get(player.getUuid());
+    static boolean undo(ServerPlayer player) {
+        HistoryState state = HISTORIES.get(player.getUUID());
         if (state == null || state.undo.isEmpty()) {
-            player.sendMessage(Text.literal("[WE] Nothing to undo."), false);
+            player.sendSystemMessage(Component.literal("[WE] Nothing to undo."));
             return false;
         }
 
@@ -45,10 +45,10 @@ final class WorldEditServerHistory {
         return true;
     }
 
-    static boolean redo(ServerPlayerEntity player) {
-        HistoryState state = HISTORIES.get(player.getUuid());
+    static boolean redo(ServerPlayer player) {
+        HistoryState state = HISTORIES.get(player.getUUID());
         if (state == null || state.redo.isEmpty()) {
-            player.sendMessage(Text.literal("[WE] Nothing to redo."), false);
+            player.sendSystemMessage(Component.literal("[WE] Nothing to redo."));
             return false;
         }
 
@@ -63,15 +63,15 @@ final class WorldEditServerHistory {
         return true;
     }
 
-    private static boolean applyHistoryEntry(ServerPlayerEntity player, HistoryEntry entry, boolean undo) {
-        ServerWorld world = player.getCommandSource().getServer().getWorld(entry.worldKey());
+    private static boolean applyHistoryEntry(ServerPlayer player, HistoryEntry entry, boolean undo) {
+        ServerLevel world = player.createCommandSourceStack().getServer().getLevel(entry.worldKey());
         if (world == null) {
-            player.sendMessage(Text.literal("[WE] The world for that history entry is no longer available."), false);
+            player.sendSystemMessage(Component.literal("[WE] The world for that history entry is no longer available."));
             return false;
         }
 
         if (!areChunksLoaded(world, entry.changes())) {
-            player.sendMessage(Text.literal("[WE] Load the affected chunks first before " + (undo ? "undo" : "redo") + "."), false);
+            player.sendSystemMessage(Component.literal("[WE] Load the affected chunks first before " + (undo ? "undo" : "redo") + "."));
             return false;
         }
 
@@ -101,15 +101,15 @@ final class WorldEditServerHistory {
             }
         } catch (RuntimeException e) {
             rollbackHistory(world, applied, undo);
-            player.sendMessage(Text.literal("[WE] " + (undo ? "Undo" : "Redo") + " failed: " + e.getMessage()), false);
+            player.sendSystemMessage(Component.literal("[WE] " + (undo ? "Undo" : "Redo") + " failed: " + e.getMessage()));
             return false;
         }
 
-        player.sendMessage(Text.literal("[WE] " + (undo ? "Undid " : "Redid ") + entry.label() + " (" + entry.changes().size() + " block change(s))."), false);
+        player.sendSystemMessage(Component.literal("[WE] " + (undo ? "Undid " : "Redid ") + entry.label() + " (" + entry.changes().size() + " block change(s))."));
         return true;
     }
 
-    private static void rollbackHistory(ServerWorld world, List<WorldEditServerChange> applied, boolean undo) {
+    private static void rollbackHistory(ServerLevel world, List<WorldEditServerChange> applied, boolean undo) {
         for (int i = applied.size() - 1; i >= 0; i--) {
             WorldEditServerChange change = applied.get(i);
             if (undo) {
@@ -120,14 +120,14 @@ final class WorldEditServerHistory {
         }
     }
 
-    private static boolean areChunksLoaded(ServerWorld world, List<WorldEditServerChange> changes) {
+    private static boolean areChunksLoaded(ServerLevel world, List<WorldEditServerChange> changes) {
         java.util.HashSet<Long> seen = new java.util.HashSet<>();
         for (WorldEditServerChange change : changes) {
             BlockPos pos = change.pos();
             int chunkX = pos.getX() >> 4;
             int chunkZ = pos.getZ() >> 4;
             long chunkKey = (((long) chunkX) << 32) ^ (chunkZ & 0xffffffffL);
-            if (seen.add(chunkKey) && !world.isChunkLoaded(chunkX, chunkZ)) {
+            if (seen.add(chunkKey) && !world.hasChunk(chunkX, chunkZ)) {
                 return false;
             }
         }
@@ -146,7 +146,7 @@ final class WorldEditServerHistory {
         }
     }
 
-    private record HistoryEntry(String label, RegistryKey<World> worldKey, List<WorldEditServerChange> changes) {
+    private record HistoryEntry(String label, ResourceKey<Level> worldKey, List<WorldEditServerChange> changes) {
     }
 
     record WorldEditServerChange(BlockPos pos, WorldEditBlockSnapshot before, WorldEditBlockSnapshot after) {

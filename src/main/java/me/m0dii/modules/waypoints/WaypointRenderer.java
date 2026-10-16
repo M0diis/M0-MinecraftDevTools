@@ -1,15 +1,15 @@
 package me.m0dii.modules.waypoints;
 
+import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.math.Axis;
 import lombok.Getter;
 import lombok.Setter;
-import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.font.TextRenderer;
-import net.minecraft.client.render.Camera;
-import net.minecraft.client.render.VertexConsumerProvider;
-import net.minecraft.client.util.math.MatrixStack;
-import net.minecraft.util.math.RotationAxis;
-import net.minecraft.util.math.Vec3d;
+import me.m0dii.render.OverlayBufferSource;
+import me.m0dii.render.OverlayRenderEvents;
+import net.minecraft.client.Camera;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Font;
+import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
 
 import java.util.List;
@@ -27,46 +27,46 @@ public class WaypointRenderer {
     }
 
     public static void register() {
-        WorldRenderEvents.AFTER_ENTITIES.register(context -> {
+        OverlayRenderEvents.AFTER_ENTITIES.register(context -> {
             if (!enabled) {
                 return;
             }
 
-            MinecraftClient client = MinecraftClient.getInstance();
-            if (client.player == null || client.world == null) {
+            Minecraft client = Minecraft.getInstance();
+            if (client.player == null || client.level == null) {
                 return;
             }
 
-            MatrixStack matrices = context.matrices();
+            PoseStack matrices = context.matrices();
             if (matrices == null) {
                 return;
             }
 
-            VertexConsumerProvider vertexConsumers = context.consumers();
+            OverlayBufferSource vertexConsumers = context.consumers();
             if (vertexConsumers == null) {
-                vertexConsumers = client.getBufferBuilders().getEntityVertexConsumers();
+                vertexConsumers = OverlayBufferSource.current();
             }
 
-            Camera camera = context.gameRenderer().getCamera();
-            Vec3d cameraPos = camera.getCameraPos();
-            String currentDimension = client.world.getRegistryKey().getValue().toString();
+            Camera camera = context.gameRenderer().mainCamera();
+            Vec3 cameraPos = camera.position();
+            String currentDimension = client.level.dimension().identifier().toString();
 
             List<WaypointHandler.Waypoint> waypoints = WaypointHandler.getWaypoints();
-            TextRenderer textRenderer = client.textRenderer;
+            Font textRenderer = client.font;
 
             for (WaypointHandler.Waypoint waypoint : waypoints) {
                 if (!waypoint.dimension.equals(currentDimension)) {
                     continue;
                 }
 
-                Vec3d waypointPos = waypoint.position;
+                Vec3 waypointPos = waypoint.position;
                 double distance = cameraPos.distanceTo(waypointPos);
 
                 if (distance > MAX_RENDER_DISTANCE) {
                     continue;
                 }
 
-                matrices.push();
+                matrices.pushPose();
 
                 matrices.translate(
                         waypointPos.x - cameraPos.x,
@@ -75,21 +75,21 @@ public class WaypointRenderer {
                 );
 
                 // Billboard effect - rotate to face camera
-                matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(-camera.getYaw()));
-                matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(camera.getPitch()));
+                matrices.rotate(Axis.YP.rotationDegrees(-camera.yRot()));
+                matrices.rotate(Axis.XP.rotationDegrees(camera.xRot()));
 
                 // Scale based on distance (but keep it readable)
                 float scale = (float) Math.clamp(distance * 0.003, 0.025, 0.05);
                 matrices.scale(-scale, -scale, scale);
 
-                Matrix4f matrix = matrices.peek().getPositionMatrix();
+                Matrix4f matrix = matrices.last().pose();
                 int fullBright = 0x00F000F0; // Always visible
 
                 String nameText = waypoint.name;
-                int nameWidth = textRenderer.getWidth(nameText);
+                int nameWidth = textRenderer.width(nameText);
                 int nameColor = 0x00FFFF; // Cyan
 
-                textRenderer.draw(
+                OverlayBufferSource.drawText(textRenderer, 
                         nameText,
                         -nameWidth / 2f,
                         -20, // Move up from center
@@ -97,13 +97,13 @@ public class WaypointRenderer {
                         false,
                         matrix,
                         vertexConsumers,
-                        TextRenderer.TextLayerType.SEE_THROUGH,
+                        Font.DisplayMode.SEE_THROUGH,
                         0,
                         fullBright
                 );
 
                 String distText = String.format("%.0fm", distance);
-                int distWidth = textRenderer.getWidth(distText);
+                int distWidth = textRenderer.width(distText);
 
                 int distColor;
                 if (distance < 100) {
@@ -114,7 +114,7 @@ public class WaypointRenderer {
                     distColor = 0xFF5555; // Red
                 }
 
-                textRenderer.draw(
+                OverlayBufferSource.drawText(textRenderer, 
                         distText,
                         -distWidth / 2f,
                         -10, // Just below name
@@ -122,21 +122,21 @@ public class WaypointRenderer {
                         false, // no shadow for SEE_THROUGH
                         matrix,
                         vertexConsumers,
-                        TextRenderer.TextLayerType.SEE_THROUGH,
+                        Font.DisplayMode.SEE_THROUGH,
                         0,
                         fullBright
                 );
 
                 // Render coordinates below distance (smaller text)
-                matrices.push();
+                matrices.pushPose();
                 matrices.scale(0.7f, 0.7f, 0.7f);
-                Matrix4f coordMatrix = matrices.peek().getPositionMatrix();
+                Matrix4f coordMatrix = matrices.last().pose();
 
                 String coordText = String.format("%.0f, %.0f, %.0f", waypointPos.x, waypointPos.y, waypointPos.z);
-                int coordWidth = textRenderer.getWidth(coordText);
+                int coordWidth = textRenderer.width(coordText);
                 int coordColor = 0xAAAAAA;
 
-                textRenderer.draw(
+                OverlayBufferSource.drawText(textRenderer, 
                         coordText,
                         -coordWidth / 2f,
                         0,
@@ -144,13 +144,13 @@ public class WaypointRenderer {
                         false,
                         coordMatrix,
                         vertexConsumers,
-                        TextRenderer.TextLayerType.SEE_THROUGH,
+                        Font.DisplayMode.SEE_THROUGH,
                         0,
                         fullBright
                 );
 
-                matrices.pop();
-                matrices.pop();
+                matrices.popPose();
+                matrices.popPose();
             }
         });
     }

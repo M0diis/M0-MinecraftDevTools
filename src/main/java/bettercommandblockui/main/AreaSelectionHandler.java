@@ -1,8 +1,8 @@
 package bettercommandblockui.main;
 
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Vec3i;
+import net.minecraft.client.Minecraft;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Vec3i;
 
 public class AreaSelectionHandler {
     private static boolean selecting;
@@ -10,7 +10,7 @@ public class AreaSelectionHandler {
     private static Vec3i endPos;
 
     public static boolean areaSelectionInput() {
-        BlockPos currentPos = MinecraftClient.getInstance().player.getBlockPos();
+        BlockPos currentPos = Minecraft.getInstance().player.blockPosition();
         if (!selecting) {
             startPos = currentPos;
         } else {
@@ -26,7 +26,7 @@ public class AreaSelectionHandler {
             output += "dy=" + difference.getY() + ",";
             output += "dz=" + difference.getZ() + ",";
 
-            MinecraftClient.getInstance().keyboard.setClipboard(output);
+            Minecraft.getInstance().keyboardHandler.setClipboard(output);
         }
 
         selecting = !selecting;

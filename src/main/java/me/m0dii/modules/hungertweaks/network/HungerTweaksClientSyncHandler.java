@@ -18,14 +18,14 @@ public final class HungerTweaksClientSyncHandler {
         ClientPlayNetworking.registerGlobalReceiver(HungerTweaksExhaustionSyncPayload.ID, (payload, context) ->
                 context.client().execute(() -> {
                     if (context.client().player != null) {
-                        HungerTweaksFoodHelper.setExhaustion(context.client().player.getHungerManager(), payload.exhaustion());
+                        HungerTweaksFoodHelper.setExhaustion(context.client().player.getFoodData(), payload.exhaustion());
                     }
                 }));
 
         ClientPlayNetworking.registerGlobalReceiver(HungerTweaksSaturationSyncPayload.ID, (payload, context) ->
                 context.client().execute(() -> {
                     if (context.client().player != null) {
-                        context.client().player.getHungerManager().setSaturationLevel(payload.saturation());
+                        context.client().player.getFoodData().setSaturation(payload.saturation());
                     }
                 }));
     }

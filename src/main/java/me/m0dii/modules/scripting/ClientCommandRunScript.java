@@ -3,10 +3,10 @@ package me.m0dii.modules.scripting;
 import com.mojang.brigadier.Command;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
-import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
+import net.fabricmc.fabric.api.client.command.v2.ClientCommands;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
-import net.minecraft.text.Text;
+import net.minecraft.network.chat.Component;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -15,8 +15,8 @@ public class ClientCommandRunScript {
     public static void register() {
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> {
             dispatcher.register(
-                    ClientCommandManager.literal("runscript")
-                            .then(ClientCommandManager.argument("script", StringArgumentType.greedyString())
+                    ClientCommands.literal("runscript")
+                            .then(ClientCommands.argument("script", StringArgumentType.greedyString())
                                     .executes(ctx -> runScript(ctx, StringArgumentType.getString(ctx, "script")))
                             )
             );
@@ -27,7 +27,7 @@ public class ClientCommandRunScript {
         try {
             String raw = script == null ? "" : script.trim();
             if (raw.isEmpty()) {
-                ctx.getSource().sendError(Text.literal("Provide a script file name or a prefixed inline script."));
+                ctx.getSource().sendError(Component.literal("Provide a script file name or a prefixed inline script."));
                 return Command.SINGLE_SUCCESS;
             }
 
@@ -45,15 +45,15 @@ public class ClientCommandRunScript {
             } else if (raw.regionMatches(true, 0, "javascript:", 0, 11) || raw.regionMatches(true, 0, "js:", 0, 3)) {
                 result = new JavaScriptScriptManager().runScript(raw.substring(raw.indexOf(':') + 1).trim(), context);
             } else if (ScriptTypes.isScriptFile(raw)) {
-                ctx.getSource().sendError(Text.literal("Script file not found: " + raw));
+                ctx.getSource().sendError(Component.literal("Script file not found: " + raw));
                 return Command.SINGLE_SUCCESS;
             } else {
-                ctx.getSource().sendError(Text.literal("Unknown script. Use a saved .groovy/.kts/.js file or groovy:/kotlin:/js: inline source."));
+                ctx.getSource().sendError(Component.literal("Unknown script. Use a saved .groovy/.kts/.js file or groovy:/kotlin:/js: inline source."));
                 return Command.SINGLE_SUCCESS;
             }
-            ctx.getSource().sendFeedback(Text.literal("Script result: " + ScriptTypes.formatResult(result)));
+            ctx.getSource().sendFeedback(Component.literal("Script result: " + ScriptTypes.formatResult(result)));
         } catch (Exception e) {
-            ctx.getSource().sendError(Text.literal("Script error: " + e.getMessage()));
+            ctx.getSource().sendError(Component.literal("Script error: " + e.getMessage()));
         }
         return Command.SINGLE_SUCCESS;
     }

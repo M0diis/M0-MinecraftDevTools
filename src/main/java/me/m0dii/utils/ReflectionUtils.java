@@ -1,12 +1,11 @@
 package me.m0dii.utils;
 
-import net.minecraft.client.option.KeyBinding;
-
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import net.minecraft.client.KeyMapping;
 
 public final class ReflectionUtils {
     private ReflectionUtils() {
@@ -96,20 +95,20 @@ public final class ReflectionUtils {
         return null;
     }
 
-    public static String getGameKeybindDisplayName(KeyBinding kb, Object options) {
+    public static String getGameKeybindDisplayName(KeyMapping kb, Object options) {
         String action = reflectActionName(kb);
         if ((action == null || action.isBlank()) && options != null) {
             action = deriveActionFromOptionsField(kb, options);
         }
         if (action == null || action.isBlank()) {
-            return kb.getBoundKeyLocalizedText().getString();
+            return kb.getTranslatedKeyMessage().getString();
         }
         return action;
     }
 
-    private static String deriveActionFromOptionsField(KeyBinding kb, Object options) {
+    private static String deriveActionFromOptionsField(KeyMapping kb, Object options) {
         for (Field f : declaredFieldsInHierarchy(options.getClass())) {
-            if (!KeyBinding.class.isAssignableFrom(f.getType())) {
+            if (!KeyMapping.class.isAssignableFrom(f.getType())) {
                 continue;
             }
             try {
@@ -144,7 +143,7 @@ public final class ReflectionUtils {
         return out.toString();
     }
 
-    private static String reflectActionName(KeyBinding kb) {
+    private static String reflectActionName(KeyMapping kb) {
         String action = extractActionKeyFromMethods(kb);
         if (action != null) {
             return humanizeTranslation(action);
@@ -169,9 +168,9 @@ public final class ReflectionUtils {
         return null;
     }
 
-    private static String extractActionKeyFromMethods(KeyBinding kb) {
+    private static String extractActionKeyFromMethods(KeyMapping kb) {
         try {
-            Method m = kb.getClass().getMethod("getTranslationKey");
+            Method m = kb.getClass().getMethod("getName");
             Object value = m.invoke(kb);
             if (value instanceof String s && isActionTranslationKey(s)) {
                 return s;
@@ -194,7 +193,7 @@ public final class ReflectionUtils {
         return null;
     }
 
-    private static String extractActionKeyFromFields(KeyBinding kb) {
+    private static String extractActionKeyFromFields(KeyMapping kb) {
         for (Field f : declaredFieldsInHierarchy(kb.getClass())) {
             if (f.getType() != String.class) {
                 continue;

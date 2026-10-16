@@ -4,11 +4,11 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.suggestion.Suggestions;
 import com.mojang.brigadier.suggestion.SuggestionsBuilder;
-import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
+import net.fabricmc.fabric.api.client.command.v2.ClientCommands;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.text.Text;
+import net.minecraft.client.Minecraft;
+import net.minecraft.network.chat.Component;
 
 import java.util.Locale;
 import java.util.concurrent.CompletableFuture;
@@ -19,20 +19,20 @@ public final class ParsePlaceholderClientCommand {
 
     public static void register() {
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) ->
-                dispatcher.register(ClientCommandManager.literal("parseplaceholder")
-                        .then(ClientCommandManager.argument("input", StringArgumentType.greedyString())
+                dispatcher.register(ClientCommands.literal("parseplaceholder")
+                        .then(ClientCommands.argument("input", StringArgumentType.greedyString())
                                 .suggests(ParsePlaceholderClientCommand::suggestPlaceholders)
                                 .executes(ParsePlaceholderClientCommand::execute))));
     }
 
     private static int execute(CommandContext<FabricClientCommandSource> context) {
-        MinecraftClient client = context.getSource().getClient();
+        Minecraft client = context.getSource().getClient();
         if (client.player == null) {
             return 0;
         }
         String input = StringArgumentType.getString(context, "input");
         String expanded = MacroPlaceholders.expand(client, input);
-        client.player.sendMessage(Text.literal("[Placeholder] " + expanded), false);
+        client.player.sendSystemMessage(Component.literal("[Placeholder] " + expanded));
         return 1;
     }
 

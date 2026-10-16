@@ -1,7 +1,7 @@
 package me.m0dii.modules.worldedit;
 
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Direction;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -30,9 +30,9 @@ public final class WorldEditCommandPlanner {
 
     public static List<String> planStack(WorldEditSelection selection, int count, Direction direction, boolean masked) {
         List<String> commands = new ArrayList<>();
-        int stepX = direction.getOffsetX() * selection.sizeX();
-        int stepY = direction.getOffsetY() * selection.sizeY();
-        int stepZ = direction.getOffsetZ() * selection.sizeZ();
+        int stepX = direction.getStepX() * selection.sizeX();
+        int stepY = direction.getStepY() * selection.sizeY();
+        int stepZ = direction.getStepZ() * selection.sizeZ();
         String maskMode = masked ? "masked" : "replace";
 
         List<WorldEditSelection> sourceParts = selection.partition(MAX_COMMAND_VOLUME);
@@ -41,7 +41,7 @@ public final class WorldEditCommandPlanner {
             int dy = stepY * copyIndex;
             int dz = stepZ * copyIndex;
             for (WorldEditSelection part : sourceParts) {
-                BlockPos destMin = part.min().add(dx, dy, dz);
+                BlockPos destMin = part.min().offset(dx, dy, dz);
                 commands.add("clone " + corners(part) + " " + coords(destMin) + " " + maskMode + " force");
             }
         }
@@ -51,14 +51,14 @@ public final class WorldEditCommandPlanner {
 
     public static List<String> planMove(WorldEditSelection selection, int distance, Direction direction, boolean masked) {
         List<String> commands = new ArrayList<>();
-        int dx = direction.getOffsetX() * distance;
-        int dy = direction.getOffsetY() * distance;
-        int dz = direction.getOffsetZ() * distance;
+        int dx = direction.getStepX() * distance;
+        int dy = direction.getStepY() * distance;
+        int dz = direction.getStepZ() * distance;
         boolean descending = dx > 0 || dy > 0 || dz > 0;
         String maskMode = masked ? "masked" : "replace";
 
         for (WorldEditSelection part : selection.partitionOrdered(direction.getAxis(), descending, MAX_COMMAND_VOLUME)) {
-            BlockPos destMin = part.min().add(dx, dy, dz);
+            BlockPos destMin = part.min().offset(dx, dy, dz);
             commands.add("clone " + corners(part) + " " + coords(destMin) + " " + maskMode + " force");
         }
 

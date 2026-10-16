@@ -2,30 +2,29 @@ package me.m0dii.modules.macros;
 
 import me.m0dii.utils.NbtExtractors;
 import me.m0dii.utils.ReflectionUtils;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.entity.BlockEntity;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.component.ComponentType;
-import net.minecraft.component.ComponentsAccess;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.mob.Monster;
-import net.minecraft.entity.passive.AnimalEntity;
-import net.minecraft.entity.passive.PassiveEntity;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.nbt.NbtCompound;
-import net.minecraft.nbt.NbtElement;
-import net.minecraft.nbt.NbtList;
-import net.minecraft.nbt.NbtString;
-import net.minecraft.registry.Registries;
-import net.minecraft.state.property.Property;
-import net.minecraft.util.hit.BlockHitResult;
-import net.minecraft.util.hit.EntityHitResult;
-import net.minecraft.util.hit.HitResult;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.World;
-
+import net.minecraft.client.Minecraft;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.component.DataComponentGetter;
+import net.minecraft.core.component.DataComponentType;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.StringTag;
+import net.minecraft.nbt.Tag;
+import net.minecraft.world.entity.AgeableMob;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.animal.Animal;
+import net.minecraft.world.entity.monster.Enemy;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.Property;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.EntityHitResult;
+import net.minecraft.world.phys.HitResult;
+import net.minecraft.world.phys.Vec3;
 import java.util.*;
 
 public final class TargetContextPlaceholderProvider implements MacroPlaceholderProvider {
@@ -152,14 +151,14 @@ public final class TargetContextPlaceholderProvider implements MacroPlaceholderP
     }
 
     @Override
-    public String resolvePlaceholder(String token, MinecraftClient client, PlayerEntity player, boolean canvasMode) {
-        if (token == null || token.isBlank() || client == null || player == null || client.world == null) {
+    public String resolvePlaceholder(String token, Minecraft client, Player player, boolean canvasMode) {
+        if (token == null || token.isBlank() || client == null || player == null || client.level == null) {
             return null;
         }
 
         if (token.startsWith(TARGET_PLAYER_PREFIX)) {
             Entity entity = targetedEntity(client);
-            if (!(entity instanceof PlayerEntity targetPlayer)) {
+            if (!(entity instanceof Player targetPlayer)) {
                 return null;
             }
             return resolveTargetPlayerToken(token.substring(TARGET_PLAYER_PREFIX.length()), targetPlayer, player);
@@ -178,10 +177,10 @@ public final class TargetContextPlaceholderProvider implements MacroPlaceholderP
             if (pos == null) {
                 return null;
             }
-            return resolveTargetBlockToken(token.substring(TARGET_BLOCK_PREFIX.length()), client.world, pos);
+            return resolveTargetBlockToken(token.substring(TARGET_BLOCK_PREFIX.length()), client.level, pos);
         }
 
-        String queryValue = resolveQueryToken(token, client.world, player);
+        String queryValue = resolveQueryToken(token, client.level, player);
         if (queryValue != null) {
             return queryValue;
         }
@@ -193,7 +192,7 @@ public final class TargetContextPlaceholderProvider implements MacroPlaceholderP
         return null;
     }
 
-    private static String resolveQueryToken(String token, World world, PlayerEntity player) {
+    private static String resolveQueryToken(String token, Level world, Player player) {
         QueryToken playerQuery = parseQueryToken(token, QUERY_PLAYER_PREFIX);
         if (playerQuery != null) {
             return resolveQueryPlayerToken(playerQuery, world, player);
@@ -216,19 +215,19 @@ public final class TargetContextPlaceholderProvider implements MacroPlaceholderP
         return null;
     }
 
-    private static String resolveQueryPlayerToken(QueryToken query, World world, PlayerEntity sourcePlayer) {
+    private static String resolveQueryPlayerToken(QueryToken query, Level world, Player sourcePlayer) {
         List<Entity> matches = resolveSelectorMatches(query.argument(), world, sourcePlayer, true);
         String aggregate = resolveAggregateEntityQuery(query.key(), matches, true);
         if (aggregate != null) {
             return aggregate;
         }
-        if (matches.isEmpty() || !(matches.getFirst() instanceof PlayerEntity targetPlayer)) {
+        if (matches.isEmpty() || !(matches.getFirst() instanceof Player targetPlayer)) {
             return null;
         }
         return resolveTargetPlayerToken(query.key(), targetPlayer, sourcePlayer);
     }
 
-    private static String resolveQueryEntityToken(QueryToken query, World world, PlayerEntity sourcePlayer) {
+    private static String resolveQueryEntityToken(QueryToken query, Level world, Player sourcePlayer) {
         List<Entity> matches = resolveSelectorMatches(query.argument(), world, sourcePlayer, false);
         String aggregate = resolveAggregateEntityQuery(query.key(), matches, false);
         if (aggregate != null) {
@@ -240,16 +239,16 @@ public final class TargetContextPlaceholderProvider implements MacroPlaceholderP
         return resolveTargetEntityToken(query.key(), matches.getFirst(), sourcePlayer);
     }
 
-    private static Entity targetedEntity(MinecraftClient client) {
-        HitResult hitResult = client.crosshairTarget;
+    private static Entity targetedEntity(Minecraft client) {
+        HitResult hitResult = client.hitResult;
         if (hitResult instanceof EntityHitResult entityHitResult) {
             return entityHitResult.getEntity();
         }
         return null;
     }
 
-    private static BlockPos targetedBlock(MinecraftClient client) {
-        HitResult hitResult = client.crosshairTarget;
+    private static BlockPos targetedBlock(Minecraft client) {
+        HitResult hitResult = client.hitResult;
         if (hitResult instanceof BlockHitResult blockHitResult) {
             return blockHitResult.getBlockPos();
         }
@@ -272,7 +271,7 @@ public final class TargetContextPlaceholderProvider implements MacroPlaceholderP
         return new QueryToken(argument, key);
     }
 
-    private static List<Entity> resolveSelectorMatches(String rawSelector, World world, PlayerEntity sourcePlayer, boolean playersOnly) {
+    private static List<Entity> resolveSelectorMatches(String rawSelector, Level world, Player sourcePlayer, boolean playersOnly) {
         SelectorQuery query = parseSelectorQuery(rawSelector);
         if (query == null || world == null || sourcePlayer == null) {
             return List.of();
@@ -289,7 +288,7 @@ public final class TargetContextPlaceholderProvider implements MacroPlaceholderP
         return List.copyOf(candidates);
     }
 
-    private static List<Entity> baseSelectorCandidates(SelectorQuery query, World world, PlayerEntity sourcePlayer, boolean playersOnly) {
+    private static List<Entity> baseSelectorCandidates(SelectorQuery query, Level world, Player sourcePlayer, boolean playersOnly) {
         if (query.directName() != null) {
             String wanted = query.directName().trim();
             if (wanted.isBlank()) {
@@ -297,14 +296,14 @@ public final class TargetContextPlaceholderProvider implements MacroPlaceholderP
             }
 
             List<Entity> direct = new ArrayList<>();
-            for (PlayerEntity player : world.getPlayers()) {
-                if (player.getGameProfile().name().equalsIgnoreCase(wanted) || player.getUuidAsString().equalsIgnoreCase(wanted)) {
+            for (Player player : world.players()) {
+                if (player.getGameProfile().name().equalsIgnoreCase(wanted) || player.getStringUUID().equalsIgnoreCase(wanted)) {
                     direct.add(player);
                 }
             }
             if (!playersOnly) {
-                for (Entity entity : world.getOtherEntities(sourcePlayer, sourcePlayer.getBoundingBox().expand(512.0))) {
-                    if (entity.getName().getString().equalsIgnoreCase(wanted) || entity.getUuidAsString().equalsIgnoreCase(wanted)) {
+                for (Entity entity : world.getEntities(sourcePlayer, sourcePlayer.getBoundingBox().inflate(512.0))) {
+                    if (entity.getName().getString().equalsIgnoreCase(wanted) || entity.getStringUUID().equalsIgnoreCase(wanted)) {
                         direct.add(entity);
                     }
                 }
@@ -312,15 +311,15 @@ public final class TargetContextPlaceholderProvider implements MacroPlaceholderP
             return direct;
         }
 
-        List<Entity> allPlayers = new ArrayList<>(world.getPlayers());
+        List<Entity> allPlayers = new ArrayList<>(world.players());
         return switch (query.baseSelector()) {
             case 's' -> List.of(sourcePlayer);
             case 'p', 'a', 'r' -> playersOnly ? allPlayers : new ArrayList<>(allPlayers);
             case 'e' -> {
                 List<Entity> entities = new ArrayList<>(allPlayers);
-                entities.addAll(world.getOtherEntities(sourcePlayer, sourcePlayer.getBoundingBox().expand(512.0)));
+                entities.addAll(world.getEntities(sourcePlayer, sourcePlayer.getBoundingBox().inflate(512.0)));
                 if (playersOnly) {
-                    entities.removeIf(entity -> !(entity instanceof PlayerEntity));
+                    entities.removeIf(entity -> !(entity instanceof Player));
                 }
                 yield entities;
             }
@@ -328,11 +327,11 @@ public final class TargetContextPlaceholderProvider implements MacroPlaceholderP
         };
     }
 
-    private static boolean matchesSelectorQuery(Entity entity, PlayerEntity sourcePlayer, SelectorQuery query, boolean playersOnly) {
+    private static boolean matchesSelectorQuery(Entity entity, Player sourcePlayer, SelectorQuery query, boolean playersOnly) {
         if (entity == null || !entity.isAlive()) {
             return false;
         }
-        if (playersOnly && !(entity instanceof PlayerEntity)) {
+        if (playersOnly && !(entity instanceof Player)) {
             return false;
         }
         if (query.directName() != null) {
@@ -354,7 +353,7 @@ public final class TargetContextPlaceholderProvider implements MacroPlaceholderP
                     }
                 }
                 case "uuid" -> {
-                    if (!entity.getUuidAsString().equalsIgnoreCase(unquote(value))) {
+                    if (!entity.getStringUUID().equalsIgnoreCase(unquote(value))) {
                         return false;
                     }
                 }
@@ -381,29 +380,29 @@ public final class TargetContextPlaceholderProvider implements MacroPlaceholderP
             return false;
         }
         if ("player".equals(normalized) || "minecraft:player".equals(normalized)) {
-            return entity instanceof PlayerEntity;
+            return entity instanceof Player;
         }
         if (playersOnly) {
             return false;
         }
-        String typeId = String.valueOf(Registries.ENTITY_TYPE.getId(entity.getType())).toLowerCase(Locale.ROOT);
+        String typeId = String.valueOf(BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType())).toLowerCase(Locale.ROOT);
         if (typeId.equals(normalized)) {
             return true;
         }
         return !normalized.contains(":") && typeId.equals("minecraft:" + normalized);
     }
 
-    private static void sortSelectorCandidates(List<Entity> candidates, SelectorQuery query, PlayerEntity sourcePlayer) {
+    private static void sortSelectorCandidates(List<Entity> candidates, SelectorQuery query, Player sourcePlayer) {
         String sortMode = query.arguments().getOrDefault("sort", defaultSelectorSort(query.baseSelector()));
         String normalized = sortMode == null ? "" : unquote(sortMode).trim().toLowerCase(Locale.ROOT);
         switch (normalized) {
-            case "nearest", "distance" -> candidates.sort(Comparator.comparingDouble(entity -> entity.squaredDistanceTo(sourcePlayer)));
-            case "furthest" -> candidates.sort(Comparator.comparingDouble((Entity entity) -> entity.squaredDistanceTo(sourcePlayer)).reversed());
+            case "nearest", "distance" -> candidates.sort(Comparator.comparingDouble(entity -> entity.distanceToSqr(sourcePlayer)));
+            case "furthest" -> candidates.sort(Comparator.comparingDouble((Entity entity) -> entity.distanceToSqr(sourcePlayer)).reversed());
             case "random" -> Collections.shuffle(candidates);
             case "name" -> candidates.sort(Comparator.comparing(entity -> entity.getName().getString(), String.CASE_INSENSITIVE_ORDER));
             case "", "arbitrary" -> {
             }
-            default -> candidates.sort(Comparator.comparingDouble(entity -> entity.squaredDistanceTo(sourcePlayer)));
+            default -> candidates.sort(Comparator.comparingDouble(entity -> entity.distanceToSqr(sourcePlayer)));
         }
     }
 
@@ -506,28 +505,28 @@ public final class TargetContextPlaceholderProvider implements MacroPlaceholderP
         return switch (key) {
             case "count" -> Integer.toString(matches.size());
             case "names" -> joinOrNone(matches.stream().map(entity -> entity.getName().getString()).toList());
-            case "uuids" -> joinOrNone(matches.stream().map(Entity::getUuidAsString).toList());
+            case "uuids" -> joinOrNone(matches.stream().map(Entity::getStringUUID).toList());
             case "types" -> playersOnly
                     ? joinOrNone(matches.stream().map(entity -> "minecraft:player").toList())
-                    : joinOrNone(matches.stream().map(entity -> String.valueOf(Registries.ENTITY_TYPE.getId(entity.getType()))).toList());
+                    : joinOrNone(matches.stream().map(entity -> String.valueOf(BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()))).toList());
             default -> null;
         };
     }
 
-    private static BlockPos resolveQueryBlockPos(String raw, PlayerEntity player) {
+    private static BlockPos resolveQueryBlockPos(String raw, Player player) {
         if (raw == null || player == null) {
             return null;
         }
         String normalized = raw.trim().toLowerCase(Locale.ROOT);
         return switch (normalized) {
-            case "feet", "self", "here" -> player.getBlockPos();
-            case "below" -> player.getBlockPos().down();
-            case "above", "head" -> player.getBlockPos().up();
+            case "feet", "self", "here" -> player.blockPosition();
+            case "below" -> player.blockPosition().below();
+            case "above", "head" -> player.blockPosition().above();
             default -> parseRelativeBlockPos(raw, player);
         };
     }
 
-    private static BlockPos parseRelativeBlockPos(String raw, PlayerEntity player) {
+    private static BlockPos parseRelativeBlockPos(String raw, Player player) {
         String normalized = raw == null ? "" : raw.trim();
         if (normalized.isBlank()) {
             return null;
@@ -545,7 +544,7 @@ public final class TargetContextPlaceholderProvider implements MacroPlaceholderP
         if (x == null || y == null || z == null) {
             return null;
         }
-        return BlockPos.ofFloored(x, y, z);
+        return BlockPos.containing(x, y, z);
     }
 
     private static Double parseCoordinate(String raw, double base) {
@@ -603,19 +602,19 @@ public final class TargetContextPlaceholderProvider implements MacroPlaceholderP
         return raw;
     }
 
-    private static String resolveTargetPlayerToken(String key, PlayerEntity targetPlayer, PlayerEntity sourcePlayer) {
+    private static String resolveTargetPlayerToken(String key, Player targetPlayer, Player sourcePlayer) {
         String entityValue = resolveTargetEntityToken(key, targetPlayer, sourcePlayer);
         if (entityValue != null) {
             return entityValue;
         }
 
         return switch (key) {
-            case "uuid" -> targetPlayer.getUuidAsString();
+            case "uuid" -> targetPlayer.getStringUUID();
             default -> null;
         };
     }
 
-    private static String resolveTargetEntityToken(String key, Entity entity, PlayerEntity player) {
+    private static String resolveTargetEntityToken(String key, Entity entity, Player player) {
         String nbtValue = resolveNbtToken(key, NbtExtractors.extractEntityNbt(entity));
         if (nbtValue != null) {
             return nbtValue;
@@ -633,18 +632,18 @@ public final class TargetContextPlaceholderProvider implements MacroPlaceholderP
             case "health_percent" -> entity instanceof LivingEntity living
                     ? formatDouble(percent(living.getHealth(), living.getMaxHealth()))
                     : null;
-            case "type" -> String.valueOf(Registries.ENTITY_TYPE.getId(entity.getType()));
+            case "type" -> String.valueOf(BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()));
             case "distance" -> formatDouble(entity.distanceTo(player));
-            case "uuid" -> entity.getUuidAsString();
+            case "uuid" -> entity.getStringUUID();
             case "x" -> formatDouble(entity.getX());
             case "y" -> formatDouble(entity.getY());
             case "z" -> formatDouble(entity.getZ());
-            case "velocity" -> formatVector(entity.getVelocity());
-            case "velocity.x" -> formatDouble(entity.getVelocity().x);
-            case "velocity.y" -> formatDouble(entity.getVelocity().y);
-            case "velocity.z" -> formatDouble(entity.getVelocity().z);
+            case "velocity" -> formatVector(entity.getDeltaMovement());
+            case "velocity.x" -> formatDouble(entity.getDeltaMovement().x);
+            case "velocity.y" -> formatDouble(entity.getDeltaMovement().y);
+            case "velocity.z" -> formatDouble(entity.getDeltaMovement().z);
             case "age" -> Integer.toString(resolveEntityAge(entity));
-            case "is_hostile" -> Boolean.toString(entity instanceof Monster);
+            case "is_hostile" -> Boolean.toString(entity instanceof Enemy);
             case "is_passive" -> Boolean.toString(isPassiveEntity(entity));
             case "is_baby" -> Boolean.toString(isBabyEntity(entity));
             case "custom_name" -> entity.getCustomName() == null ? "" : entity.getCustomName().getString();
@@ -652,25 +651,25 @@ public final class TargetContextPlaceholderProvider implements MacroPlaceholderP
         };
     }
 
-    private static String resolveTargetBlockToken(String key, World world, BlockPos pos) {
+    private static String resolveTargetBlockToken(String key, Level world, BlockPos pos) {
         BlockState state = world.getBlockState(pos);
         String baseValue = switch (key) {
             case "name" -> state.getBlock().getName().getString();
-            case "id" -> String.valueOf(Registries.BLOCK.getId(state.getBlock()));
+            case "id" -> String.valueOf(BuiltInRegistries.BLOCK.getKey(state.getBlock()));
             case "x" -> Integer.toString(pos.getX());
             case "y" -> Integer.toString(pos.getY());
             case "z" -> Integer.toString(pos.getZ());
             case "state" -> formatBlockState(state);
-            case "light_level" -> Integer.toString(world.getLightLevel(pos));
-            case "hardness" -> formatDouble(state.getHardness(world, pos));
-            case "blast_resistance" -> formatDouble(state.getBlock().getBlastResistance());
+            case "light_level" -> Integer.toString(world.getMaxLocalRawBrightness(pos));
+            case "hardness" -> formatDouble(state.getDestroySpeed(world, pos));
+            case "blast_resistance" -> formatDouble(state.getBlock().getExplosionResistance());
             default -> null;
         };
         if (baseValue != null) {
             return baseValue;
         }
 
-        NbtCompound nbt = NbtExtractors.extractBlockData(world, pos);
+        CompoundTag nbt = NbtExtractors.extractBlockData(world, pos);
         String nbtValue = resolveNbtToken(key, nbt);
         if (nbtValue != null) {
             return nbtValue;
@@ -681,7 +680,7 @@ public final class TargetContextPlaceholderProvider implements MacroPlaceholderP
             return "components".equals(key) ? "(none)" : null;
         }
 
-        String componentValue = resolveComponentToken(key, blockEntity.getComponents(), resolveAvailableComponentIds(blockEntity.getComponents()));
+        String componentValue = resolveComponentToken(key, blockEntity.components(), resolveAvailableComponentIds(blockEntity.components()));
         if (componentValue != null) {
             return componentValue;
         }
@@ -689,7 +688,7 @@ public final class TargetContextPlaceholderProvider implements MacroPlaceholderP
         return null;
     }
 
-    private static String resolvePetsToken(String token, PlayerEntity player) {
+    private static String resolvePetsToken(String token, Player player) {
         List<Entity> pets = resolveFollowingPets(player);
         if ("pets.count".equals(token)) {
             return Integer.toString(pets.size());
@@ -698,7 +697,7 @@ public final class TargetContextPlaceholderProvider implements MacroPlaceholderP
             return joinOrNone(pets.stream().map(entity -> entity.getName().getString()).toList());
         }
         if ("pets.types".equals(token)) {
-            return joinOrNone(pets.stream().map(entity -> String.valueOf(Registries.ENTITY_TYPE.getId(entity.getType()))).toList());
+            return joinOrNone(pets.stream().map(entity -> String.valueOf(BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()))).toList());
         }
 
         Entity nearest = pets.isEmpty() ? null : pets.getFirst();
@@ -711,60 +710,59 @@ public final class TargetContextPlaceholderProvider implements MacroPlaceholderP
 
         return switch (token) {
             case "pets.nearest.name" -> nearest.getName().getString();
-            case "pets.nearest.type" -> String.valueOf(Registries.ENTITY_TYPE.getId(nearest.getType()));
+            case "pets.nearest.type" -> String.valueOf(BuiltInRegistries.ENTITY_TYPE.getKey(nearest.getType()));
             case "pets.nearest.distance" -> formatDouble(nearest.distanceTo(player));
             default -> null;
         };
     }
 
-    private static List<Entity> resolveFollowingPets(PlayerEntity player) {
-        if (player.getEntityWorld() == null) {
+    private static List<Entity> resolveFollowingPets(Player player) {
+        if (player.level() == null) {
             return List.of();
         }
 
-        return player.getEntityWorld()
-                .getOtherEntities(player, player.getBoundingBox().expand(PET_SCAN_RADIUS))
+        return player.level()
+                .getEntities(player, player.getBoundingBox().inflate(PET_SCAN_RADIUS))
                 .stream()
                 .filter(entity -> isFollowingPet(entity, player))
-                .sorted(Comparator.comparingDouble(entity -> entity.squaredDistanceTo(player)))
+                .sorted(Comparator.comparingDouble(entity -> entity.distanceToSqr(player)))
                 .toList();
     }
 
-    private static boolean isFollowingPet(Entity entity, PlayerEntity player) {
+    private static boolean isFollowingPet(Entity entity, Player player) {
         if (entity == null || player == null || !entity.isAlive()) {
             return false;
         }
 
-        Boolean tamed = ReflectionUtils.invokeBooleanNoArg(entity, "isTamed");
+        // TamableAnimal#isTame, AbstractHorse#isTamed
+        Boolean tamed = ReflectionUtils.invokeBooleanNoArg(entity, "isTame");
+        if (tamed == null) {
+            tamed = ReflectionUtils.invokeBooleanNoArg(entity, "isTamed");
+        }
         if (!Boolean.TRUE.equals(tamed)) {
             return false;
         }
 
         UUID ownerUuid = resolveOwnerUuid(entity);
-        if (ownerUuid == null || !ownerUuid.equals(player.getUuid())) {
+        if (ownerUuid == null || !ownerUuid.equals(player.getUUID())) {
             return false;
         }
 
-        return !Boolean.TRUE.equals(ReflectionUtils.invokeBooleanNoArg(entity, "isSitting"))
+        return !Boolean.TRUE.equals(ReflectionUtils.invokeBooleanNoArg(entity, "isOrderedToSit"))
                 && !Boolean.TRUE.equals(ReflectionUtils.invokeBooleanNoArg(entity, "isInSittingPose"));
     }
 
     private static UUID resolveOwnerUuid(Entity entity) {
-        Object ownerUuid = ReflectionUtils.invokeNoArg(entity, "getOwnerUuid");
-        if (ownerUuid instanceof UUID uuid) {
-            return uuid;
-        }
-
         Object owner = ReflectionUtils.invokeNoArg(entity, "getOwner");
         if (owner instanceof Entity ownerEntity) {
-            return ownerEntity.getUuid();
+            return ownerEntity.getUUID();
         }
 
         Object ownerReference = ReflectionUtils.invokeNoArg(entity, "getOwnerReference");
         if (ownerReference != null) {
-            Object resolved = ReflectionUtils.invokeNoArg(ownerReference, "get");
-            if (resolved instanceof Entity ownerEntity) {
-                return ownerEntity.getUuid();
+            Object referencedUuid = ReflectionUtils.invokeNoArg(ownerReference, "getUUID");
+            if (referencedUuid instanceof UUID uuid) {
+                return uuid;
             }
         }
 
@@ -777,7 +775,7 @@ public final class TargetContextPlaceholderProvider implements MacroPlaceholderP
             return reflectedAge;
         }
 
-        NbtCompound nbt = NbtExtractors.extractEntityNbt(entity);
+        CompoundTag nbt = NbtExtractors.extractEntityNbt(entity);
         if (nbt != null && nbt.contains("Age")) {
             try {
                 return nbt.getInt("Age").orElse(0);
@@ -789,7 +787,7 @@ public final class TargetContextPlaceholderProvider implements MacroPlaceholderP
     }
 
     private static boolean isPassiveEntity(Entity entity) {
-        return entity instanceof PassiveEntity || entity instanceof AnimalEntity;
+        return entity instanceof AgeableMob || entity instanceof Animal;
     }
 
     private static boolean isBabyEntity(Entity entity) {
@@ -798,7 +796,7 @@ public final class TargetContextPlaceholderProvider implements MacroPlaceholderP
             return reflected;
         }
 
-        NbtCompound nbt = NbtExtractors.extractEntityNbt(entity);
+        CompoundTag nbt = NbtExtractors.extractEntityNbt(entity);
         if (nbt != null && nbt.contains("Age")) {
             try {
                 return nbt.getInt("Age").orElse(0) < 0;
@@ -810,7 +808,7 @@ public final class TargetContextPlaceholderProvider implements MacroPlaceholderP
     }
 
     private static String formatBlockState(BlockState state) {
-        String id = String.valueOf(Registries.BLOCK.getId(state.getBlock()));
+        String id = String.valueOf(BuiltInRegistries.BLOCK.getKey(state.getBlock()));
         if (state.getProperties().isEmpty()) {
             return id;
         }
@@ -825,20 +823,20 @@ public final class TargetContextPlaceholderProvider implements MacroPlaceholderP
     @SuppressWarnings("unchecked")
     private static <T extends Comparable<T>> String propertyValue(BlockState state, Property<?> property) {
         Property<T> typed = (Property<T>) property;
-        return typed.name(state.get(typed));
+        return typed.getName(state.getValue(typed));
     }
 
-    private static String resolveNbtValue(NbtCompound root, String path) {
+    private static String resolveNbtValue(CompoundTag root, String path) {
         if (path == null || path.isBlank()) {
             return null;
         }
-        NbtElement current = root;
+        Tag current = root;
         for (String part : path.split("\\.")) {
             if (part.isBlank()) {
                 return null;
             }
 
-            if (current instanceof NbtCompound compound) {
+            if (current instanceof CompoundTag compound) {
                 current = compound.get(part);
                 if (current == null) {
                     return null;
@@ -846,7 +844,7 @@ public final class TargetContextPlaceholderProvider implements MacroPlaceholderP
                 continue;
             }
 
-            if (current instanceof NbtList list) {
+            if (current instanceof ListTag list) {
                 int index = parseIndex(part);
                 if (index < 0 || index >= list.size()) {
                     return null;
@@ -857,13 +855,13 @@ public final class TargetContextPlaceholderProvider implements MacroPlaceholderP
 
             return null;
         }
-        if (current instanceof NbtString string) {
+        if (current instanceof StringTag string) {
             return string.asString().orElse("");
         }
         return current.toString();
     }
 
-    private static String resolveNbtToken(String key, NbtCompound nbt) {
+    private static String resolveNbtToken(String key, CompoundTag nbt) {
         if ("nbt".equals(key)) {
             return nbt == null || nbt.isEmpty() ? "" : nbt.toString();
         }
@@ -877,8 +875,8 @@ public final class TargetContextPlaceholderProvider implements MacroPlaceholderP
     }
 
     @SuppressWarnings({"rawtypes"})
-    private static String resolveComponentValue(ComponentsAccess access, String componentId) {
-        ComponentType componentType = resolveComponentType(componentId);
+    private static String resolveComponentValue(DataComponentGetter access, String componentId) {
+        DataComponentType componentType = resolveComponentType(componentId);
         if (componentType == null) {
             return null;
         }
@@ -886,13 +884,13 @@ public final class TargetContextPlaceholderProvider implements MacroPlaceholderP
         if (value == null) {
             return null;
         }
-        if (value instanceof net.minecraft.text.Text text) {
+        if (value instanceof net.minecraft.network.chat.Component text) {
             return text.getString();
         }
         return value.toString();
     }
 
-    private static String resolveComponentToken(String key, ComponentsAccess access, List<String> componentIds) {
+    private static String resolveComponentToken(String key, DataComponentGetter access, List<String> componentIds) {
         if ("components".equals(key)) {
             return joinOrNone(componentIds);
         }
@@ -903,10 +901,10 @@ public final class TargetContextPlaceholderProvider implements MacroPlaceholderP
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
-    private static List<String> resolveAvailableComponentIds(ComponentsAccess access) {
+    private static List<String> resolveAvailableComponentIds(DataComponentGetter access) {
         List<String> componentIds = new ArrayList<>();
-        for (var id : Registries.DATA_COMPONENT_TYPE.getIds()) {
-            ComponentType componentType = Registries.DATA_COMPONENT_TYPE.get(id);
+        for (var id : BuiltInRegistries.DATA_COMPONENT_TYPE.keySet()) {
+            DataComponentType componentType = BuiltInRegistries.DATA_COMPONENT_TYPE.getValue(id);
             if (componentType == null) {
                 continue;
             }
@@ -919,19 +917,19 @@ public final class TargetContextPlaceholderProvider implements MacroPlaceholderP
         return componentIds;
     }
 
-    private static ComponentType<?> resolveComponentType(String rawId) {
+    private static DataComponentType<?> resolveComponentType(String rawId) {
         if (rawId == null || rawId.isBlank()) {
             return null;
         }
 
         String normalized = rawId.trim().toLowerCase(Locale.ROOT);
         var id = normalized.contains(":")
-                ? net.minecraft.util.Identifier.tryParse(normalized)
-                : net.minecraft.util.Identifier.tryParse("minecraft:" + normalized);
-        if (id == null || !Registries.DATA_COMPONENT_TYPE.containsId(id)) {
+                ? net.minecraft.resources.Identifier.tryParse(normalized)
+                : net.minecraft.resources.Identifier.tryParse("minecraft:" + normalized);
+        if (id == null || !BuiltInRegistries.DATA_COMPONENT_TYPE.containsKey(id)) {
             return null;
         }
-        return Registries.DATA_COMPONENT_TYPE.get(id);
+        return BuiltInRegistries.DATA_COMPONENT_TYPE.getValue(id);
     }
 
     private static int parseIndex(String raw) {
@@ -942,7 +940,7 @@ public final class TargetContextPlaceholderProvider implements MacroPlaceholderP
         }
     }
 
-    private static String formatVector(Vec3d vector) {
+    private static String formatVector(Vec3 vector) {
         return formatDouble(vector.x) + " " + formatDouble(vector.y) + " " + formatDouble(vector.z);
     }
 

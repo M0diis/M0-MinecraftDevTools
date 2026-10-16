@@ -1,20 +1,20 @@
 package me.m0dii.modules.overlays;
 
+import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.VertexConsumer;
+import me.m0dii.render.OverlayBufferSource;
+import me.m0dii.render.OverlayRenderEvents;
 import me.m0dii.utils.DrawUtil;
 import me.m0dii.utils.ModConfig;
-import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
-import net.minecraft.block.Blocks;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.render.RenderLayers;
-import net.minecraft.client.render.VertexConsumer;
-import net.minecraft.client.render.VertexConsumerProvider;
-import net.minecraft.client.util.math.MatrixStack;
-import net.minecraft.util.function.BooleanBiFunction;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Box;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.util.shape.VoxelShape;
-import net.minecraft.util.shape.VoxelShapes;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.rendertype.RenderTypes;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.shapes.BooleanOp;
+import net.minecraft.world.phys.shapes.Shapes;
+import net.minecraft.world.phys.shapes.VoxelShape;
 
 /**
  * Renders helper outlines for hidden utility blocks when enabled in configuration.
@@ -27,53 +27,53 @@ public final class BlockAttributeOverlayRenderer {
     }
 
     public static void register() {
-        WorldRenderEvents.AFTER_ENTITIES.register(context -> {
+        OverlayRenderEvents.AFTER_ENTITIES.register(context -> {
             if (!ModConfig.blockAttributesShowCollisionMesh
                     && !ModConfig.blockAttributesShowLightBlocks
                     && !ModConfig.blockAttributesShowBarrierBlocks) {
                 return;
             }
-            if (context.gameRenderer() == null || context.gameRenderer().getCamera() == null) {
+            if (context.gameRenderer() == null || context.gameRenderer().mainCamera() == null) {
                 return;
             }
 
-            MatrixStack matrices = context.matrices();
-            VertexConsumerProvider consumers = context.consumers();
+            PoseStack matrices = context.matrices();
+            OverlayBufferSource consumers = context.consumers();
             if (matrices == null || consumers == null) {
                 return;
             }
 
-            MinecraftClient client = MinecraftClient.getInstance();
-            if (client.player == null || client.world == null) {
+            Minecraft client = Minecraft.getInstance();
+            if (client.player == null || client.level == null) {
                 return;
             }
 
-            Vec3d cameraPos = context.gameRenderer().getCamera().getCameraPos();
-            VertexConsumer lines = consumers.getBuffer(RenderLayers.LINES);
+            Vec3 cameraPos = context.gameRenderer().mainCamera().position();
+            VertexConsumer lines = consumers.getBuffer(RenderTypes.LINES);
 
-            BlockPos center = client.player.getBlockPos();
-            int minY = Math.max(client.world.getBottomY(), center.getY() - 6);
-            int maxY = Math.min(client.world.getTopYInclusive(), center.getY() + 6);
+            BlockPos center = client.player.blockPosition();
+            int minY = Math.max(client.level.getMinY(), center.getY() - 6);
+            int maxY = Math.min(client.level.getMaxY(), center.getY() + 6);
 
             if (ModConfig.blockAttributesShowCollisionMesh) {
                 for (int x = center.getX() - COLLISION_RADIUS; x <= center.getX() + COLLISION_RADIUS; x++) {
                     for (int y = minY; y <= maxY; y++) {
                         for (int z = center.getZ() - COLLISION_RADIUS; z <= center.getZ() + COLLISION_RADIUS; z++) {
                             BlockPos pos = new BlockPos(x, y, z);
-                            var state = client.world.getBlockState(pos);
+                            var state = client.level.getBlockState(pos);
                             if (state.isAir()) {
                                 continue;
                             }
 
-                            VoxelShape collision = state.getCollisionShape(client.world, pos);
+                            VoxelShape collision = state.getCollisionShape(client.level, pos);
                             if (collision.isEmpty()) {
                                 continue;
                             }
-                            if (!VoxelShapes.matchesAnywhere(collision, VoxelShapes.fullCube(), BooleanBiFunction.NOT_SAME)) {
+                            if (!Shapes.joinIsNotEmpty(collision, Shapes.block(), BooleanOp.NOT_SAME)) {
                                 continue;
                             }
 
-                            for (Box box : collision.getBoundingBoxes()) {
+                            for (AABB box : collision.toAabbs()) {
                                 double minX = pos.getX() + box.minX - cameraPos.x + 0.001;
                                 double minBlockY = pos.getY() + box.minY - cameraPos.y + 0.001;
                                 double minZ = pos.getZ() + box.minZ - cameraPos.z + 0.001;
@@ -96,10 +96,10 @@ public final class BlockAttributeOverlayRenderer {
                 for (int y = minY; y <= maxY; y++) {
                     for (int z = center.getZ() - SEARCH_RADIUS; z <= center.getZ() + SEARCH_RADIUS; z++) {
                         BlockPos pos = new BlockPos(x, y, z);
-                        var state = client.world.getBlockState(pos);
+                        var state = client.level.getBlockState(pos);
 
-                        boolean isLight = ModConfig.blockAttributesShowLightBlocks && state.isOf(Blocks.LIGHT);
-                        boolean isBarrier = ModConfig.blockAttributesShowBarrierBlocks && state.isOf(Blocks.BARRIER);
+                        boolean isLight = ModConfig.blockAttributesShowLightBlocks && state.is(Blocks.LIGHT);
+                        boolean isBarrier = ModConfig.blockAttributesShowBarrierBlocks && state.is(Blocks.BARRIER);
                         if (!isLight && !isBarrier) {
                             continue;
                         }

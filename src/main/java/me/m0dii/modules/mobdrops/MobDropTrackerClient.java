@@ -4,9 +4,8 @@ import me.m0dii.modules.macros.MacroPlaceholderProvider;
 import me.m0dii.modules.macros.MacroPlaceholders;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.entity.player.PlayerEntity;
-
+import net.minecraft.client.Minecraft;
+import net.minecraft.world.entity.player.Player;
 import java.util.List;
 import java.util.Locale;
 
@@ -47,7 +46,7 @@ public final class MobDropTrackerClient {
         }
 
         @Override
-        public String resolvePlaceholder(String token, MinecraftClient client, PlayerEntity player, boolean canvasMode) {
+        public String resolvePlaceholder(String token, Minecraft client, Player player, boolean canvasMode) {
             if ("mobdrops.trackers".equals(token)) {
                 return MobDropTrackerClientState.trackersToken();
             }

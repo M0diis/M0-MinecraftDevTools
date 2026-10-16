@@ -1,12 +1,12 @@
 package me.m0dii.gui.local;
 
-import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.text.Text;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.network.chat.Component;
 
 import java.util.function.Consumer;
 
 public final class UiToggleButton {
-    private final ButtonWidget widget;
+    private final Button widget;
     private final String label;
     private Consumer<Boolean> saveConsumer = ignored -> {
     };
@@ -22,8 +22,8 @@ public final class UiToggleButton {
                           int height) {
         this.label = label == null ? "" : label;
         this.value = initialValue;
-        this.widget = ButtonWidget.builder(Text.empty(), button -> toggle())
-                .dimensions(x, y, width, height)
+        this.widget = Button.builder(Component.empty(), button -> toggle())
+                .bounds(x, y, width, height)
                 .build();
         syncLabel();
     }
@@ -51,7 +51,7 @@ public final class UiToggleButton {
         return this.value;
     }
 
-    public ButtonWidget widget() {
+    public Button widget() {
         return this.widget;
     }
 
@@ -62,6 +62,6 @@ public final class UiToggleButton {
     }
 
     private void syncLabel() {
-        this.widget.setMessage(Text.literal(this.label + ": " + (this.value ? this.onText : this.offText)));
+        this.widget.setMessage(Component.literal(this.label + ": " + (this.value ? this.onText : this.offText)));
     }
 }

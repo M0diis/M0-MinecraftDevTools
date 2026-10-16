@@ -1,5 +1,11 @@
 package me.m0dii.modules.macros.gui;
 
+import me.m0dii.gui.theme.SidebarNavButton;
+import me.m0dii.gui.theme.Theme;
+import me.m0dii.gui.theme.ThemeDraw;
+import me.m0dii.gui.theme.ThemedScreen;
+import me.m0dii.gui.theme.ThemedWidgets;
+import com.mojang.blaze3d.platform.InputConstants;
 import me.m0dii.gui.GuiSystem;
 import me.m0dii.gui.local.FormPanels;
 import me.m0dii.gui.local.GuiTextEditingUtils;
@@ -29,49 +35,66 @@ import me.m0dii.modules.nbthud.NBTInfoHudModule;
 import me.m0dii.modules.pickup.ItemPickupNotifierModule;
 import me.m0dii.modules.pickup.PickupFeedSettings;
 import me.m0dii.utils.*;
-import net.minecraft.client.font.TextRenderer;
-import net.minecraft.client.gl.RenderPipelines;
-import net.minecraft.client.gui.Click;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.client.gui.widget.ClickableWidget;
-import net.minecraft.client.gui.widget.TextFieldWidget;
-import net.minecraft.client.input.CharInput;
-import net.minecraft.client.input.KeyInput;
-import net.minecraft.client.network.PlayerListEntry;
-import net.minecraft.client.option.KeyBinding;
-import net.minecraft.client.util.InputUtil;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.mob.HostileEntity;
-import net.minecraft.entity.passive.PassiveEntity;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.registry.Registries;
-import net.minecraft.scoreboard.*;
-import net.minecraft.scoreboard.number.StyledNumberFormat;
-import net.minecraft.text.Text;
-import net.minecraft.util.Identifier;
-import org.lwjgl.glfw.GLFW;
+import net.minecraft.client.KeyMapping;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Font;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.AbstractWidget;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.CharacterEvent;
+import net.minecraft.client.input.KeyEvent;
+import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.client.multiplayer.PlayerInfo;
+import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.numbers.StyledFormat;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.entity.AgeableMob;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.monster.Monster;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.scores.*;
+import net.minecraft.world.scores.criteria.ObjectiveCriteria;
 
 import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.IntConsumer;
 
-public class MacroWorkbenchScreen extends Screen {
+public class MacroWorkbenchScreen extends Screen implements ThemedScreen {
 
     public enum Tab {
-        CANVAS,
-        KEYBOARD,
-        MACROS,
-        AUTOMATION,
-        PLACEHOLDERS,
-        ENTITY_RADAR,
-        COMMAND_HISTORY,
-        MESSAGE_HISTORY,
-        CONFIGURATION
+        CANVAS("✎", "Canvas", "Canvas", "Arrange HUD elements on screen"),
+        KEYBOARD("⌘", "Keyboard", "Keyboard", "Click a key to bind or edit its macro"),
+        MACROS("⚡", "Macros", "Macros", "Command macros and their key bindings"),
+        AUTOMATION("⚙", "Automation", "Automation", "Rules that react to game events"),
+        PLACEHOLDERS("{}", "Placeholders", "Placeholders", "Every {token} you can use; click one to copy it"),
+        ENTITY_RADAR("◎", "Radar", "Entity Radar", "Entities currently tracked nearby"),
+        COMMAND_HISTORY("/", "Commands", "Command History", "Recently sent commands; click to reuse"),
+        MESSAGE_HISTORY("✉", "Messages", "Message History", "Recently received chat messages"),
+        CONFIGURATION("☰", "Settings", "Settings", "Modules, overlays and tweaks");
+
+        final String icon;
+        /** Short name shown in the sidebar. */
+        final String navLabel;
+        /** Page title shown in the header. */
+        final String label;
+        final String subtitle;
+
+        Tab(String icon, String navLabel, String label, String subtitle) {
+            this.icon = icon;
+            this.navLabel = navLabel;
+            this.label = label;
+            this.subtitle = subtitle;
+        }
     }
+
+    /** Height of the page header (title, subtitle and Save/Done) on non-canvas tabs. */
+    static final int HEADER_H = 34;
 
     private enum CanvasMode {
         CUSTOM,
@@ -83,8 +106,6 @@ public class MacroWorkbenchScreen extends Screen {
         ACTUAL
     }
 
-    private static final int TOP_BAR_H = 54;
-    private static final int BOTTOM_BAR_H = 44;
     private static final int CANVAS_CONTENT_TOP = 0;
     private static final int MODAL_W = 620;
     private static final int MODAL_H = 420;
@@ -93,19 +114,19 @@ public class MacroWorkbenchScreen extends Screen {
     private static final String EXTERNAL_MACRO_KEYBINDS_ID = "__ext_macro_keybinds";
     private static final String EXTERNAL_PICKUP_NOTIFIER_ID = "__ext_pickup_notifier";
     private static final String VANILLA_HUD_PROXY_PREFIX = "__vanilla_hud_";
-    private static final Identifier HUD_HOTBAR_TEXTURE = Identifier.ofVanilla("hud/hotbar");
-    private static final Identifier HUD_HOTBAR_SELECTION_TEXTURE = Identifier.ofVanilla("hud/hotbar_selection");
-    private static final Identifier HUD_CROSSHAIR_TEXTURE = Identifier.ofVanilla("hud/crosshair");
-    private static final Identifier HUD_ARMOR_EMPTY_TEXTURE = Identifier.ofVanilla("hud/armor_empty");
-    private static final Identifier HUD_ARMOR_HALF_TEXTURE = Identifier.ofVanilla("hud/armor_half");
-    private static final Identifier HUD_ARMOR_FULL_TEXTURE = Identifier.ofVanilla("hud/armor_full");
-    private static final Identifier HUD_EXPERIENCE_BAR_BACKGROUND_TEXTURE = Identifier.ofVanilla("hud/experience_bar_background");
-    private static final Identifier HUD_EXPERIENCE_BAR_PROGRESS_TEXTURE = Identifier.ofVanilla("hud/experience_bar_progress");
-    private static final Identifier HUD_EFFECT_BACKGROUND_TEXTURE = Identifier.ofVanilla("hud/effect_background");
-    private static final Identifier HUD_EFFECT_BACKGROUND_AMBIENT_TEXTURE = Identifier.ofVanilla("hud/effect_background_ambient");
-    private static final Identifier TOAST_SYSTEM_TEXTURE = Identifier.ofVanilla("toast/system");
-    private static final Identifier BOSS_BAR_PINK_BACKGROUND_TEXTURE = Identifier.ofVanilla("boss_bar/pink_background");
-    private static final Identifier BOSS_BAR_PINK_PROGRESS_TEXTURE = Identifier.ofVanilla("boss_bar/pink_progress");
+    private static final Identifier HUD_HOTBAR_TEXTURE = Identifier.withDefaultNamespace("hud/hotbar");
+    private static final Identifier HUD_HOTBAR_SELECTION_TEXTURE = Identifier.withDefaultNamespace("hud/hotbar_selection");
+    private static final Identifier HUD_CROSSHAIR_TEXTURE = Identifier.withDefaultNamespace("hud/crosshair");
+    private static final Identifier HUD_ARMOR_EMPTY_TEXTURE = Identifier.withDefaultNamespace("hud/armor_empty");
+    private static final Identifier HUD_ARMOR_HALF_TEXTURE = Identifier.withDefaultNamespace("hud/armor_half");
+    private static final Identifier HUD_ARMOR_FULL_TEXTURE = Identifier.withDefaultNamespace("hud/armor_full");
+    private static final Identifier HUD_EXPERIENCE_BAR_BACKGROUND_TEXTURE = Identifier.withDefaultNamespace("hud/experience_bar_background");
+    private static final Identifier HUD_EXPERIENCE_BAR_PROGRESS_TEXTURE = Identifier.withDefaultNamespace("hud/experience_bar_progress");
+    private static final Identifier HUD_EFFECT_BACKGROUND_TEXTURE = Identifier.withDefaultNamespace("hud/effect_background");
+    private static final Identifier HUD_EFFECT_BACKGROUND_AMBIENT_TEXTURE = Identifier.withDefaultNamespace("hud/effect_background_ambient");
+    private static final Identifier TOAST_SYSTEM_TEXTURE = Identifier.withDefaultNamespace("toast/system");
+    private static final Identifier BOSS_BAR_PINK_BACKGROUND_TEXTURE = Identifier.withDefaultNamespace("boss_bar/pink_background");
+    private static final Identifier BOSS_BAR_PINK_PROGRESS_TEXTURE = Identifier.withDefaultNamespace("boss_bar/pink_progress");
     private static boolean GRID_ENABLED_PREF = false;
     private static int GRID_ROWS_PREF = 12;
     private static int GRID_COLS_PREF = 16;
@@ -150,37 +171,48 @@ public class MacroWorkbenchScreen extends Screen {
     private final MacroWorkbenchCustomWidgetAdvancedClickHandler.Ops customWidgetAdvancedClickOpsBridge =
             new MacroWorkbenchCustomWidgetAdvancedClickOpsBridge(this);
 
-    private TextFieldWidget quickField;
-    private TextFieldWidget macroField;
-    private TextFieldWidget actionField;
-    private ButtonWidget backgroundToggle;
-    private ButtonWidget borderToggle;
-    private ButtonWidget editButton;
-    private ButtonWidget deleteButton;
-    private ButtonWidget gridToggleButton;
-    private ButtonWidget gridRowsMinusButton;
-    private ButtonWidget gridRowsPlusButton;
-    private ButtonWidget gridColsMinusButton;
-    private ButtonWidget gridColsPlusButton;
-    private ButtonWidget centerLinesToggleButton;
-    private ButtonWidget canvasModeToggleButton;
-    private ButtonWidget presetPrevButton;
-    private ButtonWidget presetNextButton;
-    private ButtonWidget presetNewButton;
-    private ButtonWidget presetRenameButton;
-    private ButtonWidget presetDeleteButton;
-    private TextFieldWidget presetNameField;
+    private EditBox quickField;
+    private EditBox macroField;
+    private EditBox actionField;
+    private Button backgroundToggle;
+    private Button borderToggle;
+    private Button editButton;
+    private Button deleteButton;
+    private Button gridToggleButton;
+    private Button gridRowsMinusButton;
+    private Button gridRowsPlusButton;
+    private Button gridColsMinusButton;
+    private Button gridColsPlusButton;
+    private Button centerLinesToggleButton;
+    private Button canvasModeToggleButton;
+    private Button presetPrevButton;
+    private Button presetNextButton;
+    private Button presetNewButton;
+    private Button presetRenameButton;
+    private Button presetDeleteButton;
+    private EditBox presetNameField;
 
-    private final List<ClickableWidget> topBarWidgets = new ArrayList<>();
-    private final List<ClickableWidget> canvasWidgets = new ArrayList<>();
-    private final List<ClickableWidget> keyboardWidgets = new ArrayList<>();
-    private final List<ClickableWidget> macroManagerWidgets = new ArrayList<>();
-    private final List<ClickableWidget> automationWidgets = new ArrayList<>();
-    private final List<ClickableWidget> placeholderWidgets = new ArrayList<>();
-    private final List<ClickableWidget> entityRadarWidgets = new ArrayList<>();
-    private final List<ClickableWidget> cmdHistoryWidgets = new ArrayList<>();
-    private final List<ClickableWidget> msgHistoryWidgets = new ArrayList<>();
-    private final List<ClickableWidget> configWidgets = new ArrayList<>();
+    private final List<AbstractWidget> topBarWidgets = new ArrayList<>();
+    private final List<AbstractWidget> navWidgets = new ArrayList<>();
+    private Button headerSaveButton;
+    private Button canvasAddButton;
+    private Button headerDoneButton;
+    private Button canvasMenuButton;
+    private boolean canvasNavOpen = false;
+    /** Left button state; MouseHandler#isLeftPressed only updates while no screen is open (26.x). */
+    private boolean leftMouseDown = false;
+    /** Stepper value labels ("16 cols") positioned by the canvas toolbar layout. */
+    private final List<ToolbarLabel> toolbarLabels = new ArrayList<>();
+    private final List<UiRect> canvasBarRects = new ArrayList<>();
+    private final List<AbstractWidget> canvasWidgets = new ArrayList<>();
+    private final List<AbstractWidget> keyboardWidgets = new ArrayList<>();
+    private final List<AbstractWidget> macroManagerWidgets = new ArrayList<>();
+    private final List<AbstractWidget> automationWidgets = new ArrayList<>();
+    private final List<AbstractWidget> placeholderWidgets = new ArrayList<>();
+    private final List<AbstractWidget> entityRadarWidgets = new ArrayList<>();
+    private final List<AbstractWidget> cmdHistoryWidgets = new ArrayList<>();
+    private final List<AbstractWidget> msgHistoryWidgets = new ArrayList<>();
+    private final List<AbstractWidget> configWidgets = new ArrayList<>();
     private MacroWorkbenchMacrosTab macrosTabController;
     private MacroWorkbenchAutomationTab automationTabController;
     private MacroWorkbenchConfigurationTab configurationTabController;
@@ -193,15 +225,15 @@ public class MacroWorkbenchScreen extends Screen {
     private String selectedMacroId;
     private boolean showGameKeybinds = false;
 
-    private TextFieldWidget kbNameField;
-    private TextFieldWidget kbCommandsField;
-    private TextFieldWidget kbDelayField;
-    private ButtonWidget keyboardGameToggleButton;
-    private ButtonWidget kbSaveButton;
-    private ButtonWidget kbDeleteMacroButton;
-    private ButtonWidget kbEditCommandsButton;
-    private ButtonWidget kbNewButton;
-    private ButtonWidget kbOpenManagerButton;
+    private EditBox kbNameField;
+    private EditBox kbCommandsField;
+    private EditBox kbDelayField;
+    private Button keyboardGameToggleButton;
+    private Button kbSaveButton;
+    private Button kbDeleteMacroButton;
+    private Button kbEditCommandsButton;
+    private Button kbNewButton;
+    private Button kbOpenManagerButton;
 
     private boolean advancedOpen = false;
     private boolean advancedTextFocused = false;
@@ -253,8 +285,8 @@ public class MacroWorkbenchScreen extends Screen {
     private int placeholderScroll = 0;
     private String placeholderSearchQuery = "";
     private List<String> filteredPlaceholderDocs = List.of();
-    private TextFieldWidget placeholderSearchField;
-    private ButtonWidget placeholderSearchButton;
+    private EditBox placeholderSearchField;
+    private Button placeholderSearchButton;
     private boolean gridEnabled = GRID_ENABLED_PREF;
 
     private List<String> cmdHistoryItems = new ArrayList<>();
@@ -316,7 +348,7 @@ public class MacroWorkbenchScreen extends Screen {
     }
 
     public MacroWorkbenchScreen(Screen parent, Tab initialTab) {
-        super(Text.literal("Macro Workbench"));
+        super(Component.literal("Macro Workbench"));
         this.parent = parent;
         this.tab = initialTab == null ? Tab.CANVAS : initialTab;
     }
@@ -338,53 +370,35 @@ public class MacroWorkbenchScreen extends Screen {
         rebuildBindingMaps();
         rebuildKeyboardGrid();
 
-        int topSaveW = 66;
-        int topDoneW = 66;
-        int saveX = this.width - topSaveW - (topDoneW + 12);
-        int saveY = 8;
-        int doneX = this.width - topDoneW - 8;
-        int doneY = 8;
-        ButtonWidget saveButton = ButtonWidget.builder(Text.literal("Save"), b -> saveAll())
-                .dimensions(saveX, saveY, topSaveW, 20)
+        int headerButtonW = 56;
+        int doneX = this.width - Theme.GAP_L - headerButtonW;
+        int saveX = doneX - Theme.GAP_S - headerButtonW;
+        int headerButtonY = (HEADER_H - Theme.CONTROL_H) / 2;
+        Button saveButton = Button.builder(Component.literal("Save"), b -> saveAll())
+                .bounds(saveX, headerButtonY, headerButtonW, Theme.CONTROL_H)
                 .build();
-        ButtonWidget doneButton = ButtonWidget.builder(Text.literal("Done"), b -> {
+        this.headerSaveButton = saveButton;
+        Button doneButton = ThemedWidgets.primary(Button.builder(Component.literal("Done"), b -> {
             saveAll();
-            close();
-        }).dimensions(doneX, doneY, topDoneW, 20).build();
-        List<Tab> tabs = List.of(
-                Tab.CANVAS,
-                Tab.KEYBOARD,
-                Tab.MACROS,
-                Tab.AUTOMATION,
-                Tab.PLACEHOLDERS,
-                Tab.ENTITY_RADAR,
-                Tab.COMMAND_HISTORY,
-                Tab.MESSAGE_HISTORY,
-                Tab.CONFIGURATION
-        );
-        List<String> labels = List.of("Canvas", "Keyboard", "Macros", "Automation", "Placeholders", "Entity Radar", "Cmd Hist", "Msg Hist", "Configuration");
-        List<String> compactLabels = List.of("Canvas", "Keys", "Macros", "Auto", "Place", "Radar", "Cmd", "Msg", "Config");
-        List<String> tinyLabels = List.of("CV", "KB", "MC", "AU", "PH", "ER", "CH", "MH", "CF");
-        int tabGap = 4;
-        int tabsStartX = 8;
-        int tabsEndX = saveX - 8;
-        int tabWidth = Math.max(16, (tabsEndX - tabsStartX - (tabGap * (tabs.size() - 1))) / tabs.size());
-        int tabY = 8;
-        int tabX = tabsStartX;
-        for (int i = 0; i < tabs.size(); i++) {
-            Tab tabDef = tabs.get(i);
-            String tabLabel = tabWidth < 36 ? tinyLabels.get(i) : (tabWidth < 72 ? compactLabels.get(i) : labels.get(i));
-            ButtonWidget tabButton = ButtonWidget.builder(Text.literal(tabLabel), b -> setTab(tabDef))
-                    .dimensions(tabX, tabY, tabWidth, 20)
-                    .build();
-            this.topBarWidgets.add(tabButton);
-            addDrawableChild(tabButton);
-            tabX += tabWidth + tabGap;
+            onClose();
+        }).bounds(doneX, headerButtonY, headerButtonW, Theme.CONTROL_H).build());
+        this.headerDoneButton = doneButton;
+
+        int navX = Theme.GAP_M;
+        int navW = sidebarWidth() - Theme.GAP_M * 2;
+        int navH = navItemHeight();
+        int navY = SIDEBAR_NAV_TOP;
+        for (Tab tabDef : Tab.values()) {
+            SidebarNavButton navButton = new SidebarNavButton(navX, navY, navW, navH, tabDef.icon, tabDef.navLabel,
+                    () -> this.tab == tabDef, () -> setTab(tabDef));
+            this.navWidgets.add(navButton);
+            addRenderableWidget(navButton);
+            navY += navH + 1;
         }
         this.topBarWidgets.add(saveButton);
         this.topBarWidgets.add(doneButton);
-        addDrawableChild(saveButton);
-        addDrawableChild(doneButton);
+        addRenderableWidget(saveButton);
+        addRenderableWidget(doneButton);
 
         int canvasControlY = 30;
         int canvasControlH = 20;
@@ -405,15 +419,18 @@ public class MacroWorkbenchScreen extends Screen {
                 UiFlexLayout.Item.flex(54, 1),  // Rename
                 UiFlexLayout.Item.flex(52, 1)   // Delete
         );
-        this.canvasModeToggleButton = ButtonWidget.builder(Text.literal("Custom Elements"), b -> toggleCanvasMode())
-                .dimensions(canvasControlSlots.get(0).x(), canvasControlSlots.get(0).y(), canvasControlSlots.get(0).width(), canvasControlSlots.get(0).height()).build();
-        ButtonWidget addElement = ButtonWidget.builder(Text.literal("Add Element"), b -> {
+        this.canvasMenuButton = Button.builder(Component.literal("\u2630"), b -> this.canvasNavOpen = !this.canvasNavOpen)
+                .bounds(0, 0, Theme.CONTROL_H, Theme.CONTROL_H).build();
+        this.canvasModeToggleButton = Button.builder(Component.literal("Custom HUD"), b -> toggleCanvasMode())
+                .bounds(canvasControlSlots.get(0).x(), canvasControlSlots.get(0).y(), canvasControlSlots.get(0).width(), canvasControlSlots.get(0).height()).build();
+        Button addElement = ThemedWidgets.primary(Button.builder(Component.literal("+ Add"), b -> {
             if (!isVanillaCanvasMode()) {
                 addElementModalOpen = true;
             }
-        }).dimensions(canvasControlSlots.get(1).x(), canvasControlSlots.get(1).y(), canvasControlSlots.get(1).width(), canvasControlSlots.get(1).height()).build();
+        }).bounds(canvasControlSlots.get(1).x(), canvasControlSlots.get(1).y(), canvasControlSlots.get(1).width(), canvasControlSlots.get(1).height()).build());
+        this.canvasAddButton = addElement;
 
-        this.deleteButton = ButtonWidget.builder(Text.literal("Delete"), b -> {
+        this.deleteButton = Button.builder(Component.literal("Delete"), b -> {
             if (isVanillaCanvasMode()) {
                 if (selected != null && isVanillaHudProxy(selected)) {
                     resetVanillaProxy(selected);
@@ -430,73 +447,76 @@ public class MacroWorkbenchScreen extends Screen {
                 this.selected = null;
                 syncCanvasFields();
             }
-        }).dimensions(this.width - 160, this.height - 38, 76, 18).build();
+        }).bounds(this.width - 160, this.height - 38, 76, 18).build();
 
-        this.gridToggleButton = ButtonWidget.builder(Text.literal("Grid: OFF"), b -> {
+        this.gridToggleButton = Button.builder(Component.literal("Grid: OFF"), b -> {
             gridEnabled = !gridEnabled;
             gridOverlayTicks = 120;
             persistGridPrefs();
             syncGridButtons();
-        }).dimensions(canvasControlSlots.get(2).x(), canvasControlSlots.get(2).y(), canvasControlSlots.get(2).width(), canvasControlSlots.get(2).height()).build();
+        }).bounds(canvasControlSlots.get(2).x(), canvasControlSlots.get(2).y(), canvasControlSlots.get(2).width(), canvasControlSlots.get(2).height()).build();
 
-        this.gridRowsMinusButton = ButtonWidget.builder(Text.literal("R-"), b -> {
+        this.gridRowsMinusButton = Button.builder(Component.literal("R-"), b -> {
             int step = isShiftDown() ? 5 : 1;
             gridRows = Math.max(2, gridRows - step);
             gridOverlayTicks = 120;
             persistGridPrefs();
             syncGridButtons();
-        }).dimensions(canvasControlSlots.get(3).x(), canvasControlSlots.get(3).y(), canvasControlSlots.get(3).width(), canvasControlSlots.get(3).height()).build();
-        this.gridRowsPlusButton = ButtonWidget.builder(Text.literal("R+"), b -> {
+        }).bounds(canvasControlSlots.get(3).x(), canvasControlSlots.get(3).y(), canvasControlSlots.get(3).width(), canvasControlSlots.get(3).height()).build();
+        this.gridRowsPlusButton = Button.builder(Component.literal("R+"), b -> {
             int step = isShiftDown() ? 5 : 1;
             gridRows = Math.min(80, gridRows + step);
             gridOverlayTicks = 120;
             persistGridPrefs();
             syncGridButtons();
-        }).dimensions(canvasControlSlots.get(4).x(), canvasControlSlots.get(4).y(), canvasControlSlots.get(4).width(), canvasControlSlots.get(4).height()).build();
-        this.gridColsMinusButton = ButtonWidget.builder(Text.literal("C-"), b -> {
+        }).bounds(canvasControlSlots.get(4).x(), canvasControlSlots.get(4).y(), canvasControlSlots.get(4).width(), canvasControlSlots.get(4).height()).build();
+        this.gridColsMinusButton = Button.builder(Component.literal("C-"), b -> {
             int step = isShiftDown() ? 5 : 1;
             gridCols = Math.max(2, gridCols - step);
             gridOverlayTicks = 120;
             persistGridPrefs();
             syncGridButtons();
-        }).dimensions(canvasControlSlots.get(5).x(), canvasControlSlots.get(5).y(), canvasControlSlots.get(5).width(), canvasControlSlots.get(5).height()).build();
-        this.gridColsPlusButton = ButtonWidget.builder(Text.literal("C+"), b -> {
+        }).bounds(canvasControlSlots.get(5).x(), canvasControlSlots.get(5).y(), canvasControlSlots.get(5).width(), canvasControlSlots.get(5).height()).build();
+        this.gridColsPlusButton = Button.builder(Component.literal("C+"), b -> {
             int step = isShiftDown() ? 5 : 1;
             gridCols = Math.min(80, gridCols + step);
             gridOverlayTicks = 120;
             persistGridPrefs();
             syncGridButtons();
-        }).dimensions(canvasControlSlots.get(6).x(), canvasControlSlots.get(6).y(), canvasControlSlots.get(6).width(), canvasControlSlots.get(6).height()).build();
+        }).bounds(canvasControlSlots.get(6).x(), canvasControlSlots.get(6).y(), canvasControlSlots.get(6).width(), canvasControlSlots.get(6).height()).build();
 
-        this.centerLinesToggleButton = ButtonWidget.builder(Text.literal("Center: OFF"), b -> {
+        this.centerLinesToggleButton = Button.builder(Component.literal("Center: OFF"), b -> {
             centerLinesEnabled = !centerLinesEnabled;
             persistGridPrefs();
             syncGridButtons();
-        }).dimensions(canvasControlSlots.get(7).x(), canvasControlSlots.get(7).y(), canvasControlSlots.get(7).width(), canvasControlSlots.get(7).height()).build();
+        }).bounds(canvasControlSlots.get(7).x(), canvasControlSlots.get(7).y(), canvasControlSlots.get(7).width(), canvasControlSlots.get(7).height()).build();
 
-        this.presetPrevButton = ButtonWidget.builder(Text.literal("<"), b -> cyclePreset(false)).dimensions(canvasControlSlots.get(8).x(), canvasControlSlots.get(8).y(), canvasControlSlots.get(8).width(), canvasControlSlots.get(8).height()).build();
-        this.presetNextButton = ButtonWidget.builder(Text.literal(">"), b -> cyclePreset(true)).dimensions(canvasControlSlots.get(9).x(), canvasControlSlots.get(9).y(), canvasControlSlots.get(9).width(), canvasControlSlots.get(9).height()).build();
-        this.presetNameField = new TextFieldWidget(this.textRenderer, canvasControlSlots.get(10).x(), canvasControlSlots.get(10).y(), canvasControlSlots.get(10).width(), canvasControlSlots.get(10).height(), Text.literal("Preset"));
+        this.presetPrevButton = Button.builder(Component.literal("<"), b -> cyclePreset(false)).bounds(canvasControlSlots.get(8).x(), canvasControlSlots.get(8).y(), canvasControlSlots.get(8).width(), canvasControlSlots.get(8).height()).build();
+        this.presetNextButton = Button.builder(Component.literal(">"), b -> cyclePreset(true)).bounds(canvasControlSlots.get(9).x(), canvasControlSlots.get(9).y(), canvasControlSlots.get(9).width(), canvasControlSlots.get(9).height()).build();
+        this.presetNameField = new EditBox(this.font, canvasControlSlots.get(10).x(), canvasControlSlots.get(10).y(), canvasControlSlots.get(10).width(), canvasControlSlots.get(10).height(), Component.literal("Preset"));
         this.presetNameField.setMaxLength(40);
-        this.presetNewButton = ButtonWidget.builder(Text.literal("New"), b -> createPresetFromField()).dimensions(canvasControlSlots.get(11).x(), canvasControlSlots.get(11).y(), canvasControlSlots.get(11).width(), canvasControlSlots.get(11).height()).build();
-        this.presetRenameButton = ButtonWidget.builder(Text.literal("Rename"), b -> renamePresetFromField()).dimensions(canvasControlSlots.get(12).x(), canvasControlSlots.get(12).y(), canvasControlSlots.get(12).width(), canvasControlSlots.get(12).height()).build();
-        this.presetDeleteButton = ButtonWidget.builder(Text.literal("Delete"), b -> {
+        this.presetNewButton = Button.builder(Component.literal("New"), b -> createPresetFromField()).bounds(canvasControlSlots.get(11).x(), canvasControlSlots.get(11).y(), canvasControlSlots.get(11).width(), canvasControlSlots.get(11).height()).build();
+        this.presetRenameButton = Button.builder(Component.literal("Rename"), b -> renamePresetFromField()).bounds(canvasControlSlots.get(12).x(), canvasControlSlots.get(12).y(), canvasControlSlots.get(12).width(), canvasControlSlots.get(12).height()).build();
+        this.presetDeleteButton = Button.builder(Component.literal("Delete"), b -> {
             MacroHudDataHandler.deletePreset(MacroHudDataHandler.getActivePresetId());
             this.working = MacroHudDataHandler.getConfigCopy();
             syncExternalCanvasElementsFromSources();
             syncCanvasFields();
             syncGridButtons();
             syncPresetControls();
-        }).dimensions(canvasControlSlots.get(13).x(), canvasControlSlots.get(13).y(), canvasControlSlots.get(13).width(), canvasControlSlots.get(13).height()).build();
+        }).bounds(canvasControlSlots.get(13).x(), canvasControlSlots.get(13).y(), canvasControlSlots.get(13).width(), canvasControlSlots.get(13).height()).build();
 
-        this.quickField = new TextFieldWidget(this.textRenderer, 8, this.height - 38, 280, 18, Text.literal("Quick Edit"));
+        this.quickField = new EditBox(this.font, 8, this.height - 38, 280, 18, Component.literal("Quick Edit"));
+        this.quickField.setHint(Component.literal("Text (first line)"));
         this.quickField.setMaxLength(300);
-        this.macroField = new TextFieldWidget(this.textRenderer, 292, this.height - 38, 120, 18, Text.literal("Macro Id"));
+        this.macroField = new EditBox(this.font, 292, this.height - 38, 120, 18, Component.literal("Macro Id"));
+        this.macroField.setHint(Component.literal("Macro id"));
         this.macroField.setMaxLength(120);
-        this.actionField = new TextFieldWidget(this.textRenderer, 416, this.height - 38, 180, 18, Text.literal("Action"));
+        this.actionField = new EditBox(this.font, 416, this.height - 38, 180, 18, Component.literal("Action"));
+        this.actionField.setHint(Component.literal("Action / script"));
         this.actionField.setMaxLength(32767);
 
-        this.backgroundToggle = ButtonWidget.builder(Text.literal("BG: OFF"), b -> {
+        this.backgroundToggle = Button.builder(Component.literal("BG: OFF"), b -> {
             if (isVanillaCanvasMode()) {
                 toggleVanillaPreviewMode();
                 return;
@@ -506,9 +526,9 @@ public class MacroWorkbenchScreen extends Screen {
                 ensureVisibleBackground(selected);
                 syncStyleButtons();
             }
-        }).dimensions(this.width - 316, this.height - 38, 74, 18).build();
+        }).bounds(this.width - 316, this.height - 38, 74, 18).build();
 
-        this.borderToggle = ButtonWidget.builder(Text.literal("Border: OFF"), b -> {
+        this.borderToggle = Button.builder(Component.literal("Border: OFF"), b -> {
             if (isVanillaCanvasMode()) {
                 if (selected != null && isVanillaHudProxy(selected)) {
                     toggleVanillaProxyDisplay(selected);
@@ -520,15 +540,16 @@ public class MacroWorkbenchScreen extends Screen {
                 cycleBorderSetting(selected, true);
                 syncStyleButtons();
             }
-        }).dimensions(this.width - 238, this.height - 38, 78, 18).build();
+        }).bounds(this.width - 238, this.height - 38, 78, 18).build();
 
-        this.editButton = ButtonWidget.builder(Text.literal("Edit"), b -> {
+        this.editButton = Button.builder(Component.literal("Edit"), b -> {
                     if (!isVanillaCanvasMode()) {
                         openAdvancedModal();
                     }
                 })
-                .dimensions(this.width - 80, this.height - 38, 72, 18).build();
+                .bounds(this.width - 80, this.height - 38, 72, 18).build();
 
+        this.canvasWidgets.add(canvasMenuButton);
         this.canvasWidgets.add(canvasModeToggleButton);
         this.canvasWidgets.add(addElement);
         this.canvasWidgets.add(deleteButton);
@@ -550,67 +571,53 @@ public class MacroWorkbenchScreen extends Screen {
         this.canvasWidgets.add(backgroundToggle);
         this.canvasWidgets.add(borderToggle);
         this.canvasWidgets.add(editButton);
-        addDrawableChild(addElement);
-        addDrawableChild(canvasModeToggleButton);
-        addDrawableChild(deleteButton);
-        addDrawableChild(gridToggleButton);
-        addDrawableChild(gridRowsMinusButton);
-        addDrawableChild(gridRowsPlusButton);
-        addDrawableChild(gridColsMinusButton);
-        addDrawableChild(gridColsPlusButton);
-        addDrawableChild(centerLinesToggleButton);
-        addDrawableChild(presetPrevButton);
-        addDrawableChild(presetNextButton);
-        addDrawableChild(presetNameField);
-        addDrawableChild(presetNewButton);
-        addDrawableChild(presetRenameButton);
-        addDrawableChild(presetDeleteButton);
-        addDrawableChild(quickField);
-        addDrawableChild(macroField);
-        addDrawableChild(actionField);
-        addDrawableChild(backgroundToggle);
-        addDrawableChild(borderToggle);
-        addDrawableChild(editButton);
+        addRenderableWidget(canvasMenuButton);
+        addRenderableWidget(addElement);
+        addRenderableWidget(canvasModeToggleButton);
+        addRenderableWidget(deleteButton);
+        addRenderableWidget(gridToggleButton);
+        addRenderableWidget(gridRowsMinusButton);
+        addRenderableWidget(gridRowsPlusButton);
+        addRenderableWidget(gridColsMinusButton);
+        addRenderableWidget(gridColsPlusButton);
+        addRenderableWidget(centerLinesToggleButton);
+        addRenderableWidget(presetPrevButton);
+        addRenderableWidget(presetNextButton);
+        addRenderableWidget(presetNameField);
+        addRenderableWidget(presetNewButton);
+        addRenderableWidget(presetRenameButton);
+        addRenderableWidget(presetDeleteButton);
+        addRenderableWidget(quickField);
+        addRenderableWidget(macroField);
+        addRenderableWidget(actionField);
+        addRenderableWidget(backgroundToggle);
+        addRenderableWidget(borderToggle);
+        addRenderableWidget(editButton);
 
-        int panelW = keyboardPanelWidth();
-        int panelX = keyboardPanelX();
-        int panelInnerW = panelW - 20;
-        int fieldH = 20;
-        int keyboardNameY = this.height - 112;
-        int keyboardCommandsY = this.height - 88;
-        int keyboardRowY1 = this.height - 62;
-        int keyboardRowY2 = this.height - 36;
-
-        ButtonWidget gameToggle = ButtonWidget.builder(Text.literal("Show Game Binds: OFF"), b -> {
+        KbLayout kb = keyboardLayout();
+        Button gameToggle = Button.builder(Component.literal("Game binds: " + (showGameKeybinds ? "ON" : "OFF")), b -> {
             showGameKeybinds = !showGameKeybinds;
-            b.setMessage(Text.literal("Show Game Binds: " + (showGameKeybinds ? "ON" : "OFF")));
-        }).dimensions(panelX + 10, TOP_BAR_H + 8, panelInnerW, fieldH).build();
+            b.setMessage(Component.literal("Game binds: " + (showGameKeybinds ? "ON" : "OFF")));
+        }).bounds(kb.game().x(), kb.game().y(), kb.game().width(), kb.game().height()).build();
 
-        this.kbNameField = new TextFieldWidget(this.textRenderer, panelX + 10, keyboardNameY, panelInnerW, fieldH, Text.literal("Macro Name"));
-        this.kbCommandsField = new TextFieldWidget(this.textRenderer, panelX + 10, keyboardCommandsY, panelInnerW, fieldH, Text.literal("Commands (; separated)"));
-
-        int delayW = Math.clamp(panelInnerW / 3, 72, 120);
-        int row1RightW = panelInnerW - delayW - 4;
-        int editW = Math.max(70, row1RightW / 2 - 2);
-        int kbSaveW = Math.max(70, row1RightW - editW - 4);
-        int newW = Math.max(76, (panelInnerW - 8) / 3);
-        int deleteW = Math.max(66, (panelInnerW - 8 - newW) / 2);
-        int openW = Math.max(80, panelInnerW - newW - deleteW - 8);
-
-        this.kbDelayField = new TextFieldWidget(this.textRenderer, panelX + 10, keyboardRowY1, delayW, fieldH, Text.literal("Delay Ticks"));
+        this.kbNameField = new EditBox(this.font, kb.name().x(), kb.name().y(), kb.name().width(), kb.name().height(), Component.literal("Macro Name"));
+        this.kbNameField.setHint(Component.literal("Name"));
+        this.kbCommandsField = new EditBox(this.font, kb.commands().x(), kb.commands().y(), kb.commands().width(), kb.commands().height(), Component.literal("Commands (; separated)"));
+        this.kbCommandsField.setHint(Component.literal("Commands, ; separated"));
+        this.kbDelayField = new EditBox(this.font, kb.delay().x(), kb.delay().y(), kb.delay().width(), kb.delay().height(), Component.literal("Delay Ticks"));
+        this.kbDelayField.setHint(Component.literal("Delay"));
         this.kbNameField.setMaxLength(80);
         this.kbCommandsField.setMaxLength(500);
         this.kbDelayField.setMaxLength(6);
 
-        ButtonWidget kbEditCommands = ButtonWidget.builder(Text.literal("Edit Cmds"), b -> openKeyboardCommandsModal())
-                .dimensions(panelX + 10 + delayW + 4, keyboardRowY1, editW, fieldH).build();
-        ButtonWidget kbSave = ButtonWidget.builder(Text.literal("Save Macro"), b -> saveKeyboardMacro())
-                .dimensions(panelX + 10 + delayW + 4 + editW + 4, keyboardRowY1, kbSaveW, fieldH).build();
-        ButtonWidget kbNew = ButtonWidget.builder(Text.literal("+ New"), b -> createKeyboardMacro()).dimensions(panelX + 10, keyboardRowY2, newW, fieldH).build();
-        ButtonWidget kbDelete = ButtonWidget.builder(Text.literal("Delete"), b -> deleteKeyboardMacro())
-                .dimensions(panelX + 10 + newW + 4, keyboardRowY2, deleteW, fieldH).build();
-        ButtonWidget kbOpenManager = ButtonWidget.builder(Text.literal("Open Macro Manager"),
-                b -> setTab(Tab.MACROS)).dimensions(panelX + 10 + newW + 4 + deleteW + 4, keyboardRowY2, openW, fieldH).build();
+        Button kbEditCommands = Button.builder(Component.literal("Edit\u2026"), b -> openKeyboardCommandsModal())
+                .bounds(kb.edit().x(), kb.edit().y(), kb.edit().width(), kb.edit().height()).build();
+        Button kbSave = ThemedWidgets.primary(Button.builder(Component.literal("Save"), b -> saveKeyboardMacro())
+                .bounds(kb.save().x(), kb.save().y(), kb.save().width(), kb.save().height()).build());
+        Button kbNew = Button.builder(Component.literal("+ New"), b -> createKeyboardMacro())
+                .bounds(kb.add().x(), kb.add().y(), kb.add().width(), kb.add().height()).build();
+        Button kbDelete = ThemedWidgets.danger(Button.builder(Component.literal("Delete"), b -> deleteKeyboardMacro())
+                .bounds(kb.delete().x(), kb.delete().y(), kb.delete().width(), kb.delete().height()).build());
 
         this.keyboardWidgets.add(gameToggle);
         this.keyboardWidgets.add(kbNameField);
@@ -620,37 +627,39 @@ public class MacroWorkbenchScreen extends Screen {
         this.keyboardWidgets.add(kbDelete);
         this.keyboardWidgets.add(kbEditCommands);
         this.keyboardWidgets.add(kbNew);
-        this.keyboardWidgets.add(kbOpenManager);
-        addDrawableChild(gameToggle);
-        addDrawableChild(kbNameField);
-        addDrawableChild(kbCommandsField);
-        addDrawableChild(kbDelayField);
-        addDrawableChild(kbSave);
-        addDrawableChild(kbDelete);
-        addDrawableChild(kbEditCommands);
-        addDrawableChild(kbNew);
-        addDrawableChild(kbOpenManager);
+        addRenderableWidget(gameToggle);
+        addRenderableWidget(kbNameField);
+        addRenderableWidget(kbCommandsField);
+        addRenderableWidget(kbDelayField);
+        addRenderableWidget(kbSave);
+        addRenderableWidget(kbDelete);
+        addRenderableWidget(kbEditCommands);
+        addRenderableWidget(kbNew);
 
         initPlaceholderWidgets();
 
-        ButtonWidget clearCmdHistoryButton = ButtonWidget.builder(
-                        Text.literal("Clear History"),
+        Button clearCmdHistoryButton = Button.builder(
+                        Component.literal("Clear History"),
                         b -> {
                             CommandHistoryManager.clearHistory();
                             cmdHistoryItems.clear();
                         })
-                .dimensions(this.width / 2 + 5, this.height - 30, 110, 20).build();
-        ButtonWidget clearMsgHistoryButton = ButtonWidget.builder(
-                        Text.literal("Clear History"),
+                .bounds(contentRight() - 88, contentTop(), 88, Theme.CONTROL_H).build();
+        Button clearMsgHistoryButton = Button.builder(
+                        Component.literal("Clear History"),
                         b -> {
                             MessageHistoryManager.clearHistory();
                             msgHistoryItems.clear();
                         })
-                .dimensions(this.width / 2 + 5, this.height - 30, 110, 20).build();
+                .bounds(contentRight() - 88, contentTop(), 88, Theme.CONTROL_H).build();
+        ThemedWidgets.danger(clearCmdHistoryButton);
+        ThemedWidgets.danger(this.deleteButton);
+        ThemedWidgets.danger(this.presetDeleteButton);
+        ThemedWidgets.danger(clearMsgHistoryButton);
         this.cmdHistoryWidgets.add(clearCmdHistoryButton);
         this.msgHistoryWidgets.add(clearMsgHistoryButton);
-        addDrawableChild(clearCmdHistoryButton);
-        addDrawableChild(clearMsgHistoryButton);
+        addRenderableWidget(clearCmdHistoryButton);
+        addRenderableWidget(clearMsgHistoryButton);
 
         initMacrosWidgets();
         initAutomationWidgets();
@@ -661,6 +670,74 @@ public class MacroWorkbenchScreen extends Screen {
         syncPresetControls();
         syncKeyboardFields();
         setTab(this.tab);
+    }
+
+    private static final int SIDEBAR_NAV_TOP = 30;
+
+    /** Width of the left navigation sidebar (hidden on the full-screen canvas). */
+    int sidebarWidth() {
+        return Math.clamp(Math.round(this.width * 0.2f), 116, 140);
+    }
+
+    private int navItemHeight() {
+        int available = this.height - SIDEBAR_NAV_TOP - Theme.GAP_M;
+        return Math.clamp(available / Tab.values().length - 1, 14, 20);
+    }
+
+    /** Content area of non-canvas tabs, right of the sidebar and below the page header. */
+    int contentLeft() {
+        return sidebarWidth() + Theme.GAP_L;
+    }
+
+    int contentTop() {
+        return HEADER_H + Theme.GAP_M;
+    }
+
+    int contentRight() {
+        return this.width - Theme.GAP_L;
+    }
+
+    int contentBottom() {
+        return this.height - Theme.GAP_M;
+    }
+
+    int contentWidth() {
+        return contentRight() - contentLeft();
+    }
+
+    int contentHeight() {
+        return contentBottom() - contentTop();
+    }
+
+    private void placeHeaderButtons() {
+        int headerButtonW = 56;
+        int doneX = this.width - Theme.GAP_L - headerButtonW;
+        int saveX = doneX - Theme.GAP_S - headerButtonW;
+        int y = (HEADER_H - Theme.CONTROL_H) / 2;
+        this.headerSaveButton.setX(saveX);
+        this.headerSaveButton.setY(y);
+        this.headerSaveButton.setWidth(headerButtonW);
+        this.headerDoneButton.setX(doneX);
+        this.headerDoneButton.setY(y);
+        this.headerDoneButton.setWidth(headerButtonW);
+    }
+
+    private void renderShell(GuiGraphicsExtractor context) {
+        if (this.tab == Tab.CANVAS) {
+            return;
+        }
+        placeHeaderButtons();
+        int sidebarW = sidebarWidth();
+        context.fill(0, 0, sidebarW, this.height, Theme.SIDEBAR);
+        ThemeDraw.vDivider(context, sidebarW, 0, this.height);
+        context.text(this.font, "M0", Theme.GAP_M + 8, 11, Theme.ACCENT, false);
+        context.text(this.font, "DevTools", Theme.GAP_M + 8 + this.font.width("M0 "), 11, Theme.TEXT, false);
+
+        int left = contentLeft();
+        int titleRight = this.width - Theme.GAP_L - 56 * 2 - Theme.GAP_S - Theme.GAP_M;
+        context.text(this.font, ThemeDraw.fit(this.font, this.tab.label, titleRight - left), left, 7, Theme.TEXT, false);
+        context.text(this.font, ThemeDraw.fit(this.font, this.tab.subtitle, titleRight - left), left, 19, Theme.TEXT_MUTED, false);
+        ThemeDraw.hDivider(context, sidebarW + 1, HEADER_H, this.width - sidebarW - 1);
     }
 
     private void setTab(Tab next) {
@@ -678,6 +755,7 @@ public class MacroWorkbenchScreen extends Screen {
         }
 
         this.tab = next;
+        this.canvasNavOpen = false;
         boolean canvas = next == Tab.CANVAS;
         boolean keyboard = next == Tab.KEYBOARD;
         boolean macros = next == Tab.MACROS;
@@ -766,6 +844,7 @@ public class MacroWorkbenchScreen extends Screen {
         boolean showChrome = !canvasTab || canvasChromeVisible;
 
         setWidgetState(topBarWidgets, showChrome);
+        setWidgetState(navWidgets, !canvasTab);
         setWidgetState(canvasWidgets, canvasTab && showChrome);
         setWidgetState(keyboardWidgets, keyboardTab);
         setWidgetState(macroManagerWidgets, macrosTab);
@@ -777,22 +856,22 @@ public class MacroWorkbenchScreen extends Screen {
         setWidgetState(configWidgets, configTab);
     }
 
-    private static void setWidgetState(List<ClickableWidget> widgets, boolean visible) {
-        for (ClickableWidget widget : widgets) {
+    private static void setWidgetState(List<AbstractWidget> widgets, boolean visible) {
+        for (AbstractWidget widget : widgets) {
             widget.visible = visible;
             widget.active = visible;
         }
     }
 
     @Override
-    public void render(DrawContext context, int mouseX, int mouseY, float delta) {
+    public void extractRenderState(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
         boolean automationOverlayOpen = this.tab == Tab.AUTOMATION
                 && this.automationTabController != null
                 && this.automationTabController.hasOverlayOpen();
         int effectiveMouseX = automationOverlayOpen ? -10_000 : mouseX;
         int effectiveMouseY = automationOverlayOpen ? -10_000 : mouseY;
-        context.fill(0, 0, this.width, this.height, 0xD0101010);
-        context.fill(0, TOP_BAR_H - 1, this.width, TOP_BAR_H, 0x70FFFFFF);
+        context.fill(0, 0, this.width, this.height, this.tab == Tab.CANVAS ? 0xB00B0D11 : Theme.SCRIM);
+        renderShell(context);
 
         if (this.tab == Tab.CANVAS) {
             renderCanvasTab(context, mouseX, mouseY);
@@ -815,69 +894,38 @@ public class MacroWorkbenchScreen extends Screen {
         }
 
         // Draw normal widgets first.
-        super.render(context, effectiveMouseX, effectiveMouseY, delta);
+        super.extractRenderState(context, effectiveMouseX, effectiveMouseY, delta);
 
         if (this.tab == Tab.AUTOMATION && this.automationTabController != null) {
             this.automationTabController.renderOverlay(context, mouseX, mouseY);
         }
 
-        if (advancedOpen && advancedModalDragging && this.client != null) {
-            long window = this.client.getWindow().getHandle();
-            if (GLFW.glfwGetMouseButton(window, GLFW.GLFW_MOUSE_BUTTON_LEFT) == GLFW.GLFW_PRESS) {
-                this.advancedModalPosX = mouseX - advancedModalDragOffsetX;
-                this.advancedModalPosY = mouseY - advancedModalDragOffsetY;
-            } else {
-                this.advancedModalDragging = false;
-            }
+        float modalScale = modalSpaceScale();
+        int modalMouseX = Math.round(mouseX / modalScale);
+        int modalMouseY = Math.round(mouseY / modalScale);
+        if (modalScale < 1f) {
+            context.pose().pushMatrix();
+            context.pose().scale(modalScale, modalScale);
         }
-        if (colorPickerOpen && colorPickerDragging && this.client != null) {
-            long window = this.client.getWindow().getHandle();
-            if (GLFW.glfwGetMouseButton(window, GLFW.GLFW_MOUSE_BUTTON_LEFT) == GLFW.GLFW_PRESS) {
-                int pickerW = 140;
-                int pickerH = 86;
-                this.colorPickerX = Math.clamp(mouseX - colorPickerDragOffsetX, 6, Math.max(6, this.width - pickerW - 6));
-                this.colorPickerY = Math.clamp(mouseY - colorPickerDragOffsetY, 26, Math.max(26, this.height - pickerH - 6));
-            } else {
-                this.colorPickerDragging = false;
-            }
+        inModalSpace(() -> {
+            renderModals(context, modalMouseX, modalMouseY);
+            return null;
+        });
+        if (modalScale < 1f) {
+            context.pose().popMatrix();
         }
-
-        if (advancedOpen) {
-            renderAdvancedModal(context, mouseX, mouseY);
-            updateModalDragSelection(mouseX, mouseY);
-        }
-        if (kbCommandsModalOpen) {
-            renderKeyboardCommandsModal(context, mouseX, mouseY);
-            updateModalDragSelection(mouseX, mouseY);
+        if (this.tab == Tab.CANVAS && this.canvasNavOpen && canvasChromeVisible) {
+            // Drawn after the widgets so the menu sits above the toolbar.
+            renderCanvasNavMenu(context, mouseX, mouseY);
         }
         if (this.tab == Tab.CANVAS && addElementModalOpen && !advancedOpen && !kbCommandsModalOpen) {
             renderAddElementModal(context, mouseX, mouseY);
         }
-        if (advancedOpen && colorPickerOpen) {
-            renderColorPickerPopup(context, mouseX, mouseY);
-        }
     }
 
-    private void renderCanvasTab(DrawContext context, int mouseX, int mouseY) {
+    private void renderCanvasTab(GuiGraphicsExtractor context, int mouseX, int mouseY) {
         applyQuickEdit();
         updateDragging(mouseX, mouseY);
-
-        context.drawTextWithShadow(this.textRenderer,
-                "Canvas Mode: " + (isVanillaCanvasMode() ? "Vanilla Elements" : "Custom Elements")
-                        + (isVanillaCanvasMode() ? "  |  Preview: " + (vanillaPreviewMode == VanillaPreviewMode.ACTUAL ? "Actual" : "Virtual") : "")
-                        + "  |  Press F1 to turn on/off placement mode: " + (canvasChromeVisible ? "OFF" : "ON"),
-                8, TOP_BAR_H + 4, 0xFF9FCFCF);
-        context.drawTextWithShadow(this.textRenderer,
-                isVanillaCanvasMode()
-                        ? "Drag to move, resize handle changes scale, BG toggles virtual/actual preview, Reset restores vanilla position."
-                        : "Ctrl+Click multi-select, Ctrl+C/V copy/paste element, Ctrl+Shift+C/V dimensions, Ctrl+Z undo move",
-                8, TOP_BAR_H + 16, 0xFF9FBFBF);
-        int canvasHeight = canvasHeightBound();
-        int cellW = Math.max(1, Math.round(this.width / (float) Math.max(1, gridCols)));
-        int cellH = Math.max(1, Math.round(canvasHeight / (float) Math.max(1, gridRows)));
-        context.drawTextWithShadow(this.textRenderer,
-                "Grid " + (gridEnabled ? "ON" : "OFF") + "  " + gridCols + "x" + gridRows + "  Cell: " + cellW + "x" + cellH,
-                8, TOP_BAR_H + 28, 0xFFBFCFCF);
 
         if (gridEnabled || gridOverlayTicks > 0) {
             drawGridOverlay(context);
@@ -896,89 +944,276 @@ public class MacroWorkbenchScreen extends Screen {
         }
         drawSnapGuides(context);
 
-        int y = this.height - BOTTOM_BAR_H;
-        context.drawTextWithShadow(this.textRenderer,
-                isVanillaCanvasMode() ? "Selected Vanilla HUD Element" : "Quick Edit (first line)",
-                8, y - 10, 0xFFAAAAAA);
-        if (this.macroField.visible) {
-            context.drawTextWithShadow(this.textRenderer, "Macro Id (optional)", 292, y - 10, 0xFFAAAAAA);
-            String actionLabel = "Action (optional)";
-            if (selected != null && selected.type == MacroHudDataHandler.ElementType.BUTTON
-                    && selected.buttonExecutionMode != MacroHudDataHandler.ButtonExecutionMode.COMMAND) {
-                actionLabel = "Script (inline or file name)";
-            }
-            context.drawTextWithShadow(this.textRenderer, actionLabel, 416, y - 10, 0xFFAAAAAA);
+        renderCanvasChrome(context, mouseX, mouseY);
+    }
+
+    private record ToolbarLabel(String text, int x, int y, int width) {
+    }
+
+    private record ToolbarItem(AbstractWidget widget, int width, String label) {
+        static ToolbarItem of(AbstractWidget widget, int width) {
+            return new ToolbarItem(widget, width, null);
         }
-        if (selected != null) {
-            String summary = isVanillaHudProxy(selected)
-                    ? vanillaSelectionSummary(selected)
-                    : "Selected: " + selected.type + " Pos: " + selected.x + "," + selected.y + " Size: " + selected.width + "x" + selected.height;
-            context.drawTextWithShadow(this.textRenderer, summary, 8, this.height - 18, 0xFFCCCCCC);
+
+        static ToolbarItem text(String label, int width) {
+            return new ToolbarItem(null, width, label);
         }
     }
 
-    private void renderPlaceholdersTab(DrawContext context, int mouseX, int mouseY) {
-        int left = 12;
-        int top = TOP_BAR_H + 46;
-        int bottom = this.height - 14;
-        int lineHeight = 13;
-        int maxLines = Math.max(1, (bottom - top) / lineHeight);
-        List<String> docs = placeholderDocs();
-        int maxScroll = Math.max(0, docs.size() - maxLines);
-        placeholderScroll = Math.clamp(placeholderScroll, 0, maxScroll);
-        this.filteredPlaceholderDocs = docs;
+    private static final int CANVAS_MARGIN = 6;
+    private static final int CANVAS_BAR_PAD = 4;
 
-        context.drawTextWithShadow(this.textRenderer, "Placeholder reference and return values", left, TOP_BAR_H + 6, 0xFFFFFFFF);
-        context.drawTextWithShadow(this.textRenderer, "Search and click a line to copy it", this.width - 188, TOP_BAR_H + 6, 0xFF9F9F9F);
+    private int preferredWidth(AbstractWidget widget) {
+        String message = widget.getMessage().getString();
+        if (message.matches(".*:\\s*(ON|OFF)$")) {
+            return this.font.width(message.replaceAll(":\\s*(ON|OFF)$", "")) + 34;
+        }
+        return Math.max(Theme.CONTROL_H, this.font.width(message) + 14);
+    }
 
-        int y = top;
-        for (int i = placeholderScroll; i < docs.size() && y <= bottom; i++) {
-            String line = docs.get(i);
-            boolean hovered = mouseY >= y - 1 && mouseY <= y + lineHeight - 2 && mouseX >= left - 2 && mouseX <= this.width - 16;
-            if (hovered) {
-                context.fill(left - 3, y - 1, this.width - 10, y + lineHeight - 2, 0x302B5C85);
+    /**
+     * Lays out the floating canvas toolbar (top) and inspector bar (bottom) for the current window size and widget
+     * labels. Groups wrap onto extra toolbar rows when they do not fit.
+     */
+    private void layoutCanvasChrome() {
+        this.toolbarLabels.clear();
+        this.canvasBarRects.clear();
+        if (!canvasChromeVisible) {
+            return;
+        }
+        int gap = Theme.GAP_S;
+        int h = Theme.CONTROL_H;
+        int barX = CANVAS_MARGIN;
+        int barW = this.width - CANVAS_MARGIN * 2;
+        int innerX = barX + CANVAS_BAR_PAD;
+        int innerW = barW - CANVAS_BAR_PAD * 2;
+
+        List<List<ToolbarItem>> groups = new ArrayList<>();
+        groups.add(List.of(ToolbarItem.of(canvasMenuButton, h), ToolbarItem.of(canvasModeToggleButton, preferredWidth(canvasModeToggleButton)),
+                ToolbarItem.of(canvasAddButton, preferredWidth(canvasAddButton))));
+        groups.add(List.of(ToolbarItem.of(gridToggleButton, preferredWidth(gridToggleButton)),
+                ToolbarItem.of(gridColsMinusButton, 16), ToolbarItem.text(gridCols + " cols", this.font.width("88 cols") + 4), ToolbarItem.of(gridColsPlusButton, 16),
+                ToolbarItem.of(gridRowsMinusButton, 16), ToolbarItem.text(gridRows + " rows", this.font.width("88 rows") + 4), ToolbarItem.of(gridRowsPlusButton, 16),
+                ToolbarItem.of(centerLinesToggleButton, preferredWidth(centerLinesToggleButton))));
+        groups.add(List.of(ToolbarItem.text("Preset", this.font.width("Preset") + 8), ToolbarItem.of(presetPrevButton, 16),
+                ToolbarItem.of(presetNameField, 84), ToolbarItem.of(presetNextButton, 16),
+                ToolbarItem.of(presetNewButton, preferredWidth(presetNewButton)), ToolbarItem.of(presetRenameButton, preferredWidth(presetRenameButton)),
+                ToolbarItem.of(presetDeleteButton, preferredWidth(presetDeleteButton))));
+        List<ToolbarItem> right = List.of(ToolbarItem.of(headerSaveButton, 48), ToolbarItem.of(headerDoneButton, 48));
+        int rightW = groupWidth(right, gap);
+
+        int rowY = CANVAS_MARGIN + CANVAS_BAR_PAD;
+        int cursor = innerX;
+        int rowLimit = innerX + innerW - rightW - Theme.GAP_L;
+        int rows = 1;
+        placeGroup(right, innerX + innerW - rightW, rowY, gap);
+        for (List<ToolbarItem> group : groups) {
+            int groupW = groupWidth(group, gap);
+            int start = cursor == innerX ? cursor : cursor + Theme.GAP_L;
+            if (start + groupW > rowLimit && cursor != innerX) {
+                rows++;
+                rowY += h + gap;
+                start = innerX;
+                rowLimit = innerX + innerW;
             }
-            int color = line.startsWith("[") ? 0xFF55FFFF : 0xFFD8D8D8;
-            context.drawTextWithShadow(this.textRenderer, line, left, y, color);
-            if (hovered) {
-                String hint = "[Click to copy]";
-                context.drawTextWithShadow(this.textRenderer, hint, this.width - this.textRenderer.getWidth(hint) - 14, y, 0xFFFFFFAA);
+            cursor = placeGroup(group, start, rowY, gap);
+        }
+        int toolbarH = rows * h + (rows - 1) * gap + CANVAS_BAR_PAD * 2;
+        this.canvasBarRects.add(new UiRect(barX, CANVAS_MARGIN, barW, toolbarH));
+
+        // Bottom inspector bar: flexible text fields followed by fixed-width buttons.
+        List<EditBox> fields = new ArrayList<>();
+        List<Integer> weights = new ArrayList<>();
+        if (quickField.visible) {
+            fields.add(quickField);
+            weights.add(3);
+        }
+        if (macroField.visible) {
+            fields.add(macroField);
+            weights.add(2);
+        }
+        if (actionField.visible) {
+            fields.add(actionField);
+            weights.add(3);
+        }
+        List<ToolbarItem> buttons = new ArrayList<>();
+        for (Button button : List.of(backgroundToggle, borderToggle, deleteButton, editButton)) {
+            if (button.visible) {
+                buttons.add(ToolbarItem.of(button, preferredWidth(button)));
             }
-            y += lineHeight;
+        }
+        int buttonsW = groupWidth(buttons, gap);
+        int minFieldsW = fields.size() * 56 + Math.max(0, fields.size() - 1) * gap;
+        boolean oneRow = minFieldsW + buttonsW + gap <= innerW;
+        int bottomRows = oneRow || fields.isEmpty() || buttons.isEmpty() ? 1 : 2;
+        int bottomH = bottomRows * h + (bottomRows - 1) * gap + CANVAS_BAR_PAD * 2;
+        int bottomY = this.height - CANVAS_MARGIN - bottomH;
+        int fieldsRowY = bottomY + CANVAS_BAR_PAD;
+        int buttonsRowY = bottomRows == 2 ? fieldsRowY + h + gap : fieldsRowY;
+        int fieldsW = oneRow ? innerW - buttonsW - (buttons.isEmpty() ? 0 : gap) : innerW;
+        int totalWeight = weights.stream().mapToInt(Integer::intValue).sum();
+        int fx = innerX;
+        int available = fieldsW - Math.max(0, fields.size() - 1) * gap;
+        for (int i = 0; i < fields.size(); i++) {
+            int w = i == fields.size() - 1 ? innerX + fieldsW - fx : available * weights.get(i) / Math.max(1, totalWeight);
+            resizeChromeWidget(fields.get(i), fx, fieldsRowY, Math.max(20, w));
+            fx += w + gap;
+        }
+        placeGroup(buttons, innerX + innerW - buttonsW, buttonsRowY, gap);
+        this.canvasBarRects.add(new UiRect(barX, bottomY, barW, bottomH));
+    }
+
+    private static void resizeChromeWidget(AbstractWidget widget, int x, int y, int width) {
+        boolean resized = widget.getWidth() != width;
+        widget.setX(x);
+        widget.setY(y);
+        widget.setWidth(width);
+        // A text field first created narrower keeps a stale scroll offset (showing nothing); reset it.
+        if (resized && widget instanceof EditBox field && !field.isFocused()) {
+            field.moveCursorToStart(false);
+        }
+    }
+
+    private static int groupWidth(List<ToolbarItem> group, int gap) {
+        int width = 0;
+        for (ToolbarItem item : group) {
+            width += item.width();
+        }
+        return width + Math.max(0, group.size() - 1) * gap;
+    }
+
+    /** @return the x just past the group's last item. */
+    private int placeGroup(List<ToolbarItem> group, int x, int y, int gap) {
+        int cursor = x;
+        for (ToolbarItem item : group) {
+            if (item.widget() != null) {
+                resizeChromeWidget(item.widget(), cursor, y, item.width());
+            } else {
+                this.toolbarLabels.add(new ToolbarLabel(item.label(), cursor, y, item.width()));
+            }
+            cursor += item.width() + gap;
+        }
+        return cursor - gap;
+    }
+
+    private void renderCanvasChrome(GuiGraphicsExtractor context, int mouseX, int mouseY) {
+        layoutCanvasChrome();
+        if (!canvasChromeVisible) {
+            return;
+        }
+        for (UiRect bar : this.canvasBarRects) {
+            ThemeDraw.box(context, bar.x(), bar.y(), bar.width(), bar.height(), 0xF0171B22);
+            ThemeDraw.outline(context, bar.x(), bar.y(), bar.width(), bar.height(), Theme.BORDER);
+        }
+        for (ToolbarLabel label : this.toolbarLabels) {
+            ThemeDraw.textCentered(context, this.font, label.text(), label.x(), label.y(), label.width(), Theme.CONTROL_H, Theme.TEXT_MUTED);
         }
 
+        if (this.canvasBarRects.size() >= 2) {
+            UiRect bottom = this.canvasBarRects.get(1);
+            String summary;
+            if (selected != null) {
+                summary = isVanillaHudProxy(selected)
+                        ? vanillaSelectionSummary(selected)
+                        : selected.type + "  \u00b7  " + selected.x + ", " + selected.y + "  \u00b7  " + selected.width + " \u00d7 " + selected.height;
+            } else if (isVanillaCanvasMode()) {
+                summary = "Drag a vanilla HUD element to move it; drag its corner to scale.  F1 hides the toolbar.";
+            } else {
+                summary = "Click an element to select it  \u00b7  Ctrl+click multi-select  \u00b7  Ctrl+C/V copy  \u00b7  Ctrl+Z undo  \u00b7  F1 hides the toolbar";
+            }
+            String shown = ThemeDraw.fit(this.font, summary, bottom.width() - Theme.GAP_M * 2);
+            int textW = this.font.width(shown);
+            int chipY = bottom.y() - 14;
+            ThemeDraw.box(context, bottom.x(), chipY, textW + Theme.GAP_M * 2, 12, 0xE0171B22);
+            context.text(this.font, shown, bottom.x() + Theme.GAP_M, chipY + 2, selected != null ? Theme.TEXT : Theme.TEXT_MUTED, false);
+        }
+
+    }
+
+    private static final int NAV_MENU_ROW_H = 16;
+    private static final int NAV_MENU_W = 128;
+
+    private int canvasNavMenuY() {
+        return this.canvasMenuButton.getY() + this.canvasMenuButton.getHeight() + Theme.GAP_S;
+    }
+
+    private void renderCanvasNavMenu(GuiGraphicsExtractor context, int mouseX, int mouseY) {
+        int x = this.canvasMenuButton.getX();
+        int y = canvasNavMenuY();
+        int h = Tab.values().length * NAV_MENU_ROW_H + Theme.GAP_S * 2;
+        ThemeDraw.box(context, x, y, NAV_MENU_W, h, Theme.SIDEBAR);
+        ThemeDraw.outline(context, x, y, NAV_MENU_W, h, Theme.BORDER_STRONG);
+        int rowY = y + Theme.GAP_S;
+        for (Tab tabDef : Tab.values()) {
+            boolean current = tabDef == this.tab;
+            boolean hovered = containsBox(mouseX, mouseY, x + 2, rowY, NAV_MENU_W - 4, NAV_MENU_ROW_H);
+            if (current) {
+                ThemeDraw.box(context, x + 2, rowY, NAV_MENU_W - 4, NAV_MENU_ROW_H, Theme.ACCENT_SOFT);
+            } else if (hovered) {
+                ThemeDraw.box(context, x + 2, rowY, NAV_MENU_W - 4, NAV_MENU_ROW_H, Theme.SURFACE_HOVER);
+            }
+            int textY = rowY + (NAV_MENU_ROW_H - 8) / 2;
+            context.text(this.font, tabDef.icon, x + 8, textY, current ? Theme.ACCENT_TEXT : Theme.TEXT_DIM, false);
+            context.text(this.font, tabDef.label, x + 22, textY, current || hovered ? Theme.TEXT : Theme.TEXT_MUTED, false);
+            rowY += NAV_MENU_ROW_H;
+        }
+    }
+
+    /** @return true when the click was consumed by the open navigation menu. */
+    private boolean onCanvasNavMenuClick(double mouseX, double mouseY) {
+        int x = this.canvasMenuButton.getX();
+        int rowY = canvasNavMenuY() + Theme.GAP_S;
+        this.canvasNavOpen = false;
+        for (Tab tabDef : Tab.values()) {
+            if (mouseX >= x && mouseX <= x + NAV_MENU_W && mouseY >= rowY && mouseY < rowY + NAV_MENU_ROW_H) {
+                setTab(tabDef);
+                return true;
+            }
+            rowY += NAV_MENU_ROW_H;
+        }
+        // Clicking the menu button itself just closes the menu.
+        return containsBox(mouseX, mouseY, x, this.canvasMenuButton.getY(), this.canvasMenuButton.getWidth(), this.canvasMenuButton.getHeight());
+    }
+
+    private void renderPlaceholdersTab(GuiGraphicsExtractor context, int mouseX, int mouseY) {
+        List<String> docs = placeholderDocs();
+        this.filteredPlaceholderDocs = docs;
+        UiRect list = listRect();
+        int visible = listVisibleRows();
+        placeholderScroll = Math.clamp(placeholderScroll, 0, Math.max(0, docs.size() - visible));
+        drawListCard(context, list, docs.size(), placeholderScroll);
         if (docs.isEmpty()) {
-            context.drawTextWithShadow(this.textRenderer, "No placeholders matched the current search.", left, top, 0xFFB8B8B8);
+            drawListEmpty(context, list, "No placeholders match \"" + StringUtils.safe(this.placeholderSearchQuery).trim() + "\"");
+            return;
+        }
+        for (int row = 0; row < visible && placeholderScroll + row < docs.size(); row++) {
+            String line = docs.get(placeholderScroll + row);
+            int y = listRowY(row);
+            if (line.startsWith("[")) {
+                context.text(this.font, ThemeDraw.fit(this.font, line.replace("[", "").replace("]", "").toUpperCase(Locale.ROOT), list.width() - 16),
+                        list.x() + 8, y + (LIST_ROW_H - 8) / 2 + 1, Theme.ACCENT_TEXT, false);
+                continue;
+            }
+            boolean hovered = listRowHovered(mouseX, mouseY, row);
+            drawListRow(context, list, row, hovered, line, Theme.TEXT, hovered ? "Copy" : null);
         }
     }
 
     private void initPlaceholderWidgets() {
-        int fieldX = 12;
-        int fieldY = TOP_BAR_H + 22;
-        int buttonW = 70;
-        int fieldW = Math.max(120, this.width - fieldX - buttonW - 20);
-
-        this.placeholderSearchField = new TextFieldWidget(this.textRenderer, fieldX, fieldY, fieldW, 18, Text.literal("Search placeholders"));
+        this.placeholderSearchField = new EditBox(this.font, contentLeft(), contentTop(), contentWidth(), Theme.CONTROL_H, Component.literal("Search placeholders"));
+        this.placeholderSearchField.setHint(Component.literal("Search placeholders\u2026"));
         this.placeholderSearchField.setMaxLength(96);
-        this.placeholderSearchField.setText(this.placeholderSearchQuery);
-        this.placeholderSearchField.setChangedListener(value -> {
+        this.placeholderSearchField.setValue(this.placeholderSearchQuery);
+        this.placeholderSearchField.setResponder(value -> {
             this.placeholderSearchQuery = value == null ? "" : value;
             this.placeholderScroll = 0;
         });
-
-        this.placeholderSearchButton = ButtonWidget.builder(Text.literal("Search"), button -> applyPlaceholderSearch())
-                .dimensions(fieldX + fieldW + 6, fieldY, buttonW, 18)
-                .build();
-
         this.placeholderWidgets.add(this.placeholderSearchField);
-        this.placeholderWidgets.add(this.placeholderSearchButton);
-        addDrawableChild(this.placeholderSearchField);
-        addDrawableChild(this.placeholderSearchButton);
-        syncPlaceholderSearchButton();
+        addRenderableWidget(this.placeholderSearchField);
     }
 
     private void applyPlaceholderSearch() {
-        this.placeholderSearchQuery = this.placeholderSearchField == null ? "" : StringUtils.safe(this.placeholderSearchField.getText());
+        this.placeholderSearchQuery = this.placeholderSearchField == null ? "" : StringUtils.safe(this.placeholderSearchField.getValue());
         this.placeholderScroll = 0;
         syncPlaceholderSearchButton();
     }
@@ -988,7 +1223,7 @@ public class MacroWorkbenchScreen extends Screen {
             return;
         }
         String query = StringUtils.safe(this.placeholderSearchQuery).trim();
-        this.placeholderSearchButton.setMessage(Text.literal("Search"));
+        this.placeholderSearchButton.setMessage(Component.literal("Search"));
     }
 
     private List<String> placeholderDocs() {
@@ -1028,126 +1263,122 @@ public class MacroWorkbenchScreen extends Screen {
         }
     }
 
-    private void renderConfigurationTab(DrawContext context) {
+    private void renderConfigurationTab(GuiGraphicsExtractor context) {
         if (this.configurationTabController != null) {
-            this.configurationTabController.render(context);
+            this.configurationTabController.extractRenderState(context);
         }
     }
 
-    private void renderMacrosTab(DrawContext context, int mouseX, int mouseY) {
+    private void renderMacrosTab(GuiGraphicsExtractor context, int mouseX, int mouseY) {
         if (this.macrosTabController != null) {
-            this.macrosTabController.render(context, mouseX, mouseY);
+            this.macrosTabController.extractRenderState(context, mouseX, mouseY);
         }
     }
 
-    private void renderAutomationTab(DrawContext context, int mouseX, int mouseY) {
+    private void renderAutomationTab(GuiGraphicsExtractor context, int mouseX, int mouseY) {
         if (this.automationTabController != null) {
-            this.automationTabController.render(context, mouseX, mouseY);
+            this.automationTabController.extractRenderState(context, mouseX, mouseY);
         }
     }
 
 
     private int getHistoryVisibleLines() {
-        return Math.max(1, (this.height - TOP_BAR_H - 80) / HISTORY_LINE_HEIGHT);
+        return listVisibleRows();
     }
 
-    private void renderCommandHistoryTab(DrawContext context, int mouseX, int mouseY) {
-        int top = TOP_BAR_H + 8;
-        context.drawCenteredTextWithShadow(this.textRenderer, Text.literal("Command History"), width / 2, top, 0xFFFFFFFF);
-        String info = cmdHistoryItems.isEmpty() ? "No commands in history yet." : "Click any command to copy it to clipboard";
-        context.drawCenteredTextWithShadow(this.textRenderer, Text.literal(info), width / 2, top + 14, 0xFFAAAAAA);
+    private static final int LIST_ROW_H = 14;
 
-        if (!cmdHistoryItems.isEmpty()) {
-            int listY = top + 32;
-            int maxVisible = Math.min(getHistoryVisibleLines(), cmdHistoryItems.size() - cmdHistoryScroll);
-            for (int i = 0; i < maxVisible; i++) {
-                int index = i + cmdHistoryScroll;
-                if (index >= cmdHistoryItems.size()) {
-                    break;
-                }
-                String command = cmdHistoryItems.get(index);
-                int y = listY + (i * HISTORY_LINE_HEIGHT);
-                int boxX1 = 20, boxX2 = width - 20;
-                int boxY1 = y - 2, boxY2 = y + HISTORY_LINE_HEIGHT - 2;
-                boolean hovering = mouseX >= boxX1 && mouseX <= boxX2 && mouseY >= boxY1 && mouseY <= boxY2;
-                if (hovering) {
-                    context.fill(boxX1, boxY1, boxX2, boxY2, 0x80FFFFFF);
-                }
-                String displayText = (index + 1) + ". " + command;
-                int textColor = hovering ? 0xFFFFFF00 : 0xFFFFFFFF;
-                int maxWidth = width - 50;
-                if (textRenderer.getWidth(displayText) > maxWidth) {
-                    while (textRenderer.getWidth(displayText + "...") > maxWidth && displayText.length() > 10)
-                        displayText = displayText.substring(0, displayText.length() - 1);
-                    displayText += "...";
-                }
-                context.drawTextWithShadow(this.textRenderer, displayText, 25, y, textColor);
-                if (hovering) {
-                    String hint = "[Click to copy]";
-                    context.drawTextWithShadow(this.textRenderer, Text.literal(hint), boxX2 - textRenderer.getWidth(hint) - 5, y, 0xFFFFFF00);
-                }
-            }
-            if (cmdHistoryItems.size() > getHistoryVisibleLines()) {
-                int total = (cmdHistoryItems.size() + getHistoryVisibleLines() - 1) / getHistoryVisibleLines();
-                int cur = (cmdHistoryScroll / getHistoryVisibleLines()) + 1;
-                context.drawCenteredTextWithShadow(this.textRenderer,
-                        Text.literal("Page " + cur + "/" + total + " (Scroll to navigate)"),
-                        width / 2, height - 52, 0xFF888888);
-            }
+    /** List card shared by the placeholder, history and radar tabs (below a one-row toolbar). */
+    private UiRect listRect() {
+        int y = contentTop() + Theme.CONTROL_H + Theme.GAP_M;
+        return new UiRect(contentLeft(), y, contentWidth(), Math.max(LIST_ROW_H + 8, contentBottom() - y));
+    }
+
+    private int listVisibleRows() {
+        return Math.max(1, (listRect().height() - 8) / LIST_ROW_H);
+    }
+
+    private int listRowY(int row) {
+        return listRect().y() + 4 + row * LIST_ROW_H;
+    }
+
+    /** @return the visible row under the mouse, or -1. */
+    private int listRowAt(double mouseX, double mouseY) {
+        UiRect list = listRect();
+        if (mouseX < list.x() || mouseX > list.right() - 6 || mouseY < list.y() + 4) {
+            return -1;
+        }
+        int row = (int) ((mouseY - list.y() - 4) / LIST_ROW_H);
+        return row < listVisibleRows() ? row : -1;
+    }
+
+    private boolean listRowHovered(int mouseX, int mouseY, int row) {
+        return listRowAt(mouseX, mouseY) == row;
+    }
+
+    private void drawListCard(GuiGraphicsExtractor context, UiRect list, int total, int scroll) {
+        ThemeDraw.card(context, list.x(), list.y(), list.width(), list.height());
+        int visible = listVisibleRows();
+        if (total > visible) {
+            int trackX = list.right() - 4;
+            int trackY = list.y() + 4;
+            int trackH = list.height() - 8;
+            int thumbH = Math.max(10, trackH * visible / total);
+            int thumbY = trackY + (trackH - thumbH) * scroll / Math.max(1, total - visible);
+            context.fill(trackX, trackY, trackX + 2, trackY + trackH, Theme.DIVIDER);
+            context.fill(trackX, thumbY, trackX + 2, thumbY + thumbH, Theme.BORDER_STRONG);
         }
     }
 
-    private void renderMessageHistoryTab(DrawContext context, int mouseX, int mouseY) {
-        int top = TOP_BAR_H + 8;
-        context.drawCenteredTextWithShadow(this.textRenderer, Text.literal("Message History"), width / 2, top, 0xFFFFFFFF);
-        String info = msgHistoryItems.isEmpty() ? "No messages in history yet." : "Click any message to copy it to clipboard";
-        context.drawCenteredTextWithShadow(this.textRenderer, Text.literal(info), width / 2, top + 14, 0xFFAAAAAA);
+    private void drawListEmpty(GuiGraphicsExtractor context, UiRect list, String message) {
+        ThemeDraw.textCentered(context, this.font, message, list.x(), list.y(), list.width(), Math.min(list.height(), 48), Theme.TEXT_DIM);
+    }
 
-        if (!msgHistoryItems.isEmpty()) {
-            int listY = top + 32;
-            int maxVisible = Math.min(getHistoryVisibleLines(), msgHistoryItems.size() - msgHistoryScroll);
-            for (int i = 0; i < maxVisible; i++) {
-                int index = i + msgHistoryScroll;
-                if (index >= msgHistoryItems.size()) {
-                    break;
-                }
-                String message = msgHistoryItems.get(index);
-                int y = listY + (i * HISTORY_LINE_HEIGHT);
-                int boxX1 = 20, boxX2 = width - 20;
-                int boxY1 = y - 2, boxY2 = y + HISTORY_LINE_HEIGHT - 2;
-                boolean hovering = mouseX >= boxX1 && mouseX <= boxX2 && mouseY >= boxY1 && mouseY <= boxY2;
-                if (hovering) {
-                    context.fill(boxX1, boxY1, boxX2, boxY2, 0x80FFFFFF);
-                }
-                String displayText = (index + 1) + ". " + message;
-                int textColor = hovering ? 0xFFFFFF00 : 0xFFFFFFFF;
-                int maxWidth = width - 50;
-                if (textRenderer.getWidth(displayText) > maxWidth) {
-                    while (textRenderer.getWidth(displayText + "...") > maxWidth && displayText.length() > 10)
-                        displayText = displayText.substring(0, displayText.length() - 1);
-                    displayText += "...";
-                }
-                context.drawTextWithShadow(this.textRenderer, displayText, 25, y, textColor);
-                if (hovering) {
-                    String hint = "[Click to copy]";
-                    context.drawTextWithShadow(this.textRenderer, Text.literal(hint), boxX2 - textRenderer.getWidth(hint) - 5, y, 0xFFFFFF00);
-                }
-            }
-            if (msgHistoryItems.size() > getHistoryVisibleLines()) {
-                int total = (msgHistoryItems.size() + getHistoryVisibleLines() - 1) / getHistoryVisibleLines();
-                int cur = (msgHistoryScroll / getHistoryVisibleLines()) + 1;
-                context.drawCenteredTextWithShadow(this.textRenderer,
-                        Text.literal("Page " + cur + "/" + total + " (Scroll to navigate)"),
-                        width / 2, height - 52, 0xFF888888);
-            }
+    private void drawListRow(GuiGraphicsExtractor context, UiRect list, int row, boolean hovered, String text, int color, String hint) {
+        int y = listRowY(row);
+        int rowX = list.x() + 4;
+        int rowW = list.width() - 12;
+        if (hovered) {
+            ThemeDraw.box(context, rowX, y, rowW, LIST_ROW_H - 1, Theme.SURFACE_HOVER);
+        }
+        int hintW = hint == null ? 0 : this.font.width(hint) + Theme.GAP_M;
+        context.text(this.font, ThemeDraw.fit(this.font, text, rowW - 8 - hintW), rowX + 4, y + (LIST_ROW_H - 8) / 2, hovered ? Theme.TEXT : color, false);
+        if (hint != null) {
+            context.text(this.font, hint, rowX + rowW - 4 - this.font.width(hint), y + (LIST_ROW_H - 8) / 2, Theme.ACCENT_TEXT, false);
         }
     }
 
-    private void renderEntityRadarTab(DrawContext context) {
-        int top = TOP_BAR_H + 8;
-        context.drawCenteredTextWithShadow(this.textRenderer, Text.literal("Entity Radar"), width / 2, top, 0xFFFFFFFF);
+    private void drawListToolbarText(GuiGraphicsExtractor context, String text, int reservedRight) {
+        context.text(this.font, ThemeDraw.fit(this.font, text, contentWidth() - reservedRight), contentLeft(),
+                contentTop() + (Theme.CONTROL_H - 8) / 2, Theme.TEXT_MUTED, false);
+    }
 
-        if (this.client != null && this.client.world != null && this.client.player != null) {
+    private void renderCommandHistoryTab(GuiGraphicsExtractor context, int mouseX, int mouseY) {
+        renderHistoryList(context, mouseX, mouseY, cmdHistoryItems, cmdHistoryScroll, "command", "No commands sent yet.");
+    }
+
+    private void renderMessageHistoryTab(GuiGraphicsExtractor context, int mouseX, int mouseY) {
+        renderHistoryList(context, mouseX, mouseY, msgHistoryItems, msgHistoryScroll, "message", "No messages received yet.");
+    }
+
+    private void renderHistoryList(GuiGraphicsExtractor context, int mouseX, int mouseY, List<String> items, int scroll,
+                                   String noun, String emptyText) {
+        drawListToolbarText(context, items.size() + " " + noun + (items.size() == 1 ? "" : "s") + "  \u00b7  click a row to copy it", 96);
+        UiRect list = listRect();
+        drawListCard(context, list, items.size(), scroll);
+        if (items.isEmpty()) {
+            drawListEmpty(context, list, emptyText);
+            return;
+        }
+        int visible = listVisibleRows();
+        for (int row = 0; row < visible && scroll + row < items.size(); row++) {
+            boolean hovered = listRowHovered(mouseX, mouseY, row);
+            drawListRow(context, list, row, hovered, items.get(scroll + row), Theme.TEXT_MUTED, hovered ? "Copy" : null);
+        }
+    }
+
+    private void renderEntityRadarTab(GuiGraphicsExtractor context) {
+        if (this.minecraft != null && this.minecraft.level != null && this.minecraft.player != null) {
             entityRadarItems = new ArrayList<>(EntityRadarModule.INSTANCE.getEntities());
             entityRadarScroll = Math.clamp(entityRadarScroll, 0, Math.max(0, entityRadarItems.size() - getHistoryVisibleLines()));
         } else {
@@ -1159,205 +1390,222 @@ public class MacroWorkbenchScreen extends Screen {
         int hostile = 0;
         int neutral = 0;
         for (Entity entity : entityRadarItems) {
-            if (entity instanceof HostileEntity) {
+            if (entity instanceof Monster) {
                 hostile++;
-            } else if (entity instanceof PassiveEntity) {
+            } else if (entity instanceof AgeableMob) {
                 passive++;
             } else {
                 neutral++;
             }
         }
 
-        String info = entityRadarItems.isEmpty()
-                ? "No nearby entities."
-                : "Total: " + entityRadarItems.size() + " | Passive: " + passive + " | Neutral: " + neutral + " | Hostile: " + hostile;
-        context.drawCenteredTextWithShadow(this.textRenderer, Text.literal(info), width / 2, top + 14, 0xFFAAAAAA);
+        int chipX = contentLeft();
+        int chipY = contentTop() + (Theme.CONTROL_H - 8) / 2;
+        chipX = drawLegendChip(context, chipX, chipY, Theme.TEXT_MUTED, entityRadarItems.size() + " total");
+        chipX = drawLegendChip(context, chipX, chipY, RADAR_HOSTILE, hostile + " hostile");
+        chipX = drawLegendChip(context, chipX, chipY, RADAR_PASSIVE, passive + " passive");
+        drawLegendChip(context, chipX, chipY, RADAR_NEUTRAL, neutral + " other");
 
-        if (!entityRadarItems.isEmpty()) {
-            int listY = top + 32;
-            int maxVisible = Math.min(getHistoryVisibleLines(), entityRadarItems.size() - entityRadarScroll);
-            for (int i = 0; i < maxVisible; i++) {
-                int index = i + entityRadarScroll;
-                if (index >= entityRadarItems.size()) {
-                    break;
-                }
-
-                Entity entity = entityRadarItems.get(index);
-                String name = entity.getName().getString();
-                double distance = this.client == null || this.client.player == null
-                        ? 0.0
-                        : entity.distanceTo(this.client.player);
-                String line = String.format(Locale.ROOT, "%d. %s - %.1fm", index + 1, name, distance);
-
-                int y = listY + (i * HISTORY_LINE_HEIGHT);
-                int color = 0xFFFFFFFF;
-                if (entity instanceof HostileEntity) {
-                    color = 0xFFFF6666;
-                } else if (entity instanceof PassiveEntity) {
-                    color = 0xFF66FF66;
-                }
-
-                int maxWidth = width - 50;
-                if (textRenderer.getWidth(line) > maxWidth) {
-                    while (textRenderer.getWidth(line + "...") > maxWidth && line.length() > 10) {
-                        line = line.substring(0, line.length() - 1);
-                    }
-                    line += "...";
-                }
-                context.drawTextWithShadow(this.textRenderer, line, 25, y, color);
-            }
+        UiRect list = listRect();
+        drawListCard(context, list, entityRadarItems.size(), entityRadarScroll);
+        if (entityRadarItems.isEmpty()) {
+            drawListEmpty(context, list, "No entities nearby.");
+            return;
+        }
+        int visible = listVisibleRows();
+        for (int row = 0; row < visible && entityRadarScroll + row < entityRadarItems.size(); row++) {
+            Entity entity = entityRadarItems.get(entityRadarScroll + row);
+            int color = entity instanceof Monster ? RADAR_HOSTILE : entity instanceof AgeableMob ? RADAR_PASSIVE : RADAR_NEUTRAL;
+            double distance = this.minecraft == null || this.minecraft.player == null ? 0.0 : entity.distanceTo(this.minecraft.player);
+            int y = listRowY(row) + (LIST_ROW_H - 8) / 2;
+            int rowX = list.x() + 8;
+            ThemeDraw.box(context, rowX, y + 1, 6, 6, color);
+            String dist = String.format(Locale.ROOT, "%.1f m", distance);
+            int distX = list.right() - 12 - this.font.width(dist);
+            context.text(this.font, ThemeDraw.fit(this.font, entity.getName().getString(), distX - rowX - 18), rowX + 12, y, Theme.TEXT, false);
+            context.text(this.font, dist, distX, y, Theme.TEXT_MUTED, false);
         }
     }
 
+    private static final int RADAR_HOSTILE = 0xFFE5534B;
+    private static final int RADAR_PASSIVE = 0xFF3FB950;
+    private static final int RADAR_NEUTRAL = 0xFF98A1B3;
+
     private boolean onCommandHistoryClick(double mouseX, double mouseY) {
-        if (cmdHistoryItems.isEmpty()) {
-            return false;
-        }
-        int listY = TOP_BAR_H + 8 + 32;
-        int maxVisible = Math.min(getHistoryVisibleLines(), cmdHistoryItems.size() - cmdHistoryScroll);
-        for (int i = 0; i < maxVisible; i++) {
-            int index = i + cmdHistoryScroll;
-            if (index >= cmdHistoryItems.size()) {
-                break;
-            }
-            String command = cmdHistoryItems.get(index);
-            int y = listY + (i * HISTORY_LINE_HEIGHT);
-            if (mouseX >= 20 && mouseX <= width - 20 && mouseY >= y - 2 && mouseY <= y + HISTORY_LINE_HEIGHT - 2) {
-                if (client != null) {
-                    client.keyboard.setClipboard(command);
-                }
-                return true;
-            }
-        }
-        return false;
+        return copyListRow(mouseX, mouseY, cmdHistoryItems, cmdHistoryScroll);
     }
 
     private boolean onMessageHistoryClick(double mouseX, double mouseY) {
-        if (msgHistoryItems.isEmpty()) {
-            return false;
-        }
-        int listY = TOP_BAR_H + 8 + 32;
-        int maxVisible = Math.min(getHistoryVisibleLines(), msgHistoryItems.size() - msgHistoryScroll);
-        for (int i = 0; i < maxVisible; i++) {
-            int index = i + msgHistoryScroll;
-            if (index >= msgHistoryItems.size()) {
-                break;
-            }
-            String message = msgHistoryItems.get(index);
-            int y = listY + (i * HISTORY_LINE_HEIGHT);
-            if (mouseX >= 20 && mouseX <= width - 20 && mouseY >= y - 2 && mouseY <= y + HISTORY_LINE_HEIGHT - 2) {
-                if (client != null) {
-                    client.keyboard.setClipboard(message);
-                }
-                return true;
-            }
-        }
-        return false;
+        return copyListRow(mouseX, mouseY, msgHistoryItems, msgHistoryScroll);
     }
 
     private boolean onPlaceholderClick(double mouseX, double mouseY) {
-        int left = 12;
-        int top = TOP_BAR_H + 46;
-        int bottom = this.height - 14;
-        int lineHeight = 13;
         List<String> docs = placeholderDocs();
-        int y = top;
-        for (int i = placeholderScroll; i < docs.size() && y <= bottom; i++) {
-            if (mouseX >= left - 2 && mouseX <= this.width - 12 && mouseY >= y - 1 && mouseY <= y + lineHeight - 2) {
-                if (this.client != null) {
-                    this.client.keyboard.setClipboard(docs.get(i));
-                }
-                return true;
-            }
-            y += lineHeight;
+        int row = listRowAt(mouseX, mouseY);
+        if (row < 0 || placeholderScroll + row >= docs.size() || docs.get(placeholderScroll + row).startsWith("[")) {
+            return false;
         }
-        return false;
+        return copyListRow(mouseX, mouseY, docs, placeholderScroll);
     }
 
-    private void renderKeyboardTab(DrawContext context, int mouseX, int mouseY) {
-        int panelW = keyboardPanelWidth();
-        int panelX = keyboardPanelX();
-        int panelRight = panelX + panelW;
-        int panelTop = TOP_BAR_H + 6;
-        int panelHeight = Math.max(120, this.height - panelTop - 8);
-        context.drawTextWithShadow(this.textRenderer, "Macros = Green, Game binds = Blue", 8, TOP_BAR_H + 4, 0xFFB0FFB0);
-        context.drawTextWithShadow(this.textRenderer, "Click a key to inspect or create bindings", 8, TOP_BAR_H + 16, 0xFF9FCFCF);
+    private boolean copyListRow(double mouseX, double mouseY, List<String> items, int scroll) {
+        int row = listRowAt(mouseX, mouseY);
+        if (row < 0 || scroll + row >= items.size()) {
+            return false;
+        }
+        if (this.minecraft != null) {
+            this.minecraft.keyboardHandler.setClipboard(items.get(scroll + row));
+        }
+        return true;
+    }
+
+    private void renderKeyboardTab(GuiGraphicsExtractor context, int mouseX, int mouseY) {
+        KbLayout kb = keyboardLayout();
+
+        // Legend
+        int legendY = kb.kbY();
+        int legendX = kb.kbX();
+        legendX = drawLegendChip(context, legendX, legendY, KEY_MACRO_BORDER, "Macro");
+        if (showGameKeybinds) {
+            legendX = drawLegendChip(context, legendX, legendY, KEY_GAME_BORDER, "Game bind");
+        }
+        drawLegendChip(context, legendX, legendY, Theme.ACCENT, "Selected");
 
         for (KeyCell cell : cells) {
-            if (cell.x + cell.w > panelX - 10) {
-                continue;
-            }
             boolean macroBound = macroBindingIds.containsKey(cell.keyCode);
             boolean gameBound = showGameKeybinds && gameBindingNames.containsKey(cell.keyCode);
             boolean selectedCell = cell.keyCode == selectedKey;
             boolean hovered = containsBox(mouseX, mouseY, cell.x, cell.y, cell.w, cell.h);
 
-            int bg = 0xAA202020;
+            int bg = hovered ? Theme.SURFACE_HOVER : Theme.SURFACE_RAISED;
+            int border = Theme.BORDER;
+            int text = Theme.TEXT_MUTED;
             if (gameBound) {
-                bg = 0xAA1C355A;
+                bg = hovered ? 0xFF22325A : KEY_GAME_BG;
+                border = KEY_GAME_BORDER;
+                text = Theme.TEXT;
             }
             if (macroBound) {
-                bg = 0xAA1E5A1E;
+                bg = hovered ? 0xFF234433 : KEY_MACRO_BG;
+                border = KEY_MACRO_BORDER;
+                text = Theme.TEXT;
             }
             if (selectedCell) {
-                bg = 0xAA7A5A1A;
-            } else if (hovered) {
-                bg = 0xAA383838;
+                bg = Theme.ACCENT_SOFT;
+                border = Theme.ACCENT;
+                text = Theme.TEXT;
             }
-
-            context.fill(cell.x, cell.y, cell.x + cell.w, cell.y + cell.h, bg);
-            context.fill(cell.x, cell.y, cell.x + cell.w, cell.y + 1, 0x60FFFFFF);
-            context.fill(cell.x, cell.y + cell.h - 1, cell.x + cell.w, cell.y + cell.h, hovered ? 0x80FFFFFF : 0x40000000);
-            context.drawCenteredTextWithShadow(this.textRenderer, cell.label, cell.x + (cell.w / 2), cell.y + Math.max(4, (cell.h - 9) / 2), 0xFFFFFFFF);
+            ThemeDraw.box(context, cell.x, cell.y, cell.w, cell.h, bg);
+            ThemeDraw.outline(context, cell.x, cell.y, cell.w, cell.h, border);
+            ThemeDraw.textCenteredScaled(context, this.font, cell.label, cell.x, cell.y, cell.w, cell.h, text);
         }
 
-        GuiSystem.drawPanel(context, panelX, panelTop, panelW, panelHeight);
-        context.drawTextWithShadow(this.textRenderer, "Selected key", panelX + 10, panelTop + 30, 0xFFFFFFFF);
-        context.drawTextWithShadow(this.textRenderer, selectedKey < 0 ? "None" : MacroWorkbenchCanvasUtils.keyLabel(selectedKey), panelX + 10, panelTop + 42, 0xFFFFFF55);
-
-        int y = keyboardMacroListStartY();
+        ThemeDraw.card(context, kb.cardX(), kb.cardY(), kb.cardW(), kb.cardH());
+        int pad = Theme.GAP_M;
+        int textX = kb.cardX() + pad;
         List<String> ids = macroBindingIds.getOrDefault(selectedKey, List.of());
         List<String> names = macroBindingNames.getOrDefault(selectedKey, List.of());
+        String keyName = selectedKey < 0 ? "No key selected" : "Key " + MacroWorkbenchCanvasUtils.keyLabel(selectedKey);
+        int titleW = kb.game().x() - Theme.GAP_S - textX;
+
+        if (!kb.wide()) {
+            String macroName = "";
+            if (selectedMacroId != null) {
+                int index = ids.indexOf(selectedMacroId);
+                String name = index >= 0 && index < names.size() ? names.get(index) : selectedMacroId;
+                macroName = "  \u00b7  " + name + (ids.size() > 1 ? "  (" + (index + 1) + "/" + ids.size() + ", click key for next)" : "");
+            } else if (selectedKey >= 0) {
+                macroName = ids.isEmpty() ? "  \u00b7  no macro, + New to add one" : "";
+            }
+            int titleY = kb.game().y() + (kb.game().height() - 8) / 2;
+            context.text(this.font, ThemeDraw.fit(this.font, keyName + macroName, titleW), textX, titleY, Theme.TEXT, false);
+            return;
+        }
+
+        int y = kb.cardY() + pad;
+        context.text(this.font, ThemeDraw.fit(this.font, keyName, titleW), textX, y + 4, Theme.TEXT, false);
+        y = kb.listTop();
+        ThemeDraw.sectionLabel(context, this.font, "Macros on this key", textX, y - 11, kb.cardW() - pad * 2);
+        int rowW = kb.cardW() - pad * 2;
         if (ids.isEmpty()) {
-            context.drawTextWithShadow(this.textRenderer, "No macros bound", panelX + 10, y, 0xFFAAAAAA);
+            context.text(this.font, ThemeDraw.fit(this.font, selectedKey < 0 ? "Click a key to see its bindings." : "None yet \u2014 + New binds one.", rowW), textX, y + 2, Theme.TEXT_DIM, false);
         } else {
-            context.drawTextWithShadow(this.textRenderer, "Macros (click):", panelX + 10, y, 0xFFAAFFAA);
-            y += 14;
-            for (int i = 0; i < ids.size(); i++) {
+            for (int i = 0; i < ids.size() && y + KB_ROW_H <= kb.listBottom(); i++) {
                 String id = ids.get(i);
                 String name = i < names.size() ? names.get(i) : id;
-                boolean hovered = mouseX >= panelX + 8 && mouseX <= panelRight - 8 && mouseY >= y - 2 && mouseY <= y + 10;
-                int rowBg = id.equals(selectedMacroId) ? 0x905A3A12 : (hovered ? 0x60404040 : 0x50202020);
-                context.fill(panelX + 8, y - 2, panelRight - 8, y + 10, rowBg);
-                context.drawTextWithShadow(this.textRenderer, name + " [" + id + "]", panelX + 12, y, 0xFFE0E0E0);
-                y += 13;
-                if (y > this.height - 192) {
-                    break;
+                boolean isSelected = id.equals(selectedMacroId);
+                boolean hovered = containsBox(mouseX, mouseY, textX, y, rowW, KB_ROW_H - 1);
+                if (isSelected) {
+                    ThemeDraw.box(context, textX, y, rowW, KB_ROW_H - 1, Theme.ACCENT_SOFT);
+                    context.fill(textX, y + 2, textX + 2, y + KB_ROW_H - 3, Theme.ACCENT);
+                } else if (hovered) {
+                    ThemeDraw.box(context, textX, y, rowW, KB_ROW_H - 1, Theme.SURFACE_HOVER);
                 }
+                context.text(this.font, ThemeDraw.fit(this.font, name, rowW - 12), textX + 6, y + (KB_ROW_H - 9) / 2, isSelected ? Theme.TEXT : Theme.TEXT_MUTED, false);
+                y += KB_ROW_H;
             }
         }
 
         if (showGameKeybinds) {
-            int gameY = Math.max(y + 10, this.height - 182);
-            context.drawTextWithShadow(this.textRenderer, "Game keybinds:", panelX + 10, gameY, 0xFF9AC2FF);
-            gameY += 14;
-            for (String bind : gameBindingNames.getOrDefault(selectedKey, List.of())) {
-                if (gameY > this.height - 136) {
-                    break;
+            List<String> binds = gameBindingNames.getOrDefault(selectedKey, List.of());
+            int gameY = Math.max(y + Theme.GAP_M, kb.listTop());
+            if (!binds.isEmpty() && gameY + 20 <= kb.listBottom()) {
+                ThemeDraw.sectionLabel(context, this.font, "Game binds", textX, gameY, rowW);
+                gameY += 11;
+                for (String bind : binds) {
+                    if (gameY + 9 > kb.listBottom()) {
+                        break;
+                    }
+                    context.text(this.font, ThemeDraw.fit(this.font, bind, rowW), textX, gameY, KEY_GAME_TEXT, false);
+                    gameY += 10;
                 }
-                context.drawTextWithShadow(this.textRenderer, "- " + bind, panelX + 10, gameY, 0xFFC8DFFF);
-                gameY += 12;
             }
         }
+
+        ThemeDraw.hDivider(context, kb.cardX() + 1, kb.listBottom() + Theme.GAP_S, kb.cardW() - 2);
+        ThemeDraw.sectionLabel(context, this.font, "Name", textX, kb.name().y() - 10, rowW);
+        ThemeDraw.sectionLabel(context, this.font, "Commands", textX, kb.commands().y() - 10, rowW);
+        ThemeDraw.sectionLabel(context, this.font, "Delay (ticks)", textX, kb.delay().y() - 10, kb.delay().width());
+    }
+
+    private int drawLegendChip(GuiGraphicsExtractor context, int x, int y, int color, String label) {
+        ThemeDraw.box(context, x, y + 1, 7, 7, color);
+        context.text(this.font, label, x + 10, y, Theme.TEXT_MUTED, false);
+        return x + 10 + this.font.width(label) + Theme.GAP_L;
     }
 
     @Override
-    public boolean mouseClicked(Click click, boolean doubled) {
-        if (click.button() == 0) {
+    public boolean mouseReleased(MouseButtonEvent event) {
+        if (event.button() == InputConstants.MOUSE_BUTTON_LEFT) {
+            this.leftMouseDown = false;
+        }
+        return super.mouseReleased(event);
+    }
+
+    @Override
+    public boolean mouseClicked(MouseButtonEvent click, boolean doubled) {
+        if (click.button() == InputConstants.MOUSE_BUTTON_LEFT) {
+            this.leftMouseDown = true;
+        }
+        float scale = modalSpaceScale();
+        if (scale < 1f) {
+            MouseButtonEvent scaled = new MouseButtonEvent(click.x() / scale, click.y() / scale, click.buttonInfo());
+            return inModalSpace(() -> handleMouseClicked(scaled, doubled));
+        }
+        return handleMouseClicked(click, doubled);
+    }
+
+    private boolean handleMouseClicked(MouseButtonEvent click, boolean doubled) {
+        if (click.button() == InputConstants.MOUSE_BUTTON_LEFT) {
             this.activeDragSelectionField = ModalDragSelectionField.NONE;
             this.modalDragStartMouseX = Integer.MIN_VALUE;
             this.modalDragStartMouseY = Integer.MIN_VALUE;
             this.modalDragSelectionStarted = false;
+        }
+        if (this.tab == Tab.CANVAS && this.canvasNavOpen) {
+            if (onCanvasNavMenuClick(click.x(), click.y())) {
+                return true;
+            }
         }
         if (kbCommandsModalOpen) {
             return onKeyboardCommandsModalClick(click);
@@ -1380,7 +1628,7 @@ public class MacroWorkbenchScreen extends Screen {
         }
 
         // Configuration tab has right-click decrement controls.
-        if (this.tab == Tab.CONFIGURATION && this.configurationTabController != null && click.button() != 0) {
+        if (this.tab == Tab.CONFIGURATION && this.configurationTabController != null && click.button() != InputConstants.MOUSE_BUTTON_LEFT) {
             return this.configurationTabController.handleMouseClick(click.x(), click.y(), click.button());
         }
 
@@ -1398,11 +1646,17 @@ public class MacroWorkbenchScreen extends Screen {
             return this.automationTabController.handleMouseClick(click.x(), click.y(), click.button());
         }
 
-        if (click.button() != 0) {
+        if (click.button() != InputConstants.MOUSE_BUTTON_LEFT) {
             return false;
         }
 
         if (this.tab == Tab.CANVAS) {
+            for (UiRect bar : this.canvasBarRects) {
+                if (containsBox(click.x(), click.y(), bar.x(), bar.y(), bar.width(), bar.height())) {
+                    // Clicks on toolbar padding must not select or deselect HUD elements underneath.
+                    return true;
+                }
+            }
             boolean hit = onCanvasClick(click.x(), click.y());
             if (hit && doubled && selected != null && !isVanillaCanvasMode()) {
                 openAdvancedModal();
@@ -1436,6 +1690,14 @@ public class MacroWorkbenchScreen extends Screen {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
+        float scale = modalSpaceScale();
+        if (scale < 1f) {
+            return inModalSpace(() -> handleMouseScrolled(mouseX / scale, mouseY / scale, horizontalAmount, verticalAmount));
+        }
+        return handleMouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount);
+    }
+
+    private boolean handleMouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
         if (advancedOpen) {
             if (selected != null && !isSecondaryChatProxy(selected) && !isNbtInspectorProxy(selected)
                     && !isMacroKeybindProxy(selected) && !isPickupNotifierProxy(selected)
@@ -1522,10 +1784,10 @@ public class MacroWorkbenchScreen extends Screen {
                 int sy = resolveElementY(selected);
                 if (containsBox(mouseX, mouseY, sx, sy, selected.width, selected.height)) {
                     int delta = verticalAmount > 0 ? -1 : 1;
-                    var window = this.client == null ? null : this.client.getWindow();
+                    var window = this.minecraft == null ? null : this.minecraft.getWindow();
                     boolean shiftDown = window != null && (
-                            InputUtil.isKeyPressed(window, GLFW.GLFW_KEY_LEFT_SHIFT)
-                                    || InputUtil.isKeyPressed(window, GLFW.GLFW_KEY_RIGHT_SHIFT)
+                            InputConstants.isKeyDown(InputConstants.KEY_LSHIFT)
+                                    || InputConstants.isKeyDown(InputConstants.KEY_RSHIFT)
                     );
                     int step = shiftDown ? 5 : 1;
                     selected.listScroll = Math.max(0, selected.listScroll + (delta * step));
@@ -1539,7 +1801,11 @@ public class MacroWorkbenchScreen extends Screen {
     }
 
     @Override
-    public boolean charTyped(CharInput input) {
+    public boolean charTyped(CharacterEvent input) {
+        return inModalSpace(() -> handleCharTyped(input));
+    }
+
+    private boolean handleCharTyped(CharacterEvent input) {
         if (kbCommandsModalOpen) {
             int codepoint = input.codepoint();
             if (kbCommandsFocused && codepoint >= 32 && codepoint != 127) {
@@ -1572,16 +1838,20 @@ public class MacroWorkbenchScreen extends Screen {
     }
 
     @Override
-    public boolean keyPressed(KeyInput input) {
-        int keyCode = input.getKeycode();
+    public boolean keyPressed(KeyEvent input) {
+        return inModalSpace(() -> handleKeyPressed(input));
+    }
 
-        if (this.tab == Tab.CANVAS && !advancedOpen && !kbCommandsModalOpen && keyCode == GLFW.GLFW_KEY_F1) {
+    private boolean handleKeyPressed(KeyEvent input) {
+        int keyCode = input.input();
+
+        if (this.tab == Tab.CANVAS && !advancedOpen && !kbCommandsModalOpen && keyCode == InputConstants.KEY_F1) {
             canvasChromeVisible = !canvasChromeVisible;
             refreshCanvasChromeVisibility();
             return true;
         }
 
-        if (this.tab == Tab.CANVAS && !advancedOpen && !kbCommandsModalOpen && keyCode == GLFW.GLFW_KEY_DELETE
+        if (this.tab == Tab.CANVAS && !advancedOpen && !kbCommandsModalOpen && keyCode == InputConstants.KEY_DELETE
                 && selected != null && !isVanillaCanvasMode()) {
             Set<String> ids = selectedElementIds.isEmpty() ? Set.of(selected.id) : new HashSet<>(selectedElementIds);
             this.working.elements.removeIf(e -> ids.contains(e.id));
@@ -1592,14 +1862,14 @@ public class MacroWorkbenchScreen extends Screen {
         }
 
         if (this.tab == Tab.CANVAS && !advancedOpen && !kbCommandsModalOpen && !isAnyCanvasTextFieldFocused() && isCtrlDown()) {
-            if (keyCode == GLFW.GLFW_KEY_Z) {
+            if (keyCode == InputConstants.KEY_Z) {
                 undoLastMove();
                 return true;
             }
             if (isVanillaCanvasMode()) {
                 return false;
             }
-            if (keyCode == GLFW.GLFW_KEY_C) {
+            if (keyCode == InputConstants.KEY_C) {
                 if (isShiftDown()) {
                     copySelectedDimensions();
                 } else {
@@ -1607,7 +1877,7 @@ public class MacroWorkbenchScreen extends Screen {
                 }
                 return true;
             }
-            if (keyCode == GLFW.GLFW_KEY_V) {
+            if (keyCode == InputConstants.KEY_V) {
                 if (isShiftDown()) {
                     pasteDimensionsToSelection();
                 } else {
@@ -1620,7 +1890,7 @@ public class MacroWorkbenchScreen extends Screen {
         if (kbCommandsModalOpen) {
             if (kbCommandsFocused) {
                 handleKeyboardCommandsKey(keyCode);
-            } else if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
+            } else if (keyCode == InputConstants.KEY_ESCAPE) {
                 closeKeyboardCommandsModal();
             }
             return true;
@@ -1636,7 +1906,7 @@ public class MacroWorkbenchScreen extends Screen {
                 handleAdvancedBorderKey(keyCode);
             } else if (advancedVisibilityScreenTypeFocused) {
                 handleAdvancedVisibilityScreenTypeKey(keyCode);
-            } else if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
+            } else if (keyCode == InputConstants.KEY_ESCAPE) {
                 closeAdvancedModal();
             }
             return true;
@@ -1644,7 +1914,7 @@ public class MacroWorkbenchScreen extends Screen {
         if (this.tab == Tab.PLACEHOLDERS
                 && this.placeholderSearchField != null
                 && this.placeholderSearchField.isFocused()
-                && (keyCode == GLFW.GLFW_KEY_ENTER || keyCode == GLFW.GLFW_KEY_KP_ENTER)) {
+                && (keyCode == InputConstants.KEY_RETURN || keyCode == InputConstants.KEY_NUMPADENTER)) {
             applyPlaceholderSearch();
             return true;
         }
@@ -1728,37 +1998,47 @@ public class MacroWorkbenchScreen extends Screen {
     private boolean onKeyboardClick(double x, double y) {
         for (KeyCell cell : cells) {
             if (x >= cell.x && x <= cell.x + cell.w && y >= cell.y && y <= cell.y + cell.h) {
-                selectedKey = cell.keyCode;
-                selectedMacroId = null;
+                List<String> ids = macroBindingIds.getOrDefault(cell.keyCode, List.of());
+                if (cell.keyCode == selectedKey && !ids.isEmpty()) {
+                    // Clicking the selected key again cycles through its macros.
+                    int next = (ids.indexOf(selectedMacroId) + 1) % ids.size();
+                    selectedMacroId = ids.get(next);
+                } else {
+                    selectedKey = cell.keyCode;
+                    selectedMacroId = ids.isEmpty() ? null : ids.get(0);
+                }
                 syncKeyboardFields();
                 return true;
             }
         }
 
-        int panelX = keyboardPanelX();
-        int panelRight = panelX + keyboardPanelWidth();
-        int lineY = keyboardMacroListStartY() + 14;
+        KbLayout kb = keyboardLayout();
+        if (!kb.wide()) {
+            return false;
+        }
+        int rowX = kb.cardX() + Theme.GAP_M;
+        int rowW = kb.cardW() - Theme.GAP_M * 2;
+        int lineY = kb.listTop();
         for (String id : macroBindingIds.getOrDefault(selectedKey, List.of())) {
-            if (x >= panelX + 8 && x <= panelRight - 8 && y >= lineY - 2 && y <= lineY + 10) {
+            if (lineY + KB_ROW_H > kb.listBottom()) {
+                break;
+            }
+            if (x >= rowX && x <= rowX + rowW && y >= lineY && y < lineY + KB_ROW_H) {
                 selectedMacroId = id;
                 syncKeyboardFields();
                 return true;
             }
-            lineY += 13;
-            if (lineY > this.height - 192) {
-                break;
-            }
+            lineY += KB_ROW_H;
         }
-
         return false;
     }
 
-    private boolean onAdvancedMouseClick(Click click) {
-        if (click.button() != 0 && click.button() != 1) {
+    private boolean onAdvancedMouseClick(MouseButtonEvent click) {
+        if (click.button() != InputConstants.MOUSE_BUTTON_LEFT && click.button() != InputConstants.MOUSE_BUTTON_RIGHT) {
             return true;
         }
 
-        boolean forward = click.button() != 1;
+        boolean forward = click.button() != InputConstants.MOUSE_BUTTON_RIGHT;
         MacroWorkbenchAdvancedClickSupport.Ops clickOps = advancedClickSupportOps();
         int boxX = modalX();
         int boxY = modalY();
@@ -1982,7 +2262,7 @@ public class MacroWorkbenchScreen extends Screen {
         return true;
     }
 
-    private boolean onSecondaryAdvancedMouseClick(Click click, boolean forward, int boxX, int boxY) {
+    private boolean onSecondaryAdvancedMouseClick(MouseButtonEvent click, boolean forward, int boxX, int boxY) {
         SecondaryAdvancedLayout layout = secondaryAdvancedLayout(boxX, boxY);
         MacroWorkbenchAdvancedClickSupport.Ops clickOps = advancedClickSupportOps();
         if (containsBox(click.x(), click.y(), layout.guiOpen())) {
@@ -2133,7 +2413,7 @@ public class MacroWorkbenchScreen extends Screen {
         return true;
     }
 
-    private boolean onProxyAdvancedMouseClick(Click click, boolean forward, int boxX, int boxY) {
+    private boolean onProxyAdvancedMouseClick(MouseButtonEvent click, boolean forward, int boxX, int boxY) {
         ProxyAdvancedLayout layout = proxyAdvancedLayout(boxX, boxY, isPickupNotifierProxy(selected));
         MacroWorkbenchAdvancedClickSupport.Ops clickOps = advancedClickSupportOps();
         if (containsBox(click.x(), click.y(), layout.scaleMinus())) {
@@ -2285,12 +2565,12 @@ public class MacroWorkbenchScreen extends Screen {
     }
 
     private void updateDragging(int mouseX, int mouseY) {
-        if ((!dragging && !resizing) || selected == null || this.client == null) {
+        if ((!dragging && !resizing) || selected == null || this.minecraft == null) {
             return;
         }
 
-        long window = this.client.getWindow().getHandle();
-        if (GLFW.glfwGetMouseButton(window, GLFW.GLFW_MOUSE_BUTTON_LEFT) != GLFW.GLFW_PRESS) {
+        long window = this.minecraft.getWindow().handle();
+        if (!this.leftMouseDown) {
             if (activeMoveSnapshot != null && hasSnapshotChanges(activeMoveSnapshot)) {
                 moveUndoStack.push(activeMoveSnapshot);
                 while (moveUndoStack.size() > 25) {
@@ -2460,7 +2740,7 @@ public class MacroWorkbenchScreen extends Screen {
         );
     }
 
-    private void drawSnapGuides(DrawContext context) {
+    private void drawSnapGuides(GuiGraphicsExtractor context) {
         if (!(dragging && isShiftDown()) && !(resizing && isShiftDown())) {
             return;
         }
@@ -2473,7 +2753,7 @@ public class MacroWorkbenchScreen extends Screen {
         }
     }
 
-    private void drawGridOverlay(DrawContext context) {
+    private void drawGridOverlay(GuiGraphicsExtractor context) {
         int canvasTop = canvasTopBound();
         int canvasBottom = Math.max(canvasTop + 1, canvasBottomBound());
         int canvasRight = this.width;
@@ -2488,7 +2768,7 @@ public class MacroWorkbenchScreen extends Screen {
         }
     }
 
-    private void drawCenterLinesOverlay(DrawContext context) {
+    private void drawCenterLinesOverlay(GuiGraphicsExtractor context) {
         int canvasTop = canvasTopBound();
         int canvasBottom = Math.max(canvasTop + 1, canvasBottomBound());
         int centerX = this.width / 2;
@@ -2497,7 +2777,7 @@ public class MacroWorkbenchScreen extends Screen {
         context.fill(0, centerY, this.width, centerY + 1, 0x80FFCC66);
     }
 
-    private void drawCanvasElement(DrawContext context, MacroHudDataHandler.HudElement element) {
+    private void drawCanvasElement(GuiGraphicsExtractor context, MacroHudDataHandler.HudElement element) {
         if (isVanillaHudProxy(element)) {
             refreshVanillaProxyPreview(element);
         }
@@ -2565,7 +2845,7 @@ public class MacroWorkbenchScreen extends Screen {
         drawSelectedOutline(context, x1, y1, x2, y2, selectedElementIds.contains(element.id));
     }
 
-    private void drawCanvasSpecialWidget(DrawContext context, MacroHudDataHandler.HudElement e, int x1, int y1, int x2, int y2) {
+    private void drawCanvasSpecialWidget(GuiGraphicsExtractor context, MacroHudDataHandler.HudElement e, int x1, int y1, int x2, int y2) {
         switch (e.type) {
             case ICON -> drawCanvasIconPreview(context, e, x1, y1, x2, y2);
             case BAR -> drawCanvasBarPreview(context, e, x1, y1, x2, y2);
@@ -2580,7 +2860,7 @@ public class MacroWorkbenchScreen extends Screen {
         }
     }
 
-    private void drawCanvasIconPreview(DrawContext context, MacroHudDataHandler.HudElement e, int x1, int y1, int x2, int y2) {
+    private void drawCanvasIconPreview(GuiGraphicsExtractor context, MacroHudDataHandler.HudElement e, int x1, int y1, int x2, int y2) {
         if (e.drawBackground) {
             context.fill(x1, y1, x2, y2, canvasBackgroundColor(e));
         }
@@ -2588,12 +2868,12 @@ public class MacroWorkbenchScreen extends Screen {
             drawCanvasElementBorder(context, e, x1, y1, x2, y2);
         }
         if ("entity_model".equalsIgnoreCase(StringUtils.safe(e.iconKind))) {
-            MacroWorkbenchEntityModelRenderer.draw(context, this.client, e, x1, y1, e.width, e.height);
+            MacroWorkbenchEntityModelRenderer.draw(context, this.minecraft, e, x1, y1, e.width, e.height);
         } else {
             ItemStack stack = resolvePreviewIconStack(e.iconKind, e.iconId);
             int ix = x1 + Math.max(0, (e.width - 16) / 2);
             int iy = y1 + Math.max(0, (e.height - 16) / 2);
-            context.drawItem(stack, ix, iy);
+            context.item(stack, ix, iy);
         }
         String label = StringUtils.safe(e.label);
         if (!label.isBlank()) {
@@ -2605,7 +2885,7 @@ public class MacroWorkbenchScreen extends Screen {
         }
     }
 
-    private void drawCanvasBarPreview(DrawContext context, MacroHudDataHandler.HudElement e, int x1, int y1, int x2, int y2) {
+    private void drawCanvasBarPreview(GuiGraphicsExtractor context, MacroHudDataHandler.HudElement e, int x1, int y1, int x2, int y2) {
         if (e.drawBackground) {
             context.fill(x1, y1, x2, y2, canvasBackgroundColor(e));
         }
@@ -2636,7 +2916,7 @@ public class MacroWorkbenchScreen extends Screen {
         }
     }
 
-    private void drawCanvasValuePreview(DrawContext context, MacroHudDataHandler.HudElement e, int x1, int y1, int x2, int y2) {
+    private void drawCanvasValuePreview(GuiGraphicsExtractor context, MacroHudDataHandler.HudElement e, int x1, int y1, int x2, int y2) {
         if (e.drawBackground) {
             context.fill(x1, y1, x2, y2, canvasBackgroundColor(e));
         }
@@ -2660,14 +2940,14 @@ public class MacroWorkbenchScreen extends Screen {
         drawStyledTextLine(context, text, tx, ty, e.textColor, scale);
     }
 
-    private void drawCanvasListPreview(DrawContext context, MacroHudDataHandler.HudElement e, int x1, int y1, int x2, int y2) {
+    private void drawCanvasListPreview(GuiGraphicsExtractor context, MacroHudDataHandler.HudElement e, int x1, int y1, int x2, int y2) {
         if (e.drawBackground) {
             context.fill(x1, y1, x2, y2, canvasBackgroundColor(e));
         }
         if (e.drawBorder) {
             drawCanvasElementBorder(context, e, x1, y1, x2, y2);
         }
-        String src = MacroPlaceholders.expandForCanvas(this.client, "{" + StringUtils.safe(e.sourceToken) + "}");
+        String src = MacroPlaceholders.expandForCanvas(this.minecraft, "{" + StringUtils.safe(e.sourceToken) + "}");
         List<String> lines = MacroWorkbenchCanvasUtils.splitListSource(src);
         if (lines.isEmpty()) {
             lines = List.of("(none)");
@@ -2687,21 +2967,21 @@ public class MacroWorkbenchScreen extends Screen {
         }
     }
 
-    private void drawCanvasInventoryPreview(DrawContext context, MacroHudDataHandler.HudElement e, int x1, int y1, int x2, int y2) {
+    private void drawCanvasInventoryPreview(GuiGraphicsExtractor context, MacroHudDataHandler.HudElement e, int x1, int y1, int x2, int y2) {
         if (e.drawBackground) {
             context.fill(x1, y1, x2, y2, canvasBackgroundColor(e));
         }
         if (e.drawBorder) {
             drawCanvasElementBorder(context, e, x1, y1, x2, y2);
         }
-        if (this.client == null || this.client.player == null) {
+        if (this.minecraft == null || this.minecraft.player == null) {
             return;
         }
-        MacroInventoryWidgetSupport.render(
+        MacroInventoryWidgetSupport.extractRenderState(
                 context,
-                this.textRenderer,
+                this.font,
                 e,
-                this.client.player,
+                this.minecraft.player,
                 x1,
                 y1,
                 e.width,
@@ -2709,7 +2989,7 @@ public class MacroWorkbenchScreen extends Screen {
         );
     }
 
-    private void drawCanvasShapePreview(DrawContext context, MacroHudDataHandler.HudElement e, int x1, int y1, int x2, int y2) {
+    private void drawCanvasShapePreview(GuiGraphicsExtractor context, MacroHudDataHandler.HudElement e, int x1, int y1, int x2, int y2) {
         String type = StringUtils.safe(e.shapeType).toLowerCase(Locale.ROOT);
         int w = Math.max(1, x2 - x1);
         int h = Math.max(1, y2 - y1);
@@ -2728,6 +3008,17 @@ public class MacroWorkbenchScreen extends Screen {
                         e.shapeFilled || e.drawBackground,
                         e.drawBorder,
                         Math.max(1, e.shapeThickness));
+                return;
+            }
+            case "circle" -> {
+                int d = Math.min(w, h);
+                me.m0dii.modules.macros.hud.MacroHudRuntime.drawRoundedShape(context, x1 + (w - d) / 2, y1 + (h - d) / 2, d, d, d / 2,
+                        e.backgroundColor, e.borderColor, e.shapeFilled || e.drawBackground, e.drawBorder, Math.max(1, e.shapeThickness));
+                return;
+            }
+            case "", "rounded_rect" -> {
+                me.m0dii.modules.macros.hud.MacroHudRuntime.drawRoundedShape(context, x1, y1, w, h, Math.max(0, e.shapeRadius),
+                        e.backgroundColor, e.borderColor, e.shapeFilled || e.drawBackground, e.drawBorder, Math.max(1, e.shapeThickness));
                 return;
             }
             case "line", "cross" -> {
@@ -2779,7 +3070,7 @@ public class MacroWorkbenchScreen extends Screen {
         }
     }
 
-    private void drawCanvasStateBadgePreview(DrawContext context, MacroHudDataHandler.HudElement e, int x1, int y1, int x2, int y2) {
+    private void drawCanvasStateBadgePreview(GuiGraphicsExtractor context, MacroHudDataHandler.HudElement e, int x1, int y1, int x2, int y2) {
         boolean on = true;
         int bg = on ? e.colorStart : e.colorEnd;
         context.fill(x1, y1, x2, y2, bg);
@@ -2795,7 +3086,7 @@ public class MacroWorkbenchScreen extends Screen {
         drawStyledTextLine(context, label, tx, ty, e.textColor, scale);
     }
 
-    private void drawVanillaHudActualPreview(DrawContext context, MacroHudDataHandler.HudElement element, int x1, int y1, int x2, int y2) {
+    private void drawVanillaHudActualPreview(GuiGraphicsExtractor context, MacroHudDataHandler.HudElement element, int x1, int y1, int x2, int y2) {
         HudTweaksSettings.ElementType type = vanillaHudElementType(element);
         if (type == null) {
             return;
@@ -2808,9 +3099,9 @@ public class MacroWorkbenchScreen extends Screen {
         float sx = Math.max(0.01f, element.width / (float) Math.max(1, baseWidth));
         float sy = Math.max(0.01f, element.height / (float) Math.max(1, baseHeight));
 
-        context.getMatrices().pushMatrix();
-        context.getMatrices().translate(x1, y1);
-        context.getMatrices().scale(sx, sy);
+        context.pose().pushMatrix();
+        context.pose().translate(x1, y1);
+        context.pose().scale(sx, sy);
         switch (type) {
             case ACTION_BAR -> drawActualActionBarPreview(context, descriptor.baseWidth(), descriptor.baseHeight());
             case BOSS_BAR -> drawActualBossBarPreview(context);
@@ -2825,32 +3116,32 @@ public class MacroWorkbenchScreen extends Screen {
             case TOAST -> drawActualToastPreview(context);
             case TOOLTIP -> drawActualTooltipPreview(context, descriptor.baseWidth(), descriptor.baseHeight());
         }
-        context.getMatrices().popMatrix();
+        context.pose().popMatrix();
 
         drawVanillaPreviewOverlay(context, type, config, x1, y1, x2, y2);
     }
 
-    private void drawActualActionBarPreview(DrawContext context, int width, int height) {
+    private void drawActualActionBarPreview(GuiGraphicsExtractor context, int width, int height) {
         String text = "Sample Action Bar";
-        int tw = this.textRenderer.getWidth(text);
+        int tw = this.font.width(text);
         int tx = Math.max(0, (width - tw) / 2);
         int ty = Math.max(0, (height - 9) / 2);
-        context.drawTextWithBackground(this.textRenderer, Text.literal(text), tx, ty, tw, 0xFFFFFFFF);
+        context.textWithBackdrop(this.font, Component.literal(text), tx, ty, tw, 0xFFFFFFFF);
     }
 
-    private void drawActualBossBarPreview(DrawContext context) {
+    private void drawActualBossBarPreview(GuiGraphicsExtractor context) {
         String title = "Boss Name";
-        int tw = this.textRenderer.getWidth(title);
-        context.drawTextWithShadow(this.textRenderer, title, Math.max(0, (182 - tw) / 2), 0, 0xFFFFFFFF);
-        context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, BOSS_BAR_PINK_BACKGROUND_TEXTURE, 182, 5, 0, 0, 0, 12, 182, 5);
-        context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, BOSS_BAR_PINK_PROGRESS_TEXTURE, 182, 5, 0, 0, 0, 12, 118, 5);
+        int tw = this.font.width(title);
+        context.text(this.font, title, Math.max(0, (182 - tw) / 2), 0, 0xFFFFFFFF);
+        context.blitSprite(RenderPipelines.GUI_TEXTURED, BOSS_BAR_PINK_BACKGROUND_TEXTURE, 182, 5, 0, 0, 0, 12, 182, 5);
+        context.blitSprite(RenderPipelines.GUI_TEXTURED, BOSS_BAR_PINK_PROGRESS_TEXTURE, 182, 5, 0, 0, 0, 12, 118, 5);
     }
 
-    private void drawActualCrosshairPreview(DrawContext context) {
-        context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, HUD_CROSSHAIR_TEXTURE, 0, 0, 15, 15);
+    private void drawActualCrosshairPreview(GuiGraphicsExtractor context) {
+        context.blitSprite(RenderPipelines.GUI_TEXTURED, HUD_CROSSHAIR_TEXTURE, 0, 0, 15, 15);
     }
 
-    private void drawActualDebugScreenPreview(DrawContext context) {
+    private void drawActualDebugScreenPreview(GuiGraphicsExtractor context) {
         String[] lines = {
                 "Minecraft 1.21.11/Fabric",
                 "XYZ: 123.45 / 64.00 / -78.90",
@@ -2860,82 +3151,82 @@ public class MacroWorkbenchScreen extends Screen {
                 "FPS: 144"
         };
         for (int i = 0; i < lines.length; i++) {
-            context.drawTextWithShadow(this.textRenderer, lines[i], 2, 2 + i * 10, 0xFFE0E0E0);
+            context.text(this.font, lines[i], 2, 2 + i * 10, 0xFFE0E0E0);
         }
     }
 
-    private void drawActualHotbarGroupPreview(DrawContext context) {
-        PlayerEntity player = this.client == null ? null : this.client.player;
+    private void drawActualHotbarGroupPreview(GuiGraphicsExtractor context) {
+        Player player = this.minecraft == null ? null : this.minecraft.player;
         int health = player == null ? 18 : Math.clamp(Math.round(player.getHealth()), 1, 20);
-        int food = player == null ? 18 : Math.clamp(player.getHungerManager().getFoodLevel(), 0, 20);
+        int food = player == null ? 18 : Math.clamp(player.getFoodData().getFoodLevel(), 0, 20);
         int selectedSlot = player == null ? 0 : Math.clamp(player.getInventory().getSelectedSlot(), 0, 8);
         int experience = player == null ? 12 : Math.max(1, player.experienceLevel);
 
         for (int i = 0; i < 10; i++) {
             int heartX = i * 8;
             int foodX = 182 - 9 - i * 8;
-            context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, HungerTweaksTextureHelper.getHeartTexture(false, HungerTweaksTextureHelper.HeartType.CONTAINER),
+            context.blitSprite(RenderPipelines.GUI_TEXTURED, HungerTweaksTextureHelper.getHeartTexture(false, HungerTweaksTextureHelper.HeartType.CONTAINER),
                     heartX, 0, 9, 9);
-            context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, HungerTweaksTextureHelper.getFoodTexture(false, HungerTweaksTextureHelper.FoodType.EMPTY),
+            context.blitSprite(RenderPipelines.GUI_TEXTURED, HungerTweaksTextureHelper.getFoodTexture(false, HungerTweaksTextureHelper.FoodType.EMPTY),
                     foodX, 0, 9, 9);
 
             int heartValue = i * 2 + 2;
             if (health >= heartValue) {
-                context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, HungerTweaksTextureHelper.getHeartTexture(false, HungerTweaksTextureHelper.HeartType.FULL),
+                context.blitSprite(RenderPipelines.GUI_TEXTURED, HungerTweaksTextureHelper.getHeartTexture(false, HungerTweaksTextureHelper.HeartType.FULL),
                         heartX, 0, 9, 9);
             } else if (health == heartValue - 1) {
-                context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, HungerTweaksTextureHelper.getHeartTexture(false, HungerTweaksTextureHelper.HeartType.HALF),
+                context.blitSprite(RenderPipelines.GUI_TEXTURED, HungerTweaksTextureHelper.getHeartTexture(false, HungerTweaksTextureHelper.HeartType.HALF),
                         heartX, 0, 9, 9);
             }
 
             int foodValue = i * 2 + 2;
             if (food >= foodValue) {
-                context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, HungerTweaksTextureHelper.getFoodTexture(false, HungerTweaksTextureHelper.FoodType.FULL),
+                context.blitSprite(RenderPipelines.GUI_TEXTURED, HungerTweaksTextureHelper.getFoodTexture(false, HungerTweaksTextureHelper.FoodType.FULL),
                         foodX, 0, 9, 9);
             } else if (food == foodValue - 1) {
-                context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, HungerTweaksTextureHelper.getFoodTexture(false, HungerTweaksTextureHelper.FoodType.HALF),
+                context.blitSprite(RenderPipelines.GUI_TEXTURED, HungerTweaksTextureHelper.getFoodTexture(false, HungerTweaksTextureHelper.FoodType.HALF),
                         foodX, 0, 9, 9);
             }
         }
 
         for (int i = 0; i < 10; i++) {
-            int armorValue = player == null ? 14 : Math.clamp(player.getArmor(), 0, 20);
+            int armorValue = player == null ? 14 : Math.clamp(player.getArmorValue(), 0, 20);
             int armorX = i * 8;
-            context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, HUD_ARMOR_EMPTY_TEXTURE, armorX, 8, 9, 9);
+            context.blitSprite(RenderPipelines.GUI_TEXTURED, HUD_ARMOR_EMPTY_TEXTURE, armorX, 8, 9, 9);
             int armorTarget = i * 2 + 2;
             if (armorValue >= armorTarget) {
-                context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, HUD_ARMOR_FULL_TEXTURE, armorX, 8, 9, 9);
+                context.blitSprite(RenderPipelines.GUI_TEXTURED, HUD_ARMOR_FULL_TEXTURE, armorX, 8, 9, 9);
             } else if (armorValue == armorTarget - 1) {
-                context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, HUD_ARMOR_HALF_TEXTURE, armorX, 8, 9, 9);
+                context.blitSprite(RenderPipelines.GUI_TEXTURED, HUD_ARMOR_HALF_TEXTURE, armorX, 8, 9, 9);
             }
         }
 
-        context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, HUD_EXPERIENCE_BAR_BACKGROUND_TEXTURE, 182, 5, 0, 0, 0, 12, 182, 5);
-        context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, HUD_EXPERIENCE_BAR_PROGRESS_TEXTURE, 182, 5, 0, 0, 0, 12, 124, 5);
+        context.blitSprite(RenderPipelines.GUI_TEXTURED, HUD_EXPERIENCE_BAR_BACKGROUND_TEXTURE, 182, 5, 0, 0, 0, 12, 182, 5);
+        context.blitSprite(RenderPipelines.GUI_TEXTURED, HUD_EXPERIENCE_BAR_PROGRESS_TEXTURE, 182, 5, 0, 0, 0, 12, 124, 5);
         String level = Integer.toString(experience);
-        context.drawTextWithShadow(this.textRenderer, level, Math.max(0, (182 - this.textRenderer.getWidth(level)) / 2), 8, 0xFF80FF20);
+        context.text(this.font, level, Math.max(0, (182 - this.font.width(level)) / 2), 8, 0xFF80FF20);
 
-        context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, HUD_HOTBAR_TEXTURE, 182, 22, 0, 0, 0, 17, 182, 22);
-        context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, HUD_HOTBAR_SELECTION_TEXTURE, selectedSlot * 20 - 1, 16, 24, 24);
+        context.blitSprite(RenderPipelines.GUI_TEXTURED, HUD_HOTBAR_TEXTURE, 182, 22, 0, 0, 0, 17, 182, 22);
+        context.blitSprite(RenderPipelines.GUI_TEXTURED, HUD_HOTBAR_SELECTION_TEXTURE, selectedSlot * 20 - 1, 16, 24, 24);
         for (int slot = 0; slot < 9; slot++) {
             ItemStack stack = previewHotbarStack(player, slot);
             if (!stack.isEmpty()) {
-                context.drawItem(stack, 3 + slot * 20, 20);
-                context.drawStackOverlay(this.textRenderer, stack, 3 + slot * 20, 20);
+                context.item(stack, 3 + slot * 20, 20);
+                context.itemDecorations(this.font, stack, 3 + slot * 20, 20);
             }
         }
     }
 
-    private void drawActualPlayerListPreview(DrawContext context, int width, int height) {
-        if (this.client != null && this.client.world != null && this.client.inGameHud != null) {
-            Scoreboard scoreboard = this.client.world.getScoreboard();
-            ScoreboardObjective objective = scoreboard == null ? null : scoreboard.getObjectiveForSlot(ScoreboardDisplaySlot.LIST);
+    private void drawActualPlayerListPreview(GuiGraphicsExtractor context, int width, int height) {
+        if (this.minecraft != null && this.minecraft.level != null && this.minecraft.gui != null) {
+            Scoreboard scoreboard = this.minecraft.level.getScoreboard();
+            Objective objective = scoreboard == null ? null : scoreboard.getDisplayObjective(DisplaySlot.LIST);
             if (scoreboard != null) {
                 VanillaPlayerListMetrics metrics = currentPlayerListMetrics();
-                context.getMatrices().pushMatrix();
-                context.getMatrices().translate(-metrics.left(), -metrics.top());
-                this.client.inGameHud.getPlayerListHud().render(context, metrics.renderWidth(), scoreboard, objective);
-                context.getMatrices().popMatrix();
+                context.pose().pushMatrix();
+                context.pose().translate(-metrics.left(), -metrics.top());
+                this.minecraft.gui.hud.getTabList().extractRenderState(context, metrics.renderWidth(), scoreboard, objective);
+                context.pose().popMatrix();
                 return;
             }
         }
@@ -2951,41 +3242,41 @@ public class MacroWorkbenchScreen extends Screen {
         int y = 8;
         for (int i = 0; i < rows.length; i++) {
             context.fill(24, y - 2, width - 24, y + 9, (i & 1) == 0 ? 0x402F2F2F : 0x30202020);
-            context.drawTextWithShadow(this.textRenderer, rows[i], 30, y, 0xFFFFFFFF);
-            context.drawTextWithShadow(this.textRenderer, "||||", width - 48, y, 0xFF7CFF7C);
+            context.text(this.font, rows[i], 30, y, 0xFFFFFFFF);
+            context.text(this.font, "||||", width - 48, y, 0xFF7CFF7C);
             y += 12;
         }
     }
 
-    private void drawActualScoreboardPreview(DrawContext context, int width, int height) {
-        if (this.client != null && this.client.inGameHud != null) {
-            ScoreboardObjective objective = effectiveSidebarObjective();
+    private void drawActualScoreboardPreview(GuiGraphicsExtractor context, int width, int height) {
+        if (this.minecraft != null && this.minecraft.gui != null) {
+            Objective objective = effectiveSidebarObjective();
             if (objective != null) {
                 VanillaSidebarMetrics metrics = currentSidebarMetrics();
-                context.getMatrices().pushMatrix();
-                context.getMatrices().translate(-metrics.left(), -metrics.top());
-                ((InGameHudAccessor) this.client.inGameHud).m0dev$renderScoreboardSidebar(context, objective);
-                context.getMatrices().popMatrix();
+                context.pose().pushMatrix();
+                context.pose().translate(-metrics.left(), -metrics.top());
+                ((InGameHudAccessor) this.minecraft.gui).m0dev$renderScoreboardSidebar(context, objective);
+                context.pose().popMatrix();
                 return;
             }
         }
         context.fill(0, 0, width, height, 0x70101010);
     }
 
-    private void drawActualScreenTitlePreview(DrawContext context, int width) {
+    private void drawActualScreenTitlePreview(GuiGraphicsExtractor context, int width) {
         String title = "Title";
         String subtitle = "Subtitle text";
-        int titleWidth = this.textRenderer.getWidth(title);
-        context.getMatrices().pushMatrix();
-        context.getMatrices().translate(Math.max(0, (width - titleWidth * 2) / 2), 6);
-        context.getMatrices().scale(2.0f, 2.0f);
-        context.drawTextWithShadow(this.textRenderer, title, 0, 0, 0xFFFFFFFF);
-        context.getMatrices().popMatrix();
-        int subtitleWidth = this.textRenderer.getWidth(subtitle);
-        context.drawTextWithShadow(this.textRenderer, subtitle, Math.max(0, (width - subtitleWidth) / 2), 44, 0xFFE0E0E0);
+        int titleWidth = this.font.width(title);
+        context.pose().pushMatrix();
+        context.pose().translate(Math.max(0, (width - titleWidth * 2) / 2), 6);
+        context.pose().scale(2.0f, 2.0f);
+        context.text(this.font, title, 0, 0, 0xFFFFFFFF);
+        context.pose().popMatrix();
+        int subtitleWidth = this.font.width(subtitle);
+        context.text(this.font, subtitle, Math.max(0, (width - subtitleWidth) / 2), 44, 0xFFE0E0E0);
     }
 
-    private void drawActualStatusEffectPreview(DrawContext context, int width) {
+    private void drawActualStatusEffectPreview(GuiGraphicsExtractor context, int width) {
         ItemStack[] icons = {
                 new ItemStack(Items.POTION),
                 new ItemStack(Items.GOLDEN_APPLE),
@@ -2997,42 +3288,42 @@ public class MacroWorkbenchScreen extends Screen {
             int col = i % 2;
             int x = width - 25 - col * 25;
             int y = 1 + row * 25;
-            context.drawGuiTexture(RenderPipelines.GUI_TEXTURED,
+            context.blitSprite(RenderPipelines.GUI_TEXTURED,
                     i == 0 ? HUD_EFFECT_BACKGROUND_AMBIENT_TEXTURE : HUD_EFFECT_BACKGROUND_TEXTURE,
                     x, y, 24, 24);
-            context.drawItem(icons[i], x + 4, y + 4);
+            context.item(icons[i], x + 4, y + 4);
         }
     }
 
-    private void drawActualSubtitlesPreview(DrawContext context, int width, int height) {
+    private void drawActualSubtitlesPreview(GuiGraphicsExtractor context, int width, int height) {
         String[] lines = {"< Footsteps", "> Zombie groans"};
         for (int i = 0; i < lines.length; i++) {
             int yy = height - 20 - i * 10;
-            int lineWidth = this.textRenderer.getWidth(lines[i]);
+            int lineWidth = this.font.width(lines[i]);
             int x = Math.max(0, width - lineWidth - 8);
             context.fill(x - 2, yy - 1, width, yy + 9, 0x80000000);
-            context.drawTextWithShadow(this.textRenderer, lines[i], x, yy, 0xFFFFFFFF);
+            context.text(this.font, lines[i], x, yy, 0xFFFFFFFF);
         }
     }
 
-    private void drawActualToastPreview(DrawContext context) {
-        context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, TOAST_SYSTEM_TEXTURE, 160, 32, 0, 0, 0, 0, 160, 32);
-        context.drawItem(new ItemStack(Items.DIAMOND), 8, 8);
-        context.drawTextWithShadow(this.textRenderer, "Advancement Made!", 30, 7, 0xFFFFFF00);
-        context.drawTextWithShadow(this.textRenderer, "Shiny Preview", 30, 18, 0xFFFFFFFF);
+    private void drawActualToastPreview(GuiGraphicsExtractor context) {
+        context.blitSprite(RenderPipelines.GUI_TEXTURED, TOAST_SYSTEM_TEXTURE, 160, 32, 0, 0, 0, 0, 160, 32);
+        context.item(new ItemStack(Items.DIAMOND), 8, 8);
+        context.text(this.font, "Advancement Made!", 30, 7, 0xFFFFFF00);
+        context.text(this.font, "Shiny Preview", 30, 18, 0xFFFFFFFF);
     }
 
-    private void drawActualTooltipPreview(DrawContext context, int width, int height) {
+    private void drawActualTooltipPreview(GuiGraphicsExtractor context, int width, int height) {
         context.fill(0, 0, width, height, 0xF0100010);
         context.fill(0, 0, width, 1, 0x50A0A0FF);
         context.fill(0, height - 1, width, height, 0x505050AA);
         context.fill(0, 0, 1, height, 0x50A0A0FF);
         context.fill(width - 1, 0, width, height, 0x505050AA);
-        context.drawTextWithShadow(this.textRenderer, "Diamond Sword", 4, 4, 0xFF55FFFF);
-        context.drawTextWithShadow(this.textRenderer, "+7 Attack Damage", 4, 16, 0xFFAAAAFF);
+        context.text(this.font, "Diamond Sword", 4, 4, 0xFF55FFFF);
+        context.text(this.font, "+7 Attack Damage", 4, 16, 0xFFAAAAFF);
     }
 
-    private void drawVanillaPreviewOverlay(DrawContext context,
+    private void drawVanillaPreviewOverlay(GuiGraphicsExtractor context,
                                            HudTweaksSettings.ElementType type,
                                            HudTweaksSettings.ElementConfig config,
                                            int x1,
@@ -3047,13 +3338,13 @@ public class MacroWorkbenchScreen extends Screen {
         if (!config.display) {
             context.fill(x1, y1, x2, y2, 0x88000000);
             String hidden = vanillaPreviewLabel(type) + " [Hidden]";
-            context.drawTextWithShadow(this.textRenderer, hidden, x1 + 4, y1 + 4, 0xFFFFA0A0);
+            context.text(this.font, hidden, x1 + 4, y1 + 4, 0xFFFFA0A0);
         }
     }
 
-    private ItemStack previewHotbarStack(PlayerEntity player, int slot) {
+    private ItemStack previewHotbarStack(Player player, int slot) {
         if (player != null && slot >= 0 && slot < 9) {
-            return player.getInventory().getStack(slot);
+            return player.getInventory().getItem(slot);
         }
         return switch (slot) {
             case 0 -> new ItemStack(Items.DIAMOND_SWORD);
@@ -3070,8 +3361,8 @@ public class MacroWorkbenchScreen extends Screen {
     }
 
     private String playerPreviewName() {
-        if (this.client != null && this.client.player != null) {
-            return this.client.player.getName().getString();
+        if (this.minecraft != null && this.minecraft.player != null) {
+            return this.minecraft.player.getName().getString();
         }
         return "Player";
     }
@@ -3084,7 +3375,7 @@ public class MacroWorkbenchScreen extends Screen {
         float clampedScale = Math.clamp(scale, HudTweaksSettings.MIN_SCALE, HudTweaksSettings.MAX_SCALE);
         int renderWidth = Math.max(1, Math.round(this.width / clampedScale));
         int top = 9;
-        if (this.client == null || this.client.inGameHud == null || this.client.player == null || this.client.player.networkHandler == null) {
+        if (this.minecraft == null || this.minecraft.gui == null || this.minecraft.player == null || this.minecraft.player.connection == null) {
             int fallbackWidth = 240;
             return new VanillaPlayerListMetrics(
                     Math.round(((renderWidth - fallbackWidth) / 2.0f) * clampedScale),
@@ -3095,21 +3386,21 @@ public class MacroWorkbenchScreen extends Screen {
             );
         }
 
-        var playerListHud = this.client.inGameHud.getPlayerListHud();
-        List<PlayerListEntry> entries = this.client.player.networkHandler.getListedPlayerListEntries().stream().limit(80).toList();
+        var playerListHud = this.minecraft.gui.hud.getTabList();
+        List<PlayerInfo> entries = this.minecraft.player.connection.getListedOnlinePlayers().stream().limit(80).toList();
         int nameWidth = 0;
         int scoreWidth = 0;
-        Scoreboard scoreboard = this.client.world == null ? null : this.client.world.getScoreboard();
-        ScoreboardObjective objective = scoreboard == null ? null : scoreboard.getObjectiveForSlot(ScoreboardDisplaySlot.LIST);
-        boolean scoreHearts = objective != null && objective.getRenderType() == net.minecraft.scoreboard.ScoreboardCriterion.RenderType.HEARTS;
-        int colonWidth = this.textRenderer.getWidth(":");
+        Scoreboard scoreboard = this.minecraft.level == null ? null : this.minecraft.level.getScoreboard();
+        Objective objective = scoreboard == null ? null : scoreboard.getDisplayObjective(DisplaySlot.LIST);
+        boolean scoreHearts = objective != null && objective.getRenderType() == net.minecraft.world.scores.criteria.ObjectiveCriteria.RenderType.HEARTS;
+        int colonWidth = this.font.width(":");
 
-        for (PlayerListEntry entry : entries) {
-            nameWidth = Math.max(nameWidth, this.textRenderer.getWidth(playerListHud.getPlayerName(entry)));
+        for (PlayerInfo entry : entries) {
+            nameWidth = Math.max(nameWidth, this.font.width(playerListHud.getNameForDisplay(entry)));
             if (objective != null && scoreboard != null && !scoreHearts) {
-                ReadableScoreboardScore score = scoreboard.getScore(ScoreHolder.fromProfile(entry.getProfile()), objective);
+                ReadOnlyScoreInfo score = scoreboard.getPlayerScoreInfo(ScoreHolder.fromGameProfile(entry.getProfile()), objective);
                 if (score != null) {
-                    scoreWidth = Math.max(scoreWidth, colonWidth + this.textRenderer.getWidth(score.getFormattedScore(objective.getNumberFormatOr(net.minecraft.scoreboard.number.StyledNumberFormat.YELLOW))));
+                    scoreWidth = Math.max(scoreWidth, colonWidth + this.font.width(score.formatValue(objective.numberFormatOrDefault(net.minecraft.network.chat.numbers.StyledFormat.PLAYER_LIST_DEFAULT))));
                 }
             }
         }
@@ -3122,29 +3413,28 @@ public class MacroWorkbenchScreen extends Screen {
             rows = (size + columns - 1) / columns;
         }
 
-        boolean showSkins = !this.client.isInSingleplayer()
-                || (this.client.getNetworkHandler() != null && this.client.getNetworkHandler().getConnection().isEncrypted());
+        boolean showSkins = true;
         int scoreAreaWidth = objective == null ? 0 : (scoreHearts ? 90 : scoreWidth);
         int columnWidth = columns == 0 ? 0 : Math.min(columns * ((showSkins ? 9 : 0) + nameWidth + scoreAreaWidth + 13), renderWidth - 50) / Math.max(1, columns);
         int tableWidth = columnWidth * Math.max(1, columns) + Math.max(0, columns - 1) * 5;
         int fullWidth = tableWidth;
 
-        Text header = ((PlayerListHudAccessor) playerListHud).m0dev$getHeader();
-        Text footer = ((PlayerListHudAccessor) playerListHud).m0dev$getFooter();
+        Component header = ((PlayerListHudAccessor) playerListHud).m0dev$getHeader();
+        Component footer = ((PlayerListHudAccessor) playerListHud).m0dev$getFooter();
         int currentY = 10;
         if (header != null) {
-            List<?> wrappedHeader = this.textRenderer.wrapLines(header, renderWidth - 50);
+            List<?> wrappedHeader = this.font.split(header, renderWidth - 50);
             for (Object line : wrappedHeader) {
-                fullWidth = Math.max(fullWidth, this.textRenderer.getWidth((net.minecraft.text.OrderedText) line));
+                fullWidth = Math.max(fullWidth, this.font.width((net.minecraft.util.FormattedCharSequence) line));
             }
             currentY += wrappedHeader.size() * 9 + 1;
         }
         currentY += rows * 9;
         if (footer != null) {
             currentY += 1;
-            List<?> wrappedFooter = this.textRenderer.wrapLines(footer, renderWidth - 50);
+            List<?> wrappedFooter = this.font.split(footer, renderWidth - 50);
             for (Object line : wrappedFooter) {
-                fullWidth = Math.max(fullWidth, this.textRenderer.getWidth((net.minecraft.text.OrderedText) line));
+                fullWidth = Math.max(fullWidth, this.font.width((net.minecraft.util.FormattedCharSequence) line));
             }
             currentY += wrappedFooter.size() * 9;
         }
@@ -3167,7 +3457,7 @@ public class MacroWorkbenchScreen extends Screen {
 
     private VanillaSidebarMetrics currentSidebarMetrics(float scale) {
         float clampedScale = Math.clamp(scale, HudTweaksSettings.MIN_SCALE, HudTweaksSettings.MAX_SCALE);
-        ScoreboardObjective objective = effectiveSidebarObjective();
+        Objective objective = effectiveSidebarObjective();
         if (objective == null) {
             int fallbackWidth = 144;
             int fallbackHeight = 100;
@@ -3183,16 +3473,16 @@ public class MacroWorkbenchScreen extends Screen {
         }
 
         Scoreboard scoreboard = objective.getScoreboard();
-        int width = this.textRenderer.getWidth(objective.getDisplayName());
-        int colonWidth = this.textRenderer.getWidth(":");
-        List<VanillaSidebarEntryMetrics> entries = scoreboard.getScoreboardEntries(objective).stream()
-                .filter(entry -> !entry.hidden())
-                .sorted(Comparator.comparingInt(ScoreboardEntry::value).reversed().thenComparing(ScoreboardEntry::owner))
+        int width = this.font.width(objective.getDisplayName());
+        int colonWidth = this.font.width(":");
+        List<VanillaSidebarEntryMetrics> entries = scoreboard.listPlayerScores(objective).stream()
+                .filter(entry -> !entry.isHidden())
+                .sorted(Comparator.comparingInt(PlayerScoreEntry::value).reversed().thenComparing(PlayerScoreEntry::owner))
                 .limit(15)
                 .map(entry -> measureSidebarEntry(scoreboard, objective, entry))
                 .toList();
         for (VanillaSidebarEntryMetrics entry : entries) {
-            width = Math.max(width, this.textRenderer.getWidth(entry.name()) + (entry.scoreWidth() > 0 ? colonWidth + entry.scoreWidth() : 0));
+            width = Math.max(width, this.font.width(entry.name()) + (entry.scoreWidth() > 0 ? colonWidth + entry.scoreWidth() : 0));
         }
 
         int listHeight = entries.size() * 9;
@@ -3213,32 +3503,32 @@ public class MacroWorkbenchScreen extends Screen {
     }
 
     private VanillaSidebarEntryMetrics measureSidebarEntry(Scoreboard scoreboard,
-                                                           ScoreboardObjective objective,
-                                                           ScoreboardEntry entry) {
-        Team team = scoreboard.getScoreHolderTeam(entry.owner());
-        Text decoratedName = Team.decorateName(team, entry.name());
-        Text scoreText = entry.formatted(objective.getNumberFormatOr(StyledNumberFormat.RED));
-        return new VanillaSidebarEntryMetrics(decoratedName, this.textRenderer.getWidth(scoreText));
+                                                           Objective objective,
+                                                           PlayerScoreEntry entry) {
+        PlayerTeam team = scoreboard.getPlayersTeam(entry.owner());
+        Component decoratedName = PlayerTeam.formatNameForTeam(team, entry.ownerName());
+        Component scoreText = entry.formatValue(objective.numberFormatOrDefault(StyledFormat.SIDEBAR_DEFAULT));
+        return new VanillaSidebarEntryMetrics(decoratedName, this.font.width(scoreText));
     }
 
-    private ScoreboardObjective effectiveSidebarObjective() {
-        Scoreboard scoreboard = this.client == null || this.client.world == null ? null : this.client.world.getScoreboard();
-        ScoreboardObjective live = scoreboard == null ? null : scoreboard.getObjectiveForSlot(ScoreboardDisplaySlot.SIDEBAR);
+    private Objective effectiveSidebarObjective() {
+        Scoreboard scoreboard = this.minecraft == null || this.minecraft.level == null ? null : this.minecraft.level.getScoreboard();
+        Objective live = scoreboard == null ? null : scoreboard.getDisplayObjective(DisplaySlot.SIDEBAR);
         if (live != null) {
             return live;
         }
         return previewSidebarObjective();
     }
 
-    private ScoreboardObjective previewSidebarObjective() {
+    private Objective previewSidebarObjective() {
         Scoreboard scoreboard = new Scoreboard();
-        ScoreboardObjective objective = scoreboard.addObjective(
+        Objective objective = scoreboard.addObjective(
                 "m0dev_preview_sidebar",
-                ScoreboardCriterion.DUMMY,
-                Text.literal("Objectives"),
-                ScoreboardCriterion.RenderType.INTEGER,
+                ObjectiveCriteria.DUMMY,
+                Component.literal("Objectives"),
+                ObjectiveCriteria.RenderType.INTEGER,
                 false,
-                StyledNumberFormat.RED
+                StyledFormat.SIDEBAR_DEFAULT
         );
         addPreviewSidebarScore(scoreboard, objective, "Kills", 12);
         addPreviewSidebarScore(scoreboard, objective, "Beds", 3);
@@ -3247,11 +3537,11 @@ public class MacroWorkbenchScreen extends Screen {
         return objective;
     }
 
-    private void addPreviewSidebarScore(Scoreboard scoreboard, ScoreboardObjective objective, String name, int value) {
-        scoreboard.getOrCreateScore(ScoreHolder.fromName(name), objective).setScore(value);
+    private void addPreviewSidebarScore(Scoreboard scoreboard, Objective objective, String name, int value) {
+        scoreboard.getOrCreatePlayerScore(ScoreHolder.forNameOnly(name), objective).set(value);
     }
 
-    private void drawSelectedOutline(DrawContext context, int x1, int y1, int x2, int y2, boolean isSelected) {
+    private void drawSelectedOutline(GuiGraphicsExtractor context, int x1, int y1, int x2, int y2, boolean isSelected) {
         if (!isSelected) {
             return;
         }
@@ -3279,13 +3569,13 @@ public class MacroWorkbenchScreen extends Screen {
         if (selected == null) {
             selectedElementIds.clear();
             quickField.setEditable(false);
-            quickField.setText("");
+            quickField.setValue("");
             macroField.setEditable(false);
-            macroField.setText("");
+            macroField.setValue("");
             macroField.visible = false;
             macroField.active = false;
             actionField.setEditable(false);
-            actionField.setText("");
+            actionField.setValue("");
             actionField.visible = false;
             actionField.active = false;
             syncStyleButtons();
@@ -3295,13 +3585,13 @@ public class MacroWorkbenchScreen extends Screen {
 
         if (isVanillaHudProxy(selected)) {
             quickField.setEditable(false);
-            quickField.setText(vanillaQuickFieldText(selected));
+            quickField.setValue(vanillaQuickFieldText(selected));
             macroField.setEditable(false);
-            macroField.setText("");
+            macroField.setValue("");
             macroField.visible = false;
             macroField.active = false;
             actionField.setEditable(false);
-            actionField.setText("");
+            actionField.setValue("");
             actionField.visible = false;
             actionField.active = false;
             syncStyleButtons();
@@ -3317,13 +3607,13 @@ public class MacroWorkbenchScreen extends Screen {
                     : (isMacroKeybindProxy(selected)
                        ? "Macro Keybinds"
                        : (isPickupNotifierProxy(selected) ? "Pick-up Notifier" : "NBT Inspector"));
-            quickField.setText(proxyName + " (edit style/pos/size)" + (externalState == ExternalProxyRenderState.MODULE_DISABLED ? " [DISABLED]" : ""));
+            quickField.setValue(proxyName + " (edit style/pos/size)" + (externalState == ExternalProxyRenderState.MODULE_DISABLED ? " [DISABLED]" : ""));
             macroField.setEditable(false);
-            macroField.setText("");
+            macroField.setValue("");
             macroField.visible = false;
             macroField.active = false;
             actionField.setEditable(false);
-            actionField.setText("");
+            actionField.setValue("");
             actionField.visible = false;
             actionField.active = false;
             syncStyleButtons();
@@ -3333,17 +3623,17 @@ public class MacroWorkbenchScreen extends Screen {
 
         quickField.setEditable(true);
         String raw = selected.type == MacroHudDataHandler.ElementType.TEXT ? selected.text : selected.label;
-        quickField.setText(firstLine(raw));
+        quickField.setValue(firstLine(raw));
 
         boolean button = selected.type == MacroHudDataHandler.ElementType.BUTTON;
         macroField.setEditable(button);
         macroField.visible = button;
         macroField.active = button;
-        macroField.setText(selected.macroId == null ? "" : selected.macroId);
+        macroField.setValue(selected.macroId == null ? "" : selected.macroId);
         actionField.setEditable(button);
         actionField.visible = button;
         actionField.active = button;
-        actionField.setText(selected.buttonAction == null ? "" : selected.buttonAction);
+        actionField.setValue(selected.buttonAction == null ? "" : selected.buttonAction);
 
         syncStyleButtons();
         syncCanvasModeControls();
@@ -3362,13 +3652,13 @@ public class MacroWorkbenchScreen extends Screen {
         if (lines.isEmpty()) {
             lines = new ArrayList<>(List.of(""));
         }
-        lines.set(0, quickField.getText() == null ? "" : quickField.getText());
+        lines.set(0, quickField.getValue() == null ? "" : quickField.getValue());
         String merged = String.join("\n", lines);
 
         if (selected.type == MacroHudDataHandler.ElementType.BUTTON) {
             selected.label = merged;
-            selected.macroId = macroField.getText() == null ? "" : macroField.getText().trim();
-            String compactAction = actionField.getText() == null ? "" : actionField.getText();
+            selected.macroId = macroField.getValue() == null ? "" : macroField.getValue().trim();
+            String compactAction = actionField.getValue() == null ? "" : actionField.getValue();
             String currentAction = selected.buttonAction == null ? "" : selected.buttonAction;
             boolean multilineAction = currentAction.indexOf('\n') >= 0 || currentAction.indexOf('\r') >= 0;
             // Do not clobber multiline script bodies from the single-line quick action field.
@@ -3394,8 +3684,8 @@ public class MacroWorkbenchScreen extends Screen {
                 if (editButton != null) {
                     editButton.active = false;
                 }
-                backgroundToggle.setMessage(Text.literal(vanillaPreviewMode == VanillaPreviewMode.ACTUAL ? "Preview: Actual" : "Preview: Virtual"));
-                borderToggle.setMessage(Text.literal("Visible"));
+                backgroundToggle.setMessage(Component.literal(vanillaPreviewMode == VanillaPreviewMode.ACTUAL ? "Preview: Actual" : "Preview: Virtual"));
+                borderToggle.setMessage(Component.literal("Visible"));
                 return;
             }
             backgroundToggle.active = false;
@@ -3403,8 +3693,8 @@ public class MacroWorkbenchScreen extends Screen {
             if (editButton != null) {
                 editButton.active = !isVanillaCanvasMode();
             }
-            backgroundToggle.setMessage(Text.literal("BG: OFF"));
-            borderToggle.setMessage(Text.literal("Border: OFF"));
+            backgroundToggle.setMessage(Component.literal("BG: OFF"));
+            borderToggle.setMessage(Component.literal("Border: OFF"));
             return;
         }
 
@@ -3414,10 +3704,10 @@ public class MacroWorkbenchScreen extends Screen {
             if (editButton != null) {
                 editButton.active = false;
             }
-            backgroundToggle.setMessage(Text.literal(vanillaPreviewMode == VanillaPreviewMode.ACTUAL ? "Preview: Actual" : "Preview: Virtual"));
+            backgroundToggle.setMessage(Component.literal(vanillaPreviewMode == VanillaPreviewMode.ACTUAL ? "Preview: Actual" : "Preview: Virtual"));
             HudTweaksSettings.ElementType type = vanillaHudElementType(selected);
             HudTweaksSettings.ElementConfig config = type == null ? null : this.vanillaCanvasConfigs.get(type);
-            borderToggle.setMessage(Text.literal("Visible: " + ((config == null || config.display) ? "ON" : "OFF")));
+            borderToggle.setMessage(Component.literal("Visible: " + ((config == null || config.display) ? "ON" : "OFF")));
             return;
         }
 
@@ -3426,8 +3716,8 @@ public class MacroWorkbenchScreen extends Screen {
         if (editButton != null) {
             editButton.active = true;
         }
-        backgroundToggle.setMessage(Text.literal(backgroundLabel(selected)));
-        borderToggle.setMessage(Text.literal(borderModeLabel(selected)));
+        backgroundToggle.setMessage(Component.literal(backgroundLabel(selected)));
+        borderToggle.setMessage(Component.literal(borderModeLabel(selected)));
     }
 
     private void syncGridButtons() {
@@ -3435,12 +3725,12 @@ public class MacroWorkbenchScreen extends Screen {
                 || gridColsMinusButton == null || gridColsPlusButton == null || centerLinesToggleButton == null) {
             return;
         }
-        gridToggleButton.setMessage(Text.literal(gridEnabled ? "Grid: ON" : "Grid: OFF"));
-        gridRowsMinusButton.setMessage(Text.literal("R-"));
-        gridRowsPlusButton.setMessage(Text.literal("R+"));
-        gridColsMinusButton.setMessage(Text.literal("C-"));
-        gridColsPlusButton.setMessage(Text.literal("C+"));
-        centerLinesToggleButton.setMessage(Text.literal(centerLinesEnabled ? "Center: ON" : "Center: OFF"));
+        gridToggleButton.setMessage(Component.literal(gridEnabled ? "Grid: ON" : "Grid: OFF"));
+        gridRowsMinusButton.setMessage(Component.literal("\u2212"));
+        gridRowsPlusButton.setMessage(Component.literal("+"));
+        gridColsMinusButton.setMessage(Component.literal("\u2212"));
+        gridColsPlusButton.setMessage(Component.literal("+"));
+        centerLinesToggleButton.setMessage(Component.literal(centerLinesEnabled ? "Center: ON" : "Center: OFF"));
     }
 
     private void syncPresetControls() {
@@ -3448,7 +3738,7 @@ public class MacroWorkbenchScreen extends Screen {
             return;
         }
         if (isVanillaCanvasMode()) {
-            presetNameField.setText("vanilla");
+            presetNameField.setValue("vanilla");
             presetNameField.setEditable(false);
             presetPrevButton.active = false;
             presetNextButton.active = false;
@@ -3462,7 +3752,7 @@ public class MacroWorkbenchScreen extends Screen {
             return;
         }
         String active = this.working == null ? "default" : StringUtils.safe(this.working.activePresetId);
-        presetNameField.setText(active);
+        presetNameField.setValue(active);
         presetNameField.setEditable(true);
         List<String> ids = MacroHudDataHandler.listPresetIds();
         int idx = activePresetIndex(ids, active);
@@ -3479,12 +3769,12 @@ public class MacroWorkbenchScreen extends Screen {
 
     private void syncCanvasModeControls() {
         if (this.canvasModeToggleButton != null) {
-            this.canvasModeToggleButton.setMessage(Text.literal(
-                    isVanillaCanvasMode() ? "Vanilla Elements" : "Custom Elements"
+            this.canvasModeToggleButton.setMessage(Component.literal(
+                    isVanillaCanvasMode() ? "Vanilla HUD" : "Custom HUD"
             ));
         }
         if (this.deleteButton != null) {
-            this.deleteButton.setMessage(Text.literal(
+            this.deleteButton.setMessage(Component.literal(
                     isVanillaCanvasMode()
                             ? (selected != null && isVanillaHudProxy(selected) ? "Reset Selected" : "Reset All")
                             : "Delete"
@@ -3534,7 +3824,7 @@ public class MacroWorkbenchScreen extends Screen {
         if (isVanillaCanvasMode()) {
             return;
         }
-        String name = StringUtils.safe(presetNameField == null ? null : presetNameField.getText());
+        String name = StringUtils.safe(presetNameField == null ? null : presetNameField.getValue());
         if (name.isBlank()) {
             name = "preset_" + (MacroHudDataHandler.listPresetIds().size() + 1);
         }
@@ -3552,7 +3842,7 @@ public class MacroWorkbenchScreen extends Screen {
         if (isVanillaCanvasMode()) {
             return;
         }
-        String target = StringUtils.safe(presetNameField == null ? null : presetNameField.getText());
+        String target = StringUtils.safe(presetNameField == null ? null : presetNameField.getValue());
         if (target.isBlank()) {
             return;
         }
@@ -3708,7 +3998,7 @@ public class MacroWorkbenchScreen extends Screen {
         ensureVisibleBackground(selected);
     }
 
-    private void renderAdvancedModal(DrawContext context, int mouseX, int mouseY) {
+    private void renderAdvancedModal(GuiGraphicsExtractor context, int mouseX, int mouseY) {
         int boxX = modalX();
         int boxY = modalY();
         StandardAdvancedLayout layout = standardAdvancedLayout(boxX, boxY);
@@ -3733,7 +4023,7 @@ public class MacroWorkbenchScreen extends Screen {
             return;
         }
 
-        context.drawTextWithShadow(this.textRenderer, "Edit", boxX + 12, boxY + 12, 0xFFFFFFFF);
+        context.text(this.font, "Edit", boxX + 12, boxY + 12, 0xFFFFFFFF);
 
         context.fill(textArea.x(), textArea.y(), textArea.right(), textArea.bottom(), advancedTextFocused ? 0xFF0F0F0F : 0xFF141414);
         context.fill(textArea.x(), textArea.y(), textArea.right(), textArea.y() + 1, 0x60FFFFFF);
@@ -3772,7 +4062,7 @@ public class MacroWorkbenchScreen extends Screen {
             if (shouldHighlightButtonScript()) {
                 drawButtonScriptHighlightedLine(context, line, textArea.x() + 4, y);
             } else {
-                context.drawTextWithShadow(this.textRenderer, line, textArea.x() + 4, y, 0xFFEAEAEA);
+                context.text(this.font, line, textArea.x() + 4, y, 0xFFEAEAEA);
             }
             y += 9;
         }
@@ -3785,18 +4075,18 @@ public class MacroWorkbenchScreen extends Screen {
         }
 
         if (selected != null && selected.type == MacroHudDataHandler.ElementType.BUTTON) {
-            context.drawTextWithShadow(this.textRenderer, "Command / Script (multi-line)", textArea.x(), textArea.y() - 10, 0xFFB8B8B8);
-            context.drawTextWithShadow(this.textRenderer, "Label (single-line)", actionField.x(), actionField.y() - 10, 0xFFB8B8B8);
+            context.text(this.font, "Command / Script (multi-line)", textArea.x(), textArea.y() - 10, 0xFFB8B8B8);
+            context.text(this.font, "Label (single-line)", actionField.x(), actionField.y() - 10, 0xFFB8B8B8);
         } else {
-            context.drawTextWithShadow(this.textRenderer, "Button Action (cmd:/ msg:/ copy:/ etc)", actionField.x(), actionField.y() - 10, 0xFFB8B8B8);
+            context.text(this.font, "Button Action (cmd:/ msg:/ copy:/ etc)", actionField.x(), actionField.y() - 10, 0xFFB8B8B8);
         }
         int actionBg = advancedActionFocused ? 0xFF0F0F0F : 0xFF161616;
         context.fill(actionField.x(), actionField.y(), actionField.right(), actionField.bottom(), actionBg);
         context.fill(actionField.x(), actionField.y(), actionField.right(), actionField.y() + 1, 0x60FFFFFF);
         drawSingleLineSelection(context, actionField.x() + 4, actionField.y() + 5, advancedAction, advancedActionSelectionAnchor, advancedActionCursor);
-        context.drawTextWithShadow(this.textRenderer, advancedAction, actionField.x() + 4, actionField.y() + 5, 0xFFEAEAEA);
+        context.text(this.font, advancedAction, actionField.x() + 4, actionField.y() + 5, 0xFFEAEAEA);
         if (advancedActionFocused && (System.currentTimeMillis() / 500L) % 2L == 0L) {
-            int ax = actionField.x() + 4 + this.textRenderer.getWidth(advancedAction.substring(0, Math.clamp(advancedActionCursor, 0, advancedAction.length())));
+            int ax = actionField.x() + 4 + this.font.width(advancedAction.substring(0, Math.clamp(advancedActionCursor, 0, advancedAction.length())));
             context.fill(ax, actionField.y() + 4, ax + 1, actionField.y() + 13, 0xFFFFFFFF);
         }
         drawModalButton(context, layout.bgToggle().x(), layout.bgToggle().y(), layout.bgToggle().width(), layout.bgToggle().height(), backgroundLabel(selected), layout.bgToggle().contains(mouseX, mouseY));
@@ -3829,54 +4119,55 @@ public class MacroWorkbenchScreen extends Screen {
         drawModalButton(context, layout.zMinus().x(), layout.zMinus().y(), layout.zMinus().width(), layout.zMinus().height(), "Z-", layout.zMinus().contains(mouseX, mouseY));
         drawModalButton(context, layout.zPlus().x(), layout.zPlus().y(), layout.zPlus().width(), layout.zPlus().height(), "Z+", layout.zPlus().contains(mouseX, mouseY));
         int bgPct = selected == null ? 0 : Math.round((Math.clamp(selected.backgroundAlpha, 0, 255) / 255.0f) * 100.0f);
-        context.drawTextWithShadow(this.textRenderer,
+        context.text(this.font,
                 "Line: " + (selected != null ? selected.lineHeight : 9) + "   Scale: " + (selected != null ? String.format("%.1f", selected.fontScale) : "1.0") + "   BG: " + bgPct + "%   Z: " + (selected != null ? selected.zIndex : 0),
                 layout.bgHex().x(), layout.bgHex().y() - 10, 0xFFEAEAEA);
         int labelLeftBound = boxX + 12;
-        context.drawTextWithShadow(this.textRenderer, "BG",
-                Math.max(labelLeftBound, layout.bgHex().x() - this.textRenderer.getWidth("BG") - 8),
+        context.text(this.font, "BG",
+                Math.max(labelLeftBound, layout.bgHex().x() - this.font.width("BG") - 8),
                 layout.bgHex().y() + 4, 0xFFEAEAEA);
-        context.drawTextWithShadow(this.textRenderer, "BR",
-                Math.max(labelLeftBound, layout.borderHex().x() - this.textRenderer.getWidth("BR") - 8),
+        context.text(this.font, "BR",
+                Math.max(labelLeftBound, layout.borderHex().x() - this.font.width("BR") - 8),
                 layout.borderHex().y() + 4, 0xFFEAEAEA);
-        context.drawTextWithShadow(this.textRenderer, "Use Opacity +/- for transparency. Right-click BR hex to open picker.", layout.bgHex().x(), layout.bgHex().bottom() + 2, 0xFF9A9A9A);
+        context.text(this.font, ThemeDraw.fit(this.font, "Use Opacity +/- for transparency. Right-click BR hex to open picker.", layout.apply().x() - layout.bgHex().x() - 8),
+                layout.bgHex().x(), layout.bgHex().bottom() + 2, Theme.TEXT_DIM, false);
 
         int bgInputBg = advancedBgColorFocused ? 0xFF0F0F0F : 0xFF161616;
         context.fill(layout.bgHex().x(), layout.bgHex().y(), layout.bgHex().right(), layout.bgHex().bottom(), bgInputBg);
         context.fill(layout.bgHex().x(), layout.bgHex().y(), layout.bgHex().right(), layout.bgHex().y() + 1, 0x60FFFFFF);
         drawSingleLineSelection(context, layout.bgHex().x() + 4, layout.bgHex().y() + 5, advancedBgColor, advancedBgSelectionAnchor, advancedBgCursor);
-        context.drawTextWithShadow(this.textRenderer, advancedBgColor, layout.bgHex().x() + 4, layout.bgHex().y() + 5, 0xFFEAEAEA);
+        context.text(this.font, advancedBgColor, layout.bgHex().x() + 4, layout.bgHex().y() + 5, 0xFFEAEAEA);
 
         int borderInputBg = advancedBorderColorFocused ? 0xFF0F0F0F : 0xFF161616;
         context.fill(layout.borderHex().x(), layout.borderHex().y(), layout.borderHex().right(), layout.borderHex().bottom(), borderInputBg);
         context.fill(layout.borderHex().x(), layout.borderHex().y(), layout.borderHex().right(), layout.borderHex().y() + 1, 0x60FFFFFF);
         drawSingleLineSelection(context, layout.borderHex().x() + 4, layout.borderHex().y() + 5, advancedBorderColor, advancedBorderSelectionAnchor, advancedBorderCursor);
-        context.drawTextWithShadow(this.textRenderer, advancedBorderColor, layout.borderHex().x() + 4, layout.borderHex().y() + 5, 0xFFEAEAEA);
+        context.text(this.font, advancedBorderColor, layout.borderHex().x() + 4, layout.borderHex().y() + 5, 0xFFEAEAEA);
 
         if (selected != null && selected.visibilityMode == MacroHudDataHandler.VisibilityMode.SCREEN) {
             int visTypeX = layout.visibilityType().x();
             int visTypeY = layout.visibilityType().y();
             int visTypeW = layout.visibilityType().width();
-            context.drawTextWithShadow(this.textRenderer, "Visibility Screen Type", visTypeX, visTypeY - 10, 0xFFB8B8B8);
+            context.text(this.font, "Visibility Screen Type", visTypeX, visTypeY - 10, 0xFFB8B8B8);
             int visTypeBg = advancedVisibilityScreenTypeFocused ? 0xFF0F0F0F : 0xFF161616;
             context.fill(visTypeX, visTypeY, visTypeX + visTypeW, visTypeY + 18, visTypeBg);
             context.fill(visTypeX, visTypeY, visTypeX + visTypeW, visTypeY + 1, 0x60FFFFFF);
             drawSingleLineSelection(context, visTypeX + 4, visTypeY + 5, advancedVisibilityScreenType,
                     advancedVisibilityScreenTypeSelectionAnchor, advancedVisibilityScreenTypeCursor);
-            context.drawTextWithShadow(this.textRenderer, advancedVisibilityScreenType, visTypeX + 4, visTypeY + 5, 0xFFEAEAEA);
+            context.text(this.font, advancedVisibilityScreenType, visTypeX + 4, visTypeY + 5, 0xFFEAEAEA);
             if (advancedVisibilityScreenTypeFocused && (System.currentTimeMillis() / 500L) % 2L == 0L) {
-                int cx = visTypeX + 4 + this.textRenderer.getWidth(advancedVisibilityScreenType.substring(0,
+                int cx = visTypeX + 4 + this.font.width(advancedVisibilityScreenType.substring(0,
                         Math.clamp(advancedVisibilityScreenTypeCursor, 0, advancedVisibilityScreenType.length())));
                 context.fill(cx, visTypeY + 4, cx + 1, visTypeY + 13, 0xFFFFFFFF);
             }
         }
 
         if (advancedBgColorFocused && (System.currentTimeMillis() / 500L) % 2L == 0L) {
-            int cx = layout.bgHex().x() + 4 + this.textRenderer.getWidth(advancedBgColor.substring(0, Math.clamp(advancedBgCursor, 0, advancedBgColor.length())));
+            int cx = layout.bgHex().x() + 4 + this.font.width(advancedBgColor.substring(0, Math.clamp(advancedBgCursor, 0, advancedBgColor.length())));
             context.fill(cx, layout.bgHex().y() + 4, cx + 1, layout.bgHex().y() + 13, 0xFFFFFFFF);
         }
         if (advancedBorderColorFocused && (System.currentTimeMillis() / 500L) % 2L == 0L) {
-            int cx = layout.borderHex().x() + 4 + this.textRenderer.getWidth(advancedBorderColor.substring(0, Math.clamp(advancedBorderCursor, 0, advancedBorderColor.length())));
+            int cx = layout.borderHex().x() + 4 + this.font.width(advancedBorderColor.substring(0, Math.clamp(advancedBorderCursor, 0, advancedBorderColor.length())));
             context.fill(cx, layout.borderHex().y() + 4, cx + 1, layout.borderHex().y() + 13, 0xFFFFFFFF);
         }
 
@@ -3890,18 +4181,18 @@ public class MacroWorkbenchScreen extends Screen {
     }
 
     private int[] cursorPixelWithScroll(int baseX, int baseY, String text, int cursorIndex, int scrollLine) {
-        return GuiTextEditingUtils.cursorPixelWithScroll(this.textRenderer, baseX, baseY, text, cursorIndex, scrollLine);
+        return GuiTextEditingUtils.cursorPixelWithScroll(this.font, baseX, baseY, text, cursorIndex, scrollLine);
     }
 
     private static int cursorLineIndex(String text, int cursorIndex) {
         return GuiTextEditingUtils.cursorLineIndex(text, cursorIndex);
     }
 
-    private void renderSecondaryChatAdvancedModal(DrawContext context, int mouseX, int mouseY, int boxX, int boxY) {
+    private void renderSecondaryChatAdvancedModal(GuiGraphicsExtractor context, int mouseX, int mouseY, int boxX, int boxY) {
         SecondaryAdvancedLayout layout = secondaryAdvancedLayout(boxX, boxY);
         MacroWorkbenchProxyAdvancedModalRenderer.renderSecondary(
                 context,
-                this.textRenderer,
+                this.font,
                 selected,
                 layout,
                 boxX,
@@ -3937,14 +4228,14 @@ public class MacroWorkbenchScreen extends Screen {
         );
     }
 
-    private void renderNbtInspectorAdvancedModal(DrawContext context, int mouseX, int mouseY, int boxX, int boxY) {
+    private void renderNbtInspectorAdvancedModal(GuiGraphicsExtractor context, int mouseX, int mouseY, int boxX, int boxY) {
         String title = isMacroKeybindProxy(selected)
                 ? "Macro Keybinds Settings"
                 : (isPickupNotifierProxy(selected) ? "Pick-up Notifier Settings" : "NBT Inspector Settings");
         ProxyAdvancedLayout layout = proxyAdvancedLayout(boxX, boxY, isPickupNotifierProxy(selected));
         MacroWorkbenchProxyAdvancedModalRenderer.renderProxy(
                 context,
-                this.textRenderer,
+                this.font,
                 selected,
                 layout,
                 boxX,
@@ -3986,7 +4277,7 @@ public class MacroWorkbenchScreen extends Screen {
     }
 
 
-    private void renderCustomWidgetAdvancedModal(DrawContext context, int mouseX, int mouseY, int boxX, int boxY) {
+    private void renderCustomWidgetAdvancedModal(GuiGraphicsExtractor context, int mouseX, int mouseY, int boxX, int boxY) {
         if (selected == null) {
             return;
         }
@@ -3996,9 +4287,9 @@ public class MacroWorkbenchScreen extends Screen {
         int maxVisible = Math.clamp(Math.max(1, layout.suggestionArea().height() / rowH), 1, Math.max(1, suggestions.size()));
         int maxScroll = Math.max(0, suggestions.size() - maxVisible);
         advancedActionSuggestionScroll = Math.clamp(advancedActionSuggestionScroll, 0, maxScroll);
-        MacroWorkbenchCustomWidgetAdvancedModalRenderer.render(
+        MacroWorkbenchCustomWidgetAdvancedModalRenderer.extractRenderState(
                 context,
-                this.textRenderer,
+                this.font,
                 selected,
                 layout,
                 mouseX,
@@ -4029,11 +4320,11 @@ public class MacroWorkbenchScreen extends Screen {
         );
     }
 
-    private boolean onCustomWidgetAdvancedClick(Click click, int boxX, int boxY) {
-        if (click.button() != 0 && click.button() != 1) {
+    private boolean onCustomWidgetAdvancedClick(MouseButtonEvent click, int boxX, int boxY) {
+        if (click.button() != InputConstants.MOUSE_BUTTON_LEFT && click.button() != InputConstants.MOUSE_BUTTON_RIGHT) {
             return true;
         }
-        boolean forward = click.button() != 1;
+        boolean forward = click.button() != InputConstants.MOUSE_BUTTON_RIGHT;
         if (selected == null) {
             return true;
         }
@@ -4086,11 +4377,11 @@ public class MacroWorkbenchScreen extends Screen {
         return true;
     }
 
-    private boolean handleAdvancedSuggestionClick(Click click, UiRect suggestionsArea, List<String> suggestions) {
+    private boolean handleAdvancedSuggestionClick(MouseButtonEvent click, UiRect suggestionsArea, List<String> suggestions) {
         return MacroWorkbenchCustomWidgetAdvancedClickHandler.handleSuggestionClick(click, suggestionsArea, suggestions, customWidgetAdvancedClickOpsBridge);
     }
 
-    private boolean handleCustomWidgetGeneralRowClick(Click click, List<UiRect> generalRow1, List<UiRect> generalRow2, boolean forward) {
+    private boolean handleCustomWidgetGeneralRowClick(MouseButtonEvent click, List<UiRect> generalRow1, List<UiRect> generalRow2, boolean forward) {
         return MacroWorkbenchCustomWidgetAdvancedClickHandler.handleGeneralRowClick(
                 click,
                 generalRow1,
@@ -4104,7 +4395,7 @@ public class MacroWorkbenchScreen extends Screen {
         );
     }
 
-    private boolean handleCustomWidgetBaseRowClick(Click click, List<UiRect> baseRow, boolean forward) {
+    private boolean handleCustomWidgetBaseRowClick(MouseButtonEvent click, List<UiRect> baseRow, boolean forward) {
         return MacroWorkbenchCustomWidgetAdvancedClickHandler.handleBaseRowClick(
                 click,
                 baseRow,
@@ -4117,7 +4408,7 @@ public class MacroWorkbenchScreen extends Screen {
     private MacroWorkbenchAdvancedClickSupport.Ops advancedClickSupportOps() {
         return new MacroWorkbenchAdvancedClickSupport.Ops() {
             @Override
-            public boolean contains(Click click, UiRect rect) {
+            public boolean contains(MouseButtonEvent click, UiRect rect) {
                 return containsBox(click.x(), click.y(), rect);
             }
 
@@ -4138,7 +4429,7 @@ public class MacroWorkbenchScreen extends Screen {
         };
     }
 
-    boolean cwContains(Click click, UiRect rect) {
+    boolean cwContains(MouseButtonEvent click, UiRect rect) {
         return containsBox(click.x(), click.y(), rect);
     }
 
@@ -4238,7 +4529,7 @@ public class MacroWorkbenchScreen extends Screen {
         openColorPicker(onPick, title, x, y);
     }
 
-    private boolean focusAdvancedLabelInput(Click click, UiRect labelInput) {
+    private boolean focusAdvancedLabelInput(MouseButtonEvent click, UiRect labelInput) {
         if (!containsBox(click.x(), click.y(), labelInput)) {
             advancedTextFocused = false;
             return false;
@@ -4253,7 +4544,7 @@ public class MacroWorkbenchScreen extends Screen {
         return true;
     }
 
-    private boolean focusAdvancedSourceInput(Click click, UiRect sourceInput) {
+    private boolean focusAdvancedSourceInput(MouseButtonEvent click, UiRect sourceInput) {
         if (!containsBox(click.x(), click.y(), sourceInput)) {
             advancedActionFocused = false;
             return false;
@@ -4268,7 +4559,7 @@ public class MacroWorkbenchScreen extends Screen {
         return true;
     }
 
-    private boolean handleCustomWidgetTypeClick(Click click, CustomWidgetAdvancedLayout layout, boolean forward) {
+    private boolean handleCustomWidgetTypeClick(MouseButtonEvent click, CustomWidgetAdvancedLayout layout, boolean forward) {
         if (selected == null) {
             return false;
         }
@@ -4283,7 +4574,7 @@ public class MacroWorkbenchScreen extends Screen {
                 MacroPlaceholderCatalog.SHAPE_TYPE_PRESETS,
                 new MacroWorkbenchCustomWidgetTypeClickHandler.Ops() {
                     @Override
-                    public boolean contains(Click valueClick, UiRect rect) {
+                    public boolean contains(MouseButtonEvent valueClick, UiRect rect) {
                         return containsBox(valueClick.x(), valueClick.y(), rect);
                     }
 
@@ -4340,7 +4631,7 @@ public class MacroWorkbenchScreen extends Screen {
         );
     }
 
-    private boolean handleCustomWidgetTypeInputFocus(Click click, CustomWidgetAdvancedLayout layout) {
+    private boolean handleCustomWidgetTypeInputFocus(MouseButtonEvent click, CustomWidgetAdvancedLayout layout) {
         if (selected == null) {
             return false;
         }
@@ -4361,7 +4652,7 @@ public class MacroWorkbenchScreen extends Screen {
         return false;
     }
 
-    private boolean focusAdvancedTypeInputField(Click click, UiRect input, ModalDragSelectionField field, boolean resetSelectionAnchor) {
+    private boolean focusAdvancedTypeInputField(MouseButtonEvent click, UiRect input, ModalDragSelectionField field, boolean resetSelectionAnchor) {
         if (!containsBox(click.x(), click.y(), input)) {
             return false;
         }
@@ -4403,12 +4694,12 @@ public class MacroWorkbenchScreen extends Screen {
     }
 
     private boolean isControlPressed() {
-        if (this.client == null) {
+        if (this.minecraft == null) {
             return false;
         }
-        var window = this.client.getWindow();
-        return InputUtil.isKeyPressed(window, GLFW.GLFW_KEY_LEFT_CONTROL)
-                || InputUtil.isKeyPressed(window, GLFW.GLFW_KEY_RIGHT_CONTROL);
+        var window = this.minecraft.getWindow();
+        return InputConstants.isKeyDown(InputConstants.KEY_LCONTROL)
+                || InputConstants.isKeyDown(InputConstants.KEY_RCONTROL);
     }
 
     private double stepDouble(double base) {
@@ -4596,7 +4887,7 @@ public class MacroWorkbenchScreen extends Screen {
 
             MacroDataHandler.updateMacro(
                     selectedMacroId,
-                    StringUtils.safe(kbNameField.getText()),
+                    StringUtils.safe(kbNameField.getValue()),
                     commands,
                     existing.keyCode,
                     existing.modifierKey,
@@ -4604,7 +4895,7 @@ public class MacroWorkbenchScreen extends Screen {
                     existing.showInOverlay
             );
 
-            kbCommandsField.setText(String.join(";", commands));
+            kbCommandsField.setValue(String.join(";", commands));
             CommandMacros.refreshKeybindings();
             rebuildBindingMaps();
         });
@@ -4629,7 +4920,7 @@ public class MacroWorkbenchScreen extends Screen {
         this.kbCommandsSelectionAnchor = -1;
     }
 
-    private void renderKeyboardCommandsModal(DrawContext context, int mouseX, int mouseY) {
+    private void renderKeyboardCommandsModal(GuiGraphicsExtractor context, int mouseX, int mouseY) {
         int modalW = modalWidth();
         int modalH = modalHeight();
         int boxX = this.width / 2 - (modalW / 2);
@@ -4642,8 +4933,8 @@ public class MacroWorkbenchScreen extends Screen {
         context.fill(0, 0, this.width, this.height, 0x88000000);
         GuiSystem.drawPanel(context, boxX, boxY, modalW, modalH);
 
-        context.drawTextWithShadow(this.textRenderer, "Edit Commands", boxX + 12, boxY + 12, 0xFFFFFFFF);
-        context.drawTextWithShadow(this.textRenderer, "One command per line", boxX + 12, boxY + 22, 0xFFB0B0B0);
+        context.text(this.font, "Edit Commands", boxX + 12, boxY + 12, 0xFFFFFFFF);
+        context.text(this.font, "One command per line", boxX + 12, boxY + 22, 0xFFB0B0B0);
 
         context.fill(textX, textY, textX + textW, textY + textH, kbCommandsFocused ? 0xFF0F0F0F : 0xFF141414);
         context.fill(textX, textY, textX + textW, textY + 1, 0x60FFFFFF);
@@ -4655,7 +4946,7 @@ public class MacroWorkbenchScreen extends Screen {
             if (yy > textY + textH - 12) {
                 break;
             }
-            context.drawTextWithShadow(this.textRenderer, line, textX + 4, yy, 0xFFEAEAEA);
+            context.text(this.font, line, textX + 4, yy, 0xFFEAEAEA);
             yy += 9;
         }
 
@@ -4668,8 +4959,8 @@ public class MacroWorkbenchScreen extends Screen {
         drawModalButton(context, boxX + modalW - 64, boxY + modalH - 22, 54, 18, "Cancel", containsBox(mouseX, mouseY, boxX + modalW - 64, boxY + modalH - 22, 54, 18));
     }
 
-    private boolean onKeyboardCommandsModalClick(Click click) {
-        if (click.button() != 0) {
+    private boolean onKeyboardCommandsModalClick(MouseButtonEvent click) {
+        if (click.button() != InputConstants.MOUSE_BUTTON_LEFT) {
             return true;
         }
 
@@ -4702,15 +4993,15 @@ public class MacroWorkbenchScreen extends Screen {
         return true;
     }
 
-    private void renderAddElementModal(DrawContext context, int mouseX, int mouseY) {
+    private void renderAddElementModal(GuiGraphicsExtractor context, int mouseX, int mouseY) {
         int boxX = this.width / 2 - 160;
         int boxY = this.height / 2 - 110;
         int boxW = 320;
         int boxH = 220;
         context.fill(0, 0, this.width, this.height, 0x88000000);
         GuiSystem.drawPanel(context, boxX, boxY, boxW, boxH);
-        context.drawTextWithShadow(this.textRenderer, "Add Element", boxX + 12, boxY + 10, 0xFFFFFFFF);
-        context.drawTextWithShadow(this.textRenderer, "Pick element type", boxX + 12, boxY + 22, 0xFFB0B0B0);
+        context.text(this.font, "Add Element", boxX + 12, boxY + 10, 0xFFFFFFFF);
+        context.text(this.font, "Pick element type", boxX + 12, boxY + 22, 0xFFB0B0B0);
 
         String[] labels = {"Button", "Text", "Macro List", "Icon", "Bar", "Value", "List", "Inventory", "Shape", "State Badge"};
         for (int i = 0; i < labels.length; i++) {
@@ -4723,8 +5014,8 @@ public class MacroWorkbenchScreen extends Screen {
         drawModalButton(context, boxX + boxW - 70, boxY + boxH - 24, 58, 18, "Close", containsBox(mouseX, mouseY, boxX + boxW - 70, boxY + boxH - 24, 58, 18));
     }
 
-    private boolean onAddElementModalClick(Click click) {
-        if (click.button() != 0) {
+    private boolean onAddElementModalClick(MouseButtonEvent click) {
+        if (click.button() != InputConstants.MOUSE_BUTTON_LEFT) {
             return true;
         }
         int boxX = this.width / 2 - 160;
@@ -4792,12 +5083,12 @@ public class MacroWorkbenchScreen extends Screen {
     }
 
     private boolean handleKeyboardCommandsKey(int keyCode) {
-        if (isCtrlDown() && keyCode == GLFW.GLFW_KEY_A) {
+        if (isCtrlDown() && keyCode == InputConstants.KEY_A) {
             kbCommandsSelectionAnchor = 0;
             kbCommandsCursor = kbCommandsText.length();
             return true;
         }
-        if (keyCode == GLFW.GLFW_KEY_BACKSPACE) {
+        if (keyCode == InputConstants.KEY_BACKSPACE) {
             if (hasSelection(kbCommandsSelectionAnchor, kbCommandsCursor)) {
                 int start = selectionStart(kbCommandsSelectionAnchor, kbCommandsCursor);
                 int end = selectionEnd(kbCommandsSelectionAnchor, kbCommandsCursor);
@@ -4813,7 +5104,7 @@ public class MacroWorkbenchScreen extends Screen {
             kbCommandsSelectionAnchor = -1;
             return true;
         }
-        if (keyCode == GLFW.GLFW_KEY_DELETE) {
+        if (keyCode == InputConstants.KEY_DELETE) {
             if (hasSelection(kbCommandsSelectionAnchor, kbCommandsCursor)) {
                 int start = selectionStart(kbCommandsSelectionAnchor, kbCommandsCursor);
                 int end = selectionEnd(kbCommandsSelectionAnchor, kbCommandsCursor);
@@ -4828,58 +5119,58 @@ public class MacroWorkbenchScreen extends Screen {
             kbCommandsSelectionAnchor = -1;
             return true;
         }
-        if (keyCode == GLFW.GLFW_KEY_LEFT) {
+        if (keyCode == InputConstants.KEY_LEFT) {
             int old = kbCommandsCursor;
             kbCommandsCursor = Math.max(0, kbCommandsCursor - 1);
             kbCommandsSelectionAnchor = updateSelectionAnchor(kbCommandsSelectionAnchor, old, kbCommandsCursor, isShiftDown());
             return true;
         }
-        if (keyCode == GLFW.GLFW_KEY_RIGHT) {
+        if (keyCode == InputConstants.KEY_RIGHT) {
             int old = kbCommandsCursor;
             kbCommandsCursor = Math.min(kbCommandsText.length(), kbCommandsCursor + 1);
             kbCommandsSelectionAnchor = updateSelectionAnchor(kbCommandsSelectionAnchor, old, kbCommandsCursor, isShiftDown());
             return true;
         }
-        if (keyCode == GLFW.GLFW_KEY_UP) {
+        if (keyCode == InputConstants.KEY_UP) {
             int old = kbCommandsCursor;
             kbCommandsCursor = moveCursorVertical(kbCommandsText, kbCommandsCursor, -1);
             kbCommandsSelectionAnchor = updateSelectionAnchor(kbCommandsSelectionAnchor, old, kbCommandsCursor, isShiftDown());
             return true;
         }
-        if (keyCode == GLFW.GLFW_KEY_DOWN) {
+        if (keyCode == InputConstants.KEY_DOWN) {
             int old = kbCommandsCursor;
             kbCommandsCursor = moveCursorVertical(kbCommandsText, kbCommandsCursor, 1);
             kbCommandsSelectionAnchor = updateSelectionAnchor(kbCommandsSelectionAnchor, old, kbCommandsCursor, isShiftDown());
             return true;
         }
-        if (keyCode == GLFW.GLFW_KEY_HOME) {
+        if (keyCode == InputConstants.KEY_HOME) {
             int old = kbCommandsCursor;
             kbCommandsCursor = lineStart(kbCommandsText, kbCommandsCursor);
             kbCommandsSelectionAnchor = updateSelectionAnchor(kbCommandsSelectionAnchor, old, kbCommandsCursor, isShiftDown());
             return true;
         }
-        if (keyCode == GLFW.GLFW_KEY_END) {
+        if (keyCode == InputConstants.KEY_END) {
             int old = kbCommandsCursor;
             kbCommandsCursor = lineEnd(kbCommandsText, kbCommandsCursor);
             kbCommandsSelectionAnchor = updateSelectionAnchor(kbCommandsSelectionAnchor, old, kbCommandsCursor, isShiftDown());
             return true;
         }
-        if (keyCode == GLFW.GLFW_KEY_ENTER || keyCode == GLFW.GLFW_KEY_KP_ENTER) {
+        if (keyCode == InputConstants.KEY_RETURN || keyCode == InputConstants.KEY_NUMPADENTER) {
             insertAtKeyboardCommandsCursor("\n");
             return true;
         }
-        if (isCtrlDown() && keyCode == GLFW.GLFW_KEY_V && this.client != null) {
-            insertAtKeyboardCommandsCursor(this.client.keyboard.getClipboard());
+        if (isCtrlDown() && keyCode == InputConstants.KEY_V && this.minecraft != null) {
+            insertAtKeyboardCommandsCursor(this.minecraft.keyboardHandler.getClipboard());
             return true;
         }
-        if (isCtrlDown() && keyCode == GLFW.GLFW_KEY_C && this.client != null) {
-            this.client.keyboard.setClipboard(hasSelection(kbCommandsSelectionAnchor, kbCommandsCursor)
+        if (isCtrlDown() && keyCode == InputConstants.KEY_C && this.minecraft != null) {
+            this.minecraft.keyboardHandler.setClipboard(hasSelection(kbCommandsSelectionAnchor, kbCommandsCursor)
                     ? selectedText(kbCommandsText, kbCommandsSelectionAnchor, kbCommandsCursor)
                     : kbCommandsText);
             return true;
         }
-        if (isCtrlDown() && keyCode == GLFW.GLFW_KEY_X && this.client != null) {
-            this.client.keyboard.setClipboard(hasSelection(kbCommandsSelectionAnchor, kbCommandsCursor)
+        if (isCtrlDown() && keyCode == InputConstants.KEY_X && this.minecraft != null) {
+            this.minecraft.keyboardHandler.setClipboard(hasSelection(kbCommandsSelectionAnchor, kbCommandsCursor)
                     ? selectedText(kbCommandsText, kbCommandsSelectionAnchor, kbCommandsCursor)
                     : kbCommandsText);
             if (hasSelection(kbCommandsSelectionAnchor, kbCommandsCursor)) {
@@ -4894,7 +5185,7 @@ public class MacroWorkbenchScreen extends Screen {
             kbCommandsSelectionAnchor = -1;
             return true;
         }
-        if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
+        if (keyCode == InputConstants.KEY_ESCAPE) {
             closeKeyboardCommandsModal();
             return true;
         }
@@ -4935,8 +5226,8 @@ public class MacroWorkbenchScreen extends Screen {
 
     private int parseDelayOrDefault(int fallback) {
         try {
-            if (kbDelayField.getText() != null && !kbDelayField.getText().isBlank()) {
-                return Math.max(0, Integer.parseInt(kbDelayField.getText().trim()));
+            if (kbDelayField.getValue() != null && !kbDelayField.getValue().isBlank()) {
+                return Math.max(0, Integer.parseInt(kbDelayField.getValue().trim()));
             }
         } catch (Exception ignored) {
         }
@@ -4944,13 +5235,13 @@ public class MacroWorkbenchScreen extends Screen {
     }
 
     private boolean handleAdvancedTextKey(int keyCode) {
-        if (isCtrlDown() && keyCode == GLFW.GLFW_KEY_A) {
+        if (isCtrlDown() && keyCode == InputConstants.KEY_A) {
             advancedSelectionAnchor = 0;
             advancedCursor = advancedText.length();
             advancedTextManualScroll = false;
             return true;
         }
-        if (keyCode == GLFW.GLFW_KEY_BACKSPACE) {
+        if (keyCode == InputConstants.KEY_BACKSPACE) {
             if (hasSelection(advancedSelectionAnchor, advancedCursor)) {
                 int start = selectionStart(advancedSelectionAnchor, advancedCursor);
                 int end = selectionEnd(advancedSelectionAnchor, advancedCursor);
@@ -4968,7 +5259,7 @@ public class MacroWorkbenchScreen extends Screen {
             advancedTextManualScroll = false;
             return true;
         }
-        if (keyCode == GLFW.GLFW_KEY_DELETE) {
+        if (keyCode == InputConstants.KEY_DELETE) {
             if (hasSelection(advancedSelectionAnchor, advancedCursor)) {
                 int start = selectionStart(advancedSelectionAnchor, advancedCursor);
                 int end = selectionEnd(advancedSelectionAnchor, advancedCursor);
@@ -4985,65 +5276,65 @@ public class MacroWorkbenchScreen extends Screen {
             advancedTextManualScroll = false;
             return true;
         }
-        if (keyCode == GLFW.GLFW_KEY_LEFT) {
+        if (keyCode == InputConstants.KEY_LEFT) {
             int old = advancedCursor;
             advancedCursor = Math.max(0, advancedCursor - 1);
             advancedSelectionAnchor = updateSelectionAnchor(advancedSelectionAnchor, old, advancedCursor, isShiftDown());
             advancedTextManualScroll = false;
             return true;
         }
-        if (keyCode == GLFW.GLFW_KEY_RIGHT) {
+        if (keyCode == InputConstants.KEY_RIGHT) {
             int old = advancedCursor;
             advancedCursor = Math.min(advancedText.length(), advancedCursor + 1);
             advancedSelectionAnchor = updateSelectionAnchor(advancedSelectionAnchor, old, advancedCursor, isShiftDown());
             advancedTextManualScroll = false;
             return true;
         }
-        if (keyCode == GLFW.GLFW_KEY_HOME) {
+        if (keyCode == InputConstants.KEY_HOME) {
             int old = advancedCursor;
             advancedCursor = lineStart(advancedText, advancedCursor);
             advancedSelectionAnchor = updateSelectionAnchor(advancedSelectionAnchor, old, advancedCursor, isShiftDown());
             advancedTextManualScroll = false;
             return true;
         }
-        if (keyCode == GLFW.GLFW_KEY_END) {
+        if (keyCode == InputConstants.KEY_END) {
             int old = advancedCursor;
             advancedCursor = lineEnd(advancedText, advancedCursor);
             advancedSelectionAnchor = updateSelectionAnchor(advancedSelectionAnchor, old, advancedCursor, isShiftDown());
             advancedTextManualScroll = false;
             return true;
         }
-        if (keyCode == GLFW.GLFW_KEY_UP) {
+        if (keyCode == InputConstants.KEY_UP) {
             int old = advancedCursor;
             advancedCursor = moveCursorVertical(advancedText, advancedCursor, -1);
             advancedSelectionAnchor = updateSelectionAnchor(advancedSelectionAnchor, old, advancedCursor, isShiftDown());
             advancedTextManualScroll = false;
             return true;
         }
-        if (keyCode == GLFW.GLFW_KEY_DOWN) {
+        if (keyCode == InputConstants.KEY_DOWN) {
             int old = advancedCursor;
             advancedCursor = moveCursorVertical(advancedText, advancedCursor, 1);
             advancedSelectionAnchor = updateSelectionAnchor(advancedSelectionAnchor, old, advancedCursor, isShiftDown());
             advancedTextManualScroll = false;
             return true;
         }
-        if (keyCode == GLFW.GLFW_KEY_ENTER || keyCode == GLFW.GLFW_KEY_KP_ENTER) {
+        if (keyCode == InputConstants.KEY_RETURN || keyCode == InputConstants.KEY_NUMPADENTER) {
             insertAtCursor("\n");
             return true;
         }
-        if (isCtrlDown() && keyCode == GLFW.GLFW_KEY_V && this.client != null) {
-            insertAtCursor(this.client.keyboard.getClipboard());
+        if (isCtrlDown() && keyCode == InputConstants.KEY_V && this.minecraft != null) {
+            insertAtCursor(this.minecraft.keyboardHandler.getClipboard());
             advancedActionSuggestionIndex = -1;
             return true;
         }
-        if (isCtrlDown() && keyCode == GLFW.GLFW_KEY_C && this.client != null) {
-            this.client.keyboard.setClipboard(hasSelection(advancedSelectionAnchor, advancedCursor)
+        if (isCtrlDown() && keyCode == InputConstants.KEY_C && this.minecraft != null) {
+            this.minecraft.keyboardHandler.setClipboard(hasSelection(advancedSelectionAnchor, advancedCursor)
                     ? selectedText(advancedText, advancedSelectionAnchor, advancedCursor)
                     : advancedText);
             return true;
         }
-        if (isCtrlDown() && keyCode == GLFW.GLFW_KEY_X && this.client != null) {
-            this.client.keyboard.setClipboard(hasSelection(advancedSelectionAnchor, advancedCursor)
+        if (isCtrlDown() && keyCode == InputConstants.KEY_X && this.minecraft != null) {
+            this.minecraft.keyboardHandler.setClipboard(hasSelection(advancedSelectionAnchor, advancedCursor)
                     ? selectedText(advancedText, advancedSelectionAnchor, advancedCursor)
                     : advancedText);
             if (hasSelection(advancedSelectionAnchor, advancedCursor)) {
@@ -5059,7 +5350,7 @@ public class MacroWorkbenchScreen extends Screen {
             advancedTextManualScroll = false;
             return true;
         }
-        if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
+        if (keyCode == InputConstants.KEY_ESCAPE) {
             closeAdvancedModal();
             return true;
         }
@@ -5067,15 +5358,15 @@ public class MacroWorkbenchScreen extends Screen {
     }
 
     private boolean handleAdvancedActionKey(int keyCode) {
-        if (isCtrlDown() && keyCode == GLFW.GLFW_KEY_A) {
+        if (isCtrlDown() && keyCode == InputConstants.KEY_A) {
             advancedActionSelectionAnchor = 0;
             advancedActionCursor = advancedAction.length();
             return true;
         }
-        if (!isShiftDown() && (keyCode == GLFW.GLFW_KEY_UP || keyCode == GLFW.GLFW_KEY_DOWN)) {
+        if (!isShiftDown() && (keyCode == InputConstants.KEY_UP || keyCode == InputConstants.KEY_DOWN)) {
             List<String> suggestions = advancedActionSuggestions();
             if (!suggestions.isEmpty()) {
-                int dir = keyCode == GLFW.GLFW_KEY_UP ? -1 : 1;
+                int dir = keyCode == InputConstants.KEY_UP ? -1 : 1;
                 int start = advancedActionSuggestionIndex < 0
                         ? suggestions.indexOf(advancedAction)
                         : advancedActionSuggestionIndex;
@@ -5090,7 +5381,7 @@ public class MacroWorkbenchScreen extends Screen {
                 return true;
             }
         }
-        if (keyCode == GLFW.GLFW_KEY_BACKSPACE) {
+        if (keyCode == InputConstants.KEY_BACKSPACE) {
             if (hasSelection(advancedActionSelectionAnchor, advancedActionCursor)) {
                 int start = selectionStart(advancedActionSelectionAnchor, advancedActionCursor);
                 int end = selectionEnd(advancedActionSelectionAnchor, advancedActionCursor);
@@ -5108,7 +5399,7 @@ public class MacroWorkbenchScreen extends Screen {
             advancedActionSelectionAnchor = -1;
             return true;
         }
-        if (keyCode == GLFW.GLFW_KEY_DELETE) {
+        if (keyCode == InputConstants.KEY_DELETE) {
             if (hasSelection(advancedActionSelectionAnchor, advancedActionCursor)) {
                 int start = selectionStart(advancedActionSelectionAnchor, advancedActionCursor);
                 int end = selectionEnd(advancedActionSelectionAnchor, advancedActionCursor);
@@ -5125,31 +5416,31 @@ public class MacroWorkbenchScreen extends Screen {
             advancedActionSelectionAnchor = -1;
             return true;
         }
-        if (keyCode == GLFW.GLFW_KEY_LEFT) {
+        if (keyCode == InputConstants.KEY_LEFT) {
             int old = advancedActionCursor;
             advancedActionCursor = Math.max(0, advancedActionCursor - 1);
             advancedActionSelectionAnchor = updateSelectionAnchor(advancedActionSelectionAnchor, old, advancedActionCursor, isShiftDown());
             return true;
         }
-        if (keyCode == GLFW.GLFW_KEY_RIGHT) {
+        if (keyCode == InputConstants.KEY_RIGHT) {
             int old = advancedActionCursor;
             advancedActionCursor = Math.min(advancedAction.length(), advancedActionCursor + 1);
             advancedActionSelectionAnchor = updateSelectionAnchor(advancedActionSelectionAnchor, old, advancedActionCursor, isShiftDown());
             return true;
         }
-        if (keyCode == GLFW.GLFW_KEY_HOME) {
+        if (keyCode == InputConstants.KEY_HOME) {
             int old = advancedActionCursor;
             advancedActionCursor = 0;
             advancedActionSelectionAnchor = updateSelectionAnchor(advancedActionSelectionAnchor, old, advancedActionCursor, isShiftDown());
             return true;
         }
-        if (keyCode == GLFW.GLFW_KEY_END) {
+        if (keyCode == InputConstants.KEY_END) {
             int old = advancedActionCursor;
             advancedActionCursor = advancedAction.length();
             advancedActionSelectionAnchor = updateSelectionAnchor(advancedActionSelectionAnchor, old, advancedActionCursor, isShiftDown());
             return true;
         }
-        if (keyCode == GLFW.GLFW_KEY_TAB) {
+        if (keyCode == InputConstants.KEY_TAB) {
             List<String> suggestions = advancedActionSuggestions();
             if (!suggestions.isEmpty()) {
                 int dir = isShiftDown() ? -1 : 1;
@@ -5168,19 +5459,19 @@ public class MacroWorkbenchScreen extends Screen {
             }
             return true;
         }
-        if (isCtrlDown() && keyCode == GLFW.GLFW_KEY_V && this.client != null) {
-            insertAtAdvancedActionCursor(this.client.keyboard.getClipboard());
+        if (isCtrlDown() && keyCode == InputConstants.KEY_V && this.minecraft != null) {
+            insertAtAdvancedActionCursor(this.minecraft.keyboardHandler.getClipboard());
             advancedActionSuggestionIndex = -1;
             return true;
         }
-        if (isCtrlDown() && keyCode == GLFW.GLFW_KEY_C && this.client != null) {
-            this.client.keyboard.setClipboard(hasSelection(advancedActionSelectionAnchor, advancedActionCursor)
+        if (isCtrlDown() && keyCode == InputConstants.KEY_C && this.minecraft != null) {
+            this.minecraft.keyboardHandler.setClipboard(hasSelection(advancedActionSelectionAnchor, advancedActionCursor)
                     ? selectedText(advancedAction, advancedActionSelectionAnchor, advancedActionCursor)
                     : advancedAction);
             return true;
         }
-        if (isCtrlDown() && keyCode == GLFW.GLFW_KEY_X && this.client != null) {
-            this.client.keyboard.setClipboard(hasSelection(advancedActionSelectionAnchor, advancedActionCursor)
+        if (isCtrlDown() && keyCode == InputConstants.KEY_X && this.minecraft != null) {
+            this.minecraft.keyboardHandler.setClipboard(hasSelection(advancedActionSelectionAnchor, advancedActionCursor)
                     ? selectedText(advancedAction, advancedActionSelectionAnchor, advancedActionCursor)
                     : advancedAction);
             if (hasSelection(advancedActionSelectionAnchor, advancedActionCursor)) {
@@ -5196,7 +5487,7 @@ public class MacroWorkbenchScreen extends Screen {
             advancedActionSuggestionIndex = -1;
             return true;
         }
-        if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
+        if (keyCode == InputConstants.KEY_ESCAPE) {
             closeAdvancedModal();
             return true;
         }
@@ -5220,12 +5511,12 @@ public class MacroWorkbenchScreen extends Screen {
         int cursor = advancedVisibilityScreenTypeCursor;
         int selectionAnchor = advancedVisibilityScreenTypeSelectionAnchor;
 
-        if (isCtrlDown() && keyCode == GLFW.GLFW_KEY_A) {
+        if (isCtrlDown() && keyCode == InputConstants.KEY_A) {
             advancedVisibilityScreenTypeSelectionAnchor = 0;
             advancedVisibilityScreenTypeCursor = value.length();
             return true;
         }
-        if (keyCode == GLFW.GLFW_KEY_BACKSPACE) {
+        if (keyCode == InputConstants.KEY_BACKSPACE) {
             if (hasSelection(selectionAnchor, cursor)) {
                 int start = selectionStart(selectionAnchor, cursor);
                 int end = selectionEnd(selectionAnchor, cursor);
@@ -5238,7 +5529,7 @@ public class MacroWorkbenchScreen extends Screen {
             advancedVisibilityScreenTypeSelectionAnchor = -1;
             return true;
         }
-        if (keyCode == GLFW.GLFW_KEY_DELETE) {
+        if (keyCode == InputConstants.KEY_DELETE) {
             if (hasSelection(selectionAnchor, cursor)) {
                 int start = selectionStart(selectionAnchor, cursor);
                 int end = selectionEnd(selectionAnchor, cursor);
@@ -5250,45 +5541,45 @@ public class MacroWorkbenchScreen extends Screen {
             advancedVisibilityScreenTypeSelectionAnchor = -1;
             return true;
         }
-        if (keyCode == GLFW.GLFW_KEY_LEFT) {
+        if (keyCode == InputConstants.KEY_LEFT) {
             int old = cursor;
             int next = Math.max(0, cursor - 1);
             advancedVisibilityScreenTypeCursor = next;
             advancedVisibilityScreenTypeSelectionAnchor = updateSelectionAnchor(selectionAnchor, old, next, isShiftDown());
             return true;
         }
-        if (keyCode == GLFW.GLFW_KEY_RIGHT) {
+        if (keyCode == InputConstants.KEY_RIGHT) {
             int old = cursor;
             int next = Math.min(value.length(), cursor + 1);
             advancedVisibilityScreenTypeCursor = next;
             advancedVisibilityScreenTypeSelectionAnchor = updateSelectionAnchor(selectionAnchor, old, next, isShiftDown());
             return true;
         }
-        if (keyCode == GLFW.GLFW_KEY_HOME) {
+        if (keyCode == InputConstants.KEY_HOME) {
             int old = cursor;
             advancedVisibilityScreenTypeCursor = 0;
             advancedVisibilityScreenTypeSelectionAnchor = updateSelectionAnchor(selectionAnchor, old, 0, isShiftDown());
             return true;
         }
-        if (keyCode == GLFW.GLFW_KEY_END) {
+        if (keyCode == InputConstants.KEY_END) {
             int old = cursor;
             int next = value.length();
             advancedVisibilityScreenTypeCursor = next;
             advancedVisibilityScreenTypeSelectionAnchor = updateSelectionAnchor(selectionAnchor, old, next, isShiftDown());
             return true;
         }
-        if (isCtrlDown() && keyCode == GLFW.GLFW_KEY_V && this.client != null) {
-            insertAtAdvancedVisibilityScreenTypeCursor(this.client.keyboard.getClipboard());
+        if (isCtrlDown() && keyCode == InputConstants.KEY_V && this.minecraft != null) {
+            insertAtAdvancedVisibilityScreenTypeCursor(this.minecraft.keyboardHandler.getClipboard());
             return true;
         }
-        if (isCtrlDown() && keyCode == GLFW.GLFW_KEY_C && this.client != null) {
-            this.client.keyboard.setClipboard(hasSelection(selectionAnchor, cursor)
+        if (isCtrlDown() && keyCode == InputConstants.KEY_C && this.minecraft != null) {
+            this.minecraft.keyboardHandler.setClipboard(hasSelection(selectionAnchor, cursor)
                     ? selectedText(value, selectionAnchor, cursor)
                     : value);
             return true;
         }
-        if (isCtrlDown() && keyCode == GLFW.GLFW_KEY_X && this.client != null) {
-            this.client.keyboard.setClipboard(hasSelection(selectionAnchor, cursor)
+        if (isCtrlDown() && keyCode == InputConstants.KEY_X && this.minecraft != null) {
+            this.minecraft.keyboardHandler.setClipboard(hasSelection(selectionAnchor, cursor)
                     ? selectedText(value, selectionAnchor, cursor)
                     : value);
             if (hasSelection(selectionAnchor, cursor)) {
@@ -5303,7 +5594,7 @@ public class MacroWorkbenchScreen extends Screen {
             advancedVisibilityScreenTypeSelectionAnchor = -1;
             return true;
         }
-        if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
+        if (keyCode == InputConstants.KEY_ESCAPE) {
             closeAdvancedModal();
             return true;
         }
@@ -5315,7 +5606,7 @@ public class MacroWorkbenchScreen extends Screen {
         int cursor = background ? advancedBgCursor : advancedBorderCursor;
         int selectionAnchor = background ? advancedBgSelectionAnchor : advancedBorderSelectionAnchor;
 
-        if (isCtrlDown() && keyCode == GLFW.GLFW_KEY_A) {
+        if (isCtrlDown() && keyCode == InputConstants.KEY_A) {
             if (background) {
                 advancedBgSelectionAnchor = 0;
                 advancedBgCursor = value.length();
@@ -5326,7 +5617,7 @@ public class MacroWorkbenchScreen extends Screen {
             return true;
         }
 
-        if (keyCode == GLFW.GLFW_KEY_BACKSPACE) {
+        if (keyCode == InputConstants.KEY_BACKSPACE) {
             if (hasSelection(selectionAnchor, cursor)) {
                 int start = selectionStart(selectionAnchor, cursor);
                 int end = selectionEnd(selectionAnchor, cursor);
@@ -5351,7 +5642,7 @@ public class MacroWorkbenchScreen extends Screen {
             }
             return true;
         }
-        if (keyCode == GLFW.GLFW_KEY_DELETE) {
+        if (keyCode == InputConstants.KEY_DELETE) {
             if (hasSelection(selectionAnchor, cursor)) {
                 int start = selectionStart(selectionAnchor, cursor);
                 int end = selectionEnd(selectionAnchor, cursor);
@@ -5375,7 +5666,7 @@ public class MacroWorkbenchScreen extends Screen {
             }
             return true;
         }
-        if (keyCode == GLFW.GLFW_KEY_LEFT) {
+        if (keyCode == InputConstants.KEY_LEFT) {
             int old = cursor;
             int next = Math.max(0, cursor - 1);
             setAdvancedColorState(background, value, next);
@@ -5386,7 +5677,7 @@ public class MacroWorkbenchScreen extends Screen {
             }
             return true;
         }
-        if (keyCode == GLFW.GLFW_KEY_RIGHT) {
+        if (keyCode == InputConstants.KEY_RIGHT) {
             int old = cursor;
             int next = Math.min(value.length(), cursor + 1);
             setAdvancedColorState(background, value, next);
@@ -5397,7 +5688,7 @@ public class MacroWorkbenchScreen extends Screen {
             }
             return true;
         }
-        if (keyCode == GLFW.GLFW_KEY_HOME) {
+        if (keyCode == InputConstants.KEY_HOME) {
             int old = cursor;
             setAdvancedColorState(background, value, 0);
             if (background) {
@@ -5407,7 +5698,7 @@ public class MacroWorkbenchScreen extends Screen {
             }
             return true;
         }
-        if (keyCode == GLFW.GLFW_KEY_END) {
+        if (keyCode == InputConstants.KEY_END) {
             int old = cursor;
             int next = value.length();
             setAdvancedColorState(background, value, next);
@@ -5418,22 +5709,22 @@ public class MacroWorkbenchScreen extends Screen {
             }
             return true;
         }
-        if (isCtrlDown() && keyCode == GLFW.GLFW_KEY_V && this.client != null) {
+        if (isCtrlDown() && keyCode == InputConstants.KEY_V && this.minecraft != null) {
             if (background) {
-                insertAtAdvancedBgCursor(this.client.keyboard.getClipboard());
+                insertAtAdvancedBgCursor(this.minecraft.keyboardHandler.getClipboard());
             } else {
-                insertAtAdvancedBorderCursor(this.client.keyboard.getClipboard());
+                insertAtAdvancedBorderCursor(this.minecraft.keyboardHandler.getClipboard());
             }
             return true;
         }
-        if (isCtrlDown() && keyCode == GLFW.GLFW_KEY_C && this.client != null) {
-            this.client.keyboard.setClipboard(hasSelection(selectionAnchor, cursor)
+        if (isCtrlDown() && keyCode == InputConstants.KEY_C && this.minecraft != null) {
+            this.minecraft.keyboardHandler.setClipboard(hasSelection(selectionAnchor, cursor)
                     ? selectedText(value, selectionAnchor, cursor)
                     : value);
             return true;
         }
-        if (isCtrlDown() && keyCode == GLFW.GLFW_KEY_X && this.client != null) {
-            this.client.keyboard.setClipboard(hasSelection(selectionAnchor, cursor)
+        if (isCtrlDown() && keyCode == InputConstants.KEY_X && this.minecraft != null) {
+            this.minecraft.keyboardHandler.setClipboard(hasSelection(selectionAnchor, cursor)
                     ? selectedText(value, selectionAnchor, cursor)
                     : value);
             if (hasSelection(selectionAnchor, cursor)) {
@@ -5451,7 +5742,7 @@ public class MacroWorkbenchScreen extends Screen {
             }
             return true;
         }
-        if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
+        if (keyCode == InputConstants.KEY_ESCAPE) {
             closeAdvancedModal();
             return true;
         }
@@ -5635,7 +5926,7 @@ public class MacroWorkbenchScreen extends Screen {
         colorPickerOpen = true;
     }
 
-    private boolean handleColorPickerClick(Click click) {
+    private boolean handleColorPickerClick(MouseButtonEvent click) {
         int pickerW = 140;
         int pickerH = 86;
         int headerH = 18;
@@ -5680,14 +5971,14 @@ public class MacroWorkbenchScreen extends Screen {
         }
     }
 
-    private void renderColorPickerPopup(DrawContext context, int mouseX, int mouseY) {
+    private void renderColorPickerPopup(GuiGraphicsExtractor context, int mouseX, int mouseY) {
         if (!colorPickerOpen) {
             return;
         }
         int pickerW = 140;
         int pickerH = 60;
         GuiSystem.drawPanel(context, colorPickerX, colorPickerY, pickerW, pickerH);
-        context.drawTextWithShadow(this.textRenderer, colorPickerTitle, colorPickerX + 8, colorPickerY + 6, 0xFFFFFFFF);
+        context.text(this.font, colorPickerTitle, colorPickerX + 8, colorPickerY + 6, 0xFFFFFFFF);
         drawModalButton(context, colorPickerX + pickerW - 16, colorPickerY + 4, 12, 12, "x",
                 containsBox(mouseX, mouseY, colorPickerX + pickerW - 16, colorPickerY + 4, 12, 12));
 
@@ -5718,7 +6009,7 @@ public class MacroWorkbenchScreen extends Screen {
     }
 
     private int[] cursorPixel(int x, int y, String text, int cursorIndex) {
-        return GuiTextEditingUtils.cursorPixel(this.textRenderer, x, y, text, cursorIndex);
+        return GuiTextEditingUtils.cursorPixel(this.font, x, y, text, cursorIndex);
     }
 
     private void rebuildBindingMaps() {
@@ -5737,75 +6028,109 @@ public class MacroWorkbenchScreen extends Screen {
             macroBindingNames.computeIfAbsent(m.keyCode, k -> new ArrayList<>()).add(name);
         }
 
-        if (this.client != null && this.client.options != null) {
-            for (KeyBinding kb : this.client.options.allKeys) {
+        if (this.minecraft != null && this.minecraft.options != null) {
+            for (KeyMapping kb : this.minecraft.options.keyMappings) {
                 if (kb == null) {
                     continue;
                 }
-                String translation = kb.getBoundKeyTranslationKey();
-                var key = InputUtil.fromTranslationKey(translation);
+                String translation = kb.saveString();
+                var key = InputConstants.getKey(translation);
                 if (key == null) {
                     continue;
                 }
-                int code = key.getCode();
+                int code = key.getValue();
                 if (code < 0) {
                     continue;
                 }
+                if (key.getType() == InputConstants.Type.MOUSE) {
+                    code = MacroWorkbenchCanvasUtils.mouseCell(code);
+                }
                 gameBindingNames.computeIfAbsent(code, k -> new ArrayList<>())
-                        .add(ReflectionUtils.getGameKeybindDisplayName(kb, this.client.options));
+                        .add(ReflectionUtils.getGameKeybindDisplayName(kb, this.minecraft.options));
             }
         }
     }
 
     private void rebuildKeyboardGrid() {
         cells.clear();
+        buildKeyboardGrid();
+        if (cells.isEmpty()) {
+            return;
+        }
+        KbLayout kb = keyboardLayout();
+        int minX = Integer.MAX_VALUE;
+        int maxX = Integer.MIN_VALUE;
+        int maxY = Integer.MIN_VALUE;
+        for (KeyCell cell : cells) {
+            minX = Math.min(minX, cell.x());
+            maxX = Math.max(maxX, cell.x() + cell.w());
+            maxY = Math.max(maxY, cell.y() + cell.h());
+        }
+        int dx = Math.max(0, (kb.kbX() + kb.kbW() - maxX - (minX - kb.kbX())) / 2);
+        int areaBottom = kb.kbY() + kb.kbH();
+        int dy = Math.max(0, (areaBottom - maxY) / 2);
+        List<KeyCell> centered = new ArrayList<>(cells.size());
+        for (KeyCell cell : cells) {
+            centered.add(new KeyCell(cell.keyCode(), cell.label(), cell.x() + dx, cell.y() + dy, cell.w(), cell.h()));
+        }
+        cells.clear();
+        cells.addAll(centered);
+    }
 
-        int panelX = keyboardPanelX();
-        int availableW = Math.max(170, panelX - 16);
-        int x0 = 10;
-        int y0 = TOP_BAR_H + 26;
-        int gap = Math.clamp(availableW / 180, 3, 6);
+    private void buildKeyboardGrid() {
+
+        KbLayout kb = keyboardLayout();
+        int availableW = kb.kbW();
+        int x0 = kb.kbX();
+        int y0 = kb.kbY() + KB_LEGEND_H;
+        int availableH = kb.kbH() - KB_LEGEND_H;
+        int gap = Math.clamp(availableW / 180, 2, 5);
 
         int[] rowFn = {
-                GLFW.GLFW_KEY_ESCAPE,
-                GLFW.GLFW_KEY_F1, GLFW.GLFW_KEY_F2, GLFW.GLFW_KEY_F3, GLFW.GLFW_KEY_F4,
-                GLFW.GLFW_KEY_F5, GLFW.GLFW_KEY_F6, GLFW.GLFW_KEY_F7, GLFW.GLFW_KEY_F8,
-                GLFW.GLFW_KEY_F9, GLFW.GLFW_KEY_F10, GLFW.GLFW_KEY_F11, GLFW.GLFW_KEY_F12
+                InputConstants.KEY_ESCAPE,
+                InputConstants.KEY_F1, InputConstants.KEY_F2, InputConstants.KEY_F3, InputConstants.KEY_F4,
+                InputConstants.KEY_F5, InputConstants.KEY_F6, InputConstants.KEY_F7, InputConstants.KEY_F8,
+                InputConstants.KEY_F9, InputConstants.KEY_F10, InputConstants.KEY_F11, InputConstants.KEY_F12
         };
         int[] rowDigits = {
-                GLFW.GLFW_KEY_GRAVE_ACCENT,
-                GLFW.GLFW_KEY_1, GLFW.GLFW_KEY_2, GLFW.GLFW_KEY_3, GLFW.GLFW_KEY_4, GLFW.GLFW_KEY_5,
-                GLFW.GLFW_KEY_6, GLFW.GLFW_KEY_7, GLFW.GLFW_KEY_8, GLFW.GLFW_KEY_9, GLFW.GLFW_KEY_0,
-                GLFW.GLFW_KEY_MINUS, GLFW.GLFW_KEY_EQUAL, GLFW.GLFW_KEY_BACKSPACE
+                InputConstants.KEY_GRAVE,
+                InputConstants.KEY_1, InputConstants.KEY_2, InputConstants.KEY_3, InputConstants.KEY_4, InputConstants.KEY_5,
+                InputConstants.KEY_6, InputConstants.KEY_7, InputConstants.KEY_8, InputConstants.KEY_9, InputConstants.KEY_0,
+                InputConstants.KEY_MINUS, InputConstants.KEY_EQUALS, InputConstants.KEY_BACKSPACE
         };
         int[] rowTab = {
-                GLFW.GLFW_KEY_TAB,
-                GLFW.GLFW_KEY_Q, GLFW.GLFW_KEY_W, GLFW.GLFW_KEY_E, GLFW.GLFW_KEY_R, GLFW.GLFW_KEY_T,
-                GLFW.GLFW_KEY_Y, GLFW.GLFW_KEY_U, GLFW.GLFW_KEY_I, GLFW.GLFW_KEY_O, GLFW.GLFW_KEY_P,
-                GLFW.GLFW_KEY_LEFT_BRACKET, GLFW.GLFW_KEY_RIGHT_BRACKET, GLFW.GLFW_KEY_BACKSLASH
+                InputConstants.KEY_TAB,
+                InputConstants.KEY_Q, InputConstants.KEY_W, InputConstants.KEY_E, InputConstants.KEY_R, InputConstants.KEY_T,
+                InputConstants.KEY_Y, InputConstants.KEY_U, InputConstants.KEY_I, InputConstants.KEY_O, InputConstants.KEY_P,
+                InputConstants.KEY_LBRACKET, InputConstants.KEY_RBRACKET, InputConstants.KEY_BACKSLASH
         };
         int[] rowCaps = {
-                GLFW.GLFW_KEY_CAPS_LOCK,
-                GLFW.GLFW_KEY_A, GLFW.GLFW_KEY_S, GLFW.GLFW_KEY_D, GLFW.GLFW_KEY_F, GLFW.GLFW_KEY_G,
-                GLFW.GLFW_KEY_H, GLFW.GLFW_KEY_J, GLFW.GLFW_KEY_K, GLFW.GLFW_KEY_L,
-                GLFW.GLFW_KEY_SEMICOLON, GLFW.GLFW_KEY_APOSTROPHE, GLFW.GLFW_KEY_ENTER
+                InputConstants.KEY_CAPSLOCK,
+                InputConstants.KEY_A, InputConstants.KEY_S, InputConstants.KEY_D, InputConstants.KEY_F, InputConstants.KEY_G,
+                InputConstants.KEY_H, InputConstants.KEY_J, InputConstants.KEY_K, InputConstants.KEY_L,
+                InputConstants.KEY_SEMICOLON, InputConstants.KEY_APOSTROPHE, InputConstants.KEY_RETURN
         };
         int[] rowShift = {
-                GLFW.GLFW_KEY_LEFT_SHIFT,
-                GLFW.GLFW_KEY_Z, GLFW.GLFW_KEY_X, GLFW.GLFW_KEY_C, GLFW.GLFW_KEY_V, GLFW.GLFW_KEY_B,
-                GLFW.GLFW_KEY_N, GLFW.GLFW_KEY_M, GLFW.GLFW_KEY_COMMA, GLFW.GLFW_KEY_PERIOD,
-                GLFW.GLFW_KEY_SLASH, GLFW.GLFW_KEY_RIGHT_SHIFT
+                InputConstants.KEY_LSHIFT,
+                InputConstants.KEY_Z, InputConstants.KEY_X, InputConstants.KEY_C, InputConstants.KEY_V, InputConstants.KEY_B,
+                InputConstants.KEY_N, InputConstants.KEY_M, InputConstants.KEY_COMMA, InputConstants.KEY_PERIOD,
+                InputConstants.KEY_SLASH, InputConstants.KEY_RSHIFT
         };
 
-        int kw = 46;
+        int kw = 52;
         while (kw > 18 && keyboardMainWidth(kw, gap, rowDigits, rowTab, rowCaps, rowShift) > availableW) {
             kw--;
         }
         while (gap > 2 && keyboardMainWidth(kw, gap, rowDigits, rowTab, rowCaps, rowShift) > availableW) {
             gap--;
         }
-        int kh = Math.clamp(Math.round(kw * 0.8f), 18, 28);
-        int rowStep = kh + Math.max(4, gap);
+        int kh = Math.clamp(Math.round(kw * 0.9f), 12, 30);
+        int rowGap = Math.max(2, gap);
+        // Seven rows must fit the available height.
+        while (kh > 11 && (kh + rowGap) * 7 - rowGap > availableH) {
+            kh--;
+        }
+        int rowStep = kh + rowGap;
 
         addRow(x0, y0, kw, kh, gap, rowFn);
         addRow(x0, y0 + rowStep, kw, kh, gap, rowDigits);
@@ -5813,40 +6138,108 @@ public class MacroWorkbenchScreen extends Screen {
         addRow(x0, y0 + rowStep * 3, kw, kh, gap, rowCaps);
         addRow(x0, y0 + rowStep * 4, kw, kh, gap, rowShift);
         addRow(x0, y0 + rowStep * 5, kw, kh, gap,
-                GLFW.GLFW_KEY_LEFT_CONTROL, GLFW.GLFW_KEY_LEFT_ALT, GLFW.GLFW_KEY_SPACE,
-                GLFW.GLFW_KEY_RIGHT_ALT, GLFW.GLFW_KEY_RIGHT_CONTROL,
-                GLFW.GLFW_KEY_UP, GLFW.GLFW_KEY_LEFT, GLFW.GLFW_KEY_DOWN, GLFW.GLFW_KEY_RIGHT);
+                InputConstants.KEY_LCONTROL, InputConstants.KEY_LALT, InputConstants.KEY_SPACE,
+                InputConstants.KEY_RALT, InputConstants.KEY_RCONTROL,
+                InputConstants.KEY_UP, InputConstants.KEY_LEFT, InputConstants.KEY_DOWN, InputConstants.KEY_RIGHT);
         addRow(x0, y0 + rowStep * 6, kw, kh, gap,
-                GLFW.GLFW_KEY_HOME, GLFW.GLFW_KEY_END, GLFW.GLFW_KEY_PAGE_UP, GLFW.GLFW_KEY_PAGE_DOWN,
-                GLFW.GLFW_KEY_INSERT, GLFW.GLFW_KEY_DELETE);
+                InputConstants.KEY_HOME, InputConstants.KEY_END, InputConstants.KEY_PAGEUP, InputConstants.KEY_PAGEDOWN,
+                InputConstants.KEY_INSERT, InputConstants.KEY_DELETE);
         addRow(x0 + 7 * (kw + gap), y0 + rowStep * 6, kw, kh, gap,
-                GLFW.GLFW_MOUSE_BUTTON_LEFT, GLFW.GLFW_MOUSE_BUTTON_RIGHT,
-                GLFW.GLFW_MOUSE_BUTTON_MIDDLE, GLFW.GLFW_MOUSE_BUTTON_4, GLFW.GLFW_MOUSE_BUTTON_5);
+                MacroWorkbenchCanvasUtils.mouseCell(InputConstants.MOUSE_BUTTON_LEFT),
+                MacroWorkbenchCanvasUtils.mouseCell(InputConstants.MOUSE_BUTTON_RIGHT),
+                MacroWorkbenchCanvasUtils.mouseCell(InputConstants.MOUSE_BUTTON_MIDDLE),
+                MacroWorkbenchCanvasUtils.mouseCell(InputConstants.MOUSE_BUTTON_4),
+                MacroWorkbenchCanvasUtils.mouseCell(InputConstants.MOUSE_BUTTON_5));
 
-        int numpadWidth = rowPixelWidth(kw, gap, GLFW.GLFW_KEY_KP_7, GLFW.GLFW_KEY_KP_8, GLFW.GLFW_KEY_KP_9, GLFW.GLFW_KEY_KP_ADD);
+        int numpadWidth = rowPixelWidth(kw, gap, InputConstants.KEY_NUMPAD7, InputConstants.KEY_NUMPAD8, InputConstants.KEY_NUMPAD9, InputConstants.KEY_ADD);
         int mainWidth = keyboardMainWidth(kw, gap, rowDigits, rowTab, rowCaps, rowShift);
         boolean placeNumpadRight = availableW >= mainWidth + (gap * 6) + numpadWidth;
+        boolean placeNumpadBelow = !placeNumpadRight && rowStep * 12 + 8 <= availableH;
+        if (!placeNumpadRight && !placeNumpadBelow) {
+            return;
+        }
         int numpadX = placeNumpadRight
-                ? Math.min(panelX - numpadWidth - 14, x0 + mainWidth + (gap * 4))
+                ? x0 + availableW - numpadWidth
                 : x0 + Math.max(0, (mainWidth - numpadWidth) / 2);
-        int numpadY = placeNumpadRight ? (y0 + rowStep * 2) : (y0 + rowStep * 7 + 10);
-        addRow(numpadX, numpadY, kw, kh, gap, GLFW.GLFW_KEY_KP_DIVIDE, GLFW.GLFW_KEY_KP_MULTIPLY, GLFW.GLFW_KEY_KP_SUBTRACT);
-        addRow(numpadX, numpadY + rowStep, kw, kh, gap, GLFW.GLFW_KEY_KP_7, GLFW.GLFW_KEY_KP_8, GLFW.GLFW_KEY_KP_9, GLFW.GLFW_KEY_KP_ADD);
-        addRow(numpadX, numpadY + rowStep * 2, kw, kh, gap, GLFW.GLFW_KEY_KP_4, GLFW.GLFW_KEY_KP_5, GLFW.GLFW_KEY_KP_6);
-        addRow(numpadX, numpadY + rowStep * 3, kw, kh, gap, GLFW.GLFW_KEY_KP_1, GLFW.GLFW_KEY_KP_2, GLFW.GLFW_KEY_KP_3, GLFW.GLFW_KEY_KP_ENTER);
-        addRow(numpadX, numpadY + rowStep * 4, kw, kh, gap, GLFW.GLFW_KEY_KP_0, GLFW.GLFW_KEY_KP_DECIMAL);
+        int numpadY = placeNumpadRight ? (y0 + rowStep * 2) : (y0 + rowStep * 7 + 8);
+        addRow(numpadX, numpadY, kw, kh, gap, org.lwjgl.sdl.SDLScancode.SDL_SCANCODE_KP_DIVIDE, InputConstants.KEY_MULTIPLY, org.lwjgl.sdl.SDLScancode.SDL_SCANCODE_KP_MINUS);
+        addRow(numpadX, numpadY + rowStep, kw, kh, gap, InputConstants.KEY_NUMPAD7, InputConstants.KEY_NUMPAD8, InputConstants.KEY_NUMPAD9, InputConstants.KEY_ADD);
+        addRow(numpadX, numpadY + rowStep * 2, kw, kh, gap, InputConstants.KEY_NUMPAD4, InputConstants.KEY_NUMPAD5, InputConstants.KEY_NUMPAD6);
+        addRow(numpadX, numpadY + rowStep * 3, kw, kh, gap, InputConstants.KEY_NUMPAD1, InputConstants.KEY_NUMPAD2, InputConstants.KEY_NUMPAD3, InputConstants.KEY_NUMPADENTER);
+        addRow(numpadX, numpadY + rowStep * 4, kw, kh, gap, InputConstants.KEY_NUMPAD0, org.lwjgl.sdl.SDLScancode.SDL_SCANCODE_KP_PERIOD);
     }
 
-    private int keyboardPanelWidth() {
-        return Math.clamp((int) (this.width * 0.34f), 300, 430);
+    private static final int KB_LEGEND_H = 14;
+    private static final int KB_ROW_H = 14;
+    private static final int KEY_MACRO_BG = 0xFF1B3326;
+    private static final int KEY_MACRO_BORDER = 0xFF3FB950;
+    private static final int KEY_GAME_BG = 0xFF1A2742;
+    private static final int KEY_GAME_BORDER = 0xFF4C7BD9;
+    private static final int KEY_GAME_TEXT = 0xFF9CB8F0;
+
+    /** Geometry of the keyboard tab: keyboard area plus an inspector card (right when wide, below when narrow). */
+    private record KbLayout(boolean wide, int kbX, int kbY, int kbW, int kbH,
+                            int cardX, int cardY, int cardW, int cardH, int listTop, int listBottom,
+                            UiRect game, UiRect name, UiRect commands, UiRect edit, UiRect delay,
+                            UiRect save, UiRect add, UiRect delete) {
     }
 
-    private int keyboardPanelX() {
-        return Math.max(8, this.width - keyboardPanelWidth() - 8);
-    }
+    private KbLayout keyboardLayout() {
+        int left = contentLeft();
+        int top = contentTop();
+        int right = contentRight();
+        int bottom = contentBottom();
+        int pad = Theme.GAP_M;
+        int h = Theme.CONTROL_H;
+        int gap = Theme.GAP_S;
+        boolean wide = contentWidth() >= 480;
 
-    private int keyboardMacroListStartY() {
-        return TOP_BAR_H + 76;
+        if (wide) {
+            int cardW = Math.clamp(Math.round(contentWidth() * 0.34f), 190, 280);
+            int cardX = right - cardW;
+            int innerX = cardX + pad;
+            int innerW = cardW - pad * 2;
+            int buttonsY = bottom - pad - h;
+            int delayY = buttonsY - gap - h - 10;
+            int commandsY = delayY - 10 - h - gap;
+            int nameY = commandsY - 10 - h - gap;
+            int third = (innerW - gap * 2) / 3;
+            int delayW = Math.max(48, innerW / 3);
+            int gameW = Math.min(96, innerW / 2);
+            return new KbLayout(true, left, top, cardX - Theme.GAP_L - left, bottom - top,
+                    cardX, top, cardW, bottom - top, top + pad + 18 + 14, nameY - 10 - gap * 2,
+                    new UiRect(cardX + cardW - pad - gameW, top + pad, gameW, h),
+                    new UiRect(innerX, nameY, innerW, h),
+                    new UiRect(innerX, commandsY, innerW, h),
+                    new UiRect(innerX + delayW + gap, delayY, innerW - delayW - gap, h),
+                    new UiRect(innerX, delayY, delayW, h),
+                    new UiRect(innerX + (third + gap) * 2, buttonsY, innerW - (third + gap) * 2, h),
+                    new UiRect(innerX, buttonsY, third, h),
+                    new UiRect(innerX + third + gap, buttonsY, third, h));
+        }
+
+        int cardH = pad + h + gap + h + gap + h + pad - 2;
+        int cardY = bottom - cardH;
+        int innerX = left + pad;
+        int innerW = contentWidth() - pad * 2;
+        int row1 = cardY + pad - 1;
+        int row2 = row1 + h + gap;
+        int row3 = row2 + h + gap;
+        int gameW = Math.min(90, innerW / 3);
+        int nameW = Math.round(innerW * 0.34f);
+        int editW = Math.min(44, innerW / 6);
+        int delayW = Math.max(40, innerW / 6);
+        int buttonW = (innerW - delayW - gap * 3) / 3;
+        return new KbLayout(false, left, top, contentWidth(), cardY - Theme.GAP_M - top,
+                left, cardY, contentWidth(), cardH, 0, 0,
+                new UiRect(innerX + innerW - gameW, row1, gameW, h),
+                new UiRect(innerX, row2, nameW, h),
+                new UiRect(innerX + nameW + gap, row2, innerW - nameW - editW - gap * 2, h),
+                new UiRect(innerX + innerW - editW, row2, editW, h),
+                new UiRect(innerX, row3, delayW, h),
+                new UiRect(innerX + delayW + gap + (buttonW + gap) * 2, row3, innerW - delayW - gap - (buttonW + gap) * 2, h),
+                new UiRect(innerX + delayW + gap, row3, buttonW, h),
+                new UiRect(innerX + delayW + gap + buttonW + gap, row3, buttonW, h));
     }
 
     private int keyboardMainWidth(int baseWidth, int gap, int[]... rows) {
@@ -5869,13 +6262,13 @@ public class MacroWorkbenchScreen extends Screen {
     }
 
     private int keyCellWidth(int baseWidth, int key) {
-        if (key == GLFW.GLFW_KEY_SPACE) {
+        if (key == InputConstants.KEY_SPACE) {
             return baseWidth * 4;
         }
-        if (key == GLFW.GLFW_KEY_LEFT_SHIFT || key == GLFW.GLFW_KEY_RIGHT_SHIFT || key == GLFW.GLFW_KEY_KP_0) {
+        if (key == InputConstants.KEY_LSHIFT || key == InputConstants.KEY_RSHIFT || key == InputConstants.KEY_NUMPAD0) {
             return baseWidth * 2;
         }
-        if (key == GLFW.GLFW_KEY_BACKSPACE || key == GLFW.GLFW_KEY_TAB || key == GLFW.GLFW_KEY_CAPS_LOCK || key == GLFW.GLFW_KEY_ENTER) {
+        if (key == InputConstants.KEY_BACKSPACE || key == InputConstants.KEY_TAB || key == InputConstants.KEY_CAPSLOCK || key == InputConstants.KEY_RETURN) {
             return baseWidth + 18;
         }
         return baseWidth;
@@ -5900,14 +6293,14 @@ public class MacroWorkbenchScreen extends Screen {
         kbCommandsField.setEditable(active);
         kbDelayField.setEditable(active);
         if (!active) {
-            kbNameField.setText("");
-            kbCommandsField.setText("");
-            kbDelayField.setText("");
+            kbNameField.setValue("");
+            kbCommandsField.setValue("");
+            kbDelayField.setValue("");
             return;
         }
-        kbNameField.setText(StringUtils.safe(macro.name));
-        kbCommandsField.setText(macro.commands == null ? "" : String.join(";", macro.commands));
-        kbDelayField.setText(Integer.toString(Math.max(0, macro.delayTicks)));
+        kbNameField.setValue(StringUtils.safe(macro.name));
+        kbCommandsField.setValue(macro.commands == null ? "" : String.join(";", macro.commands));
+        kbDelayField.setValue(Integer.toString(Math.max(0, macro.delayTicks)));
     }
 
     private void saveKeyboardMacro() {
@@ -5921,15 +6314,15 @@ public class MacroWorkbenchScreen extends Screen {
 
         int delay = existing.delayTicks;
         try {
-            if (kbDelayField.getText() != null && !kbDelayField.getText().isBlank()) {
-                delay = Math.max(0, Integer.parseInt(kbDelayField.getText().trim()));
+            if (kbDelayField.getValue() != null && !kbDelayField.getValue().isBlank()) {
+                delay = Math.max(0, Integer.parseInt(kbDelayField.getValue().trim()));
             }
         } catch (Exception ignored) {
             // keep previous
         }
 
         List<String> commands = new ArrayList<>();
-        String raw = kbCommandsField.getText() == null ? "" : kbCommandsField.getText().trim();
+        String raw = kbCommandsField.getValue() == null ? "" : kbCommandsField.getValue().trim();
         if (!raw.isBlank()) {
             for (String part : raw.split("[;\\n]+")) {
                 String t = part.trim();
@@ -5941,7 +6334,7 @@ public class MacroWorkbenchScreen extends Screen {
 
         MacroDataHandler.updateMacro(
                 selectedMacroId,
-                StringUtils.safe(kbNameField.getText()),
+                StringUtils.safe(kbNameField.getValue()),
                 commands,
                 existing.keyCode,
                 existing.modifierKey,
@@ -5964,7 +6357,8 @@ public class MacroWorkbenchScreen extends Screen {
     }
 
     private void createKeyboardMacro() {
-        if (selectedKey < 0) {
+        // Macros are keyboard-only; mouse cells only display game bindings.
+        if (selectedKey < 0 || MacroWorkbenchCanvasUtils.isMouseCell(selectedKey)) {
             return;
         }
         String id = UUID.randomUUID().toString().substring(0, 8);
@@ -6220,7 +6614,7 @@ public class MacroWorkbenchScreen extends Screen {
     private record VanillaSidebarMetrics(int left, int top, int width, int height) {
     }
 
-    private record VanillaSidebarEntryMetrics(Text name, int scoreWidth) {
+    private record VanillaSidebarEntryMetrics(Component name, int scoreWidth) {
     }
 
     private VanillaHudDescriptor vanillaHudDescriptor(HudTweaksSettings.ElementType type) {
@@ -6876,21 +7270,21 @@ public class MacroWorkbenchScreen extends Screen {
     }
 
     private boolean isShiftDown() {
-        if (this.client == null) {
+        if (this.minecraft == null) {
             return false;
         }
-        var window = this.client.getWindow();
-        return InputUtil.isKeyPressed(window, GLFW.GLFW_KEY_LEFT_SHIFT)
-                || InputUtil.isKeyPressed(window, GLFW.GLFW_KEY_RIGHT_SHIFT);
+        var window = this.minecraft.getWindow();
+        return InputConstants.isKeyDown(InputConstants.KEY_LSHIFT)
+                || InputConstants.isKeyDown(InputConstants.KEY_RSHIFT);
     }
 
     private boolean isCtrlDown() {
-        if (this.client == null) {
+        if (this.minecraft == null) {
             return false;
         }
-        var window = this.client.getWindow();
-        return InputUtil.isKeyPressed(window, GLFW.GLFW_KEY_LEFT_CONTROL)
-                || InputUtil.isKeyPressed(window, GLFW.GLFW_KEY_RIGHT_CONTROL);
+        var window = this.minecraft.getWindow();
+        return InputConstants.isKeyDown(InputConstants.KEY_LCONTROL)
+                || InputConstants.isKeyDown(InputConstants.KEY_RCONTROL);
     }
 
     private int alignedStartX(int x, MacroHudDataHandler.HudElement e, int textWidth, boolean insideBox) {
@@ -6914,7 +7308,7 @@ public class MacroWorkbenchScreen extends Screen {
 
     private String expandForCanvas(String raw) {
         try {
-            String out = MacroPlaceholders.expandForCanvas(this.client, raw);
+            String out = MacroPlaceholders.expandForCanvas(this.minecraft, raw);
             return out == null ? "" : out;
         } catch (Exception ignored) {
             return raw == null ? "" : raw;
@@ -7026,7 +7420,7 @@ public class MacroWorkbenchScreen extends Screen {
     }
 
     private void updateModalDragSelection(int mouseX, int mouseY) {
-        if (this.client == null || activeDragSelectionField == ModalDragSelectionField.NONE) {
+        if (this.minecraft == null || activeDragSelectionField == ModalDragSelectionField.NONE) {
             return;
         }
 
@@ -7039,8 +7433,8 @@ public class MacroWorkbenchScreen extends Screen {
             return;
         }
 
-        long window = this.client.getWindow().getHandle();
-        if (GLFW.glfwGetMouseButton(window, GLFW.GLFW_MOUSE_BUTTON_LEFT) != GLFW.GLFW_PRESS) {
+        long window = this.minecraft.getWindow().handle();
+        if (!this.leftMouseDown) {
             activeDragSelectionField = ModalDragSelectionField.NONE;
             modalDragStartMouseX = Integer.MIN_VALUE;
             modalDragStartMouseY = Integer.MIN_VALUE;
@@ -7133,17 +7527,17 @@ public class MacroWorkbenchScreen extends Screen {
         }
     }
 
-    private void drawSingleLineSelection(DrawContext context, int textX, int textY, String text, int anchor, int cursor) {
-        GuiTextEditingUtils.drawSingleLineSelection(context, this.textRenderer, textX, textY, text, anchor, cursor);
+    private void drawSingleLineSelection(GuiGraphicsExtractor context, int textX, int textY, String text, int anchor, int cursor) {
+        GuiTextEditingUtils.drawSingleLineSelection(context, this.font, textX, textY, text, anchor, cursor);
     }
 
-    private void drawMultilineSelection(DrawContext context, int textX, int textY, int maxY, String text, int anchor, int cursor, int lineHeight) {
-        GuiTextEditingUtils.drawMultilineSelection(context, this.textRenderer, textX, textY, maxY, text, anchor, cursor, lineHeight);
+    private void drawMultilineSelection(GuiGraphicsExtractor context, int textX, int textY, int maxY, String text, int anchor, int cursor, int lineHeight) {
+        GuiTextEditingUtils.drawMultilineSelection(context, this.font, textX, textY, maxY, text, anchor, cursor, lineHeight);
     }
 
-    private void drawMultilineSelectionWithScroll(DrawContext context, int textX, int textY, int maxY,
+    private void drawMultilineSelectionWithScroll(GuiGraphicsExtractor context, int textX, int textY, int maxY,
                                                   String text, int anchor, int cursor, int lineHeight, int scrollLines) {
-        GuiTextEditingUtils.drawMultilineSelectionWithScroll(context, this.textRenderer, textX, textY, maxY, text, anchor, cursor, lineHeight, scrollLines);
+        GuiTextEditingUtils.drawMultilineSelectionWithScroll(context, this.font, textX, textY, maxY, text, anchor, cursor, lineHeight, scrollLines);
     }
 
     private static boolean containsBox(double x, double y, int boxX, int boxY, int boxW, int boxH) {
@@ -7177,15 +7571,15 @@ public class MacroWorkbenchScreen extends Screen {
     private int styledLineWidth(String raw) {
         int width = 0;
         for (MacroWorkbenchTextStyling.TextRun run : MacroWorkbenchTextStyling.parseColorRuns(raw, 0xFFFFFFFF)) {
-            width += this.textRenderer.getWidth(run.text());
+            width += this.font.width(run.text());
         }
         return width;
     }
 
-    private void drawStyledTextLine(DrawContext context, String raw, int x, int y, int defaultColor, float scale) {
+    private void drawStyledTextLine(GuiGraphicsExtractor context, String raw, int x, int y, int defaultColor, float scale) {
         List<MacroWorkbenchTextStyling.TextRun> runs = MacroWorkbenchTextStyling.parseColorRuns(raw, defaultColor);
-        context.getMatrices().pushMatrix();
-        context.getMatrices().scale(scale, scale);
+        context.pose().pushMatrix();
+        context.pose().scale(scale, scale);
 
         int logicalX = Math.round(x / scale);
         int logicalY = Math.round(y / scale);
@@ -7194,11 +7588,11 @@ public class MacroWorkbenchScreen extends Screen {
             if (run.text().isEmpty()) {
                 continue;
             }
-            context.drawTextWithShadow(this.textRenderer, run.text(), cursor, logicalY, run.color());
-            cursor += this.textRenderer.getWidth(run.text());
+            context.text(this.font, run.text(), cursor, logicalY, run.color());
+            cursor += this.font.width(run.text());
         }
 
-        context.getMatrices().popMatrix();
+        context.pose().popMatrix();
     }
 
     private boolean shouldHighlightButtonScript() {
@@ -7207,7 +7601,7 @@ public class MacroWorkbenchScreen extends Screen {
                 && selected.buttonExecutionMode != MacroHudDataHandler.ButtonExecutionMode.COMMAND;
     }
 
-    private void drawButtonScriptHighlightedLine(DrawContext context, String line, int x, int y) {
+    private void drawButtonScriptHighlightedLine(GuiGraphicsExtractor context, String line, int x, int y) {
         List<ScriptTokenSpan> spans = tokenizeButtonScriptLine(line);
         if (spans.isEmpty()) {
             return;
@@ -7218,8 +7612,8 @@ public class MacroWorkbenchScreen extends Screen {
                 continue;
             }
             String part = line.substring(span.start(), span.end());
-            context.drawText(this.textRenderer, part, drawX, y, span.color(), false);
-            drawX += this.textRenderer.getWidth(part);
+            context.text(this.font, part, drawX, y, span.color(), false);
+            drawX += this.font.width(part);
         }
     }
 
@@ -7299,7 +7693,7 @@ public class MacroWorkbenchScreen extends Screen {
     }
 
     private int cursorIndexFromPoint(String text, int localX, int localY, int lineHeight) {
-        return GuiTextEditingUtils.cursorIndexFromPoint(this.textRenderer, text, localX, localY, lineHeight);
+        return GuiTextEditingUtils.cursorIndexFromPoint(this.font, text, localX, localY, lineHeight);
     }
 
     private static int canvasBackgroundColor(MacroHudDataHandler.HudElement element) {
@@ -7314,7 +7708,7 @@ public class MacroWorkbenchScreen extends Screen {
         return color;
     }
 
-    private static void drawCanvasElementBorder(DrawContext context, MacroHudDataHandler.HudElement element,
+    private static void drawCanvasElementBorder(GuiGraphicsExtractor context, MacroHudDataHandler.HudElement element,
                                                 int x1, int y1, int x2, int y2) {
         MacroHudDataHandler.BorderMode mode = element == null || element.borderMode == null
                 ? MacroHudDataHandler.BorderMode.FULL
@@ -7334,8 +7728,8 @@ public class MacroWorkbenchScreen extends Screen {
         }
     }
 
-    TextRenderer workbenchTextRenderer() {
-        return this.textRenderer;
+    Font workbenchTextRenderer() {
+        return this.font;
     }
 
     void openWorkbenchTab(Tab next) {
@@ -7382,26 +7776,26 @@ public class MacroWorkbenchScreen extends Screen {
         if (id == null) {
             return new ItemStack(Items.STONE);
         }
-        if ("block".equalsIgnoreCase(kind) && Registries.BLOCK.containsId(id)) {
-            return new ItemStack(Registries.BLOCK.get(id).asItem());
+        if ("block".equalsIgnoreCase(kind) && BuiltInRegistries.BLOCK.containsKey(id)) {
+            return new ItemStack(BuiltInRegistries.BLOCK.getValue(id).asItem());
         }
         if ("entity".equalsIgnoreCase(kind)) {
-            if (Registries.ITEM.containsId(id)) {
-                return new ItemStack(Registries.ITEM.get(id));
+            if (BuiltInRegistries.ITEM.containsKey(id)) {
+                return new ItemStack(BuiltInRegistries.ITEM.getValue(id));
             }
             Identifier eggId = Identifier.tryParse(id.getNamespace() + ":" + id.getPath() + "_spawn_egg");
-            if (eggId != null && Registries.ITEM.containsId(eggId)) {
-                return new ItemStack(Registries.ITEM.get(eggId));
+            if (eggId != null && BuiltInRegistries.ITEM.containsKey(eggId)) {
+                return new ItemStack(BuiltInRegistries.ITEM.getValue(eggId));
             }
             return new ItemStack(Items.BARRIER);
         }
-        if (Registries.ITEM.containsId(id)) {
-            return new ItemStack(Registries.ITEM.get(id));
+        if (BuiltInRegistries.ITEM.containsKey(id)) {
+            return new ItemStack(BuiltInRegistries.ITEM.getValue(id));
         }
         return new ItemStack(Items.STONE);
     }
 
-    private void drawCanvasTriangleShape(DrawContext context, int x, int y, int w, int h,
+    private void drawCanvasTriangleShape(GuiGraphicsExtractor context, int x, int y, int w, int h,
                                          int fillColor, int borderColor, boolean filled,
                                          boolean drawBorder, int thickness) {
         int apexX = x + w / 2;
@@ -7430,7 +7824,7 @@ public class MacroWorkbenchScreen extends Screen {
         }
     }
 
-    private void drawCanvasDiamondShape(DrawContext context, int x, int y, int w, int h,
+    private void drawCanvasDiamondShape(GuiGraphicsExtractor context, int x, int y, int w, int h,
                                         int fillColor, int borderColor, boolean filled,
                                         boolean drawBorder, int thickness) {
         int cx = x + w / 2;
@@ -7459,10 +7853,10 @@ public class MacroWorkbenchScreen extends Screen {
     }
 
     private Double resolveCanvasNumericToken(String token) {
-        if (this.client == null || token == null || token.isBlank()) {
+        if (this.minecraft == null || token == null || token.isBlank()) {
             return null;
         }
-        String expanded = MacroPlaceholders.expandForCanvas(this.client, "{" + token + "}");
+        String expanded = MacroPlaceholders.expandForCanvas(this.minecraft, "{" + token + "}");
         return MacroWorkbenchCanvasUtils.parseFirstDouble(expanded);
     }
 
@@ -7501,6 +7895,75 @@ public class MacroWorkbenchScreen extends Screen {
         return Math.clamp(y, 0, Math.max(0, this.height - modalH));
     }
 
+    /** Size the editor modals are designed for; smaller windows render them scaled down to this size. */
+    private static final int MODAL_MIN_W = 440;
+    private static final int MODAL_MIN_H = 316;
+
+    /** Scale applied to the editor modals so they keep their designed layout on small windows. */
+    private float modalSpaceScale() {
+        if (!(advancedOpen || kbCommandsModalOpen)) {
+            return 1f;
+        }
+        float scale = Math.min((this.width - 16) / (float) MODAL_MIN_W, (this.height - 16) / (float) MODAL_MIN_H);
+        return Math.clamp(scale, 0.5f, 1f);
+    }
+
+    /**
+     * Runs {@code action} with this screen's width/height set to the scaled "modal space", so the modal layout
+     * code (which reads width/height) computes the same geometry used for rendering and hit-testing.
+     */
+    private <T> T inModalSpace(java.util.function.Supplier<T> action) {
+        float scale = modalSpaceScale();
+        if (scale >= 1f) {
+            return action.get();
+        }
+        int realWidth = this.width;
+        int realHeight = this.height;
+        this.width = Math.round(realWidth / scale);
+        this.height = Math.round(realHeight / scale);
+        try {
+            return action.get();
+        } finally {
+            this.width = realWidth;
+            this.height = realHeight;
+        }
+    }
+
+    private void renderModals(GuiGraphicsExtractor context, int mouseX, int mouseY) {
+        if (advancedOpen && advancedModalDragging && this.minecraft != null) {
+            long window = this.minecraft.getWindow().handle();
+            if (this.leftMouseDown) {
+                this.advancedModalPosX = mouseX - advancedModalDragOffsetX;
+                this.advancedModalPosY = mouseY - advancedModalDragOffsetY;
+            } else {
+                this.advancedModalDragging = false;
+            }
+        }
+        if (colorPickerOpen && colorPickerDragging && this.minecraft != null) {
+            long window = this.minecraft.getWindow().handle();
+            if (this.leftMouseDown) {
+                int pickerW = 140;
+                int pickerH = 86;
+                this.colorPickerX = Math.clamp(mouseX - colorPickerDragOffsetX, 6, Math.max(6, this.width - pickerW - 6));
+                this.colorPickerY = Math.clamp(mouseY - colorPickerDragOffsetY, 26, Math.max(26, this.height - pickerH - 6));
+            } else {
+                this.colorPickerDragging = false;
+            }
+        }
+
+        if (advancedOpen) {
+            renderAdvancedModal(context, mouseX, mouseY);
+            updateModalDragSelection(mouseX, mouseY);
+        }
+        if (kbCommandsModalOpen) {
+            renderKeyboardCommandsModal(context, mouseX, mouseY);
+            updateModalDragSelection(mouseX, mouseY);
+        }
+        if (advancedOpen && colorPickerOpen) {
+            renderColorPickerPopup(context, mouseX, mouseY);
+        }
+    }
+
     private float modalScale() {
         int maxWidth = Math.max(1, this.width - 24);
         int maxHeight = Math.max(1, this.height - 24);
@@ -7521,11 +7984,11 @@ public class MacroWorkbenchScreen extends Screen {
         return Math.clamp(Math.round(MODAL_H * modalScale()), minHeight, maxHeight);
     }
 
-    private void drawModalButton(DrawContext context, int x, int y, int w, int h, String label, boolean hovered) {
-        GuiSystem.drawButton(context, this.textRenderer, x, y, w, h, label, hovered, true);
+    private void drawModalButton(GuiGraphicsExtractor context, int x, int y, int w, int h, String label, boolean hovered) {
+        GuiSystem.drawButton(context, this.font, x, y, w, h, label, hovered, true);
     }
 
-    private void drawModalButton(DrawContext context, int x, int y, int w, int h, String label, int mouseX, int mouseY) {
+    private void drawModalButton(GuiGraphicsExtractor context, int x, int y, int w, int h, String label, int mouseX, int mouseY) {
         drawModalButton(context, x, y, w, h, label, containsBox(mouseX, mouseY, x, y, w, h));
     }
 
@@ -7542,16 +8005,16 @@ public class MacroWorkbenchScreen extends Screen {
     }
 
     @Override
-    public void close() {
+    public void onClose() {
         closeAdvancedModal();
         persistGridPrefs();
-        if (this.client != null) {
-            this.client.setScreen(parent);
+        if (this.minecraft != null) {
+            this.minecraft.gui.setScreen(parent);
         }
     }
 
     @Override
-    public boolean shouldPause() {
+    public boolean isPauseScreen() {
         return false;
     }
 }

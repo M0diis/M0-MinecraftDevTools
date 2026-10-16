@@ -1,10 +1,10 @@
 package me.m0dii.modules.zoom;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import lombok.Getter;
 import me.m0dii.modules.Module;
 import me.m0dii.utils.KeybindCatalog;
-import net.minecraft.client.util.InputUtil;
-import net.minecraft.text.Text;
+import net.minecraft.network.chat.Component;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -27,7 +27,7 @@ public class ZoomModule extends Module {
     public void register() {
         registerHeldKeybind(
                 KeybindCatalog.ZOOM_HOLD.translationKey(),
-                InputUtil.Type.KEYSYM,
+                InputConstants.Type.KEYBOARD,
                 KeybindCatalog.ZOOM_HOLD.defaultKey(),
                 client -> held = true,
                 client -> held = false
@@ -50,19 +50,19 @@ public class ZoomModule extends Module {
             case 1 -> {
                 zoomFov = Math.max(5f, zoomFov - 5f);
                 if (getClient().player != null) {
-                    getClient().player.sendMessage(Text.literal("Zoom FOV: " + String.format("%.1f", zoomFov)), true);
+                    getClient().player.sendOverlayMessage(Component.literal("Zoom FOV: " + String.format("%.1f", zoomFov)));
                 }
             }
             case 2 -> {
                 zoomFov = Math.min(110f, zoomFov + 5f);
                 if (getClient().player != null) {
-                    getClient().player.sendMessage(Text.literal("Zoom FOV: " + String.format("%.1f", zoomFov)), true);
+                    getClient().player.sendOverlayMessage(Component.literal("Zoom FOV: " + String.format("%.1f", zoomFov)));
                 }
             }
             case 3 -> {
                 zoomFov = 30f;
                 if (getClient().player != null) {
-                    getClient().player.sendMessage(Text.literal("Zoom FOV reset to 30"), true);
+                    getClient().player.sendOverlayMessage(Component.literal("Zoom FOV reset to 30"));
                 }
             }
             default -> {
@@ -85,7 +85,7 @@ public class ZoomModule extends Module {
                 }
             }
 
-            getClient().player.sendMessage(Text.literal("Zoom FOV: " + (int) zoomFov), true);
+            getClient().player.sendOverlayMessage(Component.literal("Zoom FOV: " + (int) zoomFov));
         }
     }
 }

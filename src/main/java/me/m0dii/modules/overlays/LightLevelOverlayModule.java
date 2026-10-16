@@ -1,12 +1,12 @@
 package me.m0dii.modules.overlays;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import me.m0dii.utils.KeybindCatalog;
-import net.minecraft.block.Block;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.Blocks;
-import net.minecraft.client.util.InputUtil;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -39,26 +39,26 @@ public class LightLevelOverlayModule extends BlockTextOverlayModule {
         super.register();
 
         registerPressedKeybind(KeybindCatalog.LIGHT_OVERLAY_TOGGLE.translationKey(),
-                InputUtil.Type.KEYSYM,
+                InputConstants.Type.KEYBOARD,
                 KeybindCatalog.LIGHT_OVERLAY_TOGGLE.defaultKey(),
                 client -> toggleEnabled());
     }
 
     @Nullable
     @Override
-    protected TextRenderInfo shouldRender(BlockPos pos, Vec3d cameraPos) {
-        BlockState state = getClient().world.getBlockState(pos);
-        if (state.isAir() || state.getLuminance() > 0 || excludedBlocks.contains(state.getBlock())) {
+    protected TextRenderInfo shouldRender(BlockPos pos, Vec3 cameraPos) {
+        BlockState state = getClient().level.getBlockState(pos);
+        if (state.isAir() || state.getLightEmission() > 0 || excludedBlocks.contains(state.getBlock())) {
             return null;
         }
 
-        BlockState above = getClient().world.getBlockState(pos.up());
-        boolean topExposed = above.isAir() || above.getCollisionShape(getClient().world, pos.up()).isEmpty();
+        BlockState above = getClient().level.getBlockState(pos.above());
+        boolean topExposed = above.isAir() || above.getCollisionShape(getClient().level, pos.above()).isEmpty();
         if (!topExposed) {
             return null;
         }
 
-        int light = getClient().world.getLightLevel(pos.up());
+        int light = getClient().level.getRawBrightness(pos.above(), 0);
         if (light <= 0) {
             return null;
         }

@@ -1,12 +1,11 @@
 package me.m0dii.modules.macros;
 
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.util.InputUtil;
-import net.minecraft.text.Text;
+import net.minecraft.client.Minecraft;
+import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-
+import com.mojang.blaze3d.platform.InputConstants;
 import java.util.*;
 
 public class CommandMacros {
@@ -56,7 +55,7 @@ public class CommandMacros {
                 }
             }
 
-            if (client.currentScreen != null) {
+            if (client.gui.screen() != null) {
                 return;
             }
 
@@ -71,11 +70,11 @@ public class CommandMacros {
                     continue;
                 }
 
-                boolean isPressed = InputUtil.isKeyPressed(window, keyCode);
+                boolean isPressed = InputConstants.isKeyDown(keyCode);
                 boolean modifierPressed = true;
                 int modCode = macroModifierKeycodes.getOrDefault(macroId, -1);
                 if (modCode >= 0) {
-                    modifierPressed = InputUtil.isKeyPressed(window, modCode);
+                    modifierPressed = InputConstants.isKeyDown(modCode);
                 }
 
                 boolean wasPressed = keyPrevPressed.getOrDefault(keyCode, false);
@@ -115,8 +114,8 @@ public class CommandMacros {
         if (translationKey == null || translationKey.isBlank()) {
             return -1;
         }
-        var key = InputUtil.fromTranslationKey(translationKey.toLowerCase(Locale.ROOT));
-        return key != null ? key.getCode() : -1;
+        var key = InputConstants.getKey(translationKey.toLowerCase(Locale.ROOT));
+        return key != null ? key.getValue() : -1;
     }
 
     public static boolean addMacro(@NotNull String id,
@@ -197,16 +196,14 @@ public class CommandMacros {
     }
 
     private static void executeMacro(@NotNull String macroName, @Nullable List<String> commands) {
-        MinecraftClient client = MinecraftClient.getInstance();
+        Minecraft client = Minecraft.getInstance();
         if (client.player == null) {
             return;
         }
 
         if (commands == null || commands.isEmpty()) {
-            client.player.sendMessage(
-                    Text.literal("§cMacro '" + macroName + "' has no commands configured!"),
-                    false
-            );
+            client.player.sendSystemMessage(
+                    Component.literal("§cMacro '" + macroName + "' has no commands configured!"));
             return;
         }
 
@@ -281,7 +278,7 @@ public class CommandMacros {
                 if (expanded.startsWith("msg:") || expanded.startsWith("say:")) {
                     String msg = expanded.substring(expanded.indexOf(':') + 1).trim();
                     if (!msg.isEmpty()) {
-                        client.player.networkHandler.sendChatMessage(msg);
+                        client.player.connection.sendChat(msg);
                     }
                     continue;
                 }
@@ -289,7 +286,7 @@ public class CommandMacros {
                 if (expanded.startsWith("bar:")) {
                     String msg = expanded.substring(4).trim();
                     if (!msg.isEmpty()) {
-                        client.player.sendMessage(Text.literal(msg), true);
+                        client.player.sendOverlayMessage(Component.literal(msg));
                     }
                     continue;
                 }
@@ -297,8 +294,8 @@ public class CommandMacros {
                 if (expanded.startsWith("copy:")) {
                     String msg = expanded.substring(5).trim();
                     if (!msg.isEmpty()) {
-                        client.keyboard.setClipboard(msg);
-                        client.player.sendMessage(Text.literal("§7Copied to clipboard"), true);
+                        client.keyboardHandler.setClipboard(msg);
+                        client.player.sendOverlayMessage(Component.literal("§7Copied to clipboard"));
                     }
                     continue;
                 }
@@ -308,16 +305,14 @@ public class CommandMacros {
                 }
 
                 if (expanded.startsWith("/")) {
-                    client.player.networkHandler.sendChatCommand(expanded.substring(1));
+                    client.player.connection.sendCommand(expanded.substring(1));
                 } else {
                     // Plain chat message
-                    client.player.networkHandler.sendChatMessage(expanded);
+                    client.player.connection.sendChat(expanded);
                 }
             } catch (Exception e) {
-                client.player.sendMessage(
-                        Text.literal("§cMacro '" + macroName + "' failed: " + e.getMessage()),
-                        false
-                );
+                client.player.sendSystemMessage(
+                        Component.literal("§cMacro '" + macroName + "' failed: " + e.getMessage()));
             }
         }
     }

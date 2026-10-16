@@ -1,8 +1,10 @@
 package me.m0dii.gui;
 
 import me.m0dii.gui.local.UiRect;
-import net.minecraft.client.font.TextRenderer;
-import net.minecraft.client.gui.DrawContext;
+import me.m0dii.gui.theme.Theme;
+import me.m0dii.gui.theme.ThemeDraw;
+import net.minecraft.client.gui.Font;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 
 public final class GuiSystem {
 
@@ -41,28 +43,26 @@ public final class GuiSystem {
         return rect != null && rect.contains(x, y);
     }
 
-    public static void drawPanel(DrawContext context, int x, int y, int w, int h) {
-        context.fill(x, y, x + w, y + h, Colors.PANEL_BG);
-        context.fill(x, y, x + w, y + 1, Colors.PANEL_TOP);
-        context.fill(x, y + h - 1, x + w, y + h, Colors.PANEL_BOTTOM);
-        context.fill(x, y, x + 1, y + h, Colors.PANEL_SIDE);
-        context.fill(x + w - 1, y, x + w, y + h, Colors.PANEL_SIDE);
+    /** Modal / popup panel in the flat theme. */
+    public static void drawPanel(GuiGraphicsExtractor context, int x, int y, int w, int h) {
+        ThemeDraw.box(context, x, y, w, h, Theme.SURFACE);
+        ThemeDraw.outline(context, x, y, w, h, Theme.BORDER_STRONG);
     }
 
-    public static void drawInputField(DrawContext context, int x, int y, int w, int h, boolean focused) {
-        context.fill(x, y, x + w, y + h, focused ? Colors.INPUT_BG_FOCUSED : Colors.INPUT_BG);
-        context.fill(x, y, x + w, y + 1, Colors.INPUT_TOP);
+    public static void drawInputField(GuiGraphicsExtractor context, int x, int y, int w, int h, boolean focused) {
+        ThemeDraw.box(context, x, y, w, h, Theme.INPUT);
+        ThemeDraw.outline(context, x, y, w, h, focused ? Theme.ACCENT : Theme.BORDER);
     }
 
-    public static void drawOutline(DrawContext context, int x1, int y1, int x2, int y2, int color) {
+    public static void drawOutline(GuiGraphicsExtractor context, int x1, int y1, int x2, int y2, int color) {
         context.fill(x1, y1, x2, y1 + 1, color);
         context.fill(x1, y2 - 1, x2, y2, color);
         context.fill(x1, y1, x1 + 1, y2, color);
         context.fill(x2 - 1, y1, x2, y2, color);
     }
 
-    public static void drawButton(DrawContext context,
-                                  TextRenderer textRenderer,
+    public static void drawButton(GuiGraphicsExtractor context,
+                                  Font textRenderer,
                                   int x,
                                   int y,
                                   int w,
@@ -70,21 +70,10 @@ public final class GuiSystem {
                                   String label,
                                   boolean hovered,
                                   boolean active) {
-        int bg = hovered ? Colors.BUTTON_BG_HOVER : Colors.BUTTON_BG;
-        int top = hovered ? Colors.BUTTON_TOP_HOVER : Colors.BUTTON_TOP;
-        int bottom = hovered ? Colors.BUTTON_BOTTOM_HOVER : Colors.BUTTON_BOTTOM;
-        int text = hovered ? Colors.BUTTON_TEXT_HOVER : Colors.BUTTON_TEXT;
-        if (!active) {
-            bg = 0xFF1E1E1E;
-            top = 0x30FFFFFF;
-            bottom = 0x50000000;
-            text = 0xFF808080;
-        }
-
-        context.fill(x, y, x + w, y + h, bg);
-        context.fill(x, y, x + w, y + 1, top);
-        context.fill(x, y + h - 1, x + w, y + h, bottom);
-        context.drawCenteredTextWithShadow(textRenderer, label, x + (w / 2), y + Math.max(2, (h - 9) / 2), text);
+        boolean hot = active && hovered;
+        ThemeDraw.box(context, x, y, w, h, !active ? Theme.SURFACE : hot ? Theme.SURFACE_HOVER : Theme.SURFACE_RAISED);
+        ThemeDraw.outline(context, x, y, w, h, hot ? Theme.BORDER_STRONG : Theme.BORDER);
+        ThemeDraw.textCentered(context, textRenderer, label, x, y, w, h, active ? Theme.TEXT : Theme.TEXT_DIM);
     }
 }
 

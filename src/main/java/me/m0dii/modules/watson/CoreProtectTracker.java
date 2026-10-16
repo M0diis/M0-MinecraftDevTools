@@ -1,8 +1,8 @@
 package me.m0dii.modules.watson;
 
 import lombok.Getter;
-import net.minecraft.text.Text;
-import net.minecraft.util.math.BlockPos;
+import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.*;
@@ -23,7 +23,7 @@ public final class CoreProtectTracker {
         // Utility class
     }
 
-    public static void onChatMessage(Text message) {
+    public static void onChatMessage(Component message) {
         if (message == null) {
             return;
         }
@@ -85,7 +85,7 @@ public final class CoreProtectTracker {
 
         List<BlockPos> ordered = new ArrayList<>(unique);
         ordered.sort(Comparator
-                .comparingInt(BlockPos::getX)
+                .comparingInt((BlockPos pos) -> pos.getX())
                 .thenComparingInt(BlockPos::getY)
                 .thenComparingInt(BlockPos::getZ));
         return ordered;

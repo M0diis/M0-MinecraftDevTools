@@ -1,13 +1,13 @@
 package me.m0dii.modules.nbttooltip;
 
-import net.minecraft.client.font.TextRenderer;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.tooltip.TooltipComponent;
-import net.minecraft.item.ItemStack;
+import net.minecraft.client.gui.Font;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.screens.inventory.tooltip.ClientTooltipComponent;
+import net.minecraft.world.item.ItemStack;
 
 import java.util.List;
 
-public final class ShulkerPreviewTooltipComponent implements TooltipComponent {
+public final class ShulkerPreviewTooltipComponent implements ClientTooltipComponent {
     private static final int COLS = 9;
     private static final int CELL = 18;
     private static final int INNER = 16;
@@ -19,18 +19,18 @@ public final class ShulkerPreviewTooltipComponent implements TooltipComponent {
     }
 
     @Override
-    public int getHeight(TextRenderer textRenderer) {
+    public int getHeight(Font textRenderer) {
         int rows = Math.max(1, (int) Math.ceil(stacks.size() / (double) COLS));
         return rows * CELL + 2;
     }
 
     @Override
-    public int getWidth(TextRenderer textRenderer) {
+    public int getWidth(Font textRenderer) {
         return COLS * CELL + 2;
     }
 
     @Override
-    public void drawItems(TextRenderer textRenderer, int x, int y, int width, int height, DrawContext context) {
+    public void extractImage(Font textRenderer, int x, int y, int width, int height, GuiGraphicsExtractor context) {
         int rows = Math.max(1, (int) Math.ceil(stacks.size() / (double) COLS));
         int boxW = COLS * CELL + 2;
         int boxH = rows * CELL + 2;
@@ -52,8 +52,8 @@ public final class ShulkerPreviewTooltipComponent implements TooltipComponent {
             int cellY = y + 1 + row * CELL;
 
             context.fill(cellX, cellY, cellX + INNER, cellY + INNER, 0x44222222);
-            context.drawItem(stack, cellX, cellY);
-            context.drawStackOverlay(textRenderer, stack, cellX, cellY);
+            context.item(stack, cellX, cellY);
+            context.itemDecorations(textRenderer, stack, cellX, cellY);
         }
     }
 }

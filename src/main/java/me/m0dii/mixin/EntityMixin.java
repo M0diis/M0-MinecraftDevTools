@@ -1,8 +1,8 @@
 package me.m0dii.mixin;
 
 import me.m0dii.modules.freecam.CameraUtils;
-import net.minecraft.client.network.ClientPlayerEntity;
-import net.minecraft.entity.Entity;
+import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.world.entity.Entity;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
@@ -14,18 +14,18 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public class EntityMixin {
 
     @Shadow
-    private float yaw;
+    private float yRot;
     @Shadow
-    private float pitch;
+    private float xRot;
 
     @Unique
     private double forcedPitch;
     @Unique
     private double forcedYaw;
 
-    @Inject(method = "changeLookDirection", at = @At("HEAD"), cancellable = true)
+    @Inject(method = "turn", at = @At("HEAD"), cancellable = true)
     private void overrideYaw(double cursorDeltaX, double cursorDeltaY, CallbackInfo ci) {
-        if ((Object) this instanceof ClientPlayerEntity) {
+        if ((Object) this instanceof LocalPlayer) {
             if (CameraUtils.shouldPreventPlayerMovement()) {
                 CameraUtils.updateCameraRotations((float) cursorDeltaX, (float) cursorDeltaY);
             }
@@ -37,8 +37,8 @@ public class EntityMixin {
 
             // Update the internal rotations while no locking features are enabled
             // They will then be used as the forced rotations when some of the locking features are activated.
-            this.forcedYaw = this.yaw;
-            this.forcedPitch = this.pitch;
+            this.forcedYaw = this.yRot;
+            this.forcedPitch = this.xRot;
         }
     }
 }

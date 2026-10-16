@@ -1,27 +1,27 @@
 package me.m0dii.modules.bridging;
 
 import me.m0dii.utils.ModConfig;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.entity.Entity;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.client.Minecraft;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.phys.Vec3;
 
-record BridgingPerspective(Vec3d position, Vec3d lookVector) {
-    static BridgingPerspective resolve(MinecraftClient client, Entity player) {
+record BridgingPerspective(Vec3 position, Vec3 lookVector) {
+    static BridgingPerspective resolve(Minecraft client, Entity player) {
         if (client == null || player == null) {
-            return new BridgingPerspective(Vec3d.ZERO, Vec3d.ZERO);
+            return new BridgingPerspective(Vec3.ZERO, Vec3.ZERO);
         }
 
         if (ModConfig.bridgingPerspectiveLock == BridgingPerspectiveLock.ALWAYS_EYELINE) {
-            return new BridgingPerspective(player.getEyePos(), player.getRotationVec(1.0f));
+            return new BridgingPerspective(player.getEyePosition(), player.getViewVector(1.0f));
         }
 
         try {
             Entity cameraEntity = client.getCameraEntity();
             if (cameraEntity != null) {
-                return new BridgingPerspective(cameraEntity.getEyePos(), cameraEntity.getRotationVec(1.0f));
+                return new BridgingPerspective(cameraEntity.getEyePosition(), cameraEntity.getViewVector(1.0f));
             }
         } catch (Throwable ignored) {
         }
-        return new BridgingPerspective(player.getEyePos(), player.getRotationVec(1.0f));
+        return new BridgingPerspective(player.getEyePosition(), player.getViewVector(1.0f));
     }
 }

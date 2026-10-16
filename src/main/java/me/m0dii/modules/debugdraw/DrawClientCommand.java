@@ -4,14 +4,14 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.suggestion.Suggestions;
 import com.mojang.brigadier.suggestion.SuggestionsBuilder;
-import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
+import net.fabricmc.fabric.api.client.command.v2.ClientCommands;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.registry.Registries;
-import net.minecraft.text.Text;
-import net.minecraft.util.hit.BlockHitResult;
-import net.minecraft.util.math.BlockPos;
+import net.minecraft.client.Minecraft;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.phys.BlockHitResult;
 
 import java.util.List;
 import java.util.Locale;
@@ -39,9 +39,9 @@ public final class DrawClientCommand {
 
     public static void register() {
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) ->
-                dispatcher.register(ClientCommandManager.literal("draw")
+                dispatcher.register(ClientCommands.literal("draw")
                         .executes(DrawClientCommand::showHelp)
-                        .then(ClientCommandManager.argument("args", StringArgumentType.greedyString())
+                        .then(ClientCommands.argument("args", StringArgumentType.greedyString())
                                 .suggests(DrawClientCommand::suggestArgs)
                                 .executes(DrawClientCommand::handleArgs))));
     }
@@ -104,7 +104,7 @@ public final class DrawClientCommand {
             send(context, "Expected: /draw line <x1> <y1> <z1> <x2> <y2> <z2> [color] [seconds]");
             return 0;
         }
-        MinecraftClient client = context.getSource().getClient();
+        Minecraft client = context.getSource().getClient();
         if (client.player == null) {
             return 0;
         }
@@ -132,7 +132,7 @@ public final class DrawClientCommand {
             send(context, "Expected: /draw box <x1> <y1> <z1> <x2> <y2> <z2> [color] [seconds]");
             return 0;
         }
-        MinecraftClient client = context.getSource().getClient();
+        Minecraft client = context.getSource().getClient();
         if (client.player == null) {
             return 0;
         }
@@ -160,7 +160,7 @@ public final class DrawClientCommand {
             send(context, "Expected: /draw circle <x> <y> <z> <radius> [color] [seconds] [segments]");
             return 0;
         }
-        MinecraftClient client = context.getSource().getClient();
+        Minecraft client = context.getSource().getClient();
         if (client.player == null) {
             return 0;
         }
@@ -187,7 +187,7 @@ public final class DrawClientCommand {
             send(context, "Expected: /draw cylinder <x> <y> <z> <radius> <height> [color] [seconds] [segments]");
             return 0;
         }
-        MinecraftClient client = context.getSource().getClient();
+        Minecraft client = context.getSource().getClient();
         if (client.player == null) {
             return 0;
         }
@@ -215,7 +215,7 @@ public final class DrawClientCommand {
             send(context, "Expected: /draw sphere <x> <y> <z> <radius> [color] [seconds] [segments]");
             return 0;
         }
-        MinecraftClient client = context.getSource().getClient();
+        Minecraft client = context.getSource().getClient();
         if (client.player == null) {
             return 0;
         }
@@ -242,7 +242,7 @@ public final class DrawClientCommand {
             send(context, "Expected: /draw diamond <x> <y> <z> <radius> [color] [seconds]");
             return 0;
         }
-        MinecraftClient client = context.getSource().getClient();
+        Minecraft client = context.getSource().getClient();
         if (client.player == null) {
             return 0;
         }
@@ -268,7 +268,7 @@ public final class DrawClientCommand {
             send(context, "Expected: /draw pyramid <x> <y> <z> <radius> <height> [color] [seconds]");
             return 0;
         }
-        MinecraftClient client = context.getSource().getClient();
+        Minecraft client = context.getSource().getClient();
         if (client.player == null) {
             return 0;
         }
@@ -295,7 +295,7 @@ public final class DrawClientCommand {
             send(context, "Expected: /draw cone <x> <y> <z> <radius> <height> [color] [seconds] [segments]");
             return 0;
         }
-        MinecraftClient client = context.getSource().getClient();
+        Minecraft client = context.getSource().getClient();
         if (client.player == null) {
             return 0;
         }
@@ -323,7 +323,7 @@ public final class DrawClientCommand {
             send(context, "Expected: /draw cuboid <x> <y> <z> <radius> <height> [color] [seconds]");
             return 0;
         }
-        MinecraftClient client = context.getSource().getClient();
+        Minecraft client = context.getSource().getClient();
         if (client.player == null) {
             return 0;
         }
@@ -346,11 +346,11 @@ public final class DrawClientCommand {
     }
 
     private static int boxLook(CommandContext<FabricClientCommandSource> context, String[] t) {
-        MinecraftClient client = context.getSource().getClient();
-        if (client.player == null || client.world == null) {
+        Minecraft client = context.getSource().getClient();
+        if (client.player == null || client.level == null) {
             return 0;
         }
-        if (!(client.crosshairTarget instanceof BlockHitResult hit)) {
+        if (!(client.hitResult instanceof BlockHitResult hit)) {
             send(context, "No block under crosshair.");
             return 0;
         }
@@ -398,11 +398,11 @@ public final class DrawClientCommand {
             }
             case "left", "pos1", "p1" -> {
                 if (t.length >= 3 && "here".equalsIgnoreCase(t[2])) {
-                    MinecraftClient client = context.getSource().getClient();
+                    Minecraft client = context.getSource().getClient();
                     if (client.player == null) {
                         yield 0;
                     }
-                    BlockPos pos = client.player.getBlockPos();
+                    BlockPos pos = client.player.blockPosition();
                     DebugDrawManager.setSelectionPos(false, pos);
                     send(context, "Set pos1 to " + pos.toShortString() + " (player).");
                     yield 1;
@@ -413,7 +413,7 @@ public final class DrawClientCommand {
                     yield ok ? 1 : 0;
                 }
                 if (t.length >= 5) {
-                    MinecraftClient client = context.getSource().getClient();
+                    Minecraft client = context.getSource().getClient();
                     if (client.player == null) {
                         yield 0;
                     }
@@ -436,11 +436,11 @@ public final class DrawClientCommand {
             }
             case "right", "pos2", "p2" -> {
                 if (t.length >= 3 && "here".equalsIgnoreCase(t[2])) {
-                    MinecraftClient client = context.getSource().getClient();
+                    Minecraft client = context.getSource().getClient();
                     if (client.player == null) {
                         yield 0;
                     }
-                    BlockPos pos = client.player.getBlockPos();
+                    BlockPos pos = client.player.blockPosition();
                     DebugDrawManager.setSelectionPos(true, pos);
                     send(context, "Set pos2 to " + pos.toShortString() + " (player).");
                     yield 1;
@@ -451,7 +451,7 @@ public final class DrawClientCommand {
                     yield ok ? 1 : 0;
                 }
                 if (t.length >= 5) {
-                    MinecraftClient client = context.getSource().getClient();
+                    Minecraft client = context.getSource().getClient();
                     if (client.player == null) {
                         yield 0;
                     }
@@ -477,7 +477,7 @@ public final class DrawClientCommand {
                     send(context, "Usage: /draw select set <x1> <y1> <z1> <x2> <y2> <z2>");
                     yield 0;
                 }
-                MinecraftClient client = context.getSource().getClient();
+                Minecraft client = context.getSource().getClient();
                 if (client.player == null) {
                     yield 0;
                 }
@@ -525,7 +525,7 @@ public final class DrawClientCommand {
                 yield 0;
             }
             case "wand" -> {
-                MinecraftClient client = context.getSource().getClient();
+                Minecraft client = context.getSource().getClient();
                 if (t.length < 3) {
                     send(context, "Selection wand: " + DebugDrawManager.getSelectionWandItemId());
                     send(context, "Wand equipped: " + (DebugDrawManager.isSelectionWandEquipped() ? "yes" : "no"));
@@ -535,11 +535,11 @@ public final class DrawClientCommand {
                 String token = t[2].toLowerCase(Locale.ROOT);
                 String wandValue;
                 if ("hand".equals(token)) {
-                    if (client.player == null || client.player.getMainHandStack().isEmpty()) {
+                    if (client.player == null || client.player.getMainHandItem().isEmpty()) {
                         send(context, "Hold an item in your main hand first.");
                         yield 0;
                     }
-                    wandValue = Registries.ITEM.getId(client.player.getMainHandStack().getItem()).toString();
+                    wandValue = BuiltInRegistries.ITEM.getKey(client.player.getMainHandItem().getItem()).toString();
                 } else {
                     wandValue = token;
                 }
@@ -717,8 +717,8 @@ public final class DrawClientCommand {
     }
 
     private static int openUi(CommandContext<FabricClientCommandSource> context) {
-        MinecraftClient client = context.getSource().getClient();
-        client.execute(() -> client.setScreen(DebugDrawScreen.create(client.currentScreen)));
+        Minecraft client = context.getSource().getClient();
+        client.execute(() -> client.gui.setScreen(DebugDrawScreen.create(client.gui.screen())));
         return 1;
     }
 
@@ -757,7 +757,7 @@ public final class DrawClientCommand {
     private static void send(CommandContext<FabricClientCommandSource> context, String message) {
         var player = context.getSource().getPlayer();
         if (player != null) {
-            player.sendMessage(Text.literal("[Draw] " + message), false);
+            player.sendSystemMessage(Component.literal("[Draw] " + message));
         }
     }
 

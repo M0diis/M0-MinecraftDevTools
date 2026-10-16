@@ -1,28 +1,27 @@
 package me.m0dii.modules.bridging;
 
 import me.m0dii.utils.ModConfig;
-import net.minecraft.block.AbstractTorchBlock;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.SlabBlock;
-import net.minecraft.block.TrapdoorBlock;
-import net.minecraft.block.enums.SlabType;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.network.ClientPlayerInteractionManager;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.fluid.FluidState;
-import net.minecraft.item.BlockItem;
-import net.minecraft.item.ItemStack;
-import net.minecraft.util.ActionResult;
-import net.minecraft.util.Hand;
-import net.minecraft.util.hit.BlockHitResult;
-import net.minecraft.util.hit.HitResult;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Box;
-import net.minecraft.util.math.Direction;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.World;
-
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.MultiPlayerGameMode;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.BlockItem;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.BaseTorchBlock;
+import net.minecraft.world.level.block.SlabBlock;
+import net.minecraft.world.level.block.TrapDoorBlock;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.SlabType;
+import net.minecraft.world.level.material.FluidState;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
+import net.minecraft.world.phys.Vec3;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -35,20 +34,20 @@ public final class BridgingTweaksLogic {
     private BridgingTweaksLogic() {
     }
 
-    public static boolean tryBridgePlacement(MinecraftClient client, ClientPlayerInteractionManager interactionManager) {
+    public static boolean tryBridgePlacement(Minecraft client, MultiPlayerGameMode interactionManager) {
         if (!BridgingTweaksModule.INSTANCE.isEnabled()) {
             return false;
         }
-        if (client == null || client.player == null || client.world == null || interactionManager == null) {
+        if (client == null || client.player == null || client.level == null || interactionManager == null) {
             return false;
         }
-        if (client.crosshairTarget != null && client.crosshairTarget.getType() != HitResult.Type.MISS) {
+        if (client.hitResult != null && client.hitResult.getType() != HitResult.Type.MISS) {
             return false;
         }
-        if (BridgingTweaksModule.INSTANCE.onlyBridgeWhenCrouched() && !client.player.isSneaking()) {
+        if (BridgingTweaksModule.INSTANCE.onlyBridgeWhenCrouched() && !client.player.isShiftKeyDown()) {
             return false;
         }
-        if (interactionManager.isBreakingBlock()) {
+        if (interactionManager.isDestroying()) {
             return false;
         }
 
@@ -60,27 +59,27 @@ public final class BridgingTweaksLogic {
             return false;
         }
 
-        Hand hand = getPlacementHand(client.player);
+        InteractionHand hand = getPlacementHand(client.player);
         if (hand == null) {
             return false;
         }
 
-        ItemStack stack = client.player.getStackInHand(hand);
-        BlockHitResult hitResult = createPlacementHit(stack, client.world, target);
-        ActionResult result = interactionManager.interactBlock(client.player, hand, hitResult);
-        if (!result.isAccepted()) {
+        ItemStack stack = client.player.getItemInHand(hand);
+        BlockHitResult hitResult = createPlacementHit(stack, client.level, target);
+        InteractionResult result = interactionManager.useItemOn(client.player, hand, hitResult);
+        if (!result.consumesAction()) {
             return false;
         }
 
-        client.player.swingHand(hand);
+        client.player.swing(hand, client.player.getItemInHand(hand).getInteractAnimation(), false);
         return true;
     }
 
-    public static BridgingTarget findAssistTarget(MinecraftClient client, PlayerEntity player) {
-        if (client == null || player == null || client.world == null) {
+    public static BridgingTarget findAssistTarget(Minecraft client, Player player) {
+        if (client == null || player == null || client.level == null) {
             return null;
         }
-        if (client.crosshairTarget != null && client.crosshairTarget.getType() != HitResult.Type.MISS) {
+        if (client.hitResult != null && client.hitResult.getType() != HitResult.Type.MISS) {
             return null;
         }
         if (!isHoldingPlaceable(player)) {
@@ -92,16 +91,16 @@ public final class BridgingTweaksLogic {
         List<Direction> sides = getValidAssistSides(perspective.lookVector());
 
         for (BlockPos placePos : path) {
-            if (!isPlacementAllowed(client.world, placePos)) {
+            if (!isPlacementAllowed(client.level, placePos)) {
                 continue;
             }
 
-            if (player.getBoundingBox().intersects(new Box(placePos))) {
+            if (player.getBoundingBox().intersects(new AABB(placePos))) {
                 continue;
             }
 
             for (Direction side : sides) {
-                if (canBuildOffSide(player, client.world, placePos, side)) {
+                if (canBuildOffSide(player, client.level, placePos, side)) {
                     return new BridgingTarget(placePos, side);
                 }
             }
@@ -110,102 +109,102 @@ public final class BridgingTweaksLogic {
         return null;
     }
 
-    public static List<BlockPos> getViewBlockPath(MinecraftClient client, Entity player, BridgingPerspective perspective) {
+    public static List<BlockPos> getViewBlockPath(Minecraft client, Entity player, BridgingPerspective perspective) {
         if (client == null || player == null) {
             return List.of();
         }
 
-        double reach = client.player == null ? MAXIMUM_PLACE_REACH : client.player.getBlockInteractionRange();
-        Vec3d playerViewEnd = player.getRotationVec(1.0f).multiply(reach).add(player.getEyePos());
-        Vec3d cameraOrigin = perspective.position();
+        double reach = client.player == null ? MAXIMUM_PLACE_REACH : client.player.blockInteractionRange();
+        Vec3 playerViewEnd = player.getViewVector(1.0f).scale(reach).add(player.getEyePosition());
+        Vec3 cameraOrigin = perspective.position();
         double distance = playerViewEnd.distanceTo(cameraOrigin);
 
         float minimumDistance = BridgingTweaksModule.wrapPercent(ModConfig.bridgingMinBridgeDistance) / 100.0f;
-        Vec3d farVector = perspective.lookVector().multiply(distance);
-        Vec3d nearVector = farVector.multiply(minimumDistance);
+        Vec3 farVector = perspective.lookVector().scale(distance);
+        Vec3 nearVector = farVector.scale(minimumDistance);
 
-        BlockPos startPos = BlockPos.ofFloored(cameraOrigin.add(nearVector));
-        BlockPos endPos = BlockPos.ofFloored(cameraOrigin.add(farVector));
+        BlockPos startPos = BlockPos.containing(cameraOrigin.add(nearVector));
+        BlockPos endPos = BlockPos.containing(cameraOrigin.add(farVector));
         return BridgingPath.calculateBresenhamVoxels(startPos, endPos, ModConfig.bridgingAdjacency, ModConfig.bridgingSnapStrength);
     }
 
-    public static BlockPos findNonBridgingOutlineTarget(MinecraftClient client) {
-        if (client == null || client.player == null || client.world == null) {
+    public static BlockPos findNonBridgingOutlineTarget(Minecraft client) {
+        if (client == null || client.player == null || client.level == null) {
             return null;
         }
-        if (!(client.crosshairTarget instanceof BlockHitResult blockHit)) {
+        if (!(client.hitResult instanceof BlockHitResult blockHit)) {
             return null;
         }
         if (!isHoldingPlaceable(client.player)) {
             return null;
         }
 
-        BlockPos placeTarget = blockHit.getBlockPos().offset(blockHit.getSide());
-        if (client.player.getBoundingBox().intersects(new Box(placeTarget))) {
+        BlockPos placeTarget = blockHit.getBlockPos().relative(blockHit.getDirection());
+        if (client.player.getBoundingBox().intersects(new AABB(placeTarget))) {
             return null;
         }
         return placeTarget;
     }
 
-    private static boolean canBuildOffSide(PlayerEntity player, World world, BlockPos placePos, Direction supportDirection) {
-        BridgingAxisMode axisMode = player.isSneaking()
+    private static boolean canBuildOffSide(Player player, Level world, BlockPos placePos, Direction supportDirection) {
+        BridgingAxisMode axisMode = player.isShiftKeyDown()
                 ? ModConfig.bridgingSupportedAxesWhenCrouched.resolve(ModConfig.bridgingSupportedAxes)
                 : ModConfig.bridgingSupportedAxes;
         if (!axisMode.supports(supportDirection)) {
             return false;
         }
 
-        BlockPos supportPos = placePos.offset(supportDirection);
+        BlockPos supportPos = placePos.relative(supportDirection);
         BlockState supportState = world.getBlockState(supportPos);
         FluidState fluidState = world.getFluidState(supportPos);
         if (supportState.isAir() || !fluidState.isEmpty()) {
             return false;
         }
-        return !supportState.isReplaceable();
+        return !supportState.canBeReplaced();
     }
 
-    private static boolean isPlacementAllowed(World world, BlockPos placePos) {
+    private static boolean isPlacementAllowed(Level world, BlockPos placePos) {
         BlockState targetState = world.getBlockState(placePos);
         return BridgingTweaksModule.INSTANCE.allowReplaceableBlocks()
-                ? targetState.isReplaceable()
+                ? targetState.canBeReplaced()
                 : targetState.isAir();
     }
 
-    private static List<Direction> getValidAssistSides(Vec3d lookVector) {
+    private static List<Direction> getValidAssistSides(Vec3 lookVector) {
         List<Direction> directions = new LinkedList<>();
         for (Direction direction : Direction.values()) {
-            Vec3d normal = Vec3d.of(direction.getVector());
-            if (lookVector.dotProduct(normal) >= DIRECTION_SIMILARITY_THRESHOLD) {
+            Vec3 normal = Vec3.atLowerCornerOf(direction.getUnitVec3i());
+            if (lookVector.dot(normal) >= DIRECTION_SIMILARITY_THRESHOLD) {
                 directions.add(direction.getOpposite());
             }
         }
         return directions;
     }
 
-    private static Hand getPlacementHand(PlayerEntity player) {
-        if (player.getMainHandStack().getItem() instanceof BlockItem) {
-            return Hand.MAIN_HAND;
+    private static InteractionHand getPlacementHand(Player player) {
+        if (player.getMainHandItem().getItem() instanceof BlockItem) {
+            return InteractionHand.MAIN_HAND;
         }
-        if (player.getOffHandStack().getItem() instanceof BlockItem) {
-            return Hand.OFF_HAND;
+        if (player.getOffhandItem().getItem() instanceof BlockItem) {
+            return InteractionHand.OFF_HAND;
         }
         return null;
     }
 
-    private static boolean isHoldingPlaceable(PlayerEntity player) {
-        return isStackPlaceable(player.getMainHandStack()) || isStackPlaceable(player.getOffHandStack());
+    private static boolean isHoldingPlaceable(Player player) {
+        return isStackPlaceable(player.getMainHandItem()) || isStackPlaceable(player.getOffhandItem());
     }
 
     private static boolean isStackPlaceable(ItemStack stack) {
         if (stack == null || stack.isEmpty() || !(stack.getItem() instanceof BlockItem blockItem)) {
             return false;
         }
-        return !(BridgingTweaksModule.INSTANCE.skipTorchBridging() && blockItem.getBlock() instanceof AbstractTorchBlock);
+        return !(BridgingTweaksModule.INSTANCE.skipTorchBridging() && blockItem.getBlock() instanceof BaseTorchBlock);
     }
 
-    private static BlockHitResult createPlacementHit(ItemStack heldStack, World world, BridgingTarget target) {
+    private static BlockHitResult createPlacementHit(ItemStack heldStack, Level world, BridgingTarget target) {
         if (BridgingTweaksModule.INSTANCE.slabAssist() && heldStack.getItem() instanceof BlockItem blockItem) {
-            if (blockItem.getBlock() instanceof SlabBlock || blockItem.getBlock() instanceof TrapdoorBlock) {
+            if (blockItem.getBlock() instanceof SlabBlock || blockItem.getBlock() instanceof TrapDoorBlock) {
                 Direction clickSide = target.clickSide();
                 if (clickSide.getAxis().isHorizontal()) {
                     BlockHitResult slabHit = createHorizontalHalfPlacement(target.placePos());
@@ -222,21 +221,21 @@ public final class BridgingTweaksLogic {
             }
         }
 
-        return new BlockHitResult(Vec3d.ofCenter(target.placePos()), target.clickSide(), target.placePos(), true);
+        return new BlockHitResult(Vec3.atCenterOf(target.placePos()), target.clickSide(), target.placePos(), true);
     }
 
     private static BlockHitResult createHorizontalHalfPlacement(BlockPos placePos) {
         boolean lowerHalf = BridgingTweaksState.lastKnownYFraction > TRAPDOOR_HEIGHT - BridgingPath.NEAR_ZERO
                 && BridgingTweaksState.lastKnownYFraction < SLAB_HEIGHT + BridgingPath.NEAR_ZERO;
 
-        Vec3d hitPos = lowerHalf
-                ? Vec3d.ofBottomCenter(placePos).add(0.0D, 0.1D, 0.0D)
-                : Vec3d.ofBottomCenter(placePos).add(0.0D, 0.9D, 0.0D);
+        Vec3 hitPos = lowerHalf
+                ? Vec3.atBottomCenterOf(placePos).add(0.0D, 0.1D, 0.0D)
+                : Vec3.atBottomCenterOf(placePos).add(0.0D, 0.9D, 0.0D);
         Direction side = lowerHalf ? Direction.UP : Direction.DOWN;
         return new BlockHitResult(hitPos, side, placePos, false);
     }
 
-    private static BlockHitResult createVerticalHalfPlacement(ItemStack heldStack, World world, BridgingTarget target) {
+    private static BlockHitResult createVerticalHalfPlacement(ItemStack heldStack, Level world, BridgingTarget target) {
         if (!(heldStack.getItem() instanceof BlockItem blockItem) || !(blockItem.getBlock() instanceof SlabBlock)) {
             return null;
         }
@@ -247,7 +246,7 @@ public final class BridgingTweaksLogic {
             return null;
         }
 
-        SlabType slabType = supportState.get(SlabBlock.TYPE);
+        SlabType slabType = supportState.getValue(SlabBlock.TYPE);
         Direction clickSide = target.clickSide();
         if (slabType == SlabType.DOUBLE) {
             return null;
@@ -259,6 +258,6 @@ public final class BridgingTweaksLogic {
             return null;
         }
 
-        return new BlockHitResult(Vec3d.ofCenter(target.placePos()), clickSide, supportPos, false);
+        return new BlockHitResult(Vec3.atCenterOf(target.placePos()), clickSide, supportPos, false);
     }
 }

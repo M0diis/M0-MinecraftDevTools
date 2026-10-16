@@ -5,12 +5,11 @@ import me.m0dii.modules.freecam.CameraUtils;
 import me.m0dii.modules.freecam.DummyMovementInput;
 import me.m0dii.modules.freecam.FreecamModule;
 import me.m0dii.modules.tweaks.TweaksModule;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.input.Input;
-import net.minecraft.client.network.AbstractClientPlayerEntity;
-import net.minecraft.client.network.ClientPlayerEntity;
-import net.minecraft.client.world.ClientWorld;
-import net.minecraft.util.Hand;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.client.player.AbstractClientPlayer;
+import net.minecraft.client.player.ClientInput;
+import net.minecraft.client.player.LocalPlayer;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
@@ -19,26 +18,26 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-@Mixin(ClientPlayerEntity.class)
-public abstract class ClientPlayerEntityMixin extends AbstractClientPlayerEntity {
+@Mixin(LocalPlayer.class)
+public abstract class ClientPlayerEntityMixin extends AbstractClientPlayer {
 
     @Shadow
-    public Input input;
+    public ClientInput input;
     @Unique
     private DummyMovementInput dummyMovementInput;
     @Unique
-    private Input realInput;
+    private ClientInput realInput;
 
-    public ClientPlayerEntityMixin(ClientWorld world, GameProfile profile) {
+    public ClientPlayerEntityMixin(ClientLevel world, GameProfile profile) {
         super(world, profile);
     }
 
     @Unique
     private boolean isLocalClientPlayer() {
-        return (Object) this == MinecraftClient.getInstance().player;
+        return (Object) this == Minecraft.getInstance().player;
     }
 
-    @Inject(method = "isCamera", at = @At("HEAD"), cancellable = true)
+    @Inject(method = "isControlledCamera", at = @At("HEAD"), cancellable = true)
     private void allowPlayerMovementInFreeCameraMode(CallbackInfoReturnable<Boolean> cir) {
         if (FreecamModule.INSTANCE.isEnabled()
                 && this.isLocalClientPlayer()
@@ -51,7 +50,7 @@ public abstract class ClientPlayerEntityMixin extends AbstractClientPlayerEntity
     private void disableMovementInputsPre(CallbackInfo ci) {
         if (CameraUtils.shouldPreventPlayerMovement() && this.isLocalClientPlayer()) {
             if (this.dummyMovementInput == null) {
-                this.dummyMovementInput = new DummyMovementInput(MinecraftClient.getInstance().options);
+                this.dummyMovementInput = new DummyMovementInput(Minecraft.getInstance().options);
             }
             this.realInput = this.input;
             this.input = this.dummyMovementInput;
@@ -66,28 +65,21 @@ public abstract class ClientPlayerEntityMixin extends AbstractClientPlayerEntity
         }
     }
 
-    @Inject(method = "swingHand", at = @At("HEAD"), cancellable = true)
-    private void preventHandSwing(Hand hand, CallbackInfo ci) {
-        if (CameraUtils.shouldPreventPlayerInputs() && this.isLocalClientPlayer()) {
-            ci.cancel();
-        }
-    }
-
-    @Inject(method = "tickMovement", at = @At("TAIL"))
+    @Inject(method = "aiStep", at = @At("TAIL"))
     private void preventWallUnsprint(CallbackInfo ci) {
         if (!TweaksModule.INSTANCE.disableWallUnsprint()) {
             return;
         }
 
-        if (!this.horizontalCollision || this.input == null || this.input.playerInput == null) {
+        if (!this.horizontalCollision || this.input == null || this.input.keyPresses == null) {
             return;
         }
 
-        if (!this.input.playerInput.forward()) {
+        if (!this.input.keyPresses.forward()) {
             return;
         }
 
-        if (this.input.playerInput.sprint() || TweaksModule.INSTANCE.permanentSprint()) {
+        if (this.input.keyPresses.sprint() || TweaksModule.INSTANCE.permanentSprint()) {
             this.setSprinting(true);
         }
     }

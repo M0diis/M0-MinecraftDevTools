@@ -1,5 +1,5 @@
 plugins {
-    id 'fabric-loom' version "${loom_version}"
+    id 'net.fabricmc.fabric-loom' version "${loom_version}"
     id 'maven-publish'
 }
 
@@ -48,38 +48,39 @@ configurations {
     shadowCommon // Don't use shadow from the shadow plugin since it *excludes* files.
     compileClasspath.extendsFrom common
     runtimeClasspath.extendsFrom common
-    developmentFabric.extendsFrom common
 }
 
 dependencies {
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
-    mappings "net.fabricmc:yarn:${project.yarn_mappings}"
-    modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    implementation "net.fabricmc:fabric-loader:${project.loader_version}"
 
-    modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
-    modImplementation "maven.modrinth:midnightlib:${project.midnightlib_version}"
+    implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+    implementation "maven.modrinth:midnightlib:${project.midnightlib_version}"
 
     compileOnly "org.projectlombok:lombok:${project.lombok_version}"
     annotationProcessor "org.projectlombok:lombok:${project.lombok_version}"
 
-    modImplementation 'org.codehaus.groovy:groovy:3.0.21'
-    include 'org.codehaus.groovy:groovy:3.0.21'
+    implementation 'org.apache.groovy:groovy:5.0.8'
+    include 'org.apache.groovy:groovy:5.0.8'
 
     implementation "org.graalvm.js:js-scriptengine:25.0.3"
     implementation "org.graalvm.js:js:25.0.3"
 
-    modImplementation("org.jetbrains.kotlin:kotlin-scripting-jsr223:1.9.22")
-    modImplementation("eu.jrie.jetbrains:kotlin-shell-core:0.2.1")
+    implementation("org.jetbrains.kotlin:kotlin-scripting-jsr223:2.4.21")
+    implementation("eu.jrie.jetbrains:kotlin-shell-core:0.2.1") {
+        // Its 2019-era coroutines artifact shadows the kotlinx-coroutines-core-jvm the Kotlin 2.x compiler needs.
+        exclude group: "org.jetbrains.kotlinx", module: "kotlinx-coroutines-core"
+    }
 
-    include "org.jetbrains.kotlin:kotlin-scripting-jsr223:1.9.22"
+    include "org.jetbrains.kotlin:kotlin-scripting-jsr223:2.4.21"
     include "eu.jrie.jetbrains:kotlin-shell-core:0.2.1"
     include "org.graalvm.js:js-scriptengine:25.0.3"
     include "org.graalvm.js:js:25.0.3"
 
-    modImplementation "org.jetbrains.kotlin:kotlin-compiler-embeddable:1.9.22"
-    modImplementation "org.jetbrains.kotlin:kotlin-scripting-compiler-embeddable:1.9.22"
-    include "org.jetbrains.kotlin:kotlin-compiler-embeddable:1.9.22"
-    include "org.jetbrains.kotlin:kotlin-scripting-compiler-embeddable:1.9.22"
+    implementation "org.jetbrains.kotlin:kotlin-compiler-embeddable:2.4.21"
+    implementation "org.jetbrains.kotlin:kotlin-scripting-compiler-embeddable:2.4.21"
+    include "org.jetbrains.kotlin:kotlin-compiler-embeddable:2.4.21"
+    include "org.jetbrains.kotlin:kotlin-scripting-compiler-embeddable:2.4.21"
 
     testImplementation platform("org.junit:junit-bom:5.12.2")
     testImplementation "org.junit.jupiter:junit-jupiter"
@@ -95,11 +96,6 @@ processResources {
 }
 
 loom {
-    mixin {
-        useLegacyMixinAp = true
-        defaultRefmapName = "m0dev.refmap.json"
-    }
-
     runs {
         client {
             programArgs "--username", "M0dii"
@@ -108,7 +104,7 @@ loom {
 }
 
 tasks.withType(JavaCompile).configureEach {
-    it.options.release = 21
+    it.options.release = 25
 }
 
 tasks.withType(Test).configureEach {
@@ -116,13 +112,14 @@ tasks.withType(Test).configureEach {
 }
 
 java {
+    toolchain.languageVersion = JavaLanguageVersion.of(25)
     // Loom will automatically attach sourcesJar to a RemapSourcesJar task and to the "build" task
     // if it is present.
     // If you remove this line, sources will not be generated.
     withSourcesJar()
 
-    sourceCompatibility = JavaVersion.VERSION_21
-    targetCompatibility = JavaVersion.VERSION_21
+    sourceCompatibility = JavaVersion.VERSION_25
+    targetCompatibility = JavaVersion.VERSION_25
 }
 
 jar {
@@ -133,4 +130,17 @@ jar {
 
 loom {
     accessWidenerPath = file("src/main/resources/m0dev.accesswidener")
+}
+
+fabricApi {
+    configureTests {
+        createSourceSet = true
+        modId = 'm0-dev-tools-test'
+        enableGameTests = false
+        enableClientGameTests = true
+    }
+}
+
+loom.runs.named('clientGameTest') {
+    vmArg '-Dfabric.disableErrorGui=true'
 }

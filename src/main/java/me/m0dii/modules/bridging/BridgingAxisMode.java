@@ -1,6 +1,6 @@
 package me.m0dii.modules.bridging;
 
-import net.minecraft.util.math.Direction;
+import net.minecraft.core.Direction;
 
 public enum BridgingAxisMode {
     HORIZONTAL,

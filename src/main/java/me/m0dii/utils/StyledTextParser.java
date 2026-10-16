@@ -1,9 +1,9 @@
 package me.m0dii.utils;
 
-import net.minecraft.text.MutableText;
-import net.minecraft.text.Style;
-import net.minecraft.text.Text;
-import net.minecraft.text.TextColor;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.network.chat.Style;
+import net.minecraft.network.chat.TextColor;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -89,22 +89,22 @@ public final class StyledTextParser {
         return List.copyOf(runs);
     }
 
-    public static Text parseText(String raw) {
-        MutableText out = Text.empty();
+    public static Component parseText(String raw) {
+        MutableComponent out = Component.empty();
         for (StyledFragment fragment : parseFragments(raw)) {
-            MutableText piece = Text.literal(fragment.text());
+            MutableComponent piece = Component.literal(fragment.text());
             piece.setStyle(toStyle(fragment));
             out.append(piece);
         }
         return out;
     }
 
-    public static List<Text> parseLines(String raw) {
+    public static List<Component> parseLines(String raw) {
         List<String> lines = StringUtils.splitLinesRaw(raw);
         if (lines.size() == 1 && lines.getFirst().isBlank()) {
             return List.of();
         }
-        List<Text> out = new ArrayList<>(lines.size());
+        List<Component> out = new ArrayList<>(lines.size());
         for (String line : lines) {
             out.add(parseText(line));
         }
@@ -139,7 +139,7 @@ public final class StyledTextParser {
             style = style.withItalic(true);
         }
         if (fragment.underlined()) {
-            style = style.withUnderline(true);
+            style = style.withUnderlined(true);
         }
         if (fragment.strikethrough()) {
             style = style.withStrikethrough(true);

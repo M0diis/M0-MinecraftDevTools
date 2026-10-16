@@ -1,16 +1,18 @@
+import net.minecraft.network.chat.Component
+
 if (player == null || world == null) {
     "This example requires a loaded player and world."
 } else {
-    val message = "Player ${player.name.string} is at %.1f, %.1f, %.1f in %s with %.1f health and %d food."
+    val message = "Player ${player.getName().getString()} is at %.1f, %.1f, %.1f in %s with %.1f health and %d food."
         .format(
-            player.x,
-            player.y,
-            player.z,
-            world.registryKey.value,
-            player.health,
-            player.hungerManager.foodLevel
+            player.getX(),
+            player.getY(),
+            player.getZ(),
+            world.dimension().identifier(),
+            player.getHealth(),
+            player.getFoodData().getFoodLevel()
         )
 
-    player.sendMessage(net.minecraft.text.Text.literal(message), false)
+    player.sendSystemMessage(Component.literal(message))
     message
 }

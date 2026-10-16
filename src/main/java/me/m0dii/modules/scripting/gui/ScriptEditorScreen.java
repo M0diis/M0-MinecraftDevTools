@@ -1,19 +1,20 @@
 package me.m0dii.modules.scripting.gui;
 
+
+import me.m0dii.gui.theme.ThemedScreen;
+import com.mojang.blaze3d.platform.InputConstants;
 import groovy.lang.GroovyShell;
 import me.m0dii.gui.GuiSystem;
 import me.m0dii.modules.macros.MacroPlaceholders;
 import me.m0dii.modules.scripting.ScriptManager;
 import me.m0dii.modules.scripting.ScriptStorage;
 import me.m0dii.modules.scripting.ScriptTypes;
-import net.minecraft.client.gui.Click;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.input.CharInput;
-import net.minecraft.client.input.KeyInput;
-import net.minecraft.client.util.InputUtil;
-import net.minecraft.text.Text;
-import org.lwjgl.glfw.GLFW;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.CharacterEvent;
+import net.minecraft.client.input.KeyEvent;
+import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.network.chat.Component;
 
 import javax.script.Compilable;
 import javax.script.ScriptEngine;
@@ -25,7 +26,7 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.*;
 
-public class ScriptEditorScreen extends Screen {
+public class ScriptEditorScreen extends Screen implements ThemedScreen {
 
     private static final String DEFAULT_SCRIPT_NAME = "untitled.kts";
     private static final String GROOVY_EXT = ScriptTypes.GROOVY_EXT;
@@ -155,7 +156,7 @@ public class ScriptEditorScreen extends Screen {
     private final Deque<Snapshot> redo = new ArrayDeque<>();
 
     public ScriptEditorScreen() {
-        super(Text.literal("Scripting"));
+        super(Component.literal("Scripting"));
     }
 
     @Override
@@ -185,8 +186,8 @@ public class ScriptEditorScreen extends Screen {
     }
 
     @Override
-    public boolean mouseClicked(Click click, boolean doubled) {
-        if (click.button() != 0) {
+    public boolean mouseClicked(MouseButtonEvent click, boolean doubled) {
+        if (click.button() != InputConstants.MOUSE_BUTTON_LEFT) {
             return false;
         }
 
@@ -342,8 +343,8 @@ public class ScriptEditorScreen extends Screen {
     }
 
     @Override
-    public boolean mouseDragged(Click click, double deltaX, double deltaY) {
-        if (click.button() != 0 || !editor.focused || !editor.dragging) {
+    public boolean mouseDragged(MouseButtonEvent click, double deltaX, double deltaY) {
+        if (click.button() != InputConstants.MOUSE_BUTTON_LEFT || !editor.focused || !editor.dragging) {
             return super.mouseDragged(click, deltaX, deltaY);
         }
         Rect code = codeTextRect();
@@ -384,7 +385,7 @@ public class ScriptEditorScreen extends Screen {
     }
 
     @Override
-    public boolean charTyped(CharInput input) {
+    public boolean charTyped(CharacterEvent input) {
         int codepoint = input.codepoint();
         if (tab == UiTab.SCRIPTS && scriptsSearchFocused && (codepoint >= 32 && codepoint != 127)) {
             scriptSearch = scriptSearch + new String(Character.toChars(codepoint));
@@ -408,32 +409,32 @@ public class ScriptEditorScreen extends Screen {
     }
 
     @Override
-    public boolean keyPressed(KeyInput input) {
-        int key = input.getKeycode();
+    public boolean keyPressed(KeyEvent input) {
+        int key = input.input();
         boolean ctrl = isCtrlDown();
         boolean shift = isShiftDown();
 
-        if (tab == UiTab.SCRIPTS && scriptsSearchFocused && key == GLFW.GLFW_KEY_BACKSPACE && !scriptSearch.isEmpty()) {
+        if (tab == UiTab.SCRIPTS && scriptsSearchFocused && key == InputConstants.KEY_BACKSPACE && !scriptSearch.isEmpty()) {
             scriptSearch = scriptSearch.substring(0, scriptSearch.length() - 1);
             refreshScripts();
             return true;
         }
         if (tab == UiTab.SCRIPTS && renameFieldFocused) {
-            if (key == GLFW.GLFW_KEY_BACKSPACE && !renameDraft.isEmpty()) {
+            if (key == InputConstants.KEY_BACKSPACE && !renameDraft.isEmpty()) {
                 renameDraft = renameDraft.substring(0, renameDraft.length() - 1);
                 return true;
             }
-            if (key == GLFW.GLFW_KEY_ENTER || key == GLFW.GLFW_KEY_KP_ENTER) {
+            if (key == InputConstants.KEY_RETURN || key == InputConstants.KEY_NUMPADENTER) {
                 return renameScript();
             }
         }
 
-        if (key == GLFW.GLFW_KEY_ESCAPE) {
+        if (key == InputConstants.KEY_ESCAPE) {
             if (suggestionsVisible) {
                 hideSuggestions();
                 return true;
             }
-            close();
+            onClose();
             return true;
         }
 
@@ -441,44 +442,44 @@ public class ScriptEditorScreen extends Screen {
             return false;
         }
 
-        if (ctrl && key == GLFW.GLFW_KEY_Z && shift) {
+        if (ctrl && key == InputConstants.KEY_Z && shift) {
             return redoEdit();
         }
-        if (ctrl && key == GLFW.GLFW_KEY_Y) {
+        if (ctrl && key == InputConstants.KEY_Y) {
             return redoEdit();
         }
-        if (ctrl && key == GLFW.GLFW_KEY_Z) {
+        if (ctrl && key == InputConstants.KEY_Z) {
             return undoEdit();
         }
 
         if (suggestionsVisible) {
-            if (key == GLFW.GLFW_KEY_UP) {
+            if (key == InputConstants.KEY_UP) {
                 suggestionSelected = Math.max(0, suggestionSelected - 1);
                 ensureSuggestionVisible();
                 return true;
             }
-            if (key == GLFW.GLFW_KEY_DOWN) {
+            if (key == InputConstants.KEY_DOWN) {
                 suggestionSelected = Math.min(visibleSuggestions.size() - 1, suggestionSelected + 1);
                 ensureSuggestionVisible();
                 return true;
             }
-            if (key == GLFW.GLFW_KEY_ENTER || key == GLFW.GLFW_KEY_TAB) {
+            if (key == InputConstants.KEY_RETURN || key == InputConstants.KEY_TAB) {
                 acceptSuggestion();
                 return true;
             }
         }
 
-        if (ctrl && key == GLFW.GLFW_KEY_A) {
+        if (ctrl && key == InputConstants.KEY_A) {
             editor.selectionAnchor = 0;
             editor.cursor = editor.text.length();
             return true;
         }
-        if (ctrl && key == GLFW.GLFW_KEY_C && client != null) {
-            client.keyboard.setClipboard(selectedTextOrAll());
+        if (ctrl && key == InputConstants.KEY_C && minecraft != null) {
+            minecraft.keyboardHandler.setClipboard(selectedTextOrAll());
             return true;
         }
-        if (ctrl && key == GLFW.GLFW_KEY_X && client != null) {
-            client.keyboard.setClipboard(selectedTextOrAll());
+        if (ctrl && key == InputConstants.KEY_X && minecraft != null) {
+            minecraft.keyboardHandler.setClipboard(selectedTextOrAll());
             if (hasSelection()) {
                 deleteSelection(true);
             } else {
@@ -491,19 +492,19 @@ public class ScriptEditorScreen extends Screen {
             refreshSuggestions();
             return true;
         }
-        if (ctrl && key == GLFW.GLFW_KEY_V && client != null) {
-            replaceSelectionOrInsert(client.keyboard.getClipboard(), true);
+        if (ctrl && key == InputConstants.KEY_V && minecraft != null) {
+            replaceSelectionOrInsert(minecraft.keyboardHandler.getClipboard(), true);
             refreshSuggestions();
             return true;
         }
-        if (ctrl && key == GLFW.GLFW_KEY_S) {
+        if (ctrl && key == InputConstants.KEY_S) {
             return saveScript();
         }
-        if (ctrl && key == GLFW.GLFW_KEY_R) {
+        if (ctrl && key == InputConstants.KEY_R) {
             return runScript();
         }
 
-        if (key == GLFW.GLFW_KEY_TAB) {
+        if (key == InputConstants.KEY_TAB) {
             if (shift) {
                 unindentSelectionOrLine();
             } else {
@@ -512,13 +513,13 @@ public class ScriptEditorScreen extends Screen {
             refreshSuggestions();
             return true;
         }
-        if (key == GLFW.GLFW_KEY_ENTER || key == GLFW.GLFW_KEY_KP_ENTER) {
+        if (key == InputConstants.KEY_RETURN || key == InputConstants.KEY_NUMPADENTER) {
             insertNewlineWithAutoIndent();
             refreshSuggestions();
             return true;
         }
 
-        if (key == GLFW.GLFW_KEY_BACKSPACE) {
+        if (key == InputConstants.KEY_BACKSPACE) {
             if (hasSelection()) {
                 deleteSelection(true);
             } else if (editor.cursor > 0) {
@@ -531,7 +532,7 @@ public class ScriptEditorScreen extends Screen {
             refreshSuggestions();
             return true;
         }
-        if (key == GLFW.GLFW_KEY_DELETE) {
+        if (key == InputConstants.KEY_DELETE) {
             if (hasSelection()) {
                 deleteSelection(true);
             } else if (editor.cursor < editor.text.length()) {
@@ -544,32 +545,32 @@ public class ScriptEditorScreen extends Screen {
             return true;
         }
 
-        if (key == GLFW.GLFW_KEY_LEFT) {
+        if (key == InputConstants.KEY_LEFT) {
             moveCursor(editor.cursor - 1, shift);
             refreshSuggestions();
             return true;
         }
-        if (key == GLFW.GLFW_KEY_RIGHT) {
+        if (key == InputConstants.KEY_RIGHT) {
             moveCursor(editor.cursor + 1, shift);
             refreshSuggestions();
             return true;
         }
-        if (key == GLFW.GLFW_KEY_HOME) {
+        if (key == InputConstants.KEY_HOME) {
             moveCursor(lineStart(editor.cursor), shift);
             refreshSuggestions();
             return true;
         }
-        if (key == GLFW.GLFW_KEY_END) {
+        if (key == InputConstants.KEY_END) {
             moveCursor(lineEnd(editor.cursor), shift);
             refreshSuggestions();
             return true;
         }
-        if (key == GLFW.GLFW_KEY_UP) {
+        if (key == InputConstants.KEY_UP) {
             moveCursor(verticalMove(editor.cursor, -1), shift);
             refreshSuggestions();
             return true;
         }
-        if (key == GLFW.GLFW_KEY_DOWN) {
+        if (key == InputConstants.KEY_DOWN) {
             moveCursor(verticalMove(editor.cursor, 1), shift);
             refreshSuggestions();
             return true;
@@ -579,7 +580,7 @@ public class ScriptEditorScreen extends Screen {
     }
 
     @Override
-    public void render(DrawContext context, int mouseX, int mouseY, float delta) {
+    public void extractRenderState(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
         context.fill(0, 0, width, height, 0xD0101010);
         drawTabs(context, mouseX, mouseY);
 
@@ -600,7 +601,7 @@ public class ScriptEditorScreen extends Screen {
         }
     }
 
-    private void drawTabs(DrawContext context, int mouseX, int mouseY) {
+    private void drawTabs(GuiGraphicsExtractor context, int mouseX, int mouseY) {
         Rect tabs = tabsArea();
         context.fill(tabs.x, tabs.y, tabs.x + tabs.w, tabs.y + tabs.h, 0xA0000000);
         UiTab[] values = UiTab.values();
@@ -610,14 +611,14 @@ public class ScriptEditorScreen extends Screen {
             boolean hover = mouseX >= x && mouseX < x + TAB_W && mouseY >= tabs.y && mouseY < tabs.y + tabs.h;
             int bg = active ? 0xFF305084 : (hover ? 0xFF2A2A2A : 0xFF1A1A1A);
             context.fill(x + 1, tabs.y + 1, x + TAB_W - 1, tabs.y + tabs.h - 1, bg);
-            context.drawCenteredTextWithShadow(textRenderer, Text.literal(values[i] == UiTab.MAIN ? "Main" : values[i] == UiTab.DOCS ? "Docs" : "Scripts"), x + TAB_W / 2, tabs.y + 7, 0xFFFFFFFF);
+            context.centeredText(font, Component.literal(values[i] == UiTab.MAIN ? "Main" : values[i] == UiTab.DOCS ? "Docs" : "Scripts"), x + TAB_W / 2, tabs.y + 7, 0xFFFFFFFF);
         }
     }
 
-    private void renderMainHeader(DrawContext context, int mouseX, int mouseY) {
+    private void renderMainHeader(GuiGraphicsExtractor context, int mouseX, int mouseY) {
         Rect header = mainHeaderRect();
         context.fill(header.x, header.y, header.x + header.w, header.y + header.h, 0xAA151515);
-        context.drawTextWithShadow(textRenderer,
+        context.text(font,
                 "File: " + currentScriptName + " [" + inferLanguage(currentScriptName).name().toLowerCase(Locale.ROOT) + "]  Undo: " + undo.size() + "  Redo: " + redo.size(),
                 header.x + 8, header.y + 7, 0xFFE0E0E0);
         drawButton(context, mainBtnSave(), "Save", mouseX, mouseY);
@@ -626,17 +627,17 @@ public class ScriptEditorScreen extends Screen {
         drawButton(context, mainBtnAsync(), "Async:" + (scriptRunsAsync(editor.text) ? "ON" : "OFF"), mouseX, mouseY);
     }
 
-    private void renderScriptsPane(DrawContext context, int mouseX, int mouseY) {
+    private void renderScriptsPane(GuiGraphicsExtractor context, int mouseX, int mouseY) {
         Rect pane = scriptsPaneRect();
         context.fill(pane.x, pane.y, pane.x + pane.w, pane.y + pane.h, 0xAA151515);
-        context.drawTextWithShadow(textRenderer, "Scripts", pane.x + 6, pane.y + 4, 0xFFFFFFFF);
+        context.text(font, "Scripts", pane.x + 6, pane.y + 4, 0xFFFFFFFF);
 
         Rect search = scriptsSearchRect();
         context.fill(search.x, search.y, search.x + search.w, search.y + search.h, scriptsSearchFocused ? 0xFF162030 : 0xFF111111);
         String searchLine = "Search: " + scriptSearch;
-        context.drawText(textRenderer, searchLine, search.x + 4, search.y + 5, 0xFFDADADA, false);
+        context.text(font, searchLine, search.x + 4, search.y + 5, 0xFFDADADA, false);
         if (scriptsSearchFocused && blinkOn()) {
-            int cursorX = search.x + 4 + textRenderer.getWidth(searchLine);
+            int cursorX = search.x + 4 + font.width(searchLine);
             if (cursorX < search.x + search.w - 2) {
                 context.fill(cursorX, search.y + 4, cursorX + 1, search.y + 13, 0xFFFFFFFF);
             }
@@ -647,14 +648,14 @@ public class ScriptEditorScreen extends Screen {
         String renameValue = renameDraft.isEmpty() ? "<new script name>" : renameDraft;
         String renameLine = "Name: " + renameValue;
         int renameColor = renameDraft.isEmpty() ? 0xFF7F7F7F : 0xFFDADADA;
-        context.drawText(textRenderer, renameLine, rename.x + 4, rename.y + 5, renameColor, false);
+        context.text(font, renameLine, rename.x + 4, rename.y + 5, renameColor, false);
         if (renameFieldFocused && blinkOn()) {
-            int cursorX = rename.x + 4 + textRenderer.getWidth("Name: " + renameDraft);
+            int cursorX = rename.x + 4 + font.width("Name: " + renameDraft);
             if (cursorX < rename.x + rename.w - 2) {
                 context.fill(cursorX, rename.y + 4, cursorX + 1, rename.y + 13, 0xFFFFFFFF);
             }
         }
-        context.drawText(textRenderer, "Rename selected script. Press Enter or click Rename.", pane.x + 6, rename.y + rename.h + 4, 0xFF9EA7B3, false);
+        context.text(font, "Rename selected script. Press Enter or click Rename.", pane.x + 6, rename.y + rename.h + 4, 0xFF9EA7B3, false);
 
         Rect body = scriptsBodyRect();
         context.fill(body.x, body.y, body.x + body.w, body.y + body.h, 0xFF111111);
@@ -676,7 +677,7 @@ public class ScriptEditorScreen extends Screen {
             } else if (hover) {
                 context.fill(body.x + 1, y, body.x + body.w - 1, y + SCRIPT_ROW_H, 0xFF2A2A2A);
             }
-            context.drawText(textRenderer, name, body.x + 6, y + 3, selected ? 0xFFFFFFFF : 0xFFD0D0D0, false);
+            context.text(font, name, body.x + 6, y + 3, selected ? 0xFFFFFFFF : 0xFFD0D0D0, false);
         }
 
         drawButton(context, scriptsBtnCreate(), "Create", mouseX, mouseY);
@@ -690,7 +691,7 @@ public class ScriptEditorScreen extends Screen {
         drawButton(context, scriptsBtnAsync(), "Async:" + (scriptRunsAsync(editor.text) ? "ON" : "OFF"), mouseX, mouseY);
     }
 
-    private void renderEditor(DrawContext context) {
+    private void renderEditor(GuiGraphicsExtractor context) {
         Rect panel = editorRect();
         Rect gutter = gutterRect(panel);
         Rect code = codeTextRect(panel, gutter);
@@ -713,7 +714,7 @@ public class ScriptEditorScreen extends Screen {
             }
             String line = lines.get(lineIdx);
             String n = Integer.toString(lineIdx + 1);
-            context.drawText(textRenderer, n, gutter.x + gutter.w - 4 - textRenderer.getWidth(n), y, 0xFF888888, false);
+            context.text(font, n, gutter.x + gutter.w - 4 - font.width(n), y, 0xFF888888, false);
             drawHighlightedLine(context, line, code.x + 4 - editor.viewLeft, y, inferLanguage(currentScriptName));
             y += CODE_LINE_H;
         }
@@ -738,13 +739,13 @@ public class ScriptEditorScreen extends Screen {
         suggestionScroll = Math.clamp(suggestionScroll, 0, maxScroll);
     }
 
-    private void renderDiagnostics(DrawContext context, int mouseX, int mouseY) {
+    private void renderDiagnostics(GuiGraphicsExtractor context, int mouseX, int mouseY) {
         Rect panel = diagnosticsRect();
         context.fill(panel.x, panel.y, panel.x + panel.w, panel.y + panel.h, 0xAA151515);
         String header = "Problems (" + diagnostics.size() + ")";
-        context.drawTextWithShadow(textRenderer, header, panel.x + 6, panel.y + 4, 0xFFFFFFFF);
+        context.text(font, header, panel.x + 6, panel.y + 4, 0xFFFFFFFF);
         if (!outputText.isBlank()) {
-            context.drawText(textRenderer, trimToWidth(outputText, Math.max(40, panel.w - 126)), panel.x + 120, panel.y + 4, 0xFFC6C6C6, false);
+            context.text(font, trimToWidth(outputText, Math.max(40, panel.w - 126)), panel.x + 120, panel.y + 4, 0xFFC6C6C6, false);
         }
 
         int rows = Math.max(1, (panel.h - 18) / DIAG_ROW_H);
@@ -762,11 +763,11 @@ public class ScriptEditorScreen extends Screen {
                 context.fill(panel.x + 1, y, panel.x + panel.w - 1, y + DIAG_ROW_H, 0x402F5C8E);
             }
             int color = "ERROR".equals(diagnostic.severity) ? 0xFFFF9D9D : 0xFFE8D49E;
-            context.drawText(textRenderer, trimToWidth(diagnostic.rowText(), Math.max(40, panel.w - 12)), panel.x + 6, y + 1, color, false);
+            context.text(font, trimToWidth(diagnostic.rowText(), Math.max(40, panel.w - 12)), panel.x + 6, y + 1, color, false);
         }
     }
 
-    private void renderDocs(DrawContext context) {
+    private void renderDocs(GuiGraphicsExtractor context) {
         Rect body = docsRect();
         context.fill(body.x, body.y, body.x + body.w, body.y + body.h, 0xAA151515);
         int rows = Math.max(1, (body.h - 12) / CODE_LINE_H);
@@ -780,12 +781,12 @@ public class ScriptEditorScreen extends Screen {
             }
             String line = docsLines.get(i);
             int color = line.startsWith("[") ? 0xFF9FC8FF : 0xFFE0E0E0;
-            context.drawText(textRenderer, line, body.x + 8, y, color, false);
+            context.text(font, line, body.x + 8, y, color, false);
             y += CODE_LINE_H;
         }
     }
 
-    private void renderSuggestions(DrawContext context, int mouseX, int mouseY) {
+    private void renderSuggestions(GuiGraphicsExtractor context, int mouseX, int mouseY) {
         Rect drop = suggestionsRect();
         int breadcrumbH = 11;
         int visible = Math.clamp(visibleSuggestions.size(), 1, 8);
@@ -793,7 +794,7 @@ public class ScriptEditorScreen extends Screen {
         suggestionScroll = Math.clamp(suggestionScroll, 0, maxScroll);
         context.fill(drop.x, drop.y, drop.x + drop.w, drop.y + breadcrumbH + visible * SUGGESTION_ROW_H, 0xE0101010);
         String breadcrumb = suggestionBreadcrumb();
-        context.drawText(textRenderer, breadcrumb, drop.x + 4, drop.y + 1, 0xFF9FC8FF, false);
+        context.text(font, breadcrumb, drop.x + 4, drop.y + 1, 0xFF9FC8FF, false);
 
         for (int i = 0; i < visible; i++) {
             int idx = suggestionScroll + i;
@@ -818,7 +819,7 @@ public class ScriptEditorScreen extends Screen {
                 label += "  : " + suggestion.detail();
             }
             int color = hover ? 0xFFFFFFFF : suggestionKindColor(suggestion.kind());
-            context.drawText(textRenderer, label, drop.x + 4, y + 1, color, false);
+            context.text(font, label, drop.x + 4, y + 1, color, false);
         }
     }
 
@@ -965,8 +966,8 @@ public class ScriptEditorScreen extends Screen {
         boolean async = scriptRunsAsync(scriptSnapshot);
         if (async) {
             outputText = "Running script asynchronously...";
-            if (client != null) {
-                client.execute(() -> {
+            if (minecraft != null) {
+                minecraft.execute(() -> {
                     try {
                         Object result = manager.runScript(scriptSnapshot, context);
                         outputText = ScriptTypes.formatResult(result);
@@ -1320,10 +1321,10 @@ public class ScriptEditorScreen extends Screen {
     }
 
     private void copyDiagnosticToClipboard(Diagnostic diagnostic) {
-        if (client == null || diagnostic == null) {
+        if (minecraft == null || diagnostic == null) {
             return;
         }
-        client.keyboard.setClipboard(diagnostic.rowText());
+        minecraft.keyboardHandler.setClipboard(diagnostic.rowText());
         outputText = diagnostic.rowText();
     }
 
@@ -1765,7 +1766,7 @@ public class ScriptEditorScreen extends Screen {
         int localX = Math.max(0, mouseX - (code.x + 4) + editor.viewLeft);
         int col = textLine.length();
         for (int i = 0; i <= textLine.length(); i++) {
-            if (textRenderer.getWidth(textLine.substring(0, i)) >= localX) {
+            if (font.width(textLine.substring(0, i)) >= localX) {
                 col = i;
                 break;
             }
@@ -1789,12 +1790,12 @@ public class ScriptEditorScreen extends Screen {
             line = i + 1;
         }
         String current = lines.get(Math.clamp(line, 0, lines.size() - 1));
-        int x = code.x + 4 + textRenderer.getWidth(current.substring(0, Math.min(remaining, current.length()))) - editor.viewLeft;
+        int x = code.x + 4 + font.width(current.substring(0, Math.min(remaining, current.length()))) - editor.viewLeft;
         int y = code.y + 3 + (line - editor.scrollLine) * CODE_LINE_H;
         return new int[]{x, y};
     }
 
-    private void drawSelection(DrawContext context, Rect code, List<String> lines) {
+    private void drawSelection(GuiGraphicsExtractor context, Rect code, List<String> lines) {
         if (!hasSelection()) {
             return;
         }
@@ -1813,8 +1814,8 @@ public class ScriptEditorScreen extends Screen {
                 int s = Math.max(start, lineStart);
                 int e = Math.min(end, lineEnd);
                 if (e > s) {
-                    int sx = code.x + 4 + textRenderer.getWidth(line.substring(0, s - lineStart)) - editor.viewLeft;
-                    int ex = code.x + 4 + textRenderer.getWidth(line.substring(0, e - lineStart)) - editor.viewLeft;
+                    int sx = code.x + 4 + font.width(line.substring(0, s - lineStart)) - editor.viewLeft;
+                    int ex = code.x + 4 + font.width(line.substring(0, e - lineStart)) - editor.viewLeft;
                     context.fill(sx, y, ex, y + 9, 0x704A7CC7);
                 }
                 y += CODE_LINE_H;
@@ -1823,7 +1824,7 @@ public class ScriptEditorScreen extends Screen {
         }
     }
 
-    private void drawCurrentLineHighlight(DrawContext context, Rect code) {
+    private void drawCurrentLineHighlight(GuiGraphicsExtractor context, Rect code) {
         int line = lineNumberOfCursor();
         int y = code.y + 3 + (line - editor.scrollLine) * CODE_LINE_H;
         if (y >= code.y && y <= code.y + code.h - CODE_LINE_H) {
@@ -1841,7 +1842,7 @@ public class ScriptEditorScreen extends Screen {
         return line;
     }
 
-    private void highlightErrorSpans(DrawContext context, Rect code) {
+    private void highlightErrorSpans(GuiGraphicsExtractor context, Rect code) {
         for (Diagnostic d : diagnostics) {
             int line = Math.max(1, d.line) - 1;
             int col = Math.max(1, d.column) - 1;
@@ -1851,8 +1852,8 @@ public class ScriptEditorScreen extends Screen {
             }
             context.fill(code.x + 1, y + 8, code.x + code.w - 1, y + 9, 0x90FF5555);
             String lineText = lineTextAt(line);
-            int x1 = code.x + 4 + textRenderer.getWidth(lineText.substring(0, Math.min(col, lineText.length()))) - editor.viewLeft;
-            int x2 = x1 + Math.max(2, textRenderer.getWidth(lineText.substring(Math.min(col, lineText.length()), Math.min(col + 1, lineText.length()))));
+            int x1 = code.x + 4 + font.width(lineText.substring(0, Math.min(col, lineText.length()))) - editor.viewLeft;
+            int x2 = x1 + Math.max(2, font.width(lineText.substring(Math.min(col, lineText.length()), Math.min(col + 1, lineText.length()))));
             context.fill(x1, y + 8, x2, y + 9, 0xFFFF7070);
         }
     }
@@ -1865,7 +1866,7 @@ public class ScriptEditorScreen extends Screen {
         return lines.get(zeroBased);
     }
 
-    private void highlightMatchingBracket(DrawContext context, Rect code) {
+    private void highlightMatchingBracket(GuiGraphicsExtractor context, Rect code) {
         int leftIdx = editor.cursor > 0 ? editor.cursor - 1 : -1;
         if (leftIdx < 0 || leftIdx >= editor.text.length()) {
             return;
@@ -1927,17 +1928,17 @@ public class ScriptEditorScreen extends Screen {
         return -1;
     }
 
-    private void drawBracketMarker(DrawContext context, Rect code, int idx, int color) {
+    private void drawBracketMarker(GuiGraphicsExtractor context, Rect code, int idx, int color) {
         int[] p = cursorPixel(code, idx);
         if (p[1] < code.y || p[1] > code.y + code.h - CODE_LINE_H) {
             return;
         }
-        int charW = textRenderer.getWidth("(");
+        int charW = font.width("(");
         context.fill(p[0], p[1], p[0] + Math.max(2, charW), p[1] + 1, color);
         context.fill(p[0], p[1] + 8, p[0] + Math.max(2, charW), p[1] + 9, color);
     }
 
-    private void drawHighlightedLine(DrawContext context, String line, int x, int y, Language language) {
+    private void drawHighlightedLine(GuiGraphicsExtractor context, String line, int x, int y, Language language) {
         List<TokenSpan> spans = tokenize(line, language);
         int drawX = x;
         for (TokenSpan span : spans) {
@@ -1945,8 +1946,8 @@ public class ScriptEditorScreen extends Screen {
                 continue;
             }
             String part = line.substring(span.start, span.end);
-            context.drawText(textRenderer, part, drawX, y, span.color, false);
-            drawX += textRenderer.getWidth(part);
+            context.text(font, part, drawX, y, span.color, false);
+            drawX += font.width(part);
         }
     }
 
@@ -2257,12 +2258,12 @@ public class ScriptEditorScreen extends Screen {
         }
         completionCacheReady = true;
 
-        registerRoot("client", "net.minecraft.client.MinecraftClient");
-        registerRoot("player", "net.minecraft.client.network.ClientPlayerEntity");
-        registerRoot("world", "net.minecraft.client.world.ClientWorld");
-        registerRoot("options", "net.minecraft.client.option.GameOptions");
-        registerRoot("server", "net.minecraft.server.MinecraftServer");
-        registerRoot("source", "net.minecraft.server.command.ServerCommandSource");
+        registerRoot("client", net.minecraft.client.Minecraft.class.getName());
+        registerRoot("player", net.minecraft.client.player.LocalPlayer.class.getName());
+        registerRoot("world", net.minecraft.client.multiplayer.ClientLevel.class.getName());
+        registerRoot("options", net.minecraft.client.Options.class.getName());
+        registerRoot("server", net.minecraft.server.MinecraftServer.class.getName());
+        registerRoot("source", net.minecraft.client.player.LocalPlayer.class.getName());
 
         List<CompletionItem> global = new ArrayList<>();
         for (Map.Entry<String, String> root : ROOT_TYPE_KEYS.entrySet()) {
@@ -2753,12 +2754,12 @@ public class ScriptEditorScreen extends Screen {
 
     private String trimToWidth(String raw, int maxWidth) {
         String text = raw == null ? "" : raw;
-        if (maxWidth <= 0 || textRenderer.getWidth(text) <= maxWidth) {
+        if (maxWidth <= 0 || font.width(text) <= maxWidth) {
             return text;
         }
         final String ellipsis = "...";
         int keep = text.length();
-        while (keep > 0 && textRenderer.getWidth(text.substring(0, keep) + ellipsis) > maxWidth) {
+        while (keep > 0 && font.width(text.substring(0, keep) + ellipsis) > maxWidth) {
             keep--;
         }
         return keep <= 0 ? ellipsis : text.substring(0, keep) + ellipsis;
@@ -2779,19 +2780,19 @@ public class ScriptEditorScreen extends Screen {
     }
 
     private boolean isCtrlDown() {
-        if (client == null) {
+        if (minecraft == null) {
             return false;
         }
-        var w = client.getWindow();
-        return InputUtil.isKeyPressed(w, GLFW.GLFW_KEY_LEFT_CONTROL) || InputUtil.isKeyPressed(w, GLFW.GLFW_KEY_RIGHT_CONTROL);
+        var w = minecraft.getWindow();
+        return InputConstants.isKeyDown(InputConstants.KEY_LCONTROL) || InputConstants.isKeyDown(InputConstants.KEY_RCONTROL);
     }
 
     private boolean isShiftDown() {
-        if (client == null) {
+        if (minecraft == null) {
             return false;
         }
-        var w = client.getWindow();
-        return InputUtil.isKeyPressed(w, GLFW.GLFW_KEY_LEFT_SHIFT) || InputUtil.isKeyPressed(w, GLFW.GLFW_KEY_RIGHT_SHIFT);
+        var w = minecraft.getWindow();
+        return InputConstants.isKeyDown(InputConstants.KEY_LSHIFT) || InputConstants.isKeyDown(InputConstants.KEY_RSHIFT);
     }
 
     private Rect tabsArea() {
@@ -2942,19 +2943,19 @@ public class ScriptEditorScreen extends Screen {
         return new Rect(x, y, 350, 110);
     }
 
-    private void drawButton(DrawContext context, Rect rect, String label, int mouseX, int mouseY) {
-        GuiSystem.drawButton(context, textRenderer, rect.x, rect.y, rect.w, rect.h, label, rect.contains(mouseX, mouseY), true);
+    private void drawButton(GuiGraphicsExtractor context, Rect rect, String label, int mouseX, int mouseY) {
+        GuiSystem.drawButton(context, font, rect.x, rect.y, rect.w, rect.h, label, rect.contains(mouseX, mouseY), true);
     }
 
     @Override
-    public void close() {
-        if (client != null) {
-            client.setScreen(null);
+    public void onClose() {
+        if (minecraft != null) {
+            minecraft.gui.setScreen(null);
         }
     }
 
     @Override
-    public boolean shouldPause() {
+    public boolean isPauseScreen() {
         return false;
     }
 

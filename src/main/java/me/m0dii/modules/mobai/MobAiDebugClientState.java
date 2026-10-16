@@ -1,8 +1,7 @@
 package me.m0dii.modules.mobai;
 
+import net.minecraft.core.BlockPos;
 import net.minecraft.util.Util;
-import net.minecraft.util.math.BlockPos;
-
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -20,7 +19,7 @@ final class MobAiDebugClientState {
     }
 
     static synchronized void setInspect(int entityId, List<MobAiDebugPayloads.DebugLine> lines) {
-        inspectState = new InspectState(entityId, List.copyOf(lines), Util.getMeasuringTimeMs() + OVERLAY_TTL_MS);
+        inspectState = new InspectState(entityId, List.copyOf(lines), Util.getMillis() + OVERLAY_TTL_MS);
     }
 
     static synchronized void setPathPreview(MobAiDebugPayloads.PathPreviewPayload payload) {
@@ -35,7 +34,7 @@ final class MobAiDebugClientState {
                 List.copyOf(payload.openNodes()),
                 List.copyOf(payload.closedNodes()),
                 List.copyOf(payload.lines()),
-                Util.getMeasuringTimeMs() + OVERLAY_TTL_MS
+                Util.getMillis() + OVERLAY_TTL_MS
         );
     }
 
@@ -84,7 +83,7 @@ final class MobAiDebugClientState {
     }
 
     private static void pruneExpired() {
-        long now = Util.getMeasuringTimeMs();
+        long now = Util.getMillis();
         if (inspectState != null && inspectState.expiresAtMs() < now) {
             inspectState = null;
         }

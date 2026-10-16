@@ -7,15 +7,14 @@ import com.mojang.serialization.Codec;
 import me.m0dii.M0DevTools;
 import me.m0dii.utils.StringUtils;
 import me.m0dii.utils.StyledTextParser;
-import net.minecraft.component.ComponentType;
-import net.minecraft.item.ItemStack;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.core.component.DataComponentType;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.*;
-import net.minecraft.registry.Registries;
-import net.minecraft.registry.RegistryWrapper;
-import net.minecraft.text.Text;
-import net.minecraft.text.TextCodecs;
-import net.minecraft.util.Identifier;
-
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.ComponentSerialization;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.item.ItemStack;
 import java.util.Optional;
 
 public final class ItemDataCodec {
@@ -27,68 +26,68 @@ public final class ItemDataCodec {
     private ItemDataCodec() {
     }
 
-    public static Optional<NbtCompound> encode(ItemStack stack, RegistryWrapper.WrapperLookup registryLookup) {
+    public static Optional<CompoundTag> encode(ItemStack stack, HolderLookup.Provider registryLookup) {
         if (stack == null || stack.isEmpty() || registryLookup == null) {
             return Optional.empty();
         }
 
-        return ItemStack.CODEC.encodeStart(registryLookup.getOps(NbtOps.INSTANCE), stack)
+        return ItemStack.CODEC.encodeStart(registryLookup.createSerializationContext(NbtOps.INSTANCE), stack)
                 .resultOrPartial(message -> M0DevTools.LOGGER.warn("[ItemData] Failed to encode item stack: {}", message))
-                .filter(NbtCompound.class::isInstance)
-                .map(NbtCompound.class::cast)
-                .map(NbtCompound::copy);
+                .filter(CompoundTag.class::isInstance)
+                .map(CompoundTag.class::cast)
+                .map(CompoundTag::copy);
     }
 
-    public static Optional<ItemStack> decode(NbtCompound nbt, RegistryWrapper.WrapperLookup registryLookup) {
+    public static Optional<ItemStack> decode(CompoundTag nbt, HolderLookup.Provider registryLookup) {
         if (nbt == null || nbt.isEmpty() || registryLookup == null) {
             return Optional.empty();
         }
 
-        return ItemStack.CODEC.parse(registryLookup.getOps(NbtOps.INSTANCE), nbt)
+        return ItemStack.CODEC.parse(registryLookup.createSerializationContext(NbtOps.INSTANCE), nbt)
                 .resultOrPartial(message -> M0DevTools.LOGGER.warn("[ItemData] Failed to decode item stack: {}", message));
     }
 
-    public static NbtCompound encodeOrEmpty(ItemStack stack, RegistryWrapper.WrapperLookup registryLookup) {
-        return encode(stack, registryLookup).orElseGet(NbtCompound::new);
+    public static CompoundTag encodeOrEmpty(ItemStack stack, HolderLookup.Provider registryLookup) {
+        return encode(stack, registryLookup).orElseGet(CompoundTag::new);
     }
 
-    public static NbtCompound getComponents(NbtCompound root) {
+    public static CompoundTag getComponents(CompoundTag root) {
         if (root == null) {
-            return new NbtCompound();
+            return new CompoundTag();
         }
-        if (root.get(COMPONENTS_KEY) instanceof NbtCompound components) {
+        if (root.get(COMPONENTS_KEY) instanceof CompoundTag components) {
             return components;
         }
-        return new NbtCompound();
+        return new CompoundTag();
     }
 
-    public static NbtCompound ensureComponents(NbtCompound root) {
+    public static CompoundTag ensureComponents(CompoundTag root) {
         if (root == null) {
-            return new NbtCompound();
+            return new CompoundTag();
         }
-        if (root.get(COMPONENTS_KEY) instanceof NbtCompound components) {
+        if (root.get(COMPONENTS_KEY) instanceof CompoundTag components) {
             return components;
         }
-        NbtCompound components = new NbtCompound();
+        CompoundTag components = new CompoundTag();
         root.put(COMPONENTS_KEY, components);
         return components;
     }
 
-    public static ComponentType<?> resolveComponentType(String componentId) {
+    public static DataComponentType<?> resolveComponentType(String componentId) {
         if (componentId == null || componentId.isBlank()) {
             return null;
         }
         Identifier id = Identifier.tryParse(componentId);
-        if (id == null || !Registries.DATA_COMPONENT_TYPE.containsId(id)) {
+        if (id == null || !BuiltInRegistries.DATA_COMPONENT_TYPE.containsKey(id)) {
             return null;
         }
-        return Registries.DATA_COMPONENT_TYPE.get(id);
+        return BuiltInRegistries.DATA_COMPONENT_TYPE.getValue(id);
     }
 
-    public static NbtElement normalizeComponentValue(String componentId,
+    public static Tag normalizeComponentValue(String componentId,
                                                      String raw,
-                                                     RegistryWrapper.WrapperLookup registryLookup) throws CommandSyntaxException {
-        ComponentType<?> componentType = resolveComponentType(componentId);
+                                                     HolderLookup.Provider registryLookup) throws CommandSyntaxException {
+        DataComponentType<?> componentType = resolveComponentType(componentId);
         if (componentType == null) {
             throw invalid("Unknown component id: " + componentId);
         }
@@ -97,10 +96,10 @@ public final class ItemDataCodec {
         }
 
         try {
-            NbtElement rawValue = StringNbtReader.fromOps(NbtOps.INSTANCE).readAsArgument(new StringReader(raw));
+            Tag rawValue = TagParser.create(NbtOps.INSTANCE).parseAsArgument(new StringReader(raw));
             return normalizeComponentValue(componentType, componentId, rawValue, registryLookup);
         } catch (CommandSyntaxException syntaxException) {
-            NbtElement friendlyValue = tryNormalizeFriendlyComponentValue(componentType, componentId, raw, registryLookup);
+            Tag friendlyValue = tryNormalizeFriendlyComponentValue(componentType, componentId, raw, registryLookup);
             if (friendlyValue != null) {
                 return friendlyValue;
             }
@@ -108,36 +107,36 @@ public final class ItemDataCodec {
         }
     }
 
-    public static NbtElement normalizeComponentValue(ComponentType<?> componentType,
+    public static Tag normalizeComponentValue(DataComponentType<?> componentType,
                                                      String componentId,
-                                                     NbtElement rawValue,
-                                                     RegistryWrapper.WrapperLookup registryLookup) throws CommandSyntaxException {
+                                                     Tag rawValue,
+                                                     HolderLookup.Provider registryLookup) throws CommandSyntaxException {
         if (componentType == null) {
             throw invalid("Unknown component id: " + componentId);
         }
-        Codec<Object> codec = (Codec<Object>) componentType.getCodecOrThrow();
-        Object decoded = codec.parse(registryLookup.getOps(NbtOps.INSTANCE), rawValue)
+        Codec<Object> codec = (Codec<Object>) componentType.codecOrThrow();
+        Object decoded = codec.parse(registryLookup.createSerializationContext(NbtOps.INSTANCE), rawValue)
                 .resultOrPartial(message -> M0DevTools.LOGGER.warn("[ItemData] Failed to parse component {}: {}", componentId, message))
                 .orElseThrow(() -> invalid("Invalid value for component " + componentId));
-        return codec.encodeStart(registryLookup.getOps(NbtOps.INSTANCE), decoded)
+        return codec.encodeStart(registryLookup.createSerializationContext(NbtOps.INSTANCE), decoded)
                 .resultOrPartial(message -> M0DevTools.LOGGER.warn("[ItemData] Failed to encode component {}: {}", componentId, message))
                 .orElseThrow(() -> invalid("Invalid value for component " + componentId));
     }
 
-    public static NbtCompound normalizeItemData(String raw, RegistryWrapper.WrapperLookup registryLookup) throws CommandSyntaxException {
-        NbtCompound parsed = StringNbtReader.readCompoundAsArgument(new StringReader(raw));
+    public static CompoundTag normalizeItemData(String raw, HolderLookup.Provider registryLookup) throws CommandSyntaxException {
+        CompoundTag parsed = TagParser.parseCompoundAsArgument(new StringReader(raw));
         ItemStack stack = decode(parsed, registryLookup)
                 .orElseThrow(() -> invalid("Invalid serialized item data."));
         return encode(stack, registryLookup)
                 .orElse(parsed.copy());
     }
 
-    public static String readPlainDisplayName(NbtCompound itemData, RegistryWrapper.WrapperLookup registryLookup) {
+    public static String readPlainDisplayName(CompoundTag itemData, HolderLookup.Provider registryLookup) {
         if (registryLookup == null || itemData == null) {
             return "";
         }
-        NbtCompound components = getComponents(itemData);
-        NbtElement custom = components.get(CUSTOM_NAME_COMPONENT);
+        CompoundTag components = getComponents(itemData);
+        Tag custom = components.get(CUSTOM_NAME_COMPONENT);
         String fromCustom = decodeText(custom, registryLookup);
         if (!fromCustom.isBlank()) {
             return fromCustom;
@@ -145,7 +144,7 @@ public final class ItemDataCodec {
         return decodeText(components.get(ITEM_NAME_COMPONENT), registryLookup);
     }
 
-    public static void applyPlainCustomName(NbtCompound itemData, String plainName, RegistryWrapper.WrapperLookup registryLookup) throws CommandSyntaxException {
+    public static void applyPlainCustomName(CompoundTag itemData, String plainName, HolderLookup.Provider registryLookup) throws CommandSyntaxException {
         if (itemData == null) {
             throw invalid("Item data is missing.");
         }
@@ -153,7 +152,7 @@ public final class ItemDataCodec {
             throw invalid("Registry lookup is not available.");
         }
 
-        NbtCompound components = ensureComponents(itemData);
+        CompoundTag components = ensureComponents(itemData);
         if (plainName == null || plainName.isBlank()) {
             components.remove(CUSTOM_NAME_COMPONENT);
             if (components.isEmpty()) {
@@ -162,26 +161,26 @@ public final class ItemDataCodec {
             return;
         }
 
-        NbtElement encoded = encodeTextElement(StyledTextParser.parseText(StringUtils.normalizeSingleLineInput(plainName)), registryLookup);
+        Tag encoded = encodeTextElement(StyledTextParser.parseText(StringUtils.normalizeSingleLineInput(plainName)), registryLookup);
         components.put(CUSTOM_NAME_COMPONENT, encoded);
     }
 
-    public static String defaultTemplateForComponent(String componentId, RegistryWrapper.WrapperLookup registryLookup) {
+    public static String defaultTemplateForComponent(String componentId, HolderLookup.Provider registryLookup) {
         return ItemComponentMetadata.starterTemplate(componentId, registryLookup);
     }
 
-    public static String exampleForComponent(String componentId, RegistryWrapper.WrapperLookup registryLookup) {
+    public static String exampleForComponent(String componentId, HolderLookup.Provider registryLookup) {
         return ItemComponentMetadata.example(componentId, registryLookup);
     }
 
-    public static int readCount(NbtCompound itemData) {
+    public static int readCount(CompoundTag itemData) {
         if (itemData == null) {
             return 1;
         }
-        return itemData.get("count") instanceof NbtInt nbtInt ? Math.max(1, nbtInt.intValue()) : 1;
+        return itemData.get("count") instanceof IntTag nbtInt ? Math.max(1, nbtInt.intValue()) : 1;
     }
 
-    public static void applyCount(NbtCompound itemData, String rawCount) throws CommandSyntaxException {
+    public static void applyCount(CompoundTag itemData, String rawCount) throws CommandSyntaxException {
         if (itemData == null) {
             throw invalid("Item data is missing.");
         }
@@ -201,42 +200,42 @@ public final class ItemDataCodec {
         itemData.putInt("count", parsed);
     }
 
-    static String encodeTextLiteral(String value, RegistryWrapper.WrapperLookup registryLookup) {
+    static String encodeTextLiteral(String value, HolderLookup.Provider registryLookup) {
         if (registryLookup == null) {
             return "\"" + value.replace("\"", "\\\"") + "\"";
         }
-        return TextCodecs.CODEC.encodeStart(registryLookup.getOps(NbtOps.INSTANCE), Text.literal(value))
+        return ComponentSerialization.CODEC.encodeStart(registryLookup.createSerializationContext(NbtOps.INSTANCE), Component.literal(value))
                 .resultOrPartial(message -> M0DevTools.LOGGER.warn("[ItemData] Failed to encode text literal: {}", message))
-                .map(NbtElement::toString)
+                .map(Tag::toString)
                 .orElse("\"" + value.replace("\"", "\\\"") + "\"");
     }
 
-    private static String decodeText(NbtElement value, RegistryWrapper.WrapperLookup registryLookup) {
+    private static String decodeText(Tag value, HolderLookup.Provider registryLookup) {
         if (value == null || registryLookup == null) {
             return "";
         }
-        return TextCodecs.CODEC.parse(registryLookup.getOps(NbtOps.INSTANCE), value)
+        return ComponentSerialization.CODEC.parse(registryLookup.createSerializationContext(NbtOps.INSTANCE), value)
                 .resultOrPartial(message -> M0DevTools.LOGGER.warn("[ItemData] Failed to decode text component: {}", message))
-                .map(Text::getString)
+                .map(Component::getString)
                 .orElse("");
     }
 
-    private static NbtElement tryNormalizeFriendlyComponentValue(ComponentType<?> componentType,
+    private static Tag tryNormalizeFriendlyComponentValue(DataComponentType<?> componentType,
                                                                  String componentId,
                                                                  String raw,
-                                                                 RegistryWrapper.WrapperLookup registryLookup) throws CommandSyntaxException {
+                                                                 HolderLookup.Provider registryLookup) throws CommandSyntaxException {
         if (!shouldTryFriendlyTextFallback(componentId, raw)) {
             return null;
         }
 
         if (CUSTOM_NAME_COMPONENT.equals(componentId) || ITEM_NAME_COMPONENT.equals(componentId)) {
-            Text parsed = StyledTextParser.parseText(StringUtils.normalizeSingleLineInput(raw));
+            Component parsed = StyledTextParser.parseText(StringUtils.normalizeSingleLineInput(raw));
             return normalizeComponentValue(componentType, componentId, encodeTextElement(parsed, registryLookup), registryLookup);
         }
 
         if (LORE_COMPONENT.equals(componentId)) {
-            NbtList list = new NbtList();
-            for (Text line : StyledTextParser.parseLines(raw)) {
+            ListTag list = new ListTag();
+            for (Component line : StyledTextParser.parseLines(raw)) {
                 list.add(encodeTextElement(line, registryLookup));
             }
             return normalizeComponentValue(componentType, componentId, list, registryLookup);
@@ -265,13 +264,13 @@ public final class ItemDataCodec {
                 || normalized.startsWith("'"));
     }
 
-    private static NbtElement encodeTextElement(Text text, RegistryWrapper.WrapperLookup registryLookup) throws CommandSyntaxException {
-        return TextCodecs.CODEC.encodeStart(registryLookup.getOps(NbtOps.INSTANCE), text)
+    private static Tag encodeTextElement(Component text, HolderLookup.Provider registryLookup) throws CommandSyntaxException {
+        return ComponentSerialization.CODEC.encodeStart(registryLookup.createSerializationContext(NbtOps.INSTANCE), text)
                 .resultOrPartial(message -> M0DevTools.LOGGER.warn("[ItemData] Failed to encode text component: {}", message))
                 .orElseThrow(() -> invalid("Unable to encode the text component."));
     }
 
     private static CommandSyntaxException invalid(String message) {
-        return new SimpleCommandExceptionType(Text.literal(message)).create();
+        return new SimpleCommandExceptionType(Component.literal(message)).create();
     }
 }

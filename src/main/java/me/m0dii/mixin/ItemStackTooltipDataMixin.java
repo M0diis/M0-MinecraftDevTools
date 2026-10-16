@@ -2,8 +2,8 @@ package me.m0dii.mixin;
 
 import me.m0dii.modules.nbttooltip.ShulkerPreviewTooltipData;
 import me.m0dii.modules.nbttooltip.ShulkerTooltipModule;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.tooltip.TooltipData;
+import net.minecraft.world.inventory.tooltip.TooltipComponent;
+import net.minecraft.world.item.ItemStack;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -14,8 +14,8 @@ import java.util.Optional;
 @Mixin(ItemStack.class)
 public abstract class ItemStackTooltipDataMixin {
 
-    @Inject(method = "getTooltipData", at = @At("HEAD"), cancellable = true)
-    private void injectShulkerPreviewData(CallbackInfoReturnable<Optional<TooltipData>> cir) {
+    @Inject(method = "getTooltipImage", at = @At("HEAD"), cancellable = true)
+    private void injectShulkerPreviewData(CallbackInfoReturnable<Optional<TooltipComponent>> cir) {
         if (!ShulkerTooltipModule.INSTANCE.isEnabled()) {
             return;
         }

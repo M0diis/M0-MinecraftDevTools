@@ -8,8 +8,7 @@ import me.m0dii.modules.macros.gui.MacroWorkbenchAdvancedLayouts.CustomWidgetAdv
 import me.m0dii.modules.macros.hud.MacroHudDataHandler;
 import me.m0dii.modules.macros.hud.MacroInventoryWidgetSupport;
 import me.m0dii.utils.StringUtils;
-import net.minecraft.client.gui.Click;
-
+import net.minecraft.client.input.MouseButtonEvent;
 import java.util.List;
 
 public final class MacroWorkbenchCustomWidgetTypeClickHandler {
@@ -17,7 +16,7 @@ public final class MacroWorkbenchCustomWidgetTypeClickHandler {
     }
 
     public interface Ops {
-        boolean contains(Click click, UiRect rect);
+        boolean contains(MouseButtonEvent click, UiRect rect);
 
         int stepInt(int base);
 
@@ -40,7 +39,7 @@ public final class MacroWorkbenchCustomWidgetTypeClickHandler {
         void openColorPicker(java.util.function.IntConsumer onPick, String title, int x, int y);
     }
 
-    public static boolean handleTypeClick(Click click,
+    public static boolean handleTypeClick(MouseButtonEvent click,
                                           CustomWidgetAdvancedLayout layout,
                                           boolean forward,
                                           MacroHudDataHandler.HudElement selected,
@@ -76,7 +75,7 @@ public final class MacroWorkbenchCustomWidgetTypeClickHandler {
         return false;
     }
 
-    private static boolean handleInventoryClick(Click click,
+    private static boolean handleInventoryClick(MouseButtonEvent click,
                                                 CustomWidgetAdvancedLayout layout,
                                                 boolean forward,
                                                 MacroHudDataHandler.HudElement selected,
@@ -123,7 +122,7 @@ public final class MacroWorkbenchCustomWidgetTypeClickHandler {
         MacroInventoryWidgetSupport.applyDefaultSize(selected);
     }
 
-    private static boolean handleIconClick(Click click,
+    private static boolean handleIconClick(MouseButtonEvent click,
                                            CustomWidgetAdvancedLayout layout,
                                            boolean forward,
                                            MacroHudDataHandler.HudElement selected,
@@ -215,7 +214,7 @@ public final class MacroWorkbenchCustomWidgetTypeClickHandler {
         return false;
     }
 
-    private static boolean handleBarClick(Click click,
+    private static boolean handleBarClick(MouseButtonEvent click,
                                           CustomWidgetAdvancedLayout layout,
                                           boolean forward,
                                           MacroHudDataHandler.HudElement selected,
@@ -277,7 +276,7 @@ public final class MacroWorkbenchCustomWidgetTypeClickHandler {
         return false;
     }
 
-    private static boolean handleValueClick(Click click,
+    private static boolean handleValueClick(MouseButtonEvent click,
                                             CustomWidgetAdvancedLayout layout,
                                             boolean forward,
                                             MacroHudDataHandler.HudElement selected,
@@ -393,7 +392,7 @@ public final class MacroWorkbenchCustomWidgetTypeClickHandler {
         return false;
     }
 
-    private static boolean handleListClick(Click click,
+    private static boolean handleListClick(MouseButtonEvent click,
                                            CustomWidgetAdvancedLayout layout,
                                            boolean forward,
                                            MacroHudDataHandler.HudElement selected,
@@ -425,7 +424,7 @@ public final class MacroWorkbenchCustomWidgetTypeClickHandler {
         return false;
     }
 
-    private static boolean handleShapeClick(Click click,
+    private static boolean handleShapeClick(MouseButtonEvent click,
                                             CustomWidgetAdvancedLayout layout,
                                             boolean forward,
                                             MacroHudDataHandler.HudElement selected,
@@ -460,7 +459,7 @@ public final class MacroWorkbenchCustomWidgetTypeClickHandler {
         return false;
     }
 
-    private static boolean handleStateBadgeClick(Click click,
+    private static boolean handleStateBadgeClick(MouseButtonEvent click,
                                                  CustomWidgetAdvancedLayout layout,
                                                  boolean forward,
                                                  MacroHudDataHandler.HudElement selected,

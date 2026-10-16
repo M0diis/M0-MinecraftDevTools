@@ -2,12 +2,11 @@ package me.m0dii.modules.mobai;
 
 import me.m0dii.M0DevToolsClient;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
-import net.minecraft.network.RegistryByteBuf;
-import net.minecraft.network.codec.PacketCodec;
-import net.minecraft.network.packet.CustomPayload;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.math.BlockPos;
-
+import net.minecraft.core.BlockPos;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.resources.Identifier;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -16,19 +15,19 @@ public final class MobAiDebugPayloads {
     }
 
     public static void registerPayloadTypes() {
-        PayloadTypeRegistry.playS2C().register(InspectPayload.ID, InspectPayload.CODEC);
-        PayloadTypeRegistry.playS2C().register(PathPreviewPayload.ID, PathPreviewPayload.CODEC);
-        PayloadTypeRegistry.playS2C().register(ClearPayload.ID, ClearPayload.CODEC);
-        PayloadTypeRegistry.playS2C().register(TrackerConfigPayload.ID, TrackerConfigPayload.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(InspectPayload.ID, InspectPayload.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(PathPreviewPayload.ID, PathPreviewPayload.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(ClearPayload.ID, ClearPayload.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(TrackerConfigPayload.ID, TrackerConfigPayload.CODEC);
     }
 
     public record DebugLine(String text, int color) {
     }
 
-    public record InspectPayload(int entityId, List<DebugLine> lines) implements CustomPayload {
-        public static final CustomPayload.Id<InspectPayload> ID = new CustomPayload.Id<>(
-                Identifier.of(M0DevToolsClient.MOD_ID, "mobai/inspect"));
-        public static final PacketCodec<RegistryByteBuf, InspectPayload> CODEC = PacketCodec.of(
+    public record InspectPayload(int entityId, List<DebugLine> lines) implements CustomPacketPayload {
+        public static final CustomPacketPayload.Type<InspectPayload> ID = new CustomPacketPayload.Type<>(
+                Identifier.fromNamespaceAndPath(M0DevToolsClient.MOD_ID, "mobai/inspect"));
+        public static final StreamCodec<RegistryFriendlyByteBuf, InspectPayload> CODEC = StreamCodec.ofMember(
                 (value, buf) -> {
                     buf.writeVarInt(value.entityId);
                     writeLines(buf, value.lines);
@@ -37,7 +36,7 @@ public final class MobAiDebugPayloads {
         );
 
         @Override
-        public Id<? extends CustomPayload> getId() {
+        public Type<? extends CustomPacketPayload> type() {
             return ID;
         }
     }
@@ -51,10 +50,10 @@ public final class MobAiDebugPayloads {
                                      List<BlockPos> nodes,
                                      List<BlockPos> openNodes,
                                      List<BlockPos> closedNodes,
-                                     List<DebugLine> lines) implements CustomPayload {
-        public static final CustomPayload.Id<PathPreviewPayload> ID = new CustomPayload.Id<>(
-                Identifier.of(M0DevToolsClient.MOD_ID, "mobai/path_preview"));
-        public static final PacketCodec<RegistryByteBuf, PathPreviewPayload> CODEC = PacketCodec.of(
+                                     List<DebugLine> lines) implements CustomPacketPayload {
+        public static final CustomPacketPayload.Type<PathPreviewPayload> ID = new CustomPacketPayload.Type<>(
+                Identifier.fromNamespaceAndPath(M0DevToolsClient.MOD_ID, "mobai/path_preview"));
+        public static final StreamCodec<RegistryFriendlyByteBuf, PathPreviewPayload> CODEC = StreamCodec.ofMember(
                 (value, buf) -> {
                     buf.writeVarInt(value.entityId);
                     buf.writeBlockPos(value.target);
@@ -81,15 +80,15 @@ public final class MobAiDebugPayloads {
         );
 
         @Override
-        public Id<? extends CustomPayload> getId() {
+        public Type<? extends CustomPacketPayload> type() {
             return ID;
         }
     }
 
-    public record ClearPayload(boolean clearInspect, boolean clearPathPreview) implements CustomPayload {
-        public static final CustomPayload.Id<ClearPayload> ID = new CustomPayload.Id<>(
-                Identifier.of(M0DevToolsClient.MOD_ID, "mobai/clear"));
-        public static final PacketCodec<RegistryByteBuf, ClearPayload> CODEC = PacketCodec.of(
+    public record ClearPayload(boolean clearInspect, boolean clearPathPreview) implements CustomPacketPayload {
+        public static final CustomPacketPayload.Type<ClearPayload> ID = new CustomPacketPayload.Type<>(
+                Identifier.fromNamespaceAndPath(M0DevToolsClient.MOD_ID, "mobai/clear"));
+        public static final StreamCodec<RegistryFriendlyByteBuf, ClearPayload> CODEC = StreamCodec.ofMember(
                 (value, buf) -> {
                     buf.writeBoolean(value.clearInspect);
                     buf.writeBoolean(value.clearPathPreview);
@@ -98,7 +97,7 @@ public final class MobAiDebugPayloads {
         );
 
         @Override
-        public Id<? extends CustomPayload> getId() {
+        public Type<? extends CustomPacketPayload> type() {
             return ID;
         }
     }
@@ -107,56 +106,56 @@ public final class MobAiDebugPayloads {
                                        boolean showBoxes,
                                        int alpha,
                                        int radius,
-                                       String hostileFocus) implements CustomPayload {
-        public static final CustomPayload.Id<TrackerConfigPayload> ID = new CustomPayload.Id<>(
-                Identifier.of(M0DevToolsClient.MOD_ID, "mobai/tracker_config"));
-        public static final PacketCodec<RegistryByteBuf, TrackerConfigPayload> CODEC = PacketCodec.of(
+                                       String hostileFocus) implements CustomPacketPayload {
+        public static final CustomPacketPayload.Type<TrackerConfigPayload> ID = new CustomPacketPayload.Type<>(
+                Identifier.fromNamespaceAndPath(M0DevToolsClient.MOD_ID, "mobai/tracker_config"));
+        public static final StreamCodec<RegistryFriendlyByteBuf, TrackerConfigPayload> CODEC = StreamCodec.ofMember(
                 (value, buf) -> {
                     writeStrings(buf, value.enabledDisplays);
                     buf.writeBoolean(value.showBoxes);
                     buf.writeVarInt(value.alpha);
                     buf.writeVarInt(value.radius);
-                    buf.writeString(value.hostileFocus);
+                    buf.writeUtf(value.hostileFocus);
                 },
                 buf -> new TrackerConfigPayload(
                         readStrings(buf),
                         buf.readBoolean(),
                         buf.readVarInt(),
                         buf.readVarInt(),
-                        buf.readString())
+                        buf.readUtf())
         );
 
         @Override
-        public Id<? extends CustomPayload> getId() {
+        public Type<? extends CustomPacketPayload> type() {
             return ID;
         }
     }
 
-    private static void writeLines(RegistryByteBuf buf, List<DebugLine> lines) {
+    private static void writeLines(RegistryFriendlyByteBuf buf, List<DebugLine> lines) {
         buf.writeVarInt(lines.size());
         for (DebugLine line : lines) {
-            buf.writeString(line.text);
+            buf.writeUtf(line.text);
             buf.writeInt(line.color);
         }
     }
 
-    private static List<DebugLine> readLines(RegistryByteBuf buf) {
+    private static List<DebugLine> readLines(RegistryFriendlyByteBuf buf) {
         int size = buf.readVarInt();
         List<DebugLine> lines = new ArrayList<>(size);
         for (int i = 0; i < size; i++) {
-            lines.add(new DebugLine(buf.readString(), buf.readInt()));
+            lines.add(new DebugLine(buf.readUtf(), buf.readInt()));
         }
         return List.copyOf(lines);
     }
 
-    private static void writeBlockPositions(RegistryByteBuf buf, List<BlockPos> positions) {
+    private static void writeBlockPositions(RegistryFriendlyByteBuf buf, List<BlockPos> positions) {
         buf.writeVarInt(positions.size());
         for (BlockPos pos : positions) {
             buf.writeBlockPos(pos);
         }
     }
 
-    private static List<BlockPos> readBlockPositions(RegistryByteBuf buf) {
+    private static List<BlockPos> readBlockPositions(RegistryFriendlyByteBuf buf) {
         int size = buf.readVarInt();
         List<BlockPos> positions = new ArrayList<>(size);
         for (int i = 0; i < size; i++) {
@@ -165,18 +164,18 @@ public final class MobAiDebugPayloads {
         return List.copyOf(positions);
     }
 
-    private static void writeStrings(RegistryByteBuf buf, List<String> values) {
+    private static void writeStrings(RegistryFriendlyByteBuf buf, List<String> values) {
         buf.writeVarInt(values.size());
         for (String value : values) {
-            buf.writeString(value);
+            buf.writeUtf(value);
         }
     }
 
-    private static List<String> readStrings(RegistryByteBuf buf) {
+    private static List<String> readStrings(RegistryFriendlyByteBuf buf) {
         int size = buf.readVarInt();
         List<String> values = new ArrayList<>(size);
         for (int i = 0; i < size; i++) {
-            values.add(buf.readString());
+            values.add(buf.readUtf());
         }
         return List.copyOf(values);
     }

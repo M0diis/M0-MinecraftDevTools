@@ -1,20 +1,25 @@
 package me.m0dii.modules.hungertweaks;
 
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.font.TextRenderer;
-import net.minecraft.client.gl.RenderPipelines;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.tooltip.TooltipComponent;
-import net.minecraft.client.util.InputUtil;
-import net.minecraft.component.type.FoodComponent;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.tooltip.TooltipData;
-import net.minecraft.item.tooltip.TooltipType;
-import net.minecraft.text.*;
+import com.mojang.blaze3d.platform.InputConstants;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Font;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.screens.inventory.tooltip.ClientTooltipComponent;
+import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.ComponentContents;
+import net.minecraft.network.chat.Style;
+import net.minecraft.network.chat.contents.PlainTextContents;
+import net.minecraft.util.FormattedCharSequence;
+import net.minecraft.util.FormattedCharSink;
+import net.minecraft.util.StringDecomposer;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.food.FoodProperties;
+import net.minecraft.world.inventory.tooltip.TooltipComponent;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.TooltipFlag;
 import org.jetbrains.annotations.Nullable;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -23,8 +28,8 @@ import java.util.List;
 public class HungerTweaksTooltipOverlayHandler {
     public static HungerTweaksTooltipOverlayHandler INSTANCE;
 
-    static abstract class EmptyText implements Text {
-        private static final List<Text> EMPTY_SIBLINGS = new ArrayList<>();
+    static abstract class EmptyText implements Component {
+        private static final List<Component> EMPTY_SIBLINGS = new ArrayList<>();
 
         @Override
         public Style getStyle() {
@@ -32,17 +37,17 @@ public class HungerTweaksTooltipOverlayHandler {
         }
 
         @Override
-        public TextContent getContent() {
-            return PlainTextContent.EMPTY;
+        public ComponentContents getContents() {
+            return PlainTextContents.EMPTY;
         }
 
         @Override
-        public List<Text> getSiblings() {
+        public List<Component> getSiblings() {
             return EMPTY_SIBLINGS;
         }
     }
 
-    public static class FoodOverlayTextComponent extends EmptyText implements OrderedText {
+    public static class FoodOverlayTextComponent extends EmptyText implements FormattedCharSequence {
         public final FoodOverlay foodOverlay;
 
         FoodOverlayTextComponent(FoodOverlay foodOverlay) {
@@ -50,25 +55,25 @@ public class HungerTweaksTooltipOverlayHandler {
         }
 
         @Override
-        public OrderedText asOrderedText() {
+        public FormattedCharSequence getVisualOrderText() {
             return this;
         }
 
         @Override
-        public boolean accept(CharacterVisitor visitor) {
-            return TextVisitFactory.visitFormatted(this, getStyle(), visitor);
+        public boolean accept(FormattedCharSink visitor) {
+            return StringDecomposer.iterateFormatted(this, getStyle(), visitor);
         }
     }
 
-    public static class FoodOverlay implements TooltipComponent, TooltipData {
-        private final FoodComponent defaultFood;
-        private final FoodComponent modifiedFood;
+    public static class FoodOverlay implements ClientTooltipComponent, TooltipComponent {
+        private final FoodProperties defaultFood;
+        private final FoodProperties modifiedFood;
         private final int hungerBars;
         private final String hungerBarsText;
         private final int saturationBars;
         private final String saturationBarsText;
 
-        FoodOverlay(FoodComponent defaultFood, FoodComponent modifiedFood) {
+        FoodOverlay(FoodProperties defaultFood, FoodProperties modifiedFood) {
             this.defaultFood = defaultFood;
             this.modifiedFood = modifiedFood;
 
@@ -100,19 +105,19 @@ public class HungerTweaksTooltipOverlayHandler {
         }
 
         @Override
-        public int getHeight(TextRenderer textRenderer) {
+        public int getHeight(Font textRenderer) {
             return 20;
         }
 
         @Override
-        public int getWidth(TextRenderer textRenderer) {
-            int hungerBarLength = hungerBars * 9 + (hungerBarsText != null ? textRenderer.getWidth(hungerBarsText) : 0);
-            int saturationBarLength = saturationBars * 7 + (saturationBarsText != null ? textRenderer.getWidth(saturationBarsText) : 0);
+        public int getWidth(Font textRenderer) {
+            int hungerBarLength = hungerBars * 9 + (hungerBarsText != null ? textRenderer.width(hungerBarsText) : 0);
+            int saturationBarLength = saturationBars * 7 + (saturationBarsText != null ? textRenderer.width(saturationBarsText) : 0);
             return Math.max(hungerBarLength, saturationBarLength);
         }
 
         @Override
-        public void drawItems(TextRenderer textRenderer, int x, int y, int width, int height, DrawContext context) {
+        public void extractImage(Font textRenderer, int x, int y, int width, int height, GuiGraphicsExtractor context) {
             if (INSTANCE != null) {
                 INSTANCE.onRenderTooltip(context, this, x, y, textRenderer);
             }
@@ -123,12 +128,12 @@ public class HungerTweaksTooltipOverlayHandler {
         INSTANCE = new HungerTweaksTooltipOverlayHandler();
     }
 
-    public void onItemTooltip(ItemStack hoveredStack, @Nullable PlayerEntity player, Item.TooltipContext context, TooltipType type, List tooltip) {
+    public void onItemTooltip(ItemStack hoveredStack, @Nullable Player player, Item.TooltipContext context, TooltipFlag type, List tooltip) {
         if (hoveredStack == null || tooltip == null || !shouldShowTooltip(hoveredStack, type)) {
             return;
         }
 
-        PlayerEntity effectivePlayer = player != null ? player : MinecraftClient.getInstance().player;
+        Player effectivePlayer = player != null ? player : Minecraft.getInstance().player;
         if (effectivePlayer == null) {
             return;
         }
@@ -144,7 +149,7 @@ public class HungerTweaksTooltipOverlayHandler {
         }
     }
 
-    public void onRenderTooltip(DrawContext context, FoodOverlay foodOverlay, int toolTipX, int toolTipY, TextRenderer textRenderer) {
+    public void onRenderTooltip(GuiGraphicsExtractor context, FoodOverlay foodOverlay, int toolTipX, int toolTipY, Font textRenderer) {
         int x = toolTipX + (foodOverlay.hungerBars - 1) * 9;
         int y = toolTipY;
 
@@ -153,20 +158,20 @@ public class HungerTweaksTooltipOverlayHandler {
         boolean rotten = HungerTweaksFoodHelper.isRotten(foodOverlay.modifiedFood);
 
         for (int i = 0; i < foodOverlay.hungerBars * 2; i += 2) {
-            context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, HungerTweaksTextureHelper.FOOD_EMPTY_TEXTURE, x, y, 9, 9);
+            context.blitSprite(RenderPipelines.GUI_TEXTURED, HungerTweaksTextureHelper.FOOD_EMPTY_TEXTURE, x, y, 9, 9);
 
             if (FoodOutline.get(modifiedFoodHunger, defaultFoodHunger, i) != FoodOutline.NORMAL) {
-                context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, HungerTweaksTextureHelper.HUNGER_OUTLINE_SPRITE, x, y, 9, 9);
+                context.blitSprite(RenderPipelines.GUI_TEXTURED, HungerTweaksTextureHelper.HUNGER_OUTLINE_SPRITE, x, y, 9, 9);
             }
 
             boolean defaultHalf = defaultFoodHunger - 1 == i;
-            context.drawGuiTexture(RenderPipelines.GUI_TEXTURED,
+            context.blitSprite(RenderPipelines.GUI_TEXTURED,
                     HungerTweaksTextureHelper.getFoodTexture(rotten, defaultHalf ? HungerTweaksTextureHelper.FoodType.HALF : HungerTweaksTextureHelper.FoodType.FULL),
                     x, y, 9, 9, 0.25f);
 
             if (modifiedFoodHunger > i) {
                 boolean modifiedHalf = modifiedFoodHunger - 1 == i;
-                context.drawGuiTexture(RenderPipelines.GUI_TEXTURED,
+                context.blitSprite(RenderPipelines.GUI_TEXTURED,
                         HungerTweaksTextureHelper.getFoodTexture(rotten, modifiedHalf ? HungerTweaksTextureHelper.FoodType.HALF : HungerTweaksTextureHelper.FoodType.FULL),
                         x, y, 9, 9);
             }
@@ -175,11 +180,11 @@ public class HungerTweaksTooltipOverlayHandler {
         }
 
         if (foodOverlay.hungerBarsText != null) {
-            context.getMatrices().pushMatrix();
-            context.getMatrices().translate(x + 18, y);
-            context.getMatrices().scale(0.75f, 0.75f);
-            context.drawTextWithShadow(textRenderer, foodOverlay.hungerBarsText, 2, 2, 0xFFAAAAAA);
-            context.getMatrices().popMatrix();
+            context.pose().pushMatrix();
+            context.pose().translate(x + 18, y);
+            context.pose().scale(0.75f, 0.75f);
+            context.text(textRenderer, foodOverlay.hungerBarsText, 2, 2, 0xFFAAAAAA);
+            context.pose().popMatrix();
         }
 
         x = toolTipX + (foodOverlay.saturationBars - 1) * 7;
@@ -191,20 +196,20 @@ public class HungerTweaksTooltipOverlayHandler {
             float effectiveSaturationOfBar = (absoluteSaturationIncrement - i) / 2f;
             int u = effectiveSaturationOfBar >= 1 ? 21 : effectiveSaturationOfBar > 0.5 ? 14 : effectiveSaturationOfBar > 0.25 ? 7 : 28;
             int v = modifiedSaturationIncrement >= 0 ? 27 : 34;
-            context.drawTexture(RenderPipelines.GUI_TEXTURED, HungerTweaksTextureHelper.MOD_ICONS, x, y, (float) u, (float) v, 7, 7, 256, 256);
+            context.blit(RenderPipelines.GUI_TEXTURED, HungerTweaksTextureHelper.MOD_ICONS, x, y, (float) u, (float) v, 7, 7, 256, 256);
             x -= 7;
         }
 
         if (foodOverlay.saturationBarsText != null) {
-            context.getMatrices().pushMatrix();
-            context.getMatrices().translate(x + 14, y);
-            context.getMatrices().scale(0.75f, 0.75f);
-            context.drawTextWithShadow(textRenderer, foodOverlay.saturationBarsText, 2, 1, 0xFFAAAAAA);
-            context.getMatrices().popMatrix();
+            context.pose().pushMatrix();
+            context.pose().translate(x + 14, y);
+            context.pose().scale(0.75f, 0.75f);
+            context.text(textRenderer, foodOverlay.saturationBarsText, 2, 1, 0xFFAAAAAA);
+            context.pose().popMatrix();
         }
     }
 
-    private boolean shouldShowTooltip(ItemStack hoveredStack, TooltipType type) {
+    private boolean shouldShowTooltip(ItemStack hoveredStack, TooltipFlag type) {
         if (!HungerTweaksModule.INSTANCE.isEnabled() || hoveredStack.isEmpty()) {
             return false;
         }
@@ -217,12 +222,12 @@ public class HungerTweaksTooltipOverlayHandler {
     }
 
     private static boolean isShiftKeyDown() {
-        MinecraftClient client = MinecraftClient.getInstance();
+        Minecraft client = Minecraft.getInstance();
         if (client == null) {
             return false;
         }
-        return InputUtil.isKeyPressed(client.getWindow(), GLFW.GLFW_KEY_LEFT_SHIFT)
-                || InputUtil.isKeyPressed(client.getWindow(), GLFW.GLFW_KEY_RIGHT_SHIFT);
+        return InputConstants.isKeyDown(InputConstants.KEY_LSHIFT)
+                || InputConstants.isKeyDown(InputConstants.KEY_RSHIFT);
     }
 
     private enum FoodOutline {

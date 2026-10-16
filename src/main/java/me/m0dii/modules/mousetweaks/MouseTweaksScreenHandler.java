@@ -1,8 +1,7 @@
 package me.m0dii.modules.mousetweaks;
 
-import net.minecraft.screen.slot.Slot;
-
 import java.util.List;
+import net.minecraft.world.inventory.Slot;
 
 interface MouseTweaksScreenHandler {
     boolean isMouseTweaksDisabled();

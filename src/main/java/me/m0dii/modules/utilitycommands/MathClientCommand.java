@@ -2,10 +2,10 @@ package me.m0dii.modules.utilitycommands;
 
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
-import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
+import net.fabricmc.fabric.api.client.command.v2.ClientCommands;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
-import net.minecraft.text.Text;
+import net.minecraft.network.chat.Component;
 
 public final class MathClientCommand {
     private MathClientCommand() {
@@ -13,15 +13,15 @@ public final class MathClientCommand {
 
     public static void register() {
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) ->
-                dispatcher.register(ClientCommandManager.literal("math")
+                dispatcher.register(ClientCommands.literal("math")
                         .executes(MathClientCommand::showHelp)
-                        .then(ClientCommandManager.argument("expression", StringArgumentType.greedyString())
+                        .then(ClientCommands.argument("expression", StringArgumentType.greedyString())
                                 .executes(MathClientCommand::evaluateExpression))));
     }
 
     private static int showHelp(CommandContext<FabricClientCommandSource> context) {
-        context.getSource().sendFeedback(Text.literal("[Math] Usage: /math <expression>"));
-        context.getSource().sendFeedback(Text.literal("[Math] Examples: /math 5 + 5, /math sqrt(144), /math sin(90), /math 2^16"));
+        context.getSource().sendFeedback(Component.literal("[Math] Usage: /math <expression>"));
+        context.getSource().sendFeedback(Component.literal("[Math] Examples: /math 5 + 5, /math sqrt(144), /math sin(90), /math 2^16"));
         return 1;
     }
 
@@ -33,10 +33,10 @@ public final class MathClientCommand {
 
         try {
             double result = MathExpressionEvaluator.evaluate(expression);
-            context.getSource().sendFeedback(Text.literal("[Math] " + expression + " = " + MathExpressionEvaluator.formatResult(result)));
+            context.getSource().sendFeedback(Component.literal("[Math] " + expression + " = " + MathExpressionEvaluator.formatResult(result)));
             return 1;
         } catch (IllegalArgumentException exception) {
-            context.getSource().sendError(Text.literal("[Math] " + exception.getMessage()));
+            context.getSource().sendError(Component.literal("[Math] " + exception.getMessage()));
             return 0;
         }
     }

@@ -3,7 +3,7 @@ package me.m0dii.modules.worldedit;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongArrayList;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
-import net.minecraft.util.math.BlockPos;
+import net.minecraft.core.BlockPos;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -41,7 +41,7 @@ final class WorldEditRestorePlanner {
                 continue;
             }
 
-            BlockPos start = BlockPos.fromLong(key);
+            BlockPos start = BlockPos.of(key);
             if (value.blockEntityData() != null) {
                 commands.add("setblock " + coords(start) + " " + value.blockState() + value.blockEntityData());
                 consumed.add(key);
@@ -129,15 +129,15 @@ final class WorldEditRestorePlanner {
     }
 
     private static int xOf(long packedPos) {
-        return BlockPos.fromLong(packedPos).getX();
+        return BlockPos.of(packedPos).getX();
     }
 
     private static int yOf(long packedPos) {
-        return BlockPos.fromLong(packedPos).getY();
+        return BlockPos.of(packedPos).getY();
     }
 
     private static int zOf(long packedPos) {
-        return BlockPos.fromLong(packedPos).getZ();
+        return BlockPos.of(packedPos).getZ();
     }
 
     private record RestoreValue(String blockState, String blockEntityData) {

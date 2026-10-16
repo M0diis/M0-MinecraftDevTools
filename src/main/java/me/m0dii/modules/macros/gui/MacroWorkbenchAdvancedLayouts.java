@@ -15,8 +15,10 @@ public final class MacroWorkbenchAdvancedLayouts {
 
     public static StandardAdvancedLayout standard(int boxX, int boxY, int modalW, int modalH) {
         UiRect content = FormPanels.panel(boxX + 12, boxY + 34, modalW - 24, modalH - 60);
+        // Six 20px control rows with 8px gaps follow the text area; it gives up height on short modals.
+        int textAreaH = Math.clamp(content.height() - (6 * 20 + 6 * 8), 40, 122);
         List<UiRect> col = FormPanels.column(content, 8, UiFlexLayout.Align.STRETCH,
-                UiFlexLayout.Item.fixed(122),
+                UiFlexLayout.Item.fixed(textAreaH),
                 UiFlexLayout.Item.fixed(20),
                 UiFlexLayout.Item.fixed(20),
                 UiFlexLayout.Item.fixed(20),

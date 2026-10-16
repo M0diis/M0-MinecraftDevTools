@@ -6,23 +6,23 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.suggestion.Suggestions;
 import com.mojang.brigadier.suggestion.SuggestionsBuilder;
-import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
+import net.fabricmc.fabric.api.client.command.v2.ClientCommands;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
-import net.minecraft.block.Block;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.network.ClientPlayerEntity;
-import net.minecraft.registry.Registries;
-import net.minecraft.text.Text;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.hit.BlockHitResult;
-import net.minecraft.util.hit.HitResult;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Box;
-import net.minecraft.util.math.Direction;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.Heightmap;
-import net.minecraft.world.RaycastContext;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.level.ClipContext;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.levelgen.Heightmap;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
+import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -46,32 +46,32 @@ public final class ConvenienceClientCommands {
     }
 
     private static void register(CommandDispatcher<FabricClientCommandSource> dispatcher) {
-        dispatcher.register(ClientCommandManager.literal("top")
+        dispatcher.register(ClientCommands.literal("top")
                 .executes(context -> teleportTop(context.getSource())));
-        dispatcher.register(ClientCommandManager.literal("asc")
+        dispatcher.register(ClientCommands.literal("asc")
                 .executes(context -> teleportAsc(context.getSource())));
-        dispatcher.register(ClientCommandManager.literal("desc")
+        dispatcher.register(ClientCommands.literal("desc")
                 .executes(context -> teleportDesc(context.getSource())));
-        dispatcher.register(ClientCommandManager.literal("thru")
+        dispatcher.register(ClientCommands.literal("thru")
                 .executes(context -> teleportThru(context.getSource())));
-        dispatcher.register(ClientCommandManager.literal("jumpto")
+        dispatcher.register(ClientCommands.literal("jumpto")
                 .executes(context -> teleportJumpTo(context.getSource())));
         dispatcher.register(
-                ClientCommandManager.literal("up")
+                ClientCommands.literal("up")
                         .executes(context -> teleportUp(context.getSource(), 1, null))
-                        .then(ClientCommandManager.argument("blocks", IntegerArgumentType.integer(1, MAX_UP_BLOCKS))
+                        .then(ClientCommands.argument("blocks", IntegerArgumentType.integer(1, MAX_UP_BLOCKS))
                                 .executes(context -> teleportUp(
                                         context.getSource(),
                                         IntegerArgumentType.getInteger(context, "blocks"),
                                         null
                                 ))
-                                .then(ClientCommandManager.literal("-b")
+                                .then(ClientCommands.literal("-b")
                                         .executes(context -> teleportUp(
                                                 context.getSource(),
                                                 IntegerArgumentType.getInteger(context, "blocks"),
                                                 DEFAULT_UP_BLOCK
                                         ))
-                                        .then(ClientCommandManager.argument("block", StringArgumentType.word())
+                                        .then(ClientCommands.argument("block", StringArgumentType.word())
                                                 .suggests(ConvenienceClientCommands::suggestBlockArgument)
                                                 .executes(context -> teleportUp(
                                                         context.getSource(),
@@ -82,83 +82,83 @@ public final class ConvenienceClientCommands {
     }
 
     private static int teleportTop(FabricClientCommandSource source) {
-        MinecraftClient client = source.getClient();
+        Minecraft client = source.getClient();
         if (!ensureReady(client, source)) {
             return 0;
         }
 
-        ClientPlayerEntity player = client.player;
+        LocalPlayer player = client.player;
         int x = player.getBlockX();
         int z = player.getBlockZ();
-        int topY = client.world.getTopY(Heightmap.Type.MOTION_BLOCKING, x, z) - 1;
+        int topY = client.level.getHeight(Heightmap.Types.MOTION_BLOCKING, x, z) - 1;
         if (topY <= player.getBlockY()) {
-            source.sendError(Text.literal("No higher block found above you."));
+            source.sendError(Component.literal("No higher block found above you."));
             return 0;
         }
 
         for (int y = topY; y > player.getBlockY(); y--) {
             BlockPos floor = new BlockPos(x, y, z);
-            BlockPos feet = floor.up();
+            BlockPos feet = floor.above();
             if (isSafeFeetPosition(player, feet)) {
                 teleportTo(player, toFeetPosition(feet));
-                source.sendFeedback(Text.literal("Teleported to the highest safe block above you."));
+                source.sendFeedback(Component.literal("Teleported to the highest safe block above you."));
                 return 1;
             }
         }
 
-        source.sendError(Text.literal("Couldn't find a safe position above you."));
+        source.sendError(Component.literal("Couldn't find a safe position above you."));
         return 0;
     }
 
     private static int teleportAsc(FabricClientCommandSource source) {
-        MinecraftClient client = source.getClient();
+        Minecraft client = source.getClient();
         if (!ensureReady(client, source)) {
             return 0;
         }
 
         BlockPos feet = findNearestSafeFeetAbove(client.player);
         if (feet == null) {
-            source.sendError(Text.literal("No empty space found above you."));
+            source.sendError(Component.literal("No empty space found above you."));
             return 0;
         }
 
         teleportTo(client.player, toFeetPosition(feet));
-        source.sendFeedback(Text.literal("Ascended to the nearest safe space above."));
+        source.sendFeedback(Component.literal("Ascended to the nearest safe space above."));
         return 1;
     }
 
     private static int teleportDesc(FabricClientCommandSource source) {
-        MinecraftClient client = source.getClient();
+        Minecraft client = source.getClient();
         if (!ensureReady(client, source)) {
             return 0;
         }
 
         BlockPos feet = findNearestSafeFeetBelow(client.player);
         if (feet == null) {
-            source.sendError(Text.literal("No empty space found below you."));
+            source.sendError(Component.literal("No empty space found below you."));
             return 0;
         }
 
         teleportTo(client.player, toFeetPosition(feet));
-        source.sendFeedback(Text.literal("Descended to the nearest safe space below."));
+        source.sendFeedback(Component.literal("Descended to the nearest safe space below."));
         return 1;
     }
 
     private static int teleportThru(FabricClientCommandSource source) {
-        MinecraftClient client = source.getClient();
+        Minecraft client = source.getClient();
         if (!ensureReady(client, source)) {
             return 0;
         }
 
-        ClientPlayerEntity player = client.player;
-        Vec3d eyePos = player.getEyePos();
-        Vec3d direction = player.getRotationVec(1.0f).normalize();
+        LocalPlayer player = client.player;
+        Vec3 eyePos = player.getEyePosition();
+        Vec3 direction = player.getViewVector(1.0f).normalize();
         boolean crossedSolid = false;
 
         for (double distance = STEP_DISTANCE; distance <= THRU_DISTANCE; distance += STEP_DISTANCE) {
-            Vec3d sample = eyePos.add(direction.multiply(distance));
-            BlockPos sampleBlock = BlockPos.ofFloored(sample);
-            boolean solid = !client.world.getBlockState(sampleBlock).getCollisionShape(client.world, sampleBlock).isEmpty();
+            Vec3 sample = eyePos.add(direction.scale(distance));
+            BlockPos sampleBlock = BlockPos.containing(sample);
+            boolean solid = !client.level.getBlockState(sampleBlock).getCollisionShape(client.level, sampleBlock).isEmpty();
             if (solid) {
                 crossedSolid = true;
                 continue;
@@ -168,117 +168,117 @@ public final class ConvenienceClientCommands {
             }
 
             double feetY = sample.y - player.getEyeHeight(player.getPose());
-            BlockPos nearFeet = BlockPos.ofFloored(sample.x, feetY, sample.z);
+            BlockPos nearFeet = BlockPos.containing(sample.x, feetY, sample.z);
             BlockPos safeFeet = findSafeFeetNearby(player, nearFeet);
             if (safeFeet != null) {
                 teleportTo(player, toFeetPosition(safeFeet));
-                source.sendFeedback(Text.literal("Teleported through the obstacle."));
+                source.sendFeedback(Component.literal("Teleported through the obstacle."));
                 return 1;
             }
         }
 
-        source.sendError(Text.literal(crossedSolid
+        source.sendError(Component.literal(crossedSolid
                 ? "Couldn't find safe space beyond the obstacle."
                 : "No blocking obstacle found in front of you."));
         return 0;
     }
 
     private static int teleportUp(FabricClientCommandSource source, int blocks, String supportBlockRaw) {
-        MinecraftClient client = source.getClient();
+        Minecraft client = source.getClient();
         if (!ensureReady(client, source)) {
             return 0;
         }
 
-        ClientPlayerEntity player = client.player;
+        LocalPlayer player = client.player;
         double centeredX = Math.floor(player.getX()) + 0.5;
         double centeredZ = Math.floor(player.getZ()) + 0.5;
         double targetY = Math.floor(player.getY()) + blocks;
 
         String supportBlockId = resolveBlockId(supportBlockRaw);
         if (supportBlockRaw != null && supportBlockId == null) {
-            source.sendError(Text.literal("Unknown block '" + supportBlockRaw + "'."));
+            source.sendError(Component.literal("Unknown block '" + supportBlockRaw + "'."));
             return 0;
         }
 
-        if (supportBlockId != null && client.getNetworkHandler() != null) {
-            BlockPos supportPos = BlockPos.ofFloored(centeredX, targetY - 1.0, centeredZ);
-            client.getNetworkHandler().sendChatCommand("setblock "
+        if (supportBlockId != null && client.getConnection() != null) {
+            BlockPos supportPos = BlockPos.containing(centeredX, targetY - 1.0, centeredZ);
+            client.getConnection().sendCommand("setblock "
                     + supportPos.getX() + " "
                     + supportPos.getY() + " "
                     + supportPos.getZ() + " "
                     + supportBlockId);
         }
 
-        teleportTo(player, new Vec3d(centeredX, targetY, centeredZ));
-        source.sendFeedback(Text.literal(supportBlockId == null
+        teleportTo(player, new Vec3(centeredX, targetY, centeredZ));
+        source.sendFeedback(Component.literal(supportBlockId == null
                 ? "Teleported up " + blocks + " block" + (blocks == 1 ? "" : "s") + "."
                 : "Teleported up " + blocks + " block" + (blocks == 1 ? "" : "s") + " and requested " + supportBlockId + " below you."));
         return 1;
     }
 
     private static int teleportJumpTo(FabricClientCommandSource source) {
-        MinecraftClient client = source.getClient();
+        Minecraft client = source.getClient();
         if (!ensureReady(client, source)) {
             return 0;
         }
 
-        ClientPlayerEntity player = client.player;
+        LocalPlayer player = client.player;
         BlockHitResult hit = raycastBlock(player, JUMPTO_DISTANCE);
         if (hit == null || hit.getType() != HitResult.Type.BLOCK) {
-            source.sendError(Text.literal("No block found in sight."));
+            source.sendError(Component.literal("No block found in sight."));
             return 0;
         }
 
         for (BlockPos candidate : jumpCandidates(hit)) {
             if (isSafeFeetPosition(player, candidate)) {
                 teleportTo(player, toFeetPosition(candidate));
-                source.sendFeedback(Text.literal("Teleported to the targeted block."));
+                source.sendFeedback(Component.literal("Teleported to the targeted block."));
                 return 1;
             }
         }
 
-        source.sendError(Text.literal("Couldn't find safe space near the targeted block."));
+        source.sendError(Component.literal("Couldn't find safe space near the targeted block."));
         return 0;
     }
 
-    private static BlockHitResult raycastBlock(ClientPlayerEntity player, double distance) {
-        Vec3d start = player.getEyePos();
-        Vec3d end = start.add(player.getRotationVec(1.0f).multiply(distance));
-        return player.getEntityWorld().raycast(new RaycastContext(
+    private static BlockHitResult raycastBlock(LocalPlayer player, double distance) {
+        Vec3 start = player.getEyePosition();
+        Vec3 end = start.add(player.getViewVector(1.0f).scale(distance));
+        return player.level().clip(new ClipContext(
                 start,
                 end,
-                RaycastContext.ShapeType.OUTLINE,
-                RaycastContext.FluidHandling.NONE,
+                ClipContext.Block.OUTLINE,
+                ClipContext.Fluid.NONE,
                 player
         ));
     }
 
     private static List<BlockPos> jumpCandidates(BlockHitResult hit) {
         BlockPos target = hit.getBlockPos();
-        Direction side = hit.getSide();
+        Direction side = hit.getDirection();
         LinkedHashSet<BlockPos> candidates = new LinkedHashSet<>();
-        candidates.add(target.offset(side));
-        candidates.add(target.up());
-        candidates.add(target.offset(side).up());
+        candidates.add(target.relative(side));
+        candidates.add(target.above());
+        candidates.add(target.relative(side).above());
         if (side != Direction.UP) {
-            candidates.add(target.offset(side).up(2));
+            candidates.add(target.relative(side).above(2));
         }
         for (int i = 2; i <= 6; i++) {
-            candidates.add(target.up(i));
+            candidates.add(target.above(i));
         }
         return new ArrayList<>(candidates);
     }
 
-    private static BlockPos findSafeFeetNearby(ClientPlayerEntity player, BlockPos around) {
+    private static BlockPos findSafeFeetNearby(LocalPlayer player, BlockPos around) {
         for (int dy = 0; dy <= SAFE_SEARCH_VERTICAL; dy++) {
-            BlockPos up = around.up(dy);
+            BlockPos up = around.above(dy);
             if (isSafeFeetPosition(player, up)) {
                 return up;
             }
             if (dy == 0) {
                 continue;
             }
-            BlockPos down = around.down(dy);
+            BlockPos down = around.below(dy);
             if (isSafeFeetPosition(player, down)) {
                 return down;
             }
@@ -286,8 +286,8 @@ public final class ConvenienceClientCommands {
         return null;
     }
 
-    private static BlockPos findNearestSafeFeetAbove(ClientPlayerEntity player) {
-        for (int y = player.getBlockY() + 1; y <= player.getEntityWorld().getTopYInclusive(); y++) {
+    private static BlockPos findNearestSafeFeetAbove(LocalPlayer player) {
+        for (int y = player.getBlockY() + 1; y <= player.level().getMaxY(); y++) {
             BlockPos feet = new BlockPos(player.getBlockX(), y, player.getBlockZ());
             if (isSafeFeetPosition(player, feet)) {
                 return feet;
@@ -296,8 +296,8 @@ public final class ConvenienceClientCommands {
         return null;
     }
 
-    private static BlockPos findNearestSafeFeetBelow(ClientPlayerEntity player) {
-        for (int y = player.getBlockY() - 1; y > player.getEntityWorld().getBottomY(); y--) {
+    private static BlockPos findNearestSafeFeetBelow(LocalPlayer player) {
+        for (int y = player.getBlockY() - 1; y > player.level().getMinY(); y--) {
             BlockPos feet = new BlockPos(player.getBlockX(), y, player.getBlockZ());
             if (isSafeFeetPosition(player, feet)) {
                 return feet;
@@ -306,37 +306,37 @@ public final class ConvenienceClientCommands {
         return null;
     }
 
-    private static boolean isSafeFeetPosition(ClientPlayerEntity player, BlockPos feetPos) {
-        if (player == null || player.getEntityWorld() == null) {
+    private static boolean isSafeFeetPosition(LocalPlayer player, BlockPos feetPos) {
+        if (player == null || player.level() == null) {
             return false;
         }
 
-        BlockPos floor = feetPos.down();
-        if (player.getEntityWorld().getBlockState(floor).getCollisionShape(player.getEntityWorld(), floor).isEmpty()) {
+        BlockPos floor = feetPos.below();
+        if (player.level().getBlockState(floor).getCollisionShape(player.level(), floor).isEmpty()) {
             return false;
         }
 
-        Vec3d destination = toFeetPosition(feetPos);
-        Box box = player.getBoundingBox().offset(
+        Vec3 destination = toFeetPosition(feetPos);
+        AABB box = player.getBoundingBox().move(
                 destination.x - player.getX(),
                 destination.y - player.getY(),
                 destination.z - player.getZ()
         );
-        return player.getEntityWorld().isSpaceEmpty(player, box);
+        return player.level().noCollision(player, box);
     }
 
-    private static Vec3d toFeetPosition(BlockPos feetPos) {
-        return new Vec3d(feetPos.getX() + 0.5, feetPos.getY(), feetPos.getZ() + 0.5);
+    private static Vec3 toFeetPosition(BlockPos feetPos) {
+        return new Vec3(feetPos.getX() + 0.5, feetPos.getY(), feetPos.getZ() + 0.5);
     }
 
-    private static void teleportTo(ClientPlayerEntity player, Vec3d position) {
-        player.setPosition(position.x, position.y, position.z);
-        player.setVelocity(Vec3d.ZERO);
+    private static void teleportTo(LocalPlayer player, Vec3 position) {
+        player.setPos(position.x, position.y, position.z);
+        player.setDeltaMovement(Vec3.ZERO);
     }
 
-    private static boolean ensureReady(MinecraftClient client, FabricClientCommandSource source) {
-        if (client.player == null || client.world == null) {
-            source.sendError(Text.literal("You must be in a world to use this command."));
+    private static boolean ensureReady(Minecraft client, FabricClientCommandSource source) {
+        if (client.player == null || client.level == null) {
+            source.sendError(Component.literal("You must be in a world to use this command."));
             return false;
         }
         return true;
@@ -344,7 +344,7 @@ public final class ConvenienceClientCommands {
 
     private static CompletableFuture<Suggestions> suggestBlockArgument(CommandContext<FabricClientCommandSource> context, SuggestionsBuilder builder) {
         String prefix = builder.getRemaining().toLowerCase(Locale.ROOT);
-        for (Identifier id : Registries.BLOCK.getIds()) {
+        for (Identifier id : BuiltInRegistries.BLOCK.keySet()) {
             String full = id.toString();
             String path = id.getPath();
             if (prefix.contains(":")) {
@@ -366,12 +366,12 @@ public final class ConvenienceClientCommands {
         }
         String query = raw.trim().toLowerCase(Locale.ROOT);
         Identifier direct = query.contains(":") ? Identifier.tryParse(query) : Identifier.tryParse("minecraft:" + query);
-        if (direct != null && Registries.BLOCK.containsId(direct)) {
+        if (direct != null && BuiltInRegistries.BLOCK.containsKey(direct)) {
             return direct.toString();
         }
 
         Block match = null;
-        for (Identifier id : Registries.BLOCK.getIds()) {
+        for (Identifier id : BuiltInRegistries.BLOCK.keySet()) {
             String full = id.toString().toLowerCase(Locale.ROOT);
             String path = id.getPath().toLowerCase(Locale.ROOT);
             if (path.equals(query) || full.equals(query)) {
@@ -381,12 +381,12 @@ public final class ConvenienceClientCommands {
                 if (match != null) {
                     return null;
                 }
-                match = Registries.BLOCK.get(id);
+                match = BuiltInRegistries.BLOCK.getValue(id);
             }
         }
         if (match == null) {
             return null;
         }
-        return String.valueOf(Registries.BLOCK.getId(match));
+        return String.valueOf(BuiltInRegistries.BLOCK.getKey(match));
     }
 }

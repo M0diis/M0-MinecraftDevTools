@@ -1,18 +1,21 @@
 package me.m0dii.modules.macros.gui;
 
+
+
+import me.m0dii.gui.theme.ThemedScreen;
+import com.mojang.blaze3d.platform.InputConstants;
 import me.m0dii.gui.local.*;
 import me.m0dii.modules.macros.MacroDataHandler;
 import me.m0dii.utils.StringUtils;
-import net.minecraft.client.gui.Click;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.text.Text;
-
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.network.chat.Component;
 import java.util.ArrayList;
 import java.util.List;
 
-public final class MacroPanelEditorScreen extends Screen {
+public final class MacroPanelEditorScreen extends Screen implements ThemedScreen {
     private final Screen parent;
     private MacroPanelDataHandler.PanelConfig working;
     private final UiSelectionList buttonList = new UiSelectionList(0, 0, 1, 1);
@@ -26,11 +29,11 @@ public final class MacroPanelEditorScreen extends Screen {
     private UiBoundIntField widthField;
     private UiBoundIntField heightField;
     private UiToggleButton enabledToggle;
-    private ButtonWidget addButton;
-    private ButtonWidget deleteButton;
+    private Button addButton;
+    private Button deleteButton;
 
     private MacroPanelEditorScreen(Screen parent) {
-        super(Text.literal("Macro Panel Editor"));
+        super(Component.literal("Macro Panel Editor"));
         this.parent = parent;
     }
 
@@ -55,19 +58,19 @@ public final class MacroPanelEditorScreen extends Screen {
         int saveX = doneX - buttonW - 4;
         int macrosX = saveX - 96 - 4;
 
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("Open Macros"), button -> {
-                    if (this.client != null) {
-                        this.client.setScreen(MacroWorkbenchScreen.create(this, MacroWorkbenchScreen.Tab.MACROS));
+        this.addRenderableWidget(Button.builder(Component.literal("Open Macros"), button -> {
+                    if (this.minecraft != null) {
+                        this.minecraft.gui.setScreen(MacroWorkbenchScreen.create(this, MacroWorkbenchScreen.Tab.MACROS));
                     }
-                }).dimensions(macrosX, topY, 96, 20)
+                }).bounds(macrosX, topY, 96, 20)
                 .build());
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("Save"), button -> saveWorking())
-                .dimensions(saveX, topY, buttonW, 20)
+        this.addRenderableWidget(Button.builder(Component.literal("Save"), button -> saveWorking())
+                .bounds(saveX, topY, buttonW, 20)
                 .build());
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("Done"), button -> {
+        this.addRenderableWidget(Button.builder(Component.literal("Done"), button -> {
                     saveWorking();
-                    close();
-                }).dimensions(doneX, topY, buttonW, 20)
+                    onClose();
+                }).bounds(doneX, topY, buttonW, 20)
                 .build());
 
         int leftX = 12;
@@ -76,11 +79,11 @@ public final class MacroPanelEditorScreen extends Screen {
         int rightW = Math.max(220, this.width - rightX - 12);
         int controlsY = 38;
 
-        this.addButton = this.addDrawableChild(ButtonWidget.builder(Text.literal("+ Button"), button -> addPanelButton())
-                .dimensions(leftX, controlsY, 82, 20)
+        this.addButton = this.addRenderableWidget(Button.builder(Component.literal("+ Button"), button -> addPanelButton())
+                .bounds(leftX, controlsY, 82, 20)
                 .build());
-        this.deleteButton = this.addDrawableChild(ButtonWidget.builder(Text.literal("Delete"), button -> deleteSelectedButton())
-                .dimensions(leftX + 86, controlsY, 72, 20)
+        this.deleteButton = this.addRenderableWidget(Button.builder(Component.literal("Delete"), button -> deleteSelectedButton())
+                .bounds(leftX + 86, controlsY, 72, 20)
                 .build());
 
         int fieldX = rightX + 12;
@@ -88,19 +91,19 @@ public final class MacroPanelEditorScreen extends Screen {
         int halfW = (fieldW - 4) / 2;
         int rowY = 64;
 
-        this.titleField = new UiBoundTextField(this.textRenderer, fieldX, rowY, fieldW, 18, "Panel title")
+        this.titleField = new UiBoundTextField(this.font, fieldX, rowY, fieldW, 18, "Panel title")
                 .setMaxLength(96)
                 .setSaveConsumer(value -> this.working.title = value);
-        this.addDrawableChild(this.titleField.widget());
+        this.addRenderableWidget(this.titleField.widget());
 
         rowY += 30;
         this.enabledToggle = new UiToggleButton("Panel Enabled", this.working.enabled, fieldX, rowY, fieldW, 20)
                 .setLabels("YES", "NO")
                 .setSaveConsumer(value -> this.working.enabled = value);
-        this.addDrawableChild(this.enabledToggle.widget());
+        this.addRenderableWidget(this.enabledToggle.widget());
 
         rowY += 34;
-        this.labelField = new UiBoundTextField(this.textRenderer, fieldX, rowY, fieldW, 18, "Button label")
+        this.labelField = new UiBoundTextField(this.font, fieldX, rowY, fieldW, 18, "Button label")
                 .setMaxLength(80)
                 .setSaveConsumer(value -> {
                     MacroPanelDataHandler.PanelButton button = selectedButton();
@@ -110,10 +113,10 @@ public final class MacroPanelEditorScreen extends Screen {
                     button.label = value;
                     refreshButtonRows();
                 });
-        this.addDrawableChild(this.labelField.widget());
+        this.addRenderableWidget(this.labelField.widget());
 
         rowY += 30;
-        this.macroIdField = new UiBoundTextField(this.textRenderer, fieldX, rowY, fieldW, 18, "Macro id")
+        this.macroIdField = new UiBoundTextField(this.font, fieldX, rowY, fieldW, 18, "Macro id")
                 .setMaxLength(80)
                 .setSaveConsumer(value -> {
                     MacroPanelDataHandler.PanelButton button = selectedButton();
@@ -123,10 +126,10 @@ public final class MacroPanelEditorScreen extends Screen {
                     button.macroId = value == null ? "" : value.trim();
                     refreshButtonRows();
                 });
-        this.addDrawableChild(this.macroIdField.widget());
+        this.addRenderableWidget(this.macroIdField.widget());
 
         rowY += 30;
-        this.xField = new UiBoundIntField(this.textRenderer, fieldX, rowY, halfW, 18, "X")
+        this.xField = new UiBoundIntField(this.font, fieldX, rowY, halfW, 18, "X")
                 .setMin(0)
                 .setMax(6000)
                 .setDefaultValue(20)
@@ -137,7 +140,7 @@ public final class MacroPanelEditorScreen extends Screen {
                         button.x = value;
                     }
                 });
-        this.yField = new UiBoundIntField(this.textRenderer, fieldX + halfW + 4, rowY, halfW, 18, "Y")
+        this.yField = new UiBoundIntField(this.font, fieldX + halfW + 4, rowY, halfW, 18, "Y")
                 .setMin(0)
                 .setMax(6000)
                 .setDefaultValue(40)
@@ -148,11 +151,11 @@ public final class MacroPanelEditorScreen extends Screen {
                         button.y = value;
                     }
                 });
-        this.addDrawableChild(this.xField.widget());
-        this.addDrawableChild(this.yField.widget());
+        this.addRenderableWidget(this.xField.widget());
+        this.addRenderableWidget(this.yField.widget());
 
         rowY += 30;
-        this.widthField = new UiBoundIntField(this.textRenderer, fieldX, rowY, halfW, 18, "Width")
+        this.widthField = new UiBoundIntField(this.font, fieldX, rowY, halfW, 18, "Width")
                 .setMin(50)
                 .setMax(240)
                 .setDefaultValue(110)
@@ -163,7 +166,7 @@ public final class MacroPanelEditorScreen extends Screen {
                         button.width = value;
                     }
                 });
-        this.heightField = new UiBoundIntField(this.textRenderer, fieldX + halfW + 4, rowY, halfW, 18, "Height")
+        this.heightField = new UiBoundIntField(this.font, fieldX + halfW + 4, rowY, halfW, 18, "Height")
                 .setMin(18)
                 .setMax(40)
                 .setDefaultValue(20)
@@ -174,16 +177,16 @@ public final class MacroPanelEditorScreen extends Screen {
                         button.height = value;
                     }
                 });
-        this.addDrawableChild(this.widthField.widget());
-        this.addDrawableChild(this.heightField.widget());
+        this.addRenderableWidget(this.widthField.widget());
+        this.addRenderableWidget(this.heightField.widget());
 
         refreshButtonRows();
         syncFields();
     }
 
     @Override
-    public void render(DrawContext context, int mouseX, int mouseY, float delta) {
-        renderBackground(context, mouseX, mouseY, delta);
+    public void extractRenderState(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
+        extractBackground(context, mouseX, mouseY, delta);
 
         int leftX = 12;
         int leftW = Math.max(220, this.width / 3);
@@ -202,39 +205,39 @@ public final class MacroPanelEditorScreen extends Screen {
 
         this.buttonList.setBounds(leftX, listY, leftW, listH);
 
-        context.drawTextWithShadow(this.textRenderer, "Buttons", leftX, 48, 0xFFFFFFFF);
-        context.drawTextWithShadow(this.textRenderer, "Panel Settings", rightX, 48, 0xFFFFFFFF);
-        this.buttonList.render(context, this.textRenderer, mouseX, mouseY);
+        context.text(this.font, "Buttons", leftX, 48, 0xFFFFFFFF);
+        context.text(this.font, "Panel Settings", rightX, 48, 0xFFFFFFFF);
+        this.buttonList.extractRenderState(context, this.font, mouseX, mouseY);
         UiForms.drawPanel(context, rightX, rightY, rightW, rightH);
 
         int infoX = rightX + 12;
         int infoY = rightY + 8;
         MacroPanelDataHandler.PanelButton selected = selectedButton();
-        context.drawTextWithShadow(this.textRenderer, "Panel title", infoX, titleY - 10, 0xFFB8B8B8);
-        context.drawTextWithShadow(this.textRenderer, "Runtime macros can be managed in the Macros tab.", infoX, enabledY + 24, 0xFF9FCFCF);
-        context.drawTextWithShadow(this.textRenderer, "Button", infoX, labelY - 10, 0xFFB8B8B8);
-        context.drawTextWithShadow(this.textRenderer, "Macro Id", infoX, macroIdY - 10, 0xFFB8B8B8);
-        context.drawTextWithShadow(this.textRenderer, "Position", infoX, positionY - 10, 0xFFB8B8B8);
-        context.drawTextWithShadow(this.textRenderer, "Size", infoX, sizeY - 10, 0xFFB8B8B8);
+        context.text(this.font, "Panel title", infoX, titleY - 10, 0xFFB8B8B8);
+        context.text(this.font, "Runtime macros can be managed in the Macros tab.", infoX, enabledY + 24, 0xFF9FCFCF);
+        context.text(this.font, "Button", infoX, labelY - 10, 0xFFB8B8B8);
+        context.text(this.font, "Macro Id", infoX, macroIdY - 10, 0xFFB8B8B8);
+        context.text(this.font, "Position", infoX, positionY - 10, 0xFFB8B8B8);
+        context.text(this.font, "Size", infoX, sizeY - 10, 0xFFB8B8B8);
 
         if (selected == null) {
-            context.drawTextWithShadow(this.textRenderer, "Create or select a button to edit it.", infoX, sizeY + 38, 0xFFB8B8B8);
+            context.text(this.font, "Create or select a button to edit it.", infoX, sizeY + 38, 0xFFB8B8B8);
         } else {
             String macroName = resolveMacroName(selected.macroId);
-            context.drawTextWithShadow(this.textRenderer, "Selected: " + selected.label + " [" + selected.id + "]", infoX, sizeY + 38, 0xFFFFFFFF);
-            context.drawTextWithShadow(this.textRenderer, "Targets: " + macroName, infoX, sizeY + 52, 0xFFB8B8B8);
+            context.text(this.font, "Selected: " + selected.label + " [" + selected.id + "]", infoX, sizeY + 38, 0xFFFFFFFF);
+            context.text(this.font, "Targets: " + macroName, infoX, sizeY + 52, 0xFFB8B8B8);
         }
 
         renderMacroHelp(context, infoX, rightY + rightH - 36, rightW - 24);
-        super.render(context, mouseX, mouseY, delta);
+        super.extractRenderState(context, mouseX, mouseY, delta);
     }
 
     @Override
-    public boolean mouseClicked(Click click, boolean doubled) {
+    public boolean mouseClicked(MouseButtonEvent click, boolean doubled) {
         if (super.mouseClicked(click, doubled)) {
             return true;
         }
-        if (click.button() == 0 && this.buttonList.handleMouseClick(click.x(), click.y())) {
+        if (click.button() == InputConstants.MOUSE_BUTTON_LEFT && this.buttonList.handleMouseClick(click.x(), click.y())) {
             int index = this.buttonList.selectedIndex();
             this.selectedButtonId = index >= 0 && index < this.working.buttons.size() ? this.working.buttons.get(index).id : null;
             syncFields();
@@ -252,20 +255,20 @@ public final class MacroPanelEditorScreen extends Screen {
     }
 
     @Override
-    public void renderBackground(DrawContext context, int mouseX, int mouseY, float delta) {
+    public void extractBackground(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
         context.fill(0, 0, this.width, this.height, 0xD0101010);
         context.fill(0, 31, this.width, 32, 0x70FFFFFF);
     }
 
     @Override
-    public void close() {
-        if (this.client != null) {
-            this.client.setScreen(this.parent);
+    public void onClose() {
+        if (this.minecraft != null) {
+            this.minecraft.gui.setScreen(this.parent);
         }
     }
 
     @Override
-    public boolean shouldPause() {
+    public boolean isPauseScreen() {
         return false;
     }
 
@@ -331,10 +334,10 @@ public final class MacroPanelEditorScreen extends Screen {
         if (!active) {
             this.labelField.setText("");
             this.macroIdField.setText("");
-            this.xField.widget().setText("");
-            this.yField.widget().setText("");
-            this.widthField.widget().setText("");
-            this.heightField.widget().setText("");
+            this.xField.widget().setValue("");
+            this.yField.widget().setValue("");
+            this.widthField.widget().setValue("");
+            this.heightField.widget().setValue("");
             return;
         }
 
@@ -358,18 +361,18 @@ public final class MacroPanelEditorScreen extends Screen {
         return null;
     }
 
-    private void renderMacroHelp(DrawContext context, int x, int y, int maxWidth) {
+    private void renderMacroHelp(GuiGraphicsExtractor context, int x, int y, int maxWidth) {
         List<String> macroIds = new ArrayList<>(MacroDataHandler.getAllMacros().keySet());
         macroIds.sort(String.CASE_INSENSITIVE_ORDER);
         String joined = macroIds.isEmpty() ? "No macros created yet." : "Known macro ids: " + String.join(", ", macroIds);
         String text = joined;
-        while (this.textRenderer.getWidth(text) > maxWidth && text.length() > 12) {
+        while (this.font.width(text) > maxWidth && text.length() > 12) {
             text = text.substring(0, text.length() - 1);
         }
         if (!text.equals(joined)) {
             text += "...";
         }
-        context.drawTextWithShadow(this.textRenderer, text, x, y, 0xFF9FCFCF);
+        context.text(this.font, text, x, y, 0xFF9FCFCF);
     }
 
     private static String resolveMacroName(String macroId) {

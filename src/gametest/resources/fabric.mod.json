@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "m0-dev-tools-test",
+  "version": "1.0.0",
+  "name": "M0 Dev Tools runtime tests",
+  "environment": "client",
+  "entrypoints": {
+    "fabric-client-gametest": ["me.m0dii.RuntimeSmokeTest"]
+  },
+  "depends": {
+    "m0-dev-tools": "*",
+    "fabric-client-gametest-api-v1": "*"
+  }
+}

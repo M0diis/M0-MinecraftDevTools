@@ -1,34 +1,34 @@
 package me.m0dii.mixin;
 
-import net.minecraft.client.gui.screen.ingame.HandledScreen;
-import net.minecraft.screen.slot.Slot;
-import net.minecraft.screen.slot.SlotActionType;
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.world.inventory.ContainerInput;
+import net.minecraft.world.inventory.Slot;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Accessor;
 import org.spongepowered.asm.mixin.gen.Invoker;
 
 import java.util.Set;
 
-@Mixin(HandledScreen.class)
+@Mixin(AbstractContainerScreen.class)
 public interface HandledScreenAccessor {
-    @Invoker("getSlotAt")
+    @Invoker("getHoveredSlot")
     Slot m0dev$invokeGetSlotAt(double mouseX, double mouseY);
 
-    @Invoker("onMouseClick")
-    void m0dev$invokeOnMouseClick(Slot slot, int slotId, int button, SlotActionType actionType);
+    @Invoker("slotClicked")
+    void m0dev$invokeOnMouseClick(Slot slot, int slotId, int button, ContainerInput actionType);
 
-    @Accessor("cursorDragging")
+    @Accessor("isQuickCrafting")
     boolean m0dev$isCursorDragging();
 
-    @Accessor("cursorDragging")
+    @Accessor("isQuickCrafting")
     void m0dev$setCursorDragging(boolean value);
 
-    @Accessor("heldButtonType")
+    @Accessor("quickCraftingType")
     int m0dev$getHeldButtonType();
 
-    @Accessor("cancelNextRelease")
+    @Accessor("skipNextRelease")
     void m0dev$setCancelNextRelease(boolean value);
 
-    @Accessor("cursorDragSlots")
+    @Accessor("quickCraftSlots")
     Set<Slot> m0dev$getCursorDragSlots();
 }

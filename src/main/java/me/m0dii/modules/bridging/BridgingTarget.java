@@ -1,7 +1,7 @@
 package me.m0dii.modules.bridging;
 
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Direction;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 
 public record BridgingTarget(BlockPos placePos, Direction supportDirection) {
     public Direction clickSide() {
@@ -9,6 +9,6 @@ public record BridgingTarget(BlockPos placePos, Direction supportDirection) {
     }
 
     public BlockPos supportPos() {
-        return this.placePos.offset(this.supportDirection);
+        return this.placePos.relative(this.supportDirection);
     }
 }

@@ -1,21 +1,21 @@
 package me.m0dii.modules.healthbars;
 
+import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.math.Axis;
 import me.m0dii.modules.Module;
-import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
-import net.minecraft.client.font.TextRenderer;
-import net.minecraft.client.render.Camera;
-import net.minecraft.client.render.VertexConsumerProvider;
-import net.minecraft.client.util.math.MatrixStack;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.mob.Monster;
-import net.minecraft.entity.passive.AnimalEntity;
-import net.minecraft.entity.passive.PassiveEntity;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.util.hit.EntityHitResult;
-import net.minecraft.util.hit.HitResult;
-import net.minecraft.util.math.RotationAxis;
-import net.minecraft.util.math.Vec3d;
+import me.m0dii.render.OverlayBufferSource;
+import me.m0dii.render.OverlayRenderEvents;
+import net.minecraft.client.Camera;
+import net.minecraft.client.gui.Font;
+import net.minecraft.world.entity.AgeableMob;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.animal.Animal;
+import net.minecraft.world.entity.monster.Enemy;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.phys.EntityHitResult;
+import net.minecraft.world.phys.HitResult;
+import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
 
 import java.util.ArrayList;
@@ -50,20 +50,20 @@ public final class EntityHealthBarsModule extends Module {
 
     @Override
     public void register() {
-        WorldRenderEvents.AFTER_ENTITIES.register(context -> {
+        OverlayRenderEvents.AFTER_ENTITIES.register(context -> {
             if (!isEnabled() || isClientNull()) {
                 return;
             }
 
-            Camera camera = context.gameRenderer().getCamera();
-            MatrixStack matrices = context.matrices();
+            Camera camera = context.gameRenderer().mainCamera();
+            PoseStack matrices = context.matrices();
             if (camera == null || matrices == null) {
                 return;
             }
 
-            VertexConsumerProvider consumers = context.consumers();
+            OverlayBufferSource consumers = context.consumers();
             if (consumers == null) {
-                consumers = getClient().getBufferBuilders().getEntityVertexConsumers();
+                consumers = OverlayBufferSource.current();
             }
 
             if (visibilityMode == VisibilityMode.LOOKING) {
@@ -75,61 +75,61 @@ public final class EntityHealthBarsModule extends Module {
         });
     }
 
-    private void renderLookTarget(MatrixStack matrices, VertexConsumerProvider consumers, Camera camera) {
-        HitResult hitResult = getClient().crosshairTarget;
+    private void renderLookTarget(PoseStack matrices, OverlayBufferSource consumers, Camera camera) {
+        HitResult hitResult = getClient().hitResult;
         if (!(hitResult instanceof EntityHitResult entityHitResult)) {
             return;
         }
         Entity entity = entityHitResult.getEntity();
-        if (entity instanceof LivingEntity living && shouldRender(living, camera.getCameraPos())) {
+        if (entity instanceof LivingEntity living && shouldRender(living, camera.position())) {
             renderHealthLabel(matrices, consumers, camera, living);
         }
     }
 
-    private void renderNearby(MatrixStack matrices, VertexConsumerProvider consumers, Camera camera) {
-        Vec3d cameraPos = camera.getCameraPos();
+    private void renderNearby(PoseStack matrices, OverlayBufferSource consumers, Camera camera) {
+        Vec3 cameraPos = camera.position();
         double maxDistanceSq = renderDistance * renderDistance;
 
-        List<LivingEntity> entities = getClient().world.getOtherEntities(getClient().player, getClient().player.getBoundingBox().expand(renderDistance))
+        List<LivingEntity> entities = getClient().level.getEntities(getClient().player, getClient().player.getBoundingBox().inflate(renderDistance))
                 .stream()
                 .filter(LivingEntity.class::isInstance)
                 .map(LivingEntity.class::cast)
                 .filter(entity -> shouldRender(entity, cameraPos))
-                .sorted(Comparator.comparingDouble(entity -> entity.squaredDistanceTo(getClient().player)))
+                .sorted(Comparator.comparingDouble(entity -> entity.distanceToSqr(getClient().player)))
                 .toList();
 
         for (LivingEntity entity : entities) {
-            if (cameraPos.squaredDistanceTo(entity.getX(), entity.getY(), entity.getZ()) > maxDistanceSq) {
+            if (cameraPos.distanceToSqr(entity.getX(), entity.getY(), entity.getZ()) > maxDistanceSq) {
                 continue;
             }
             renderHealthLabel(matrices, consumers, camera, entity);
         }
     }
 
-    private boolean shouldRender(LivingEntity entity, Vec3d cameraPos) {
+    private boolean shouldRender(LivingEntity entity, Vec3 cameraPos) {
         if (entity == null || !entity.isAlive() || entity.isInvisible()) {
             return false;
         }
         if (entity == getClient().player) {
             return false;
         }
-        if (cameraPos.squaredDistanceTo(entity.getX(), entity.getY(), entity.getZ()) > (renderDistance * renderDistance)) {
+        if (cameraPos.distanceToSqr(entity.getX(), entity.getY(), entity.getZ()) > (renderDistance * renderDistance)) {
             return false;
         }
         return switch (displayMode) {
             case ALL -> true;
-            case HOSTILE -> entity instanceof Monster;
-            case PASSIVE -> entity instanceof PassiveEntity || entity instanceof AnimalEntity;
-            case PLAYERS -> entity instanceof PlayerEntity;
+            case HOSTILE -> entity instanceof Enemy;
+            case PASSIVE -> entity instanceof AgeableMob || entity instanceof Animal;
+            case PLAYERS -> entity instanceof Player;
         };
     }
 
-    private void renderHealthLabel(MatrixStack matrices,
-                                   VertexConsumerProvider consumers,
+    private void renderHealthLabel(PoseStack matrices,
+                                   OverlayBufferSource consumers,
                                    Camera camera,
                                    LivingEntity entity) {
-        Vec3d cameraPos = camera.getCameraPos();
-        Vec3d renderPos = new Vec3d(entity.getX(), entity.getY() + entity.getHeight() + 0.55, entity.getZ());
+        Vec3 cameraPos = camera.position();
+        Vec3 renderPos = new Vec3(entity.getX(), entity.getY() + entity.getBbHeight() + 0.55, entity.getZ());
         double distance = cameraPos.distanceTo(renderPos);
         float scale = (float) Math.clamp(distance * 0.0025, 0.018, 0.035);
 
@@ -137,30 +137,30 @@ public final class EntityHealthBarsModule extends Module {
         String healthText = buildHealthText(entity);
         int color = resolveHealthColor(entity);
 
-        matrices.push();
+        matrices.pushPose();
         matrices.translate(renderPos.x - cameraPos.x, renderPos.y - cameraPos.y, renderPos.z - cameraPos.z);
-        matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(-camera.getYaw()));
-        matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(camera.getPitch()));
+        matrices.rotate(Axis.YP.rotationDegrees(-camera.yRot()));
+        matrices.rotate(Axis.XP.rotationDegrees(camera.xRot()));
         matrices.scale(-scale, -scale, scale);
 
-        TextRenderer textRenderer = getClient().textRenderer;
-        Matrix4f matrix = matrices.peek().getPositionMatrix();
+        Font textRenderer = getClient().font;
+        Matrix4f matrix = matrices.last().pose();
         int light = 0x00F000F0;
 
         drawCentered(textRenderer, consumers, matrix, nameText, -18, 0xFFFFFFFF, light);
         drawCentered(textRenderer, consumers, matrix, healthText, -8, color, light);
-        matrices.pop();
+        matrices.popPose();
     }
 
-    private void drawCentered(TextRenderer textRenderer,
-                              VertexConsumerProvider consumers,
+    private void drawCentered(Font textRenderer,
+                              OverlayBufferSource consumers,
                               Matrix4f matrix,
                               String text,
                               float y,
                               int color,
                               int light) {
-        int width = textRenderer.getWidth(text);
-        textRenderer.draw(
+        int width = textRenderer.width(text);
+        OverlayBufferSource.drawText(textRenderer, 
                 text,
                 -width / 2f,
                 y,
@@ -168,7 +168,7 @@ public final class EntityHealthBarsModule extends Module {
                 false,
                 matrix,
                 consumers,
-                TextRenderer.TextLayerType.SEE_THROUGH,
+                Font.DisplayMode.SEE_THROUGH,
                 0,
                 light
         );

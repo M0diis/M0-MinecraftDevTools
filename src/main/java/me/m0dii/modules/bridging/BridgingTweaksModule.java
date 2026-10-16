@@ -5,8 +5,7 @@ import me.m0dii.modules.Module;
 import me.m0dii.utils.ModConfig;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
-import net.minecraft.util.Identifier;
-
+import net.minecraft.resources.Identifier;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -25,7 +24,7 @@ public final class BridgingTweaksModule extends Module {
         this.renderer.register();
         HudElementRegistry.attachElementBefore(
                 VanillaHudElements.CHAT,
-                Identifier.of(M0DevToolsClient.MOD_ID, "bridging_tweaks_hud"),
+                Identifier.fromNamespaceAndPath(M0DevToolsClient.MOD_ID, "bridging_tweaks_hud"),
                 this.renderer::onHudRender
         );
     }

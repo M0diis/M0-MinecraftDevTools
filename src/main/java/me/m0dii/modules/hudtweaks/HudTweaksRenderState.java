@@ -1,7 +1,7 @@
 package me.m0dii.modules.hudtweaks;
 
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.util.Window;
+import com.mojang.blaze3d.platform.Window;
+import net.minecraft.client.Minecraft;
 import org.joml.Matrix3x2fStack;
 
 public final class HudTweaksRenderState {
@@ -42,9 +42,9 @@ public final class HudTweaksRenderState {
             return;
         }
 
-        Window window = MinecraftClient.getInstance().getWindow();
-        float pivotX = scenePivotX(type, window.getScaledWidth());
-        float pivotY = scenePivotY(type, window.getScaledHeight());
+        Window window = Minecraft.getInstance().getWindow();
+        float pivotX = scenePivotX(type, window.getGuiScaledWidth());
+        float pivotY = scenePivotY(type, window.getGuiScaledHeight());
         matrices.translate(config.offsetX, config.offsetY);
         matrices.translate(pivotX, pivotY);
         matrices.scale(scale, scale);

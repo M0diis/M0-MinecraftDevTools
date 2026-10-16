@@ -1,25 +1,25 @@
 package me.m0dii.modules.macros.hud;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import me.m0dii.modules.macros.CommandMacros;
 import me.m0dii.modules.macros.MacroDataHandler;
 import me.m0dii.modules.macros.MacroPlaceholders;
 import me.m0dii.modules.scripting.HudButtonScriptExecutor;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.ChatScreen;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.screen.ingame.GenericContainerScreen;
-import net.minecraft.client.gui.screen.ingame.HandledScreen;
-import net.minecraft.client.gui.screen.ingame.InventoryScreen;
-import net.minecraft.client.util.InputUtil;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.registry.Registries;
-import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
-import net.minecraft.util.Identifier;
+import net.minecraft.ChatFormatting;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.screens.ChatScreen;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.client.gui.screens.inventory.ContainerScreen;
+import net.minecraft.client.gui.screens.inventory.InventoryScreen;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import org.jetbrains.annotations.NotNull;
 
 import java.lang.reflect.Method;
@@ -33,15 +33,15 @@ public final class MacroHudRuntime {
     private MacroHudRuntime() {
     }
 
-    public static void render(@NotNull DrawContext context, boolean interactiveMode) {
+    public static void extractRenderState(@NotNull GuiGraphicsExtractor context, boolean interactiveMode) {
         MacroHudDataHandler.HudConfig cfg = MacroHudDataHandler.getConfigCopy();
         if (!cfg.enabled) {
             return;
         }
 
-        MinecraftClient client = MinecraftClient.getInstance();
-        int screenW = client.getWindow().getScaledWidth();
-        int screenH = client.getWindow().getScaledHeight();
+        Minecraft client = Minecraft.getInstance();
+        int screenW = client.getWindow().getGuiScaledWidth();
+        int screenH = client.getWindow().getGuiScaledHeight();
         List<MacroHudDataHandler.HudElement> layeredElements = HudElementUtils.sortedByLayer(cfg.elements);
         String hoveredButtonId = interactiveMode ? resolveHoveredButtonId(layeredElements, client, screenW, screenH) : null;
 
@@ -50,7 +50,7 @@ public final class MacroHudRuntime {
                 continue;
             }
 
-            if (!matchesVisibility(element, client.currentScreen)) {
+            if (!matchesVisibility(element, client.gui.screen())) {
                 continue;
             }
 
@@ -73,12 +73,12 @@ public final class MacroHudRuntime {
     }
 
     public static boolean handleClick(double mouseX, double mouseY, int button) {
-        if (button != 0) {
+        if (button != InputConstants.MOUSE_BUTTON_LEFT) {
             return false;
         }
 
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (client.player == null || client.currentScreen == null) {
+        Minecraft client = Minecraft.getInstance();
+        if (client.player == null || client.gui.screen() == null) {
             return false;
         }
 
@@ -87,8 +87,8 @@ public final class MacroHudRuntime {
             return false;
         }
 
-        int screenW = client.getWindow().getScaledWidth();
-        int screenH = client.getWindow().getScaledHeight();
+        int screenW = client.getWindow().getGuiScaledWidth();
+        int screenH = client.getWindow().getGuiScaledHeight();
 
         List<MacroHudDataHandler.HudElement> layeredElements = HudElementUtils.sortedByLayer(cfg.elements);
         for (int i = layeredElements.size() - 1; i >= 0; i--) {
@@ -96,7 +96,7 @@ public final class MacroHudRuntime {
             if (!element.visible || element.type != MacroHudDataHandler.ElementType.BUTTON) {
                 continue;
             }
-            if (!matchesVisibility(element, client.currentScreen)) {
+            if (!matchesVisibility(element, client.gui.screen())) {
                 continue;
             }
             int x = resolveX(element, screenW);
@@ -116,13 +116,13 @@ public final class MacroHudRuntime {
             }
 
             if (element.macroId == null || element.macroId.isBlank()) {
-                client.player.sendMessage(Text.literal("HUD button '" + actionName + "' has no macro id or action."), true);
+                client.player.sendOverlayMessage(Component.literal("HUD button '" + actionName + "' has no macro id or action."));
                 return true;
             }
 
             boolean ok = CommandMacros.runMacroById(element.macroId);
             if (!ok) {
-                client.player.sendMessage(Text.literal("Unknown macro id: " + element.macroId).formatted(Formatting.RED), true);
+                client.player.sendOverlayMessage(Component.literal("Unknown macro id: " + element.macroId).withStyle(ChatFormatting.RED));
             }
             return true;
         }
@@ -131,8 +131,8 @@ public final class MacroHudRuntime {
     }
 
     public static boolean isInteractiveContext() {
-        MinecraftClient client = MinecraftClient.getInstance();
-        return client.currentScreen instanceof ChatScreen;
+        Minecraft client = Minecraft.getInstance();
+        return client.gui.screen() instanceof ChatScreen;
     }
 
     private static boolean matchesVisibility(MacroHudDataHandler.HudElement element, Screen screen) {
@@ -141,8 +141,8 @@ public final class MacroHudRuntime {
             case ALWAYS -> true;
             case CHAT -> screen instanceof ChatScreen;
             case INVENTORY -> screen instanceof InventoryScreen;
-            case CONTAINER -> screen instanceof HandledScreen<?> handled && !(handled instanceof InventoryScreen);
-            case CHEST -> screen instanceof GenericContainerScreen;
+            case CONTAINER -> screen instanceof AbstractContainerScreen<?> handled && !(handled instanceof InventoryScreen);
+            case CHEST -> screen instanceof ContainerScreen;
             case SCREEN -> matchesScreenTypeFilter(screen, element.visibilityScreenType);
         };
     }
@@ -161,17 +161,17 @@ public final class MacroHudRuntime {
     }
 
     private static String resolveHoveredButtonId(List<MacroHudDataHandler.HudElement> layeredElements,
-                                                 MinecraftClient client,
+                                                 Minecraft client,
                                                  int screenW,
                                                  int screenH) {
-        int mx = (int) Math.round(client.mouse.getX() * (double) screenW / Math.max(1, client.getWindow().getWidth()));
-        int my = (int) Math.round(client.mouse.getY() * (double) screenH / Math.max(1, client.getWindow().getHeight()));
+        int mx = (int) Math.round(client.mouseHandler.xpos() * (double) screenW / Math.max(1, client.getWindow().getScreenWidth()));
+        int my = (int) Math.round(client.mouseHandler.ypos() * (double) screenH / Math.max(1, client.getWindow().getScreenHeight()));
         for (int i = layeredElements.size() - 1; i >= 0; i--) {
             MacroHudDataHandler.HudElement element = layeredElements.get(i);
             if (!element.visible || element.type != MacroHudDataHandler.ElementType.BUTTON) {
                 continue;
             }
-            if (!matchesVisibility(element, client.currentScreen)) {
+            if (!matchesVisibility(element, client.gui.screen())) {
                 continue;
             }
             int x = resolveX(element, screenW);
@@ -183,7 +183,7 @@ public final class MacroHudRuntime {
         return null;
     }
 
-    private static void renderTextElement(DrawContext context, MacroHudDataHandler.HudElement element, int x, int y) {
+    private static void renderTextElement(GuiGraphicsExtractor context, MacroHudDataHandler.HudElement element, int x, int y) {
         List<String> lines = splitLines(expanded(element.text));
         if (element.drawBackground) {
             context.fill(x, y, x + element.width, y + element.height,
@@ -207,7 +207,7 @@ public final class MacroHudRuntime {
         }
     }
 
-    private static void renderButtonElement(DrawContext context,
+    private static void renderButtonElement(GuiGraphicsExtractor context,
                                             MacroHudDataHandler.HudElement element,
                                             int x,
                                             int y,
@@ -247,7 +247,7 @@ public final class MacroHudRuntime {
         }
     }
 
-    private static void renderMacroKeybindElement(DrawContext context, MacroHudDataHandler.HudElement element, int x, int y) {
+    private static void renderMacroKeybindElement(GuiGraphicsExtractor context, MacroHudDataHandler.HudElement element, int x, int y) {
         List<String> lines = new ArrayList<>();
         String title = expanded(element.text);
         lines.add(title == null || title.isBlank() ? "Macro Keybinds" : title);
@@ -272,7 +272,7 @@ public final class MacroHudRuntime {
         renderLinesElement(context, element, x, y, lines);
     }
 
-    private static void renderIconElement(DrawContext context, MacroHudDataHandler.HudElement element, int x, int y) {
+    private static void renderIconElement(GuiGraphicsExtractor context, MacroHudDataHandler.HudElement element, int x, int y) {
         if (element.drawBackground) {
             context.fill(x, y, x + element.width, y + element.height,
                     effectiveBackgroundColor(element.backgroundColor, element.backgroundOpaque, element.backgroundAlpha));
@@ -296,15 +296,15 @@ public final class MacroHudRuntime {
         ItemStack stack = resolveIconStack(element);
         int ix = x + Math.max(0, (element.width - 16) / 2);
         int iy = y + Math.max(0, (element.height - 16) / 2);
-        context.drawItem(stack, ix, iy);
+        context.item(stack, ix, iy);
 
         if (element.iconShowCount && stack.getCount() > 1) {
-            context.drawTextWithShadow(MinecraftClient.getInstance().textRenderer, Integer.toString(stack.getCount()), x + element.width - 8, y + element.height - 8, 0xFFFFFFFF);
+            context.text(Minecraft.getInstance().font, Integer.toString(stack.getCount()), x + element.width - 8, y + element.height - 8, 0xFFFFFFFF);
         }
 
-        if (element.iconShowDurability && stack.isDamageable()) {
+        if (element.iconShowDurability && stack.isDamageableItem()) {
             int max = stack.getMaxDamage();
-            int remain = Math.max(0, max - stack.getDamage());
+            int remain = Math.max(0, max - stack.getDamageValue());
             float ratio = max <= 0 ? 0.0f : (remain / (float) max);
             int bw = Math.max(1, Math.round((element.width - 2) * ratio));
             context.fill(x + 1, y + element.height - 2, x + element.width - 1, y + element.height - 1, 0x66000000);
@@ -328,7 +328,7 @@ public final class MacroHudRuntime {
         }
     }
 
-    private static void renderBarElement(DrawContext context, MacroHudDataHandler.HudElement element, int x, int y) {
+    private static void renderBarElement(GuiGraphicsExtractor context, MacroHudDataHandler.HudElement element, int x, int y) {
         if (element.drawBackground) {
             context.fill(x, y, x + element.width, y + element.height,
                     effectiveBackgroundColor(element.backgroundColor, element.backgroundOpaque, element.backgroundAlpha));
@@ -390,7 +390,7 @@ public final class MacroHudRuntime {
         drawStyledTextLine(context, txt, tx, ty, element.textColor, scale);
     }
 
-    private static void renderValueElement(DrawContext context, MacroHudDataHandler.HudElement element, int x, int y) {
+    private static void renderValueElement(GuiGraphicsExtractor context, MacroHudDataHandler.HudElement element, int x, int y) {
         if (element.drawBackground) {
             context.fill(x, y, x + element.width, y + element.height,
                     effectiveBackgroundColor(element.backgroundColor, element.backgroundOpaque, element.backgroundAlpha));
@@ -422,7 +422,7 @@ public final class MacroHudRuntime {
         drawStyledTextLine(context, text, tx, ty, color, scale);
     }
 
-    private static void renderListElement(DrawContext context, MacroHudDataHandler.HudElement element, int x, int y) {
+    private static void renderListElement(GuiGraphicsExtractor context, MacroHudDataHandler.HudElement element, int x, int y) {
         if (element.drawBackground) {
             context.fill(x, y, x + element.width, y + element.height,
                     effectiveBackgroundColor(element.backgroundColor, element.backgroundOpaque, element.backgroundAlpha));
@@ -431,7 +431,7 @@ public final class MacroHudRuntime {
             drawBorder(context, x, y, element.width, element.height, element.borderColor, element.borderMode);
         }
 
-        String src = MacroPlaceholders.expand(MinecraftClient.getInstance(), "{" + element.sourceToken + "}");
+        String src = MacroPlaceholders.expand(Minecraft.getInstance(), "{" + element.sourceToken + "}");
         if (src == null) {
             src = "";
         }
@@ -450,7 +450,7 @@ public final class MacroHudRuntime {
         renderLinesElement(context, element, x, y, visible);
     }
 
-    private static void renderInventoryElement(DrawContext context, MacroHudDataHandler.HudElement element, int x, int y) {
+    private static void renderInventoryElement(GuiGraphicsExtractor context, MacroHudDataHandler.HudElement element, int x, int y) {
         if (element.drawBackground) {
             context.fill(x, y, x + element.width, y + element.height,
                     effectiveBackgroundColor(element.backgroundColor, element.backgroundOpaque, element.backgroundAlpha));
@@ -459,13 +459,13 @@ public final class MacroHudRuntime {
             drawBorder(context, x, y, element.width, element.height, element.borderColor, element.borderMode);
         }
 
-        MinecraftClient client = MinecraftClient.getInstance();
+        Minecraft client = Minecraft.getInstance();
         if (client.player == null) {
             return;
         }
-        MacroInventoryWidgetSupport.render(
+        MacroInventoryWidgetSupport.extractRenderState(
                 context,
-                client.textRenderer,
+                client.font,
                 element,
                 client.player,
                 x,
@@ -475,7 +475,7 @@ public final class MacroHudRuntime {
         );
     }
 
-    private static void renderShapeElement(DrawContext context, MacroHudDataHandler.HudElement element, int x, int y) {
+    private static void renderShapeElement(GuiGraphicsExtractor context, MacroHudDataHandler.HudElement element, int x, int y) {
         String shape = Objects.toString(element.shapeType, "rounded_rect").toLowerCase(Locale.ROOT);
         int w = Math.max(1, element.width);
         int h = Math.max(1, element.height);
@@ -527,8 +527,8 @@ public final class MacroHudRuntime {
         }
     }
 
-    private static void renderStateBadgeElement(DrawContext context, MacroHudDataHandler.HudElement element, int x, int y) {
-        String raw = MacroPlaceholders.expand(MinecraftClient.getInstance(), "{" + element.sourceToken + "}");
+    private static void renderStateBadgeElement(GuiGraphicsExtractor context, MacroHudDataHandler.HudElement element, int x, int y) {
+        String raw = MacroPlaceholders.expand(Minecraft.getInstance(), "{" + element.sourceToken + "}");
         boolean on = resolveStateBoolean(raw, element);
         int bg = effectiveBackgroundColor(on ? element.colorStart : element.colorEnd, element.backgroundOpaque, element.backgroundAlpha);
 
@@ -546,7 +546,7 @@ public final class MacroHudRuntime {
         drawStyledTextLine(context, text, tx, ty, element.textColor, scale);
     }
 
-    private static void renderLinesElement(DrawContext context, MacroHudDataHandler.HudElement element, int x, int y, List<String> lines) {
+    private static void renderLinesElement(GuiGraphicsExtractor context, MacroHudDataHandler.HudElement element, int x, int y, List<String> lines) {
         if (element.drawBackground) {
             context.fill(x, y, x + element.width, y + element.height,
                     effectiveBackgroundColor(element.backgroundColor, element.backgroundOpaque, element.backgroundAlpha));
@@ -576,7 +576,7 @@ public final class MacroHudRuntime {
         return mouseX >= x && mouseX <= x + e.width && mouseY >= y && mouseY <= y + e.height;
     }
 
-    private static void drawBorder(DrawContext context, int x, int y, int width, int height, int color, MacroHudDataHandler.BorderMode mode) {
+    private static void drawBorder(GuiGraphicsExtractor context, int x, int y, int width, int height, int color, MacroHudDataHandler.BorderMode mode) {
         int x2 = x + width;
         int y2 = y + height;
         MacroHudDataHandler.BorderMode resolved = mode == null ? MacroHudDataHandler.BorderMode.FULL : mode;
@@ -625,8 +625,8 @@ public final class MacroHudRuntime {
         if (forceOpaque) {
             return 0xFF000000 | (withAlpha & 0x00FFFFFF);
         }
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (client.currentScreen instanceof HandledScreen<?> handled && !(handled instanceof InventoryScreen)) {
+        Minecraft client = Minecraft.getInstance();
+        if (client.gui.screen() instanceof AbstractContainerScreen<?> handled && !(handled instanceof InventoryScreen)) {
             // Reduce alpha and lift brightness so HUD remains readable above container dim overlays.
             int targetAlpha = Math.clamp(alpha, 0x66, 0xA0);
             int brightened = brighten(withAlpha, 0x14141414);
@@ -645,24 +645,24 @@ public final class MacroHudRuntime {
 
         try {
             if ("block".equals(kind)) {
-                var block = Registries.BLOCK.get(id);
+                var block = BuiltInRegistries.BLOCK.getValue(id);
                 return block == null ? new ItemStack(Items.BARRIER) : new ItemStack(block.asItem());
             }
             if ("entity".equals(kind)) {
-                if (Registries.ITEM.containsId(id)) {
-                    var directItem = Registries.ITEM.get(id);
+                if (BuiltInRegistries.ITEM.containsKey(id)) {
+                    var directItem = BuiltInRegistries.ITEM.getValue(id);
                     if (directItem != null && directItem != Items.AIR) {
                         return new ItemStack(directItem);
                     }
                 }
                 Identifier eggId = Identifier.tryParse(id.getNamespace() + ":" + id.getPath() + "_spawn_egg");
-                if (eggId != null && Registries.ITEM.containsId(eggId)) {
-                    return new ItemStack(Registries.ITEM.get(eggId));
+                if (eggId != null && BuiltInRegistries.ITEM.containsKey(eggId)) {
+                    return new ItemStack(BuiltInRegistries.ITEM.getValue(eggId));
                 }
                 return new ItemStack(Items.BARRIER);
             }
 
-            var item = Registries.ITEM.get(id);
+            var item = BuiltInRegistries.ITEM.getValue(id);
             if (item == null || item == Items.AIR) {
                 return new ItemStack(Items.BARRIER);
             }
@@ -672,8 +672,8 @@ public final class MacroHudRuntime {
         }
     }
 
-    private static void drawPlayerModelIcon(DrawContext context, MacroHudDataHandler.HudElement element, int x, int y) {
-        MinecraftClient client = MinecraftClient.getInstance();
+    private static void drawPlayerModelIcon(GuiGraphicsExtractor context, MacroHudDataHandler.HudElement element, int x, int y) {
+        Minecraft client = Minecraft.getInstance();
         Entity target = resolveModelTargetEntity(client, element);
         if (target == null) {
             return;
@@ -701,7 +701,7 @@ public final class MacroHudRuntime {
                 element.modelYaw, element.modelPitch, element.modelFollowLook);
     }
 
-    private static Entity resolveModelTargetEntity(MinecraftClient client, MacroHudDataHandler.HudElement element) {
+    private static Entity resolveModelTargetEntity(Minecraft client, MacroHudDataHandler.HudElement element) {
         if (client == null) {
             return null;
         }
@@ -713,23 +713,47 @@ public final class MacroHudRuntime {
         return client.player != null ? client.player : client.getCameraEntity();
     }
 
-    private static void drawEntityModelReflective(DrawContext context, Entity entity,
+    private static boolean drawEntityModelDirect(GuiGraphicsExtractor context, Entity entity,
+                                                 int left, int top, int right, int bottom,
+                                                 int size, float resolvedYaw, float resolvedPitch) {
+        if (!(entity instanceof LivingEntity living)) {
+            return false;
+        }
+        try {
+            float cx = (left + right) / 2.0f;
+            float cy = (top + bottom) / 2.0f;
+            float clampedYaw = Math.clamp(resolvedYaw, -30.0f, 30.0f);
+            float clampedPitch = Math.clamp(resolvedPitch, -30.0f, 30.0f);
+            float mx = cx - 40.0f * (float) Math.tan(clampedYaw / 20.0f);
+            float my = cy + 40.0f * (float) Math.tan(clampedPitch / 20.0f);
+            InventoryScreen.extractEntityInInventoryFollowsMouse(context, left, top, right, bottom, size, 0.0625f, mx, my, living);
+            return true;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    private static void drawEntityModelReflective(GuiGraphicsExtractor context, Entity entity,
                                                   int left, int top, int right, int bottom,
                                                   int size, float yaw, float pitch, boolean followLook) {
         if (entity == null || size < 1) {
             return;
         }
         try {
-            Class<?> inventoryScreen = Class.forName("net.minecraft.client.gui.screen.ingame.InventoryScreen");
-            Class<?> drawContextClass = Class.forName("net.minecraft.client.gui.DrawContext");
-            Class<?> entityClass = Class.forName("net.minecraft.entity.Entity");
-            Class<?> vectorClass = Class.forName("org.joml.Vector3f");
-            Class<?> quaternionClass = Class.forName("org.joml.Quaternionf");
-            Class<?> livingEntityClass = Class.forName("net.minecraft.entity.LivingEntity");
-
             float[] resolvedAngles = resolveModelAngles(entity, yaw, pitch, followLook);
             float resolvedYaw = resolvedAngles[0];
             float resolvedPitch = resolvedAngles[1];
+
+            if (drawEntityModelDirect(context, entity, left, top, right, bottom, size, resolvedYaw, resolvedPitch)) {
+                return;
+            }
+
+            Class<?> inventoryScreen = InventoryScreen.class;
+            Class<?> drawContextClass = GuiGraphicsExtractor.class;
+            Class<?> entityClass = Entity.class;
+            Class<?> vectorClass = Class.forName("org.joml.Vector3f");
+            Class<?> quaternionClass = Class.forName("org.joml.Quaternionf");
+            Class<?> livingEntityClass = LivingEntity.class;
 
             Object vecZero = vectorClass.getConstructor(float.class, float.class, float.class).newInstance(0.0f, 0.0f, 0.0f);
             Object modelQuat = buildModelQuaternion(quaternionClass, resolvedYaw, resolvedPitch);
@@ -854,7 +878,7 @@ public final class MacroHudRuntime {
     }
 
     private static boolean invokePreferredEntityDraw(Class<?> inventoryScreen,
-                                                     DrawContext context,
+                                                     GuiGraphicsExtractor context,
                                                      Entity entity,
                                                      int left, int top, int right, int bottom, int size,
                                                      Object vecZero, Object modelQuat, Object identityQuat,
@@ -902,7 +926,7 @@ public final class MacroHudRuntime {
                 Object lightQuat = quaternionClass.getConstructor().newInstance();
                 rotX.invoke(lightQuat, pitchRad);
                 Object vec = vectorClass.getConstructor(float.class, float.class, float.class)
-                        .newInstance(0.0f, entity.getHeight() / 2.0f + 0.0625f * entityScale, 0.0f);
+                        .newInstance(0.0f, entity.getBbHeight() / 2.0f + 0.0625f * entityScale, 0.0f);
                 float fcx = (left + right) / 2.0f;
                 float fcy = (top + bottom) / 2.0f;
                 EntityOrientationSnapshot snapshot = captureEntityOrientation(entity);
@@ -1071,11 +1095,11 @@ public final class MacroHudRuntime {
         Float headYaw = null;
         Float prevHeadYaw = null;
         if (entity instanceof LivingEntity living) {
-            bodyYaw = living.getBodyYaw();
-            headYaw = living.getHeadYaw();
-            prevHeadYaw = getFieldFloat(LivingEntity.class, living, "prevHeadYaw");
+            bodyYaw = living.getVisualRotationYInDegrees();
+            headYaw = living.getYHeadRot();
+            prevHeadYaw = living.yHeadRotO;
         }
-        return new EntityOrientationSnapshot(entity.getYaw(), entity.getPitch(), bodyYaw, headYaw, prevHeadYaw);
+        return new EntityOrientationSnapshot(entity.getYRot(), entity.getXRot(), bodyYaw, headYaw, prevHeadYaw);
     }
 
     /**
@@ -1085,12 +1109,12 @@ public final class MacroHudRuntime {
         if (entity == null) {
             return;
         }
-        entity.setYaw(yaw);
-        entity.setPitch(pitch);
+        entity.setYRot(yaw);
+        entity.setXRot(pitch);
         if (entity instanceof LivingEntity living) {
-            living.setBodyYaw(yaw);
-            living.setHeadYaw(yaw);
-            setFieldFloat(LivingEntity.class, living, "prevHeadYaw", yaw);
+            living.setYBodyRot(yaw);
+            living.setYHeadRot(yaw);
+            living.yHeadRotO = yaw;
         }
     }
 
@@ -1102,12 +1126,12 @@ public final class MacroHudRuntime {
         if (entity == null) {
             return;
         }
-        entity.setYaw(displayYaw);
-        entity.setPitch(pitch);
+        entity.setYRot(displayYaw);
+        entity.setXRot(pitch);
         if (entity instanceof LivingEntity living) {
-            living.setBodyYaw(displayYaw);
-            living.setHeadYaw(displayYaw);
-            setFieldFloat(LivingEntity.class, living, "prevHeadYaw", displayYaw);
+            living.setYBodyRot(displayYaw);
+            living.setYHeadRot(displayYaw);
+            living.yHeadRotO = displayYaw;
         }
     }
 
@@ -1115,17 +1139,17 @@ public final class MacroHudRuntime {
         if (entity == null || snapshot == null) {
             return;
         }
-        entity.setYaw(snapshot.yaw());
-        entity.setPitch(snapshot.pitch());
+        entity.setYRot(snapshot.yaw());
+        entity.setXRot(snapshot.pitch());
         if (entity instanceof LivingEntity living) {
             if (snapshot.bodyYaw() != null) {
-                living.setBodyYaw(snapshot.bodyYaw());
+                living.setYBodyRot(snapshot.bodyYaw());
             }
             if (snapshot.headYaw() != null) {
-                living.setHeadYaw(snapshot.headYaw());
+                living.setYHeadRot(snapshot.headYaw());
             }
             if (snapshot.prevHeadYaw() != null) {
-                setFieldFloat(LivingEntity.class, living, "prevHeadYaw", snapshot.prevHeadYaw());
+                living.yHeadRotO = snapshot.prevHeadYaw();
             }
         }
     }
@@ -1133,39 +1157,9 @@ public final class MacroHudRuntime {
     /**
      * Reads a float field by name, traversing the class hierarchy. Returns null if not found.
      */
-    private static Float getFieldFloat(Class<?> clazz, Object obj, String fieldName) {
-        for (Class<?> c = clazz; c != null; c = c.getSuperclass()) {
-            try {
-                java.lang.reflect.Field f = c.getDeclaredField(fieldName);
-                f.setAccessible(true);
-                return f.getFloat(obj);
-            } catch (NoSuchFieldException ignored) {
-                // Try parent
-            } catch (Exception ignored) {
-                break;
-            }
-        }
-        return null;
-    }
-
     /**
      * Sets a float field by name, traversing the class hierarchy. Silently ignores failures.
      */
-    private static void setFieldFloat(Class<?> clazz, Object obj, String fieldName, float value) {
-        for (Class<?> c = clazz; c != null; c = c.getSuperclass()) {
-            try {
-                java.lang.reflect.Field f = c.getDeclaredField(fieldName);
-                f.setAccessible(true);
-                f.setFloat(obj, value);
-                return;
-            } catch (NoSuchFieldException ignored) {
-                // Try parent
-            } catch (Exception ignored) {
-                break;
-            }
-        }
-    }
-
     private record EntityOrientationSnapshot(float yaw, float pitch, Float bodyYaw, Float headYaw, Float prevHeadYaw) {
     }
 
@@ -1173,8 +1167,8 @@ public final class MacroHudRuntime {
         float baseYaw = 0.0f;
         float basePitch = 0.0f;
         if (followLook && entity != null) {
-            baseYaw = entity instanceof LivingEntity living ? living.getHeadYaw() : entity.getYaw();
-            basePitch = entity.getPitch();
+            baseYaw = entity instanceof LivingEntity living ? living.getYHeadRot() : entity.getYRot();
+            basePitch = entity.getXRot();
         }
         float resolvedYaw = wrapDegrees(baseYaw + yawOffset);
         float resolvedPitch = Math.clamp(basePitch + pitchOffset, -90.0f, 90.0f);
@@ -1248,41 +1242,22 @@ public final class MacroHudRuntime {
     }
 
     private static float resolveCooldownProgress(ItemStack stack) {
-        MinecraftClient client = MinecraftClient.getInstance();
+        Minecraft client = Minecraft.getInstance();
         if (client.player == null || stack == null || stack.isEmpty()) {
             return 0.0f;
         }
         try {
-            var cooldowns = client.player.getItemCooldownManager();
-            try {
-                var m = cooldowns.getClass().getMethod("getCooldownProgress", stack.getItem().getClass().getSuperclass(), float.class);
-                Object value = m.invoke(cooldowns, stack.getItem(), 0.0f);
-                if (value instanceof Float f) {
-                    return Math.clamp(f, 0.0f, 1.0f);
-                }
-            } catch (Exception ignored) {
-                // fallback below
-            }
-            try {
-                var m = cooldowns.getClass().getMethod("getCooldownProgress", stack.getItem().getClass(), float.class);
-                Object value = m.invoke(cooldowns, stack.getItem(), 0.0f);
-                if (value instanceof Float f) {
-                    return Math.clamp(f, 0.0f, 1.0f);
-                }
-            } catch (Exception ignored) {
-                // no-op
-            }
+            return Math.clamp(client.player.getCooldowns().getCooldownPercent(stack, 0.0f), 0.0f, 1.0f);
         } catch (Exception ignored) {
-            // no-op
+            return 0.0f;
         }
-        return 0.0f;
     }
 
     private static Double resolveNumericToken(String token) {
         if (token == null || token.isBlank()) {
             return null;
         }
-        String expanded = MacroPlaceholders.expand(MinecraftClient.getInstance(), "{" + token + "}");
+        String expanded = MacroPlaceholders.expand(Minecraft.getInstance(), "{" + token + "}");
         return parseFirstDouble(expanded);
     }
 
@@ -1392,48 +1367,81 @@ public final class MacroHudRuntime {
         return out;
     }
 
-    private static void drawRoundedRectShape(DrawContext context, int x, int y, int w, int h, int radius,
+    private static void drawRoundedRectShape(GuiGraphicsExtractor context, int x, int y, int w, int h, int radius,
                                              int fillColor, int borderColor, boolean filled,
                                              boolean drawBorder, int thickness) {
-        int r = Math.clamp(radius, 0, Math.min(w, h) / 2);
-        if (filled) {
-            context.fill(x + r, y, x + w - r, y + h, fillColor);
-            context.fill(x, y + r, x + w, y + h - r, fillColor);
-            fillCircleQuadrants(context, x + r, y + r, r, fillColor, true, 1);
-            fillCircleQuadrants(context, x + w - r - 1, y + r, r, fillColor, true, 1);
-            fillCircleQuadrants(context, x + r, y + h - r - 1, r, fillColor, true, 1);
-            fillCircleQuadrants(context, x + w - r - 1, y + h - r - 1, r, fillColor, true, 1);
-        }
-        if (drawBorder) {
-            for (int i = 0; i < thickness; i++) {
-                drawBorder(context, x + i, y + i, Math.max(1, w - i * 2), Math.max(1, h - i * 2), borderColor, MacroHudDataHandler.BorderMode.FULL);
-            }
-        }
+        drawRoundedShape(context, x, y, w, h, radius, fillColor, borderColor, filled, drawBorder, thickness);
     }
 
-    private static void drawCircleShape(DrawContext context, int cx, int cy, int radius,
+    private static void drawCircleShape(GuiGraphicsExtractor context, int cx, int cy, int radius,
                                         int fillColor, int borderColor, boolean filled,
                                         boolean drawBorder, int thickness) {
         int r = Math.max(1, radius);
-        if (filled) {
-            for (int y = -r; y <= r; y++) {
-                int xLen = (int) Math.sqrt(Math.max(0, r * r - y * y));
-                context.fill(cx - xLen, cy + y, cx + xLen + 1, cy + y + 1, fillColor);
-            }
+        int d = r * 2;
+        drawRoundedShape(context, cx - r, cy - r, d, d, r, fillColor, borderColor, filled, drawBorder, thickness);
+    }
+
+    /**
+     * Rounded rectangle (a circle when the radius is half the size) drawn one row at a time, so translucent colors
+     * never overlap and the border follows the rounded outline.
+     */
+    public static void drawRoundedShape(GuiGraphicsExtractor context, int x, int y, int w, int h, int radius,
+                                        int fillColor, int borderColor, boolean filled,
+                                        boolean drawBorder, int thickness) {
+        if (w <= 0 || h <= 0) {
+            return;
         }
-        if (drawBorder) {
-            for (int t = 0; t < Math.max(1, thickness); t++) {
-                int rr = Math.max(1, r - t);
-                for (int y = -rr; y <= rr; y++) {
-                    int xLen = (int) Math.sqrt(Math.max(0, rr * rr - y * y));
-                    context.fill(cx - xLen, cy + y, cx - xLen + 1, cy + y + 1, borderColor);
-                    context.fill(cx + xLen, cy + y, cx + xLen + 1, cy + y + 1, borderColor);
+        int r = Math.clamp(radius, 0, Math.min(w, h) / 2);
+        int t = drawBorder ? Math.clamp(thickness, 1, Math.max(1, Math.min(w, h) / 2)) : 0;
+        int innerW = w - t * 2;
+        int innerH = h - t * 2;
+        int innerR = Math.max(0, r - t);
+        for (int row = 0; row < h; row++) {
+            int outerInset = roundedInset(row, h, r);
+            int left = x + outerInset;
+            int right = x + w - outerInset;
+            int innerRow = row - t;
+            boolean hasInner = innerW > 0 && innerH > 0 && innerRow >= 0 && innerRow < innerH;
+            int innerLeft = left;
+            int innerRight = left;
+            if (hasInner) {
+                int innerInset = roundedInset(innerRow, innerH, innerR);
+                innerLeft = x + t + innerInset;
+                innerRight = x + t + innerW - innerInset;
+            }
+            int yy = y + row;
+            if (filled && hasInner && innerRight > innerLeft) {
+                context.fill(innerLeft, yy, innerRight, yy + 1, fillColor);
+            } else if (filled && !drawBorder && right > left) {
+                context.fill(left, yy, right, yy + 1, fillColor);
+            }
+            if (drawBorder) {
+                if (!hasInner || innerRight <= innerLeft) {
+                    if (right > left) {
+                        context.fill(left, yy, right, yy + 1, borderColor);
+                    }
+                } else {
+                    context.fill(left, yy, innerLeft, yy + 1, borderColor);
+                    context.fill(innerRight, yy, right, yy + 1, borderColor);
                 }
             }
         }
     }
 
-    private static void drawLineShape(DrawContext context, int x, int y, int w, int h, int color, int thickness, boolean visible) {
+    /** Horizontal inset of a rounded rectangle's edge at {@code row}. */
+    private static int roundedInset(int row, int height, int radius) {
+        if (radius <= 0) {
+            return 0;
+        }
+        int fromEdge = Math.min(row, height - 1 - row);
+        if (fromEdge >= radius) {
+            return 0;
+        }
+        double dy = radius - fromEdge - 0.5;
+        return (int) Math.round(radius - Math.sqrt(Math.max(0.0, radius * (double) radius - dy * dy)));
+    }
+
+    private static void drawLineShape(GuiGraphicsExtractor context, int x, int y, int w, int h, int color, int thickness, boolean visible) {
         if (!visible) {
             return;
         }
@@ -1463,7 +1471,7 @@ public final class MacroHudRuntime {
         }
     }
 
-    private static void drawCrossShape(DrawContext context, int x, int y, int w, int h, int color, int thickness, boolean visible) {
+    private static void drawCrossShape(GuiGraphicsExtractor context, int x, int y, int w, int h, int color, int thickness, boolean visible) {
         if (!visible) {
             return;
         }
@@ -1476,7 +1484,7 @@ public final class MacroHudRuntime {
         context.fill(cx - 1, cy - 1, cx + 2, cy + 2, color);
     }
 
-    private static void drawTriangleShape(DrawContext context, int x, int y, int w, int h,
+    private static void drawTriangleShape(GuiGraphicsExtractor context, int x, int y, int w, int h,
                                           int fillColor, int borderColor, boolean filled,
                                           boolean drawBorder, int thickness) {
         int apexX = x + w / 2;
@@ -1505,7 +1513,7 @@ public final class MacroHudRuntime {
         }
     }
 
-    private static void drawDiamondShape(DrawContext context, int x, int y, int w, int h,
+    private static void drawDiamondShape(GuiGraphicsExtractor context, int x, int y, int w, int h,
                                          int fillColor, int borderColor, boolean filled,
                                          boolean drawBorder, int thickness) {
         int cx = x + w / 2;
@@ -1533,7 +1541,7 @@ public final class MacroHudRuntime {
         }
     }
 
-    private static void fillCircleQuadrants(DrawContext context, int cx, int cy, int radius, int color, boolean filled, int thickness) {
+    private static void fillCircleQuadrants(GuiGraphicsExtractor context, int cx, int cy, int radius, int color, boolean filled, int thickness) {
         if (radius <= 0) {
             return;
         }
@@ -1563,7 +1571,7 @@ public final class MacroHudRuntime {
     }
 
     private static String expanded(String raw) {
-        MinecraftClient client = MinecraftClient.getInstance();
+        Minecraft client = Minecraft.getInstance();
         try {
             String out = MacroPlaceholders.expand(client, raw);
             return out == null ? "" : out;
@@ -1574,7 +1582,7 @@ public final class MacroHudRuntime {
 
     private static String safeKeyName(int keyCode) {
         try {
-            return InputUtil.Type.KEYSYM.createFromCode(keyCode).getLocalizedText().getString();
+            return InputConstants.Type.KEYBOARD.getOrCreate(keyCode).getDisplayName().getString();
         } catch (Exception ignored) {
             return "Key " + keyCode;
         }
@@ -1606,34 +1614,34 @@ public final class MacroHudRuntime {
     private static int styledLineWidth(String rawLine) {
         int width = 0;
         for (TextRun run : parseColorRuns(rawLine, 0xFFFFFFFF)) {
-            width += MinecraftClient.getInstance().textRenderer.getWidth(run.text());
+            width += Minecraft.getInstance().font.width(run.text());
         }
         return width;
     }
 
-    private static void drawStyledTextLine(DrawContext context, String rawLine, int x, int y, int defaultColor, float scale) {
+    private static void drawStyledTextLine(GuiGraphicsExtractor context, String rawLine, int x, int y, int defaultColor, float scale) {
         List<TextRun> runs = parseColorRuns(rawLine, defaultColor);
         if (runs.isEmpty()) {
             return;
         }
 
-        context.getMatrices().pushMatrix();
-        context.getMatrices().scale(scale, scale);
+        context.pose().pushMatrix();
+        context.pose().scale(scale, scale);
 
         int logicalX = Math.round(x / scale);
         int logicalY = Math.round(y / scale);
         int cursor = logicalX;
 
-        var tr = MinecraftClient.getInstance().textRenderer;
+        var tr = Minecraft.getInstance().font;
         for (TextRun run : runs) {
             if (run.text().isEmpty()) {
                 continue;
             }
-            context.drawTextWithShadow(tr, run.text(), cursor, logicalY, run.color());
-            cursor += tr.getWidth(run.text());
+            context.text(tr, run.text(), cursor, logicalY, run.color());
+            cursor += tr.width(run.text());
         }
 
-        context.getMatrices().popMatrix();
+        context.pose().popMatrix();
     }
 
     private record TextRun(String text, int color) {

@@ -1,26 +1,26 @@
 package me.m0dii.modules.macros;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import me.m0dii.utils.CpsTracker;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.screen.ingame.HandledScreen;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.EquipmentSlot;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.entity.player.PlayerInventory;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemStack;
-import net.minecraft.registry.RegistryKey;
-import net.minecraft.registry.entry.RegistryEntry;
-import net.minecraft.screen.slot.Slot;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.hit.BlockHitResult;
-import net.minecraft.util.hit.EntityHitResult;
-import net.minecraft.util.hit.HitResult;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.MathHelper;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.biome.Biome;
-import org.lwjgl.glfw.GLFW;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Holder;
+import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.util.Mth;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.inventory.Slot;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.biome.Biome;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.EntityHitResult;
+import net.minecraft.world.phys.HitResult;
+import net.minecraft.world.phys.Vec3;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -58,22 +58,22 @@ public final class MacroPlaceholders {
         return List.copyOf(PROVIDERS.values());
     }
 
-    public static String expand(MinecraftClient client, String input) {
+    public static String expand(Minecraft client, String input) {
         return expandInternal(client, input, false);
     }
 
-    public static String expandForCanvas(MinecraftClient client, String input) {
+    public static String expandForCanvas(Minecraft client, String input) {
         return expandInternal(client, input, true);
     }
 
-    private static String expandInternal(MinecraftClient client, String input, boolean canvasMode) {
+    private static String expandInternal(Minecraft client, String input, boolean canvasMode) {
         if (input == null || input.isEmpty() || client == null || client.player == null) {
             return input;
         }
 
-        PlayerEntity p = client.player;
-        var world = client.world;
-        HitResult hit = client.crosshairTarget;
+        Player p = client.player;
+        var world = client.level;
+        HitResult hit = client.hitResult;
         BlockPos lookBlock = null;
         Entity lookEntity = null;
         if (hit instanceof BlockHitResult bhr) {
@@ -86,7 +86,7 @@ public final class MacroPlaceholders {
         StringBuilder sb = new StringBuilder();
         while (m.find()) {
             String token = m.group(1).trim();
-            String replacement = resolveToken(token, client, p, world != null ? world.getRegistryKey().getValue() : null, lookBlock, lookEntity, canvasMode);
+            String replacement = resolveToken(token, client, p, world != null ? world.dimension().identifier() : null, lookBlock, lookEntity, canvasMode);
             if (replacement == null) {
                 replacement = "";
             }
@@ -98,7 +98,7 @@ public final class MacroPlaceholders {
         return sb.toString();
     }
 
-    private static String resolveToken(String token, MinecraftClient client, PlayerEntity p, Identifier dimId, BlockPos lookBlock, Entity lookEntity, boolean canvasMode) {
+    private static String resolveToken(String token, Minecraft client, Player p, Identifier dimId, BlockPos lookBlock, Entity lookEntity, boolean canvasMode) {
         String transformed = tryResolveTransformedToken(token, client, p, dimId, lookBlock, lookEntity, canvasMode);
         if (transformed != null) {
             return transformed;
@@ -107,7 +107,7 @@ public final class MacroPlaceholders {
         return resolveTokenCore(token, client, p, dimId, lookBlock, lookEntity, canvasMode);
     }
 
-    private static String resolveTokenCore(String token, MinecraftClient client, PlayerEntity p, Identifier dimId, BlockPos lookBlock, Entity lookEntity, boolean canvasMode) {
+    private static String resolveTokenCore(String token, Minecraft client, Player p, Identifier dimId, BlockPos lookBlock, Entity lookEntity, boolean canvasMode) {
         String exact = REGISTRY.resolveExact(new PlaceholderRegistry.Context(client, p, dimId, lookBlock, lookEntity, canvasMode, token));
         if (exact != null) {
             return exact;
@@ -177,7 +177,7 @@ public final class MacroPlaceholders {
         return null;
     }
 
-    private static String resolveItemCountToken(String token, MinecraftClient client, PlayerEntity player) {
+    private static String resolveItemCountToken(String token, Minecraft client, Player player) {
         final String inventoryPrefix = "inventory.count:";
         final String containerPrefix = "container.count:";
 
@@ -194,17 +194,17 @@ public final class MacroPlaceholders {
             if (item == null) {
                 return "0";
             }
-            if (!(client.currentScreen instanceof HandledScreen<?> handledScreen)) {
+            if (!(client.gui.screen() instanceof AbstractContainerScreen<?> handledScreen)) {
                 return "0";
             }
             int total = 0;
-            PlayerInventory playerInventory = player.getInventory();
-            for (Slot slot : handledScreen.getScreenHandler().slots) {
-                if (slot == null || !slot.hasStack() || slot.inventory == playerInventory) {
+            Inventory playerInventory = player.getInventory();
+            for (Slot slot : handledScreen.getMenu().slots) {
+                if (slot == null || !slot.hasItem() || slot.container == playerInventory) {
                     continue;
                 }
-                ItemStack stack = slot.getStack();
-                if (!stack.isEmpty() && stack.isOf(item)) {
+                ItemStack stack = slot.getItem();
+                if (!stack.isEmpty() && stack.is(item)) {
                     total += stack.getCount();
                 }
             }
@@ -214,11 +214,11 @@ public final class MacroPlaceholders {
         return null;
     }
 
-    private static int countItemInInventory(PlayerInventory inventory, Item item) {
+    private static int countItemInInventory(Inventory inventory, Item item) {
         int total = 0;
-        for (int i = 0; i < inventory.size(); i++) {
-            ItemStack stack = inventory.getStack(i);
-            if (!stack.isEmpty() && stack.isOf(item)) {
+        for (int i = 0; i < inventory.getContainerSize(); i++) {
+            ItemStack stack = inventory.getItem(i);
+            if (!stack.isEmpty() && stack.is(item)) {
                 total += stack.getCount();
             }
         }
@@ -234,13 +234,13 @@ public final class MacroPlaceholders {
         Identifier id = trimmed.indexOf(':') >= 0
                 ? Identifier.tryParse(trimmed)
                 : Identifier.tryParse("minecraft:" + trimmed);
-        if (id == null || !net.minecraft.registry.Registries.ITEM.containsId(id)) {
+        if (id == null || !net.minecraft.core.registries.BuiltInRegistries.ITEM.containsKey(id)) {
             return null;
         }
-        return net.minecraft.registry.Registries.ITEM.get(id);
+        return net.minecraft.core.registries.BuiltInRegistries.ITEM.getValue(id);
     }
 
-    private static String resolveArmorToken(String token, PlayerEntity player) {
+    private static String resolveArmorToken(String token, Player player) {
         if (!token.startsWith("armor.")) {
             return null;
         }
@@ -251,10 +251,10 @@ public final class MacroPlaceholders {
         }
 
         ItemStack stack = switch (parts[1]) {
-            case "boots" -> player.getEquippedStack(EquipmentSlot.FEET);
-            case "leggings" -> player.getEquippedStack(EquipmentSlot.LEGS);
-            case "chestplate" -> player.getEquippedStack(EquipmentSlot.CHEST);
-            case "helmet" -> player.getEquippedStack(EquipmentSlot.HEAD);
+            case "boots" -> player.getItemBySlot(EquipmentSlot.FEET);
+            case "leggings" -> player.getItemBySlot(EquipmentSlot.LEGS);
+            case "chestplate" -> player.getItemBySlot(EquipmentSlot.CHEST);
+            case "helmet" -> player.getItemBySlot(EquipmentSlot.HEAD);
             default -> null;
         };
         if (stack == null) {
@@ -262,10 +262,10 @@ public final class MacroPlaceholders {
         }
 
         return switch (parts[2]) {
-            case "item" -> stack.getName().getString();
+            case "item" -> stack.getHoverName().getString();
             case "id" -> stack.getItem().toString();
             case "count" -> Integer.toString(stack.getCount());
-            case "damage" -> Integer.toString(stack.getDamage());
+            case "damage" -> Integer.toString(stack.getDamageValue());
             case "max_damage" -> Integer.toString(stack.getMaxDamage());
             case "durability" -> Integer.toString(durability(stack));
             default -> null;
@@ -273,8 +273,8 @@ public final class MacroPlaceholders {
     }
 
     private static String tryResolveTransformedToken(String token,
-                                                     MinecraftClient client,
-                                                     PlayerEntity p,
+                                                     Minecraft client,
+                                                     Player p,
                                                      Identifier dimId,
                                                      BlockPos lookBlock,
                                                      Entity lookEntity,
@@ -360,7 +360,7 @@ public final class MacroPlaceholders {
         return idx >= 0 ? value.substring(idx + 1) : value;
     }
 
-    private static String resolveKeyStateToken(String token, MinecraftClient client) {
+    private static String resolveKeyStateToken(String token, Minecraft client) {
         if (token == null || client == null || client.getWindow() == null) {
             return null;
         }
@@ -378,8 +378,13 @@ public final class MacroPlaceholders {
             return "false";
         }
 
-        long window = client.getWindow().getHandle();
-        boolean down = GLFW.glfwGetKey(window, keyCode) == GLFW.GLFW_PRESS;
+        boolean down = switch (keyName.toLowerCase(Locale.ROOT)) {
+            // Mouse aliases resolve to button ids, which are not keyboard scancodes.
+            case "lmb", "mouse1" -> client.mouseHandler.isLeftPressed();
+            case "rmb", "mouse2" -> client.mouseHandler.isRightPressed();
+            case "mmb", "mouse3" -> client.mouseHandler.isMiddlePressed();
+            default -> InputConstants.isKeyDown(keyCode);
+        };
 
         if (held) {
             return Boolean.toString(down);
@@ -396,35 +401,43 @@ public final class MacroPlaceholders {
         }
         String key = rawName.trim().toLowerCase(Locale.ROOT);
         return switch (key) {
-            case "space" -> GLFW.GLFW_KEY_SPACE;
-            case "tab" -> GLFW.GLFW_KEY_TAB;
-            case "enter", "return" -> GLFW.GLFW_KEY_ENTER;
-            case "esc", "escape" -> GLFW.GLFW_KEY_ESCAPE;
-            case "shift" -> GLFW.GLFW_KEY_LEFT_SHIFT;
-            case "ctrl", "control" -> GLFW.GLFW_KEY_LEFT_CONTROL;
-            case "alt" -> GLFW.GLFW_KEY_LEFT_ALT;
-            case "up" -> GLFW.GLFW_KEY_UP;
-            case "down" -> GLFW.GLFW_KEY_DOWN;
-            case "left" -> GLFW.GLFW_KEY_LEFT;
-            case "right" -> GLFW.GLFW_KEY_RIGHT;
-            case "lmb", "mouse1" -> GLFW.GLFW_MOUSE_BUTTON_LEFT;
-            case "rmb", "mouse2" -> GLFW.GLFW_MOUSE_BUTTON_RIGHT;
-            case "mmb", "mouse3" -> GLFW.GLFW_MOUSE_BUTTON_MIDDLE;
+            case "space" -> InputConstants.KEY_SPACE;
+            case "tab" -> InputConstants.KEY_TAB;
+            case "enter", "return" -> InputConstants.KEY_RETURN;
+            case "esc", "escape" -> InputConstants.KEY_ESCAPE;
+            case "shift" -> InputConstants.KEY_LSHIFT;
+            case "ctrl", "control" -> InputConstants.KEY_LCONTROL;
+            case "alt" -> InputConstants.KEY_LALT;
+            case "up" -> InputConstants.KEY_UP;
+            case "down" -> InputConstants.KEY_DOWN;
+            case "left" -> InputConstants.KEY_LEFT;
+            case "right" -> InputConstants.KEY_RIGHT;
+            case "lmb", "mouse1" -> InputConstants.MOUSE_BUTTON_LEFT;
+            case "rmb", "mouse2" -> InputConstants.MOUSE_BUTTON_RIGHT;
+            case "mmb", "mouse3" -> InputConstants.MOUSE_BUTTON_MIDDLE;
             default -> {
                 if (key.length() == 1) {
                     char c = key.charAt(0);
                     if (c >= 'a' && c <= 'z') {
-                        yield GLFW.GLFW_KEY_A + (c - 'a');
+                        yield InputConstants.KEY_A + (c - 'a');
                     }
-                    if (c >= '0' && c <= '9') {
-                        yield GLFW.GLFW_KEY_0 + (c - '0');
+                    // Scancode order is 1..9 then 0.
+                    if (c == '0') {
+                        yield InputConstants.KEY_0;
+                    }
+                    if (c >= '1' && c <= '9') {
+                        yield InputConstants.KEY_1 + (c - '1');
                     }
                 }
                 if (key.startsWith("f")) {
                     try {
                         int fn = Integer.parseInt(key.substring(1));
-                        if (fn >= 1 && fn <= 25) {
-                            yield GLFW.GLFW_KEY_F1 + (fn - 1);
+                        // F1-F12 and F13-F24 are two separate scancode runs.
+                        if (fn >= 1 && fn <= 12) {
+                            yield InputConstants.KEY_F1 + (fn - 1);
+                        }
+                        if (fn >= 13 && fn <= 24) {
+                            yield InputConstants.KEY_F13 + (fn - 13);
                         }
                     } catch (Exception ignored) {
                         // no-op
@@ -435,59 +448,12 @@ public final class MacroPlaceholders {
         };
     }
 
-    private static Integer resolveCurrentFps(MinecraftClient client) {
+    private static Integer resolveCurrentFps(Minecraft client) {
         try {
-            Method m = MinecraftClient.class.getDeclaredMethod("getCurrentFps");
-            m.setAccessible(true);
-            Object value = m.invoke(null);
-            if (value instanceof Integer i) {
-                return i;
-            }
+            return client.getFps();
         } catch (Exception ignored) {
-            // Try instance method fallback below.
+            return null;
         }
-
-        try {
-            Method m = client.getClass().getMethod("getCurrentFps");
-            Object value = m.invoke(client);
-            if (value instanceof Integer i) {
-                return i;
-            }
-        } catch (Exception ignored) {
-            // no-op
-        }
-
-        // Newer mappings can expose FPS only as a field.
-        Integer reflected = readIntField(MinecraftClient.class, null, "currentFps");
-        if (reflected != null) {
-            return reflected;
-        }
-        reflected = readIntField(client.getClass(), client, "currentFps");
-        if (reflected != null) {
-            return reflected;
-        }
-
-        reflected = readIntField(MinecraftClient.class, null, "fps");
-        if (reflected != null) {
-            return reflected;
-        }
-        reflected = readIntField(client.getClass(), client, "fps");
-
-        return reflected;
-    }
-
-    private static Integer readIntField(Class<?> owner, Object target, String fieldName) {
-        try {
-            Field f = owner.getDeclaredField(fieldName);
-            f.setAccessible(true);
-            Object value = f.get(target);
-            if (value instanceof Integer i) {
-                return i;
-            }
-        } catch (Exception ignored) {
-            // no-op
-        }
-        return null;
     }
 
     private static Object invokeNoArg(Object target, String methodName) {
@@ -519,15 +485,15 @@ public final class MacroPlaceholders {
         return null;
     }
 
-    private static String resolveEntityListToken(String token, PlayerEntity p) {
-        var world = p.getEntityWorld();
+    private static String resolveEntityListToken(String token, Player p) {
+        var world = p.level();
         if (world == null) {
             return null;
         }
 
         if ("entities.nearby.count".equals(token)) {
-            long count = world.getOtherEntities(p, p.getBoundingBox().expand(64)).stream()
-                    .filter(entity -> !(entity instanceof PlayerEntity))
+            long count = world.getEntities(p, p.getBoundingBox().inflate(64)).stream()
+                    .filter(entity -> !(entity instanceof Player))
                     .count();
             return Long.toString(count);
         }
@@ -602,28 +568,28 @@ public final class MacroPlaceholders {
         final boolean withDistanceFinal = withDistance;
         final boolean withDirectionFinal = withDirection;
         final boolean withDirectionArrowFinal = withDirectionArrow;
-        var nearbyEntities = world.getOtherEntities(p, p.getBoundingBox().expand(radius)).stream()
-                .filter(entity -> !(entity instanceof PlayerEntity));
+        var nearbyEntities = world.getEntities(p, p.getBoundingBox().inflate(radius)).stream()
+                .filter(entity -> !(entity instanceof Player));
 
         if (sortByName) {
-            nearbyEntities = nearbyEntities.sorted((a, b) -> a.getType().getName().getString().compareToIgnoreCase(b.getType().getName().getString()));
+            nearbyEntities = nearbyEntities.sorted((a, b) -> a.getType().getDescription().getString().compareToIgnoreCase(b.getType().getDescription().getString()));
         } else {
-            nearbyEntities = nearbyEntities.sorted(Comparator.comparingDouble(a -> a.squaredDistanceTo(p)));
+            nearbyEntities = nearbyEntities.sorted(Comparator.comparingDouble(a -> a.distanceToSqr(p)));
         }
 
         List<String> names = nearbyEntities
                 .map(entity -> {
-                    String name = entity.getType().getName().getString();
+                    String name = entity.getType().getDescription().getString();
                     if (!withDistanceFinal && !withDirectionFinal) {
                         return name;
                     }
                     List<String> extras = new ArrayList<>();
                     if (withDistanceFinal) {
-                        int meters = (int) Math.round(Math.sqrt(entity.squaredDistanceTo(p)));
+                        int meters = (int) Math.round(Math.sqrt(entity.distanceToSqr(p)));
                         extras.add(meters + "m");
                     }
                     if (withDirectionFinal) {
-                        extras.add(directionFromToShort(p.getX(), p.getZ(), entity.getX(), entity.getZ(), p.getYaw(), withDirectionArrowFinal));
+                        extras.add(directionFromToShort(p.getX(), p.getZ(), entity.getX(), entity.getZ(), p.getYRot(), withDirectionArrowFinal));
                     }
                     return name + " (" + String.join(" ", extras) + ")";
                 })
@@ -640,45 +606,45 @@ public final class MacroPlaceholders {
         return names.isEmpty() ? "(none)" : String.join(newline ? "\n" : ", ", names);
     }
 
-    private static String resolvePlayerListToken(String token, PlayerEntity p) {
-        var world = p.getEntityWorld();
+    private static String resolvePlayerListToken(String token, Player p) {
+        var world = p.level();
         if (world == null) {
             return null;
         }
 
         if ("players.count".equals(token)) {
-            return Integer.toString(world.getPlayers().size());
+            return Integer.toString(world.players().size());
         }
 
         if ("players.count.other".equals(token)) {
-            long others = world.getPlayers().stream()
-                    .filter(other -> !other.getUuid().equals(p.getUuid()))
+            long others = world.players().stream()
+                    .filter(other -> !other.getUUID().equals(p.getUUID()))
                     .count();
             return Long.toString(others);
         }
 
         if ("players.list".equals(token) || "players.list.csv".equals(token)) {
-            return world.getPlayers().stream()
+            return world.players().stream()
                     .map(other -> other.getGameProfile().name())
                     .collect(Collectors.joining(", "));
         }
 
         if ("players.list.other".equals(token) || "players.list.other.csv".equals(token)) {
-            return world.getPlayers().stream()
-                    .filter(other -> !other.getUuid().equals(p.getUuid()))
+            return world.players().stream()
+                    .filter(other -> !other.getUUID().equals(p.getUUID()))
                     .map(other -> other.getGameProfile().name())
                     .collect(Collectors.joining(", "));
         }
 
         if ("players.list.nl".equals(token)) {
-            return world.getPlayers().stream()
+            return world.players().stream()
                     .map(other -> other.getGameProfile().name())
                     .collect(Collectors.joining("\n"));
         }
 
         if ("players.list.other.nl".equals(token)) {
-            return world.getPlayers().stream()
-                    .filter(other -> !other.getUuid().equals(p.getUuid()))
+            return world.players().stream()
+                    .filter(other -> !other.getUUID().equals(p.getUUID()))
                     .map(other -> other.getGameProfile().name())
                     .collect(Collectors.joining("\n"));
         }
@@ -752,14 +718,14 @@ public final class MacroPlaceholders {
             }
 
             final int maxRadiusSq = radius == Integer.MAX_VALUE ? Integer.MAX_VALUE : radius * radius;
-            var nearbyPlayers = world.getPlayers().stream()
-                    .filter(other -> !other.getUuid().equals(p.getUuid()))
-                    .filter(other -> p.squaredDistanceTo(other) <= maxRadiusSq);
+            var nearbyPlayers = world.players().stream()
+                    .filter(other -> !other.getUUID().equals(p.getUUID()))
+                    .filter(other -> p.distanceToSqr(other) <= maxRadiusSq);
 
             if (sortByName) {
                 nearbyPlayers = nearbyPlayers.sorted((a, b) -> a.getGameProfile().name().compareToIgnoreCase(b.getGameProfile().name()));
             } else {
-                nearbyPlayers = nearbyPlayers.sorted(Comparator.comparingDouble((PlayerEntity a) -> a.squaredDistanceTo(p)));
+                nearbyPlayers = nearbyPlayers.sorted(Comparator.comparingDouble((Player a) -> a.distanceToSqr(p)));
             }
 
             final boolean withDistanceFinal = withDistance;
@@ -774,11 +740,11 @@ public final class MacroPlaceholders {
                         }
                         List<String> extras = new ArrayList<>();
                         if (withDistanceFinal) {
-                            int meters = (int) Math.round(Math.sqrt(other.squaredDistanceTo(p)));
+                            int meters = (int) Math.round(Math.sqrt(other.distanceToSqr(p)));
                             extras.add(meters + "m");
                         }
                         if (withDirectionFinal) {
-                            extras.add(directionFromToShort(p.getX(), p.getZ(), other.getX(), other.getZ(), p.getYaw(), withDirectionArrowFinal));
+                            extras.add(directionFromToShort(p.getX(), p.getZ(), other.getX(), other.getZ(), p.getYRot(), withDirectionArrowFinal));
                         }
                         return name + " (" + String.join(" ", extras) + ")";
                     })
@@ -796,8 +762,8 @@ public final class MacroPlaceholders {
         }
 
         if ("players.nearby.count".equals(token)) {
-            long count = world.getPlayers().stream()
-                    .filter(other -> !other.getUuid().equals(p.getUuid()))
+            long count = world.players().stream()
+                    .filter(other -> !other.getUUID().equals(p.getUUID()))
                     .count();
             return Long.toString(count);
         }
@@ -805,7 +771,7 @@ public final class MacroPlaceholders {
         return null;
     }
 
-    private static String resolveSelectorToken(String token, PlayerEntity p, boolean canvasMode) {
+    private static String resolveSelectorToken(String token, Player p, boolean canvasMode) {
         if (!canvasMode) {
             return switch (token) {
                 case "sel.self" -> "@s";
@@ -817,21 +783,21 @@ public final class MacroPlaceholders {
             };
         }
 
-        var world = p.getEntityWorld();
+        var world = p.level();
         if (world == null) {
             return "";
         }
 
         return switch (token) {
             case "sel.self" -> p.getGameProfile().name();
-            case "sel.nearest" -> world.getPlayers().stream()
-                    .filter(other -> !other.getUuid().equals(p.getUuid()))
-                    .min(Comparator.comparingDouble((PlayerEntity a) -> a.squaredDistanceTo(p)))
+            case "sel.nearest" -> world.players().stream()
+                    .filter(other -> !other.getUUID().equals(p.getUUID()))
+                    .min(Comparator.comparingDouble((Player a) -> a.distanceToSqr(p)))
                     .map(player -> player.getGameProfile().name())
                     .orElse("(none)");
             case "sel.random" -> {
-                var others = world.getPlayers().stream()
-                        .filter(other -> !other.getUuid().equals(p.getUuid()))
+                var others = world.players().stream()
+                        .filter(other -> !other.getUUID().equals(p.getUUID()))
                         .toList();
                 if (others.isEmpty()) {
                     yield "(none)";
@@ -839,13 +805,13 @@ public final class MacroPlaceholders {
                 yield others.get(RAND.nextInt(others.size())).getGameProfile().name();
             }
             case "sel.all" -> {
-                var names = world.getPlayers().stream()
-                        .filter(other -> !other.getUuid().equals(p.getUuid()))
+                var names = world.players().stream()
+                        .filter(other -> !other.getUUID().equals(p.getUUID()))
                         .map(other -> other.getGameProfile().name())
                         .toList();
                 yield names.isEmpty() ? "(none)" : String.join(", ", names);
             }
-            case "sel.entities" -> world.getOtherEntities(p, p.getBoundingBox().expand(64)).stream()
+            case "sel.entities" -> world.getEntities(p, p.getBoundingBox().inflate(64)).stream()
                     .findFirst()
                     .map(entity -> entity.getName().getString())
                     .orElse("(none)");
@@ -978,28 +944,28 @@ public final class MacroPlaceholders {
 
         registry.register("hp", ctx -> Integer.toString((int) Math.floor(ctx.player().getHealth())));
         registry.register("max_hp", ctx -> Integer.toString((int) Math.floor(ctx.player().getMaxHealth())));
-        registry.register("food", ctx -> Integer.toString(ctx.player().getHungerManager().getFoodLevel()));
+        registry.register("food", ctx -> Integer.toString(ctx.player().getFoodData().getFoodLevel()));
         registry.register("xp", ctx -> Integer.toString(ctx.player().totalExperience));
         registry.register("level", ctx -> Integer.toString(ctx.player().experienceLevel));
-        registry.register("saturation", ctx -> Integer.toString((int) ctx.player().getHungerManager().getSaturationLevel()));
-        registry.register("yaw", ctx -> String.format(Locale.ROOT, "%.1f", MathHelper.wrapDegrees(ctx.player().getYaw())));
-        registry.register("pitch", ctx -> String.format(Locale.ROOT, "%.1f", ctx.player().getPitch()));
+        registry.register("saturation", ctx -> Integer.toString((int) ctx.player().getFoodData().getSaturationLevel()));
+        registry.register("yaw", ctx -> String.format(Locale.ROOT, "%.1f", Mth.wrapDegrees(ctx.player().getYRot())));
+        registry.register("pitch", ctx -> String.format(Locale.ROOT, "%.1f", ctx.player().getXRot()));
         registry.register("player.gamemode", ctx -> resolvePlayerGameMode(ctx.player()));
-        registry.register("player.sneaking", ctx -> Boolean.toString(ctx.player().isSneaking()));
+        registry.register("player.sneaking", ctx -> Boolean.toString(ctx.player().isShiftKeyDown()));
         registry.register("player.sprinting", ctx -> Boolean.toString(ctx.player().isSprinting()));
-        registry.register("player.on_ground", ctx -> Boolean.toString(ctx.player().isOnGround()));
+        registry.register("player.on_ground", ctx -> Boolean.toString(ctx.player().onGround()));
         registry.register("player.swimming", ctx -> Boolean.toString(ctx.player().isSwimming()));
-        registry.register("player.chunk.x", ctx -> Integer.toString(ctx.player().getChunkPos().x));
-        registry.register("player.chunk.z", ctx -> Integer.toString(ctx.player().getChunkPos().z));
-        registry.register("player.chunk", ctx -> ctx.player().getChunkPos().x + " " + ctx.player().getChunkPos().z);
+        registry.register("player.chunk.x", ctx -> Integer.toString(ctx.player().chunkPosition().x()));
+        registry.register("player.chunk.z", ctx -> Integer.toString(ctx.player().chunkPosition().z()));
+        registry.register("player.chunk", ctx -> ctx.player().chunkPosition().x() + " " + ctx.player().chunkPosition().z());
 
         registry.register("player.name", ctx -> ctx.player().getGameProfile().name());
-        registry.register("player.uuid", ctx -> ctx.player().getUuidAsString());
-        registerAliases(registry, ctx -> formatDouble(ctx.player().getVelocity().x), "player.vel.x", "vel.x");
-        registerAliases(registry, ctx -> formatDouble(ctx.player().getVelocity().y), "player.vel.y", "vel.y");
-        registerAliases(registry, ctx -> formatDouble(ctx.player().getVelocity().z), "player.vel.z", "vel.z");
+        registry.register("player.uuid", ctx -> ctx.player().getStringUUID());
+        registerAliases(registry, ctx -> formatDouble(ctx.player().getDeltaMovement().x), "player.vel.x", "vel.x");
+        registerAliases(registry, ctx -> formatDouble(ctx.player().getDeltaMovement().y), "player.vel.y", "vel.y");
+        registerAliases(registry, ctx -> formatDouble(ctx.player().getDeltaMovement().z), "player.vel.z", "vel.z");
         registerAliases(registry, ctx -> {
-            Vec3d velocity = ctx.player().getVelocity();
+            Vec3 velocity = ctx.player().getDeltaMovement();
             return formatDouble(Math.sqrt(velocity.x * velocity.x + velocity.z * velocity.z) * 20.0);
         }, "player.speed", "speed");
 
@@ -1013,12 +979,12 @@ public final class MacroPlaceholders {
         registry.register("pos.biome", ctx -> resolveCurrentBiomeId(ctx.player()));
         registry.register("pos.biome.pretty", ctx -> toTitleCase(resolveCurrentBiomeId(ctx.player())));
         registry.register("pos.dim", ctx -> resolveCurrentDimensionId(ctx.player()));
-        registry.register("pos.light", ctx -> ctx.player().getEntityWorld() == null ? "0" : Integer.toString(ctx.player().getEntityWorld().getLightLevel(ctx.player().getBlockPos())));
-        registry.register("pos.facing", ctx -> ctx.player().getHorizontalFacing().asString());
-        registerAliases(registry, ctx -> yawToCompass(ctx.player().getYaw(), true), "pos.facing.short", "dir.compass.short");
-        registerAliases(registry, ctx -> yawToCompass(ctx.player().getYaw(), false), "dir.compass", "dir.facing");
-        registerAliases(registry, ctx -> yawToCompassWithArrow(ctx.player().getYaw(), true), "dir.compass.short_arrow", "dir.compass.short.arrow");
-        registerAliases(registry, ctx -> yawToCompassWithArrow(ctx.player().getYaw(), false), "dir.compass.arrow", "dir.facing.arrow");
+        registry.register("pos.light", ctx -> ctx.player().level() == null ? "0" : Integer.toString(ctx.player().level().getMaxLocalRawBrightness(ctx.player().blockPosition())));
+        registry.register("pos.facing", ctx -> ctx.player().getDirection().getSerializedName());
+        registerAliases(registry, ctx -> yawToCompass(ctx.player().getYRot(), true), "pos.facing.short", "dir.compass.short");
+        registerAliases(registry, ctx -> yawToCompass(ctx.player().getYRot(), false), "dir.compass", "dir.facing");
+        registerAliases(registry, ctx -> yawToCompassWithArrow(ctx.player().getYRot(), true), "dir.compass.short_arrow", "dir.compass.short.arrow");
+        registerAliases(registry, ctx -> yawToCompassWithArrow(ctx.player().getYRot(), false), "dir.compass.arrow", "dir.facing.arrow");
 
         registry.register("look.block.x", ctx -> ctx.lookBlock() == null ? null : Integer.toString(ctx.lookBlock().getX()));
         registry.register("look.block.y", ctx -> ctx.lookBlock() == null ? null : Integer.toString(ctx.lookBlock().getY()));
@@ -1028,59 +994,59 @@ public final class MacroPlaceholders {
             if (ctx.lookBlock() == null) {
                 return null;
             }
-            if (ctx.player().getEntityWorld() == null) {
+            if (ctx.player().level() == null) {
                 return "";
             }
-            return ctx.player().getEntityWorld().getBlockState(ctx.lookBlock()).getBlock().toString();
+            return ctx.player().level().getBlockState(ctx.lookBlock()).getBlock().toString();
         });
         registry.register("look.block.light", ctx -> {
             if (ctx.lookBlock() == null) {
                 return null;
             }
-            if (ctx.player().getEntityWorld() == null) {
+            if (ctx.player().level() == null) {
                 return "0";
             }
-            return Integer.toString(ctx.player().getEntityWorld().getLightLevel(ctx.lookBlock()));
+            return Integer.toString(ctx.player().level().getMaxLocalRawBrightness(ctx.lookBlock()));
         });
 
         registry.register("look.entity.name", ctx -> ctx.lookEntity() == null ? null : ctx.lookEntity().getName().getString());
-        registry.register("look.entity.uuid", ctx -> ctx.lookEntity() == null ? null : ctx.lookEntity().getUuidAsString());
+        registry.register("look.entity.uuid", ctx -> ctx.lookEntity() == null ? null : ctx.lookEntity().getStringUUID());
         registry.register("look.entity.id", ctx -> ctx.lookEntity() == null ? null : Integer.toString(ctx.lookEntity().getId()));
         registry.register("look.entity.type", ctx -> ctx.lookEntity() == null ? null : ctx.lookEntity().getType().toString());
 
-        registry.register("look.dir.x", ctx -> formatDouble(ctx.player().getRotationVec(1.0f).normalize().x));
-        registry.register("look.dir.y", ctx -> formatDouble(ctx.player().getRotationVec(1.0f).normalize().y));
-        registry.register("look.dir.z", ctx -> formatDouble(ctx.player().getRotationVec(1.0f).normalize().z));
+        registry.register("look.dir.x", ctx -> formatDouble(ctx.player().getViewVector(1.0f).normalize().x));
+        registry.register("look.dir.y", ctx -> formatDouble(ctx.player().getViewVector(1.0f).normalize().y));
+        registry.register("look.dir.z", ctx -> formatDouble(ctx.player().getViewVector(1.0f).normalize().z));
 
-        registry.register("hand.item", ctx -> ctx.player().getMainHandStack().getName().getString());
-        registry.register("hand.id", ctx -> ctx.player().getMainHandStack().getItem().toString());
-        registry.register("hand.count", ctx -> Integer.toString(ctx.player().getMainHandStack().getCount()));
-        registry.register("hand.damage", ctx -> Integer.toString(ctx.player().getMainHandStack().getDamage()));
-        registry.register("hand.max_damage", ctx -> Integer.toString(ctx.player().getMainHandStack().getMaxDamage()));
-        registry.register("hand.durability", ctx -> Integer.toString(durability(ctx.player().getMainHandStack())));
+        registry.register("hand.item", ctx -> ctx.player().getMainHandItem().getHoverName().getString());
+        registry.register("hand.id", ctx -> ctx.player().getMainHandItem().getItem().toString());
+        registry.register("hand.count", ctx -> Integer.toString(ctx.player().getMainHandItem().getCount()));
+        registry.register("hand.damage", ctx -> Integer.toString(ctx.player().getMainHandItem().getDamageValue()));
+        registry.register("hand.max_damage", ctx -> Integer.toString(ctx.player().getMainHandItem().getMaxDamage()));
+        registry.register("hand.durability", ctx -> Integer.toString(durability(ctx.player().getMainHandItem())));
 
-        registry.register("offhand.item", ctx -> ctx.player().getOffHandStack().getName().getString());
-        registry.register("offhand.id", ctx -> ctx.player().getOffHandStack().getItem().toString());
-        registry.register("offhand.count", ctx -> Integer.toString(ctx.player().getOffHandStack().getCount()));
-        registry.register("offhand.damage", ctx -> Integer.toString(ctx.player().getOffHandStack().getDamage()));
-        registry.register("offhand.max_damage", ctx -> Integer.toString(ctx.player().getOffHandStack().getMaxDamage()));
-        registry.register("offhand.durability", ctx -> Integer.toString(durability(ctx.player().getOffHandStack())));
+        registry.register("offhand.item", ctx -> ctx.player().getOffhandItem().getHoverName().getString());
+        registry.register("offhand.id", ctx -> ctx.player().getOffhandItem().getItem().toString());
+        registry.register("offhand.count", ctx -> Integer.toString(ctx.player().getOffhandItem().getCount()));
+        registry.register("offhand.damage", ctx -> Integer.toString(ctx.player().getOffhandItem().getDamageValue()));
+        registry.register("offhand.max_damage", ctx -> Integer.toString(ctx.player().getOffhandItem().getMaxDamage()));
+        registry.register("offhand.durability", ctx -> Integer.toString(durability(ctx.player().getOffhandItem())));
 
-        registry.register("client.screen", ctx -> ctx.client().currentScreen == null ? "none" : ctx.client().currentScreen.getClass().getSimpleName());
-        registry.register("client.screen.width", ctx -> ctx.client().getWindow() == null ? "0" : Integer.toString(Math.max(0, ctx.client().getWindow().getScaledWidth())));
-        registry.register("client.screen.height", ctx -> ctx.client().getWindow() == null ? "0" : Integer.toString(Math.max(0, ctx.client().getWindow().getScaledHeight())));
+        registry.register("client.screen", ctx -> ctx.client().gui.screen() == null ? "none" : ctx.client().gui.screen().getClass().getSimpleName());
+        registry.register("client.screen.width", ctx -> ctx.client().getWindow() == null ? "0" : Integer.toString(Math.max(0, ctx.client().getWindow().getGuiScaledWidth())));
+        registry.register("client.screen.height", ctx -> ctx.client().getWindow() == null ? "0" : Integer.toString(Math.max(0, ctx.client().getWindow().getGuiScaledHeight())));
         registry.register("client.fps", ctx -> {
             Integer fps = resolveCurrentFps(ctx.client());
             return fps == null ? "0" : Integer.toString(Math.max(0, fps));
         });
         registry.register("client.server.singleplayer", ctx -> {
             try {
-                return Boolean.toString(ctx.client().isInSingleplayer());
+                return Boolean.toString(ctx.client().isLocalServer());
             } catch (Exception ignored) {
                 return "false";
             }
         });
-        registry.register("client.server.address", ctx -> readCurrentServerField(ctx.client(), "address"));
+        registry.register("client.server.address", ctx -> readCurrentServerField(ctx.client(), "ip"));
         registry.register("client.server.name", ctx -> readCurrentServerField(ctx.client(), "name"));
 
         registerAliases(registry, MacroPlaceholders::resolveWorldTimeTicks, "world.time", "world.time.ticks");
@@ -1104,16 +1070,16 @@ public final class MacroPlaceholders {
         if (max <= 0) {
             return 0;
         }
-        return max - stack.getDamage();
+        return max - stack.getDamageValue();
     }
 
-    private static String resolvePlayerGameMode(PlayerEntity player) {
+    private static String resolvePlayerGameMode(Player player) {
         try {
             if (player.isSpectator()) {
                 return "spectator";
             }
             var abilities = player.getAbilities();
-            if (abilities != null && abilities.creativeMode) {
+            if (abilities != null && abilities.instabuild) {
                 return "creative";
             }
         } catch (Exception ignored) {
@@ -1122,34 +1088,34 @@ public final class MacroPlaceholders {
         return "survival";
     }
 
-    private static String resolveCurrentBiomeId(PlayerEntity player) {
-        if (player.getEntityWorld() == null) {
+    private static String resolveCurrentBiomeId(Player player) {
+        if (player.level() == null) {
             return "";
         }
-        RegistryEntry<Biome> entry = player.getEntityWorld().getBiome(player.getBlockPos());
+        Holder<Biome> entry = player.level().getBiome(player.blockPosition());
         if (entry == null) {
             return "";
         }
-        RegistryKey<Biome> key = entry.getKey().orElse(null);
-        if (key == null || key.getValue() == null) {
+        ResourceKey<Biome> key = entry.unwrapKey().orElse(null);
+        if (key == null || key.identifier() == null) {
             return "";
         }
-        return key.getValue().toString();
+        return key.identifier().toString();
     }
 
-    private static String resolveCurrentDimensionId(PlayerEntity player) {
-        if (player.getEntityWorld() == null) {
+    private static String resolveCurrentDimensionId(Player player) {
+        if (player.level() == null) {
             return "";
         }
-        RegistryKey<?> key = player.getEntityWorld().getRegistryKey();
-        if (key == null || key.getValue() == null) {
+        ResourceKey<?> key = player.level().dimension();
+        if (key == null || key.identifier() == null) {
             return "";
         }
-        return key.getValue().toString();
+        return key.identifier().toString();
     }
 
-    private static String readCurrentServerField(MinecraftClient client, String fieldName) {
-        Object entry = invokeNoArg(client, "getCurrentServerEntry");
+    private static String readCurrentServerField(Minecraft client, String fieldName) {
+        Object entry = client.getCurrentServer();
         if (entry == null) {
             return "";
         }
@@ -1157,10 +1123,10 @@ public final class MacroPlaceholders {
     }
 
     private static long worldTimeOrZero(PlaceholderRegistry.Context ctx) {
-        if (ctx.player().getEntityWorld() == null) {
+        if (ctx.player().level() == null) {
             return 0L;
         }
-        return ctx.player().getEntityWorld().getTimeOfDay();
+        return ctx.player().level().getOverworldClockTime();
     }
 
     private static String resolveWorldTimeTicks(PlaceholderRegistry.Context ctx) {

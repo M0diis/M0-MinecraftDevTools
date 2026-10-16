@@ -2,20 +2,20 @@ package bettercommandblockui.main.ui;
 
 import lombok.Getter;
 import lombok.Setter;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gl.RenderPipelines;
-import net.minecraft.client.gui.Click;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.narration.NarrationMessageBuilder;
-import net.minecraft.client.gui.widget.ClickableWidget;
-import net.minecraft.client.input.CharInput;
-import net.minecraft.text.Text;
-import net.minecraft.util.Identifier;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.AbstractWidget;
+import net.minecraft.client.gui.narration.NarrationElementOutput;
+import net.minecraft.client.input.CharacterEvent;
+import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
 
 import static bettercommandblockui.main.BetterCommandBlockUI.SCROLLBAR_HORIZONTAL;
 import static bettercommandblockui.main.BetterCommandBlockUI.SCROLLBAR_VERTICAL;
 
-public class ScrollbarWidget extends ClickableWidget {
+public class ScrollbarWidget extends AbstractWidget {
     protected boolean dragging = false;
     protected boolean horizontal = false;
     protected double prevMouseX = 0.0d;
@@ -31,7 +31,7 @@ public class ScrollbarWidget extends ClickableWidget {
     @Setter
     protected java.util.function.Consumer<Double> changedListener;
 
-    public ScrollbarWidget(int x, int y, int width, int height, Text message, boolean horizontal) {
+    public ScrollbarWidget(int x, int y, int width, int height, Component message, boolean horizontal) {
         super(x, y, width, height, message);
         this.horizontal = horizontal;
         this.scale = 1.0d;
@@ -42,41 +42,41 @@ public class ScrollbarWidget extends ClickableWidget {
     }
 
     @Override
-    public void renderWidget(DrawContext context, int mouseX, int mouseY, float delta) {
+    public void extractWidgetRenderState(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
         if (!this.visible) {
             return;
         }
-        this.hovered = checkHovered(mouseX, mouseY);
+        this.isHovered = checkHovered(mouseX, mouseY);
 
         this.renderFrame(context);
         this.renderSlider(context, mouseX, mouseY, delta);
     }
 
-    protected void renderFrame(DrawContext context) {
+    protected void renderFrame(GuiGraphicsExtractor context) {
         renderLongBox(context, false, false, 0, horizontal ? width : height, frameRepeatLength);
     }
 
-    protected void renderSlider(DrawContext context, int mouseX, int mouseY, float delta) {
-        renderLongBox(context, true, hovered, (int) (pos * (length - barLength)), barLength, barRepeatLength);
+    protected void renderSlider(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
+        renderLongBox(context, true, isHovered, (int) (pos * (length - barLength)), barLength, barRepeatLength);
     }
 
-    protected void renderLongBox(DrawContext context, boolean enabled, boolean hovered, int position, int boxLength, int repeatLength) {
+    protected void renderLongBox(GuiGraphicsExtractor context, boolean enabled, boolean hovered, int position, int boxLength, int repeatLength) {
         if (horizontal) {
             Identifier textures = SCROLLBAR_HORIZONTAL.get(enabled, hovered);
-            context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, textures, textureLength, 10, 0, 0, this.getX() + position, this.getY(), Math.min(boxLength / 2, textureLength / 2), this.height);
-            context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, textures, textureLength, 10, Math.max(textureLength / 2, textureLength - boxLength / 2), 0, Math.max(this.getX() + position + boxLength / 2, this.getX() + position + boxLength - textureLength / 2), this.getY(), Math.min(boxLength / 2, textureLength / 2), this.height);
+            context.blitSprite(RenderPipelines.GUI_TEXTURED, textures, textureLength, 10, 0, 0, this.getX() + position, this.getY(), Math.min(boxLength / 2, textureLength / 2), this.height);
+            context.blitSprite(RenderPipelines.GUI_TEXTURED, textures, textureLength, 10, Math.max(textureLength / 2, textureLength - boxLength / 2), 0, Math.max(this.getX() + position + boxLength / 2, this.getX() + position + boxLength - textureLength / 2), this.getY(), Math.min(boxLength / 2, textureLength / 2), this.height);
             int drawX = this.getX() + position + textureLength / 2;
             for (int i = 0; i < (repeatLength / (textureLength / 2)) + 1; i++) {
-                context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, textures, textureLength, 10, textureLength / 4, 0, drawX, this.getY(), Math.min((repeatLength - i * textureLength / 2), textureLength / 2), this.height);
+                context.blitSprite(RenderPipelines.GUI_TEXTURED, textures, textureLength, 10, textureLength / 4, 0, drawX, this.getY(), Math.min((repeatLength - i * textureLength / 2), textureLength / 2), this.height);
                 drawX += textureLength / 2;
             }
         } else {
             Identifier textures = SCROLLBAR_VERTICAL.get(enabled, hovered);
-            context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, textures, 10, textureLength, 0, 0, this.getX(), this.getY() + position, this.width, Math.min(boxLength / 2, textureLength / 2));
-            context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, textures, 10, textureLength, 0, Math.max(textureLength / 2, textureLength - boxLength / 2), this.getX(), Math.max(this.getY() + position + boxLength / 2, this.getY() + position + boxLength - textureLength / 2), this.width, Math.min(boxLength / 2, textureLength / 2));
+            context.blitSprite(RenderPipelines.GUI_TEXTURED, textures, 10, textureLength, 0, 0, this.getX(), this.getY() + position, this.width, Math.min(boxLength / 2, textureLength / 2));
+            context.blitSprite(RenderPipelines.GUI_TEXTURED, textures, 10, textureLength, 0, Math.max(textureLength / 2, textureLength - boxLength / 2), this.getX(), Math.max(this.getY() + position + boxLength / 2, this.getY() + position + boxLength - textureLength / 2), this.width, Math.min(boxLength / 2, textureLength / 2));
             int drawY = this.getY() + textureLength / 2;
             for (int i = 0; i < (repeatLength / (textureLength / 2)) + 1; i++) {
-                context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, textures, 10, textureLength, 0, textureLength / 4, this.getX(), drawY, this.width, Math.min((repeatLength - i * textureLength / 2), textureLength / 2));
+                context.blitSprite(RenderPipelines.GUI_TEXTURED, textures, 10, textureLength, 0, textureLength / 4, this.getX(), drawY, this.width, Math.min((repeatLength - i * textureLength / 2), textureLength / 2));
                 drawY += textureLength / 2;
             }
         }
@@ -99,9 +99,9 @@ public class ScrollbarWidget extends ClickableWidget {
     }
 
     @Override
-    public boolean mouseClicked(Click click, boolean doubled) {
+    public boolean mouseClicked(MouseButtonEvent click, boolean doubled) {
         if (this.isValidClickButton(click.buttonInfo()) && this.checkHovered(click.x(), click.y())) {
-            this.playDownSound(MinecraftClient.getInstance().getSoundManager());
+            this.playDownSound(Minecraft.getInstance().getSoundManager());
             this.onClick(click, doubled);
             return true;
         }
@@ -109,7 +109,7 @@ public class ScrollbarWidget extends ClickableWidget {
     }
 
     @Override
-    public void onClick(Click click, boolean doubled) {
+    public void onClick(MouseButtonEvent click, boolean doubled) {
         if (!this.visible) {
             return;
         }
@@ -119,7 +119,7 @@ public class ScrollbarWidget extends ClickableWidget {
     }
 
     @Override
-    public void onRelease(Click click) {
+    public void onRelease(MouseButtonEvent click) {
         if (!this.visible) {
             return;
         }
@@ -127,7 +127,7 @@ public class ScrollbarWidget extends ClickableWidget {
     }
 
     @Override
-    public void onDrag(Click click, double distX, double distY) {
+    public void onDrag(MouseButtonEvent click, double distX, double distY) {
         if (dragging) {
             double posBefore = pos;
             if (horizontal) {
@@ -157,12 +157,12 @@ public class ScrollbarWidget extends ClickableWidget {
     }
 
     @Override
-    public boolean charTyped(CharInput input) {
+    public boolean charTyped(CharacterEvent input) {
         return super.charTyped(input);
     }
 
     @Override
-    public void appendClickableNarrations(NarrationMessageBuilder builder) {
+    public void updateWidgetNarration(NarrationElementOutput builder) {
 
     }
 }

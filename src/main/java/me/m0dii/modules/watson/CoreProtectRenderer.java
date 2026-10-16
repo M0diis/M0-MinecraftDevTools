@@ -4,19 +4,18 @@ import lombok.Getter;
 import lombok.Setter;
 import me.m0dii.utils.CustomRenderLayers;
 import me.m0dii.utils.DrawUtil;
-import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.font.TextRenderer;
-import net.minecraft.client.render.Camera;
-import net.minecraft.client.render.RenderLayers;
-import net.minecraft.client.render.VertexConsumer;
-import net.minecraft.client.render.VertexConsumerProvider;
-import net.minecraft.client.util.math.MatrixStack;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.RotationAxis;
-import net.minecraft.util.math.Vec3d;
+import me.m0dii.render.OverlayRenderEvents;
+import net.minecraft.client.Camera;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Font;
+import me.m0dii.render.OverlayBufferSource;
+import net.minecraft.client.renderer.rendertype.RenderTypes;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
-
+import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.VertexConsumer;
+import com.mojang.math.Axis;
 import java.util.*;
 
 /**
@@ -83,13 +82,13 @@ public final class CoreProtectRenderer {
         }
         registered = true;
 
-        WorldRenderEvents.AFTER_ENTITIES.register(context -> {
+        OverlayRenderEvents.AFTER_ENTITIES.register(context -> {
             if (!WatsonCoreProtectModule.INSTANCE.isEnabled()) {
                 return;
             }
 
-            MinecraftClient client = MinecraftClient.getInstance();
-            if (client.world == null || client.player == null) {
+            Minecraft client = Minecraft.getInstance();
+            if (client.level == null || client.player == null) {
                 return;
             }
 
@@ -99,19 +98,19 @@ public final class CoreProtectRenderer {
                 return;
             }
 
-            VertexConsumerProvider consumers = context.consumers();
+            OverlayBufferSource consumers = context.consumers();
             if (consumers == null) {
-                consumers = client.getBufferBuilders().getEntityVertexConsumers();
+                consumers = OverlayBufferSource.current();
             }
 
-            VertexConsumer visible = consumers.getBuffer(RenderLayers.LINES);
+            VertexConsumer visible = consumers.getBuffer(RenderTypes.LINES);
             VertexConsumer occluded = consumers.getBuffer(CustomRenderLayers.LINES_NO_DEPTH);
 
-            Vec3d cameraPos = context.gameRenderer().getCamera().getCameraPos();
+            Vec3 cameraPos = context.gameRenderer().mainCamera().position();
             double cameraX = cameraPos.x;
             double cameraY = cameraPos.y;
             double cameraZ = cameraPos.z;
-            Camera camera = context.gameRenderer().getCamera();
+            Camera camera = context.gameRenderer().mainCamera();
 
             Map<BlockPos, Integer> positionNumbers = labelsEnabled
                     ? CoreProtectTracker.getPositionIndexMap()
@@ -144,12 +143,12 @@ public final class CoreProtectRenderer {
             }
 
             if (labelsEnabled && !labelsToRender.isEmpty()) {
-                VertexConsumerProvider labelConsumers = client.getBufferBuilders().getEntityVertexConsumers();
+                OverlayBufferSource labelConsumers = OverlayBufferSource.current();
                 for (LabelEntry label : labelsToRender) {
                     renderLabel(
                             context.matrices(),
                             labelConsumers,
-                            client.textRenderer,
+                            client.font,
                             camera,
                             label.pos(),
                             label.index(),
@@ -161,10 +160,6 @@ public final class CoreProtectRenderer {
             }
 
             // Explicitly flush line buffers to ensure they are rendered in this pass.
-            if (consumers instanceof VertexConsumerProvider.Immediate immediate) {
-                immediate.draw(RenderLayers.LINES);
-                immediate.draw(CustomRenderLayers.LINES_NO_DEPTH);
-            }
         });
     }
 
@@ -230,8 +225,8 @@ public final class CoreProtectRenderer {
         for (int i = 1; i < ordered.size(); i++) {
             BlockPos next = ordered.get(i);
 
-            Vec3d a = Vec3d.ofCenter(prev);
-            Vec3d b = Vec3d.ofCenter(next);
+            Vec3 a = Vec3.atCenterOf(prev);
+            Vec3 b = Vec3.atCenterOf(next);
 
             DrawUtil.drawLineSafe(
                     visible,
@@ -298,33 +293,33 @@ public final class CoreProtectRenderer {
         DrawUtil.drawLineSafe(occluded, 0.0, 0.0, 0.0, cx, cy, cz, color[0], color[1], color[2], 0.85f, vectorLineWidth + 0.5f);
     }
 
-    private static void renderLabel(MatrixStack matrices,
-                                    VertexConsumerProvider consumers,
-                                    TextRenderer textRenderer,
+    private static void renderLabel(PoseStack matrices,
+                                    OverlayBufferSource consumers,
+                                    Font textRenderer,
                                     Camera camera,
                                     BlockPos pos,
                                     int number,
                                     double cameraX,
                                     double cameraY,
                                     double cameraZ) {
-        Vec3d center = Vec3d.ofCenter(pos);
+        Vec3 center = Vec3.atCenterOf(pos);
         double dx = center.x - cameraX;
         double dy = center.y - cameraY;
         double dz = center.z - cameraZ;
         double distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
 
-        matrices.push();
+        matrices.pushPose();
         matrices.translate(dx, dy, dz);
-        matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(-camera.getYaw()));
-        matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(camera.getPitch()));
+        matrices.rotate(Axis.YP.rotationDegrees(-camera.yRot()));
+        matrices.rotate(Axis.XP.rotationDegrees(camera.xRot()));
 
         float scale = (float) Math.clamp(distance * 0.003f, 0.018f, 0.045f);
         matrices.scale(-scale, -scale, scale);
 
         String text = "[" + number + "]";
-        int width = textRenderer.getWidth(text);
-        Matrix4f matrix = matrices.peek().getPositionMatrix();
-        textRenderer.draw(
+        int width = textRenderer.width(text);
+        Matrix4f matrix = matrices.last().pose();
+        OverlayBufferSource.drawText(textRenderer, 
                 text,
                 -width / 2f,
                 -4,
@@ -332,12 +327,12 @@ public final class CoreProtectRenderer {
                 false,
                 matrix,
                 consumers,
-                TextRenderer.TextLayerType.SEE_THROUGH,
+                Font.DisplayMode.SEE_THROUGH,
                 0,
                 0x00F000F0
         );
 
-        matrices.pop();
+        matrices.popPose();
     }
 
 

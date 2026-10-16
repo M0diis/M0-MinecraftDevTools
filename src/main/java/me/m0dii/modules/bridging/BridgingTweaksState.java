@@ -1,7 +1,7 @@
 package me.m0dii.modules.bridging;
 
 import lombok.Getter;
-import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.Minecraft;
 
 public final class BridgingTweaksState {
     @Getter
@@ -11,13 +11,13 @@ public final class BridgingTweaksState {
     private BridgingTweaksState() {
     }
 
-    public static void tick(MinecraftClient client) {
+    public static void tick(Minecraft client) {
         if (client == null || client.player == null) {
             lastAssistTarget = null;
             return;
         }
 
-        if (client.player.isOnGround()) {
+        if (client.player.onGround()) {
             lastKnownYFraction = client.player.getY() - Math.floor(client.player.getY());
         }
 

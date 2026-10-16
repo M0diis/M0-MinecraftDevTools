@@ -2,7 +2,7 @@ package me.m0dii.modules.chat;
 
 import lombok.Getter;
 import lombok.Setter;
-import net.minecraft.text.Text;
+import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -17,12 +17,12 @@ public final class SecondaryChatManager {
 
     public static final class ChatMessage {
         private final long id;
-        private final Text text;
+        private final Component text;
         private final String plainText;
         private final Instant receivedAt;
         private int repeats = 1;
 
-        private ChatMessage(long id, @NotNull Text text) {
+        private ChatMessage(long id, @NotNull Component text) {
             this.id = id;
             this.text = text.copy();
             this.plainText = this.text.getString();
@@ -33,7 +33,7 @@ public final class SecondaryChatManager {
             return id;
         }
 
-        public Text text() {
+        public Component text() {
             return text;
         }
 
@@ -99,7 +99,7 @@ public final class SecondaryChatManager {
         unreadCounts.keySet().removeIf(key -> key.startsWith(prefix));
     }
 
-    public static synchronized List<Text> snapshot() {
+    public static synchronized List<Component> snapshot() {
         SecondaryChatSettings.WindowConfig window = findWindow("main");
         if (window == null) {
             return List.of();
@@ -109,7 +109,7 @@ public final class SecondaryChatManager {
             return List.of();
         }
 
-        List<Text> texts = new ArrayList<>();
+        List<Component> texts = new ArrayList<>();
         for (ChatMessage message : snapshot(window.id, tab.id)) {
             texts.add(message.text());
         }
@@ -124,7 +124,7 @@ public final class SecondaryChatManager {
         return new ArrayList<>(buffer);
     }
 
-    public static synchronized void push(@Nullable Text text) {
+    public static synchronized void push(@Nullable Component text) {
         if (text == null) {
             return;
         }
@@ -142,7 +142,7 @@ public final class SecondaryChatManager {
         lastAlphaReset = System.currentTimeMillis();
     }
 
-    public static synchronized RouteResult routeIncoming(@Nullable Text text) {
+    public static synchronized RouteResult routeIncoming(@Nullable Component text) {
         SecondaryChatSettings.Data settings = SecondaryChatSettings.get();
         if (!settings.enabled || text == null) {
             return new RouteResult(false, false);
@@ -172,7 +172,7 @@ public final class SecondaryChatManager {
         return new RouteResult(routed, matchedFilter);
     }
 
-    public static boolean matchesFilter(@Nullable Text text) {
+    public static boolean matchesFilter(@Nullable Component text) {
         SecondaryChatSettings.Data settings = SecondaryChatSettings.get();
         return settings.enabled && text != null && matchesAnyConfiguredFilter(settings, text);
     }
@@ -234,7 +234,7 @@ public final class SecondaryChatManager {
 
     private static void addToTab(SecondaryChatSettings.WindowConfig window,
                                  SecondaryChatSettings.TabConfig tab,
-                                 Text text,
+                                 Component text,
                                  int maxLines) {
         String key = key(window.id, tab.id);
         Deque<ChatMessage> buffer = buffers.computeIfAbsent(key, ignored -> new ArrayDeque<>());
@@ -266,7 +266,7 @@ public final class SecondaryChatManager {
     }
 
     private static List<SecondaryChatSettings.TabConfig> tabsForMessage(SecondaryChatSettings.WindowConfig window,
-                                                                        Text text,
+                                                                        Component text,
                                                                         boolean replaceMode) {
         List<SecondaryChatSettings.TabConfig> sorted = new ArrayList<>(window.tabs);
         sorted.sort(Comparator.comparingInt((SecondaryChatSettings.TabConfig tab) -> tab.priority).reversed());
@@ -310,7 +310,7 @@ public final class SecondaryChatManager {
         return matched;
     }
 
-    private static boolean matchesAnyConfiguredFilter(SecondaryChatSettings.Data settings, Text text) {
+    private static boolean matchesAnyConfiguredFilter(SecondaryChatSettings.Data settings, Component text) {
         if (matchesRegexList(settings.regexList, text)) {
             return true;
         }
@@ -328,11 +328,11 @@ public final class SecondaryChatManager {
         return false;
     }
 
-    private static boolean matchesTab(SecondaryChatSettings.TabConfig tab, Text text) {
+    private static boolean matchesTab(SecondaryChatSettings.TabConfig tab, Component text) {
         return matchesRegexList(tab.regexList, text);
     }
 
-    private static boolean matchesRegexList(@Nullable List<String> regexList, Text text) {
+    private static boolean matchesRegexList(@Nullable List<String> regexList, Component text) {
         if (regexList == null || regexList.isEmpty()) {
             return false;
         }

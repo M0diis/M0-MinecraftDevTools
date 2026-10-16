@@ -1,5 +1,6 @@
 package me.m0dii;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import eu.midnightdust.lib.config.MidnightConfig;
 import me.m0dii.modules.automation.AutomationModule;
 import me.m0dii.modules.bridging.BridgingTweaksModule;
@@ -57,8 +58,6 @@ import me.m0dii.utils.KeybindManager;
 import me.m0dii.utils.ModConfig;
 import me.m0dii.utils.TickHandler;
 import net.fabricmc.api.ClientModInitializer;
-import net.minecraft.client.util.InputUtil;
-
 import java.io.File;
 
 public class M0DevToolsClient implements ClientModInitializer {
@@ -120,7 +119,7 @@ public class M0DevToolsClient implements ClientModInitializer {
         ModuleRegistry.initializeCategories();
 
         KeybindManager.registerPressedKeybind(KeybindCatalog.OPEN_MODULES_SCREEN.translationKey(),
-                InputUtil.Type.KEYSYM, KeybindCatalog.OPEN_MODULES_SCREEN.defaultKey(),
+                InputConstants.Type.KEYBOARD, KeybindCatalog.OPEN_MODULES_SCREEN.defaultKey(),
                 client -> ClickHudModule.INSTANCE.getRenderer().toggle());
 
         ClientCommandRunScript.register();

@@ -1,15 +1,15 @@
 package me.m0dii.modules.overlays;
 
 import com.google.common.collect.Lists;
+import com.mojang.blaze3d.platform.InputConstants;
+import com.mojang.blaze3d.vertex.PoseStack;
 import me.m0dii.modules.BlockTargetTextModule;
 import me.m0dii.utils.KeybindCatalog;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.RedstoneWireBlock;
-import net.minecraft.client.render.Camera;
-import net.minecraft.client.util.InputUtil;
-import net.minecraft.client.util.math.MatrixStack;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.client.Camera;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.block.RedstoneWireBlock;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
@@ -28,7 +28,7 @@ public class RedstoneBlockUpdateViewModule extends BlockTargetTextModule {
 
         registerPressedKeybind(
                 KeybindCatalog.REDSTONE_BUD_TOGGLE.translationKey(),
-                InputUtil.Type.KEYSYM,
+                InputConstants.Type.KEYBOARD,
                 KeybindCatalog.REDSTONE_BUD_TOGGLE.defaultKey(),
                 client -> toggleEnabled()
         );
@@ -40,12 +40,12 @@ public class RedstoneBlockUpdateViewModule extends BlockTargetTextModule {
     }
 
     @Override
-    protected void renderText(@NotNull MatrixStack matrices, @NotNull Camera camera, @NotNull BlockPos pos, @NotNull BlockState blockState) {
+    protected void renderText(@NotNull PoseStack matrices, @NotNull Camera camera, @NotNull BlockPos pos, @NotNull BlockState blockState) {
         List<BlockPos> order = getDustUpdateOrderAt(pos);
 
         for (int i = 0; i < order.size(); i++) {
-            Vec3d renderPos = getBlockCenterWithVerticalOffset(order.get(i), 0);
-            renderFloatingText(matrices, renderPos, camera.getCameraPos(), String.valueOf(i + 1), camera);
+            Vec3 renderPos = getBlockCenterWithVerticalOffset(order.get(i), 0);
+            renderFloatingText(matrices, renderPos, camera.position(), String.valueOf(i + 1), camera);
         }
     }
 
@@ -54,8 +54,8 @@ public class RedstoneBlockUpdateViewModule extends BlockTargetTextModule {
         ordered.add(pos);
         ordered.add(pos.west());
         ordered.add(pos.east());
-        ordered.add(pos.down());
-        ordered.add(pos.up());
+        ordered.add(pos.below());
+        ordered.add(pos.above());
         ordered.add(pos.north());
         ordered.add(pos.south());
         return ordered;

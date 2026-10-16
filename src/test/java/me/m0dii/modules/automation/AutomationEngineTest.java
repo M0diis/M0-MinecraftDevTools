@@ -9,6 +9,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+
 class AutomationEngineTest {
     @Test
     void ruleMatchingDispatchesRegexEvent() {
@@ -227,17 +228,17 @@ class AutomationEngineTest {
         }
 
         @Override
-        public net.minecraft.client.MinecraftClient client() {
+        public net.minecraft.client.Minecraft client() {
             return null;
         }
 
         @Override
-        public net.minecraft.client.network.ClientPlayerEntity player() {
+        public net.minecraft.client.player.LocalPlayer player() {
             return null;
         }
 
         @Override
-        public net.minecraft.client.world.ClientWorld world() {
+        public net.minecraft.client.multiplayer.ClientLevel world() {
             return null;
         }
     }

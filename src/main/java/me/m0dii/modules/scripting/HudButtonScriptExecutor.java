@@ -2,9 +2,8 @@ package me.m0dii.modules.scripting;
 
 import me.m0dii.M0DevTools;
 import me.m0dii.modules.macros.hud.MacroHudDataHandler;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.text.Text;
-
+import net.minecraft.client.Minecraft;
+import net.minecraft.network.chat.Component;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -22,7 +21,7 @@ public final class HudButtonScriptExecutor {
             return false;
         }
 
-        MinecraftClient client = MinecraftClient.getInstance();
+        Minecraft client = Minecraft.getInstance();
         if (client.player == null) {
             return false;
         }
@@ -50,7 +49,7 @@ public final class HudButtonScriptExecutor {
             try {
                 script = ScriptStorage.readScript(script);
             } catch (Exception e) {
-                client.player.sendMessage(Text.literal("Script button '" + actionName + "' failed to load script file."), true);
+                client.player.sendOverlayMessage(Component.literal("Script button '" + actionName + "' failed to load script file."));
                 M0DevTools.LOGGER.error("Failed to load script for HUD button '{}': {}", actionName, e.getMessage());
                 return false;
             }
@@ -69,11 +68,11 @@ public final class HudButtonScriptExecutor {
                 try {
                     Object result = finalEngine.runScript(finalScript, context);
                     if (client.player != null) {
-                        client.player.sendMessage(Text.literal(ScriptTypes.formatResult(result)), false);
+                        client.player.sendSystemMessage(Component.literal(ScriptTypes.formatResult(result)));
                     }
                 } catch (Exception e) {
                     if (client.player != null) {
-                        client.player.sendMessage(Text.literal("Script button '" + actionName + "' failed: " + e.getMessage()), true);
+                        client.player.sendOverlayMessage(Component.literal("Script button '" + actionName + "' failed: " + e.getMessage()));
                     }
                     M0DevTools.LOGGER.error("Error executing HUD script button '{}':", actionName, e);
                 }
@@ -83,10 +82,10 @@ public final class HudButtonScriptExecutor {
 
         try {
             Object result = engine.runScript(script, context);
-            client.player.sendMessage(Text.literal(ScriptTypes.formatResult(result)), false);
+            client.player.sendSystemMessage(Component.literal(ScriptTypes.formatResult(result)));
             return true;
         } catch (Exception e) {
-            client.player.sendMessage(Text.literal("Script button '" + actionName + "' failed: " + e.getMessage()), true);
+            client.player.sendOverlayMessage(Component.literal("Script button '" + actionName + "' failed: " + e.getMessage()));
             M0DevTools.LOGGER.error("Error executing HUD script button '{}':", actionName, e);
             return false;
         }

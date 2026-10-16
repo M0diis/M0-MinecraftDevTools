@@ -1,13 +1,13 @@
 package me.m0dii.gui.local;
 
-import net.minecraft.client.font.TextRenderer;
-import net.minecraft.client.gui.widget.TextFieldWidget;
-import net.minecraft.text.Text;
+import net.minecraft.client.gui.Font;
+import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.network.chat.Component;
 
 import java.util.function.IntConsumer;
 
 public final class UiBoundIntField {
-    private final TextFieldWidget widget;
+    private final ValidatedEditBox widget;
     private IntConsumer saveConsumer = ignored -> {
     };
     private int min = Integer.MIN_VALUE;
@@ -15,15 +15,15 @@ public final class UiBoundIntField {
     private int defaultValue = 0;
     private Integer parsedValue = null;
 
-    public UiBoundIntField(TextRenderer textRenderer,
+    public UiBoundIntField(Font textRenderer,
                            int x,
                            int y,
                            int width,
                            int height,
                            String placeholder) {
-        this.widget = new TextFieldWidget(textRenderer, x, y, width, height, Text.literal(placeholder == null ? "" : placeholder));
-        this.widget.setTextPredicate(UiBoundIntField::isIntegerCandidate);
-        this.widget.setChangedListener(this::handleChanged);
+        this.widget = new ValidatedEditBox(textRenderer, x, y, width, height, Component.literal(placeholder == null ? "" : placeholder));
+        this.widget.setFilter(UiBoundIntField::isIntegerCandidate);
+        this.widget.setResponder(this::handleChanged);
     }
 
     public UiBoundIntField setSaveConsumer(IntConsumer consumer) {
@@ -66,7 +66,7 @@ public final class UiBoundIntField {
     }
 
     public UiBoundIntField setValue(int value) {
-        this.widget.setText(Integer.toString(clamp(value)));
+        this.widget.setValue(Integer.toString(clamp(value)));
         return this;
     }
 
@@ -75,28 +75,28 @@ public final class UiBoundIntField {
     }
 
     public boolean isValid() {
-        return this.parsedValue != null || this.widget.getText().isBlank();
+        return this.parsedValue != null || this.widget.getValue().isBlank();
     }
 
     public String getText() {
-        return this.widget.getText();
+        return this.widget.getValue();
     }
 
-    public TextFieldWidget widget() {
+    public EditBox widget() {
         return this.widget;
     }
 
     private void normalizeCurrentText() {
-        if (this.widget.getText() == null || this.widget.getText().isBlank()) {
+        if (this.widget.getValue() == null || this.widget.getValue().isBlank()) {
             return;
         }
-        Integer value = parse(this.widget.getText());
+        Integer value = parse(this.widget.getValue());
         if (value == null) {
             return;
         }
         int clamped = clamp(value);
         if (clamped != value) {
-            this.widget.setText(Integer.toString(clamped));
+            this.widget.setValue(Integer.toString(clamped));
         }
     }
 

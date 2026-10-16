@@ -4,12 +4,11 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.suggestion.Suggestions;
 import com.mojang.brigadier.suggestion.SuggestionsBuilder;
-import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
+import net.fabricmc.fabric.api.client.command.v2.ClientCommands;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
-import net.minecraft.command.CommandSource;
-import net.minecraft.text.Text;
-
+import net.minecraft.commands.SharedSuggestionProvider;
+import net.minecraft.network.chat.Component;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.CompletableFuture;
@@ -28,9 +27,9 @@ public final class CameraClientCommand {
 
     public static void register() {
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) ->
-                dispatcher.register(ClientCommandManager.literal("camera")
+                dispatcher.register(ClientCommands.literal("camera")
                         .executes(CameraClientCommand::showHelp)
-                        .then(ClientCommandManager.argument("args", StringArgumentType.greedyString())
+                        .then(ClientCommands.argument("args", StringArgumentType.greedyString())
                                 .suggests(CameraClientCommand::suggestArgs)
                                 .executes(CameraClientCommand::handleArgs))));
     }
@@ -170,7 +169,7 @@ public final class CameraClientCommand {
     }
 
     private static void send(CommandContext<FabricClientCommandSource> context, String message) {
-        context.getSource().sendFeedback(Text.literal("[Camera] " + message));
+        context.getSource().sendFeedback(Component.literal("[Camera] " + message));
     }
 
     private static CompletableFuture<Suggestions> suggestArgs(CommandContext<FabricClientCommandSource> context,
@@ -193,13 +192,13 @@ public final class CameraClientCommand {
 
         String sub = rawTokens[0].toLowerCase(Locale.ROOT);
         switch (sub) {
-            case "add", "prepend", "duration" -> CommandSource.suggestMatching(
+            case "add", "prepend", "duration" -> SharedSuggestionProvider.suggest(
                     List.of(sub + " 0.5", sub + " 1", sub + " 2", sub + " 5"), builder);
-            case "stretch" -> CommandSource.suggestMatching(
+            case "stretch" -> SharedSuggestionProvider.suggest(
                     List.of("stretch 50", "stretch 75", "stretch 100", "stretch 150", "stretch 200"), builder);
-            case "interpolation", "interp" -> CommandSource.suggestMatching(
+            case "interpolation", "interp" -> SharedSuggestionProvider.suggest(
                     List.of("interpolation linear", "interpolation catmull_rom"), builder);
-            case "play" -> CommandSource.suggestMatching(
+            case "play" -> SharedSuggestionProvider.suggest(
                     List.of("play 1", "play 2", "play 4"), builder);
             case "select" -> {
                 if (index <= 1) {

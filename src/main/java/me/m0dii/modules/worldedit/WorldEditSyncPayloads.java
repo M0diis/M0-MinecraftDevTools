@@ -2,18 +2,18 @@ package me.m0dii.modules.worldedit;
 
 import me.m0dii.M0DevToolsClient;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
-import net.minecraft.network.RegistryByteBuf;
-import net.minecraft.network.codec.PacketCodec;
-import net.minecraft.network.packet.CustomPayload;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.math.BlockPos;
+import net.minecraft.core.BlockPos;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.resources.Identifier;
 
 public final class WorldEditSyncPayloads {
     private WorldEditSyncPayloads() {
     }
 
     public static void registerPayloadTypes() {
-        PayloadTypeRegistry.playC2S().register(EditRequestPayload.ID, EditRequestPayload.CODEC);
+        PayloadTypeRegistry.serverboundPlay().register(EditRequestPayload.ID, EditRequestPayload.CODEC);
     }
 
     public enum Operation {
@@ -41,18 +41,18 @@ public final class WorldEditSyncPayloads {
                                      String secondaryArg,
                                      int amount,
                                      String direction,
-                                     boolean masked) implements CustomPayload {
-        public static final CustomPayload.Id<EditRequestPayload> ID = new CustomPayload.Id<>(Identifier.of(M0DevToolsClient.MOD_ID, "worldedit/request"));
-        public static final PacketCodec<RegistryByteBuf, EditRequestPayload> CODEC = PacketCodec.of(
+                                     boolean masked) implements CustomPacketPayload {
+        public static final CustomPacketPayload.Type<EditRequestPayload> ID = new CustomPacketPayload.Type<>(Identifier.fromNamespaceAndPath(M0DevToolsClient.MOD_ID, "worldedit/request"));
+        public static final StreamCodec<RegistryFriendlyByteBuf, EditRequestPayload> CODEC = StreamCodec.ofMember(
                 (value, buf) -> {
                     buf.writeVarInt(value.operation.ordinal());
                     buf.writeBlockPos(value.min);
                     buf.writeBlockPos(value.max);
-                    buf.writeString(value.selectionShape);
-                    buf.writeString(value.primaryArg);
-                    buf.writeString(value.secondaryArg);
+                    buf.writeUtf(value.selectionShape);
+                    buf.writeUtf(value.primaryArg);
+                    buf.writeUtf(value.secondaryArg);
                     buf.writeVarInt(value.amount);
-                    buf.writeString(value.direction);
+                    buf.writeUtf(value.direction);
                     buf.writeBoolean(value.masked);
                 },
                 buf -> {
@@ -63,11 +63,11 @@ public final class WorldEditSyncPayloads {
                             operation,
                             buf.readBlockPos(),
                             buf.readBlockPos(),
-                            buf.readString(),
-                            buf.readString(),
-                            buf.readString(),
+                            buf.readUtf(),
+                            buf.readUtf(),
+                            buf.readUtf(),
                             buf.readVarInt(),
-                            buf.readString(),
+                            buf.readUtf(),
                             buf.readBoolean()
                     );
                 }
@@ -83,8 +83,8 @@ public final class WorldEditSyncPayloads {
                                   String direction,
                                   boolean masked) {
             this.operation = operation;
-            this.min = min == null ? BlockPos.ORIGIN : min;
-            this.max = max == null ? BlockPos.ORIGIN : max;
+            this.min = min == null ? BlockPos.ZERO : min;
+            this.max = max == null ? BlockPos.ZERO : max;
             this.selectionShape = selectionShape == null ? WorldEditRegionShape.BOX.name() : selectionShape;
             this.primaryArg = primaryArg == null ? "" : primaryArg;
             this.secondaryArg = secondaryArg == null ? "" : secondaryArg;
@@ -94,7 +94,7 @@ public final class WorldEditSyncPayloads {
         }
 
         @Override
-        public Id<? extends CustomPayload> getId() {
+        public Type<? extends CustomPacketPayload> type() {
             return ID;
         }
     }

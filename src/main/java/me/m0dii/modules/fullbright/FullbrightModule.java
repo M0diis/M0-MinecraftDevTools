@@ -4,8 +4,7 @@ import lombok.Getter;
 import me.m0dii.modules.Module;
 import me.m0dii.utils.KeybindCatalog;
 import me.m0dii.utils.ModConfig;
-import net.minecraft.client.util.InputUtil;
-
+import com.mojang.blaze3d.platform.InputConstants;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -24,7 +23,7 @@ public class FullbrightModule extends Module {
     public void register() {
         registerPressedKeybind(
                 KeybindCatalog.FULLBRIGHT_TOGGLE.translationKey(),
-                InputUtil.Type.KEYSYM,
+                InputConstants.Type.KEYBOARD,
                 KeybindCatalog.FULLBRIGHT_TOGGLE.defaultKey(),
                 client -> toggleEnabled()
         );

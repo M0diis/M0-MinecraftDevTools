@@ -2,11 +2,11 @@ package me.m0dii.modules.waypoints;
 
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.StringArgumentType;
-import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
+import net.fabricmc.fabric.api.client.command.v2.ClientCommands;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
-import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
+import net.minecraft.ChatFormatting;
+import net.minecraft.network.chat.Component;
 
 public class WaypointCommands {
 
@@ -21,52 +21,50 @@ public class WaypointCommands {
     }
 
     private static void registerWaypointCommands(CommandDispatcher<FabricClientCommandSource> dispatcher) {
-        dispatcher.register(ClientCommandManager.literal("waypoint")
+        dispatcher.register(ClientCommands.literal("waypoint")
                 // /waypoint list
-                .then(ClientCommandManager.literal("list")
+                .then(ClientCommands.literal("list")
                         .executes(context -> {
                             WaypointHandler.listWaypoints();
                             return 1;
                         }))
 
                 // /waypoint add
-                .then(ClientCommandManager.literal("add")
+                .then(ClientCommands.literal("add")
                         .executes(context -> {
                             WaypointHandler.addWaypoint();
                             return 1;
                         }))
 
                 // /waypoint gui
-                .then(ClientCommandManager.literal("gui")
+                .then(ClientCommands.literal("gui")
                         .executes(context -> {
-                            if (context.getSource().getClient().currentScreen == null) {
+                            if (context.getSource().getClient().gui.screen() == null) {
                                 context.getSource().getClient().execute(() ->
-                                        context.getSource().getClient().setScreen(WaypointScreen.create(null))
+                                        context.getSource().getClient().gui.setScreen(WaypointScreen.create(null))
                                 );
                             }
                             return 1;
                         }))
 
                 // /waypoint render [toggle]
-                .then(ClientCommandManager.literal("render")
+                .then(ClientCommands.literal("render")
                         .executes(context -> {
                             WaypointRenderer.setEnabled(!WaypointRenderer.isEnabled());
                             String status = WaypointRenderer.isEnabled() ? "enabled" : "disabled";
                             if (context.getSource().getPlayer() != null) {
-                                context.getSource().getPlayer().sendMessage(
-                                        Text.literal("Waypoint rendering " + status)
-                                                .formatted(WaypointRenderer.isEnabled()
-                                                        ? Formatting.GREEN
-                                                        : Formatting.RED),
-                                        false
-                                );
+                                context.getSource().getPlayer().sendSystemMessage(
+                                        Component.literal("Waypoint rendering " + status)
+                                                .withStyle(WaypointRenderer.isEnabled()
+                                                        ? ChatFormatting.GREEN
+                                                        : ChatFormatting.RED));
                             }
                             return 1;
                         }))
 
                 // /waypoint tp <id>
-                .then(ClientCommandManager.literal("tp")
-                        .then(ClientCommandManager.argument("id", StringArgumentType.word())
+                .then(ClientCommands.literal("tp")
+                        .then(ClientCommands.argument("id", StringArgumentType.word())
                                 .executes(context -> {
                                     String id = StringArgumentType.getString(context, "id");
                                     WaypointHandler.teleportToWaypoint(id);
@@ -74,8 +72,8 @@ public class WaypointCommands {
                                 })))
 
                 // /waypoint delete <id>
-                .then(ClientCommandManager.literal("delete")
-                        .then(ClientCommandManager.argument("id", StringArgumentType.word())
+                .then(ClientCommands.literal("delete")
+                        .then(ClientCommands.argument("id", StringArgumentType.word())
                                 .executes(context -> {
                                     String id = StringArgumentType.getString(context, "id");
                                     WaypointHandler.deleteWaypoint(id);
@@ -83,9 +81,9 @@ public class WaypointCommands {
                                 })))
 
                 // /waypoint rename <id> <name>
-                .then(ClientCommandManager.literal("rename")
-                        .then(ClientCommandManager.argument("id", StringArgumentType.word())
-                                .then(ClientCommandManager.argument("name", StringArgumentType.greedyString())
+                .then(ClientCommands.literal("rename")
+                        .then(ClientCommands.argument("id", StringArgumentType.word())
+                                .then(ClientCommands.argument("name", StringArgumentType.greedyString())
                                         .executes(context -> {
                                             String id = StringArgumentType.getString(context, "id");
                                             String name = StringArgumentType.getString(context, "name");

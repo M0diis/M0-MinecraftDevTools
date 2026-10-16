@@ -1,14 +1,14 @@
 package me.m0dii.mixin.hungertweaks;
 
-import net.minecraft.entity.player.HungerManager;
+import net.minecraft.world.food.FoodData;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Accessor;
 
-@Mixin(HungerManager.class)
+@Mixin(FoodData.class)
 public interface HungerManagerAccessor {
-    @Accessor("exhaustion")
+    @Accessor("exhaustionLevel")
     float m0dev$getExhaustion();
 
-    @Accessor("exhaustion")
+    @Accessor("exhaustionLevel")
     void m0dev$setExhaustion(float exhaustion);
 }

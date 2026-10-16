@@ -1,6 +1,6 @@
 package me.m0dii.utils;
 
-import net.minecraft.client.render.VertexConsumer;
+import com.mojang.blaze3d.vertex.VertexConsumer;
 import org.joml.Matrix4f;
 
 public final class DrawUtil {
@@ -33,8 +33,8 @@ public final class DrawUtil {
                                 float b,
                                 float a,
                                 float width) {
-        buffer.vertex((float) x1, (float) y1, (float) z1).color(r, g, b, a).normal(0.0f, 1.0f, 0.0f).lineWidth(width);
-        buffer.vertex((float) x2, (float) y2, (float) z2).color(r, g, b, a).normal(0.0f, 1.0f, 0.0f).lineWidth(width);
+        buffer.addVertex((float) x1, (float) y1, (float) z1).setColor(r, g, b, a).setNormal(0.0f, 1.0f, 0.0f).setLineWidth(width);
+        buffer.addVertex((float) x2, (float) y2, (float) z2).setColor(r, g, b, a).setNormal(0.0f, 1.0f, 0.0f).setLineWidth(width);
     }
 
     public static void drawLine(VertexConsumer buffer,
@@ -53,8 +53,8 @@ public final class DrawUtil {
                                 float ny,
                                 float nz,
                                 float width) {
-        buffer.vertex(matrix, x1, y1, z1).color(r, g, b, a).normal(nx, ny, nz).lineWidth(width);
-        buffer.vertex(matrix, x2, y2, z2).color(r, g, b, a).normal(nx, ny, nz).lineWidth(width);
+        buffer.addVertex(matrix, x1, y1, z1).setColor(r, g, b, a).setNormal(nx, ny, nz).setLineWidth(width);
+        buffer.addVertex(matrix, x2, y2, z2).setColor(r, g, b, a).setNormal(nx, ny, nz).setLineWidth(width);
     }
 
     public static void drawLineSafe(VertexConsumer buffer,

@@ -1,80 +1,72 @@
 package bettercommandblockui.mixin;
 
-import net.minecraft.client.font.TextRenderer;
-import net.minecraft.client.gui.widget.TextFieldWidget;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Accessor;
 import org.spongepowered.asm.mixin.gen.Invoker;
 
 import java.util.function.Consumer;
 import java.util.function.Predicate;
+import net.minecraft.client.gui.Font;
+import net.minecraft.client.gui.components.EditBox;
 
-@Mixin(TextFieldWidget.class)
+@Mixin(EditBox.class)
 public interface TextFieldWidgetAccessor {
 
     @Invoker("getMaxLength")
     int invokeGetMaxLength();
 
     @Invoker
-    int invokeGetCursorPosWithOffset(int characterOffset);
+    int invokeGetCursorPos(int characterOffset);
 
     @Accessor
-    boolean getDrawsBackground();
+    boolean getBordered();
 
     @Accessor
-    boolean getEditable();
+    boolean getIsEditable();
 
     @Accessor
-    boolean getFocusUnlocked();
+    boolean getCanLoseFocus();
 
     @Accessor
-    int getEditableColor();
+    int getTextColor();
 
     @Accessor
-    int getUneditableColor();
+    int getTextColorUneditable();
 
     @Accessor
-    int getSelectionStart();
+    int getCursorPos();
 
-    @Accessor("selectionStart")
+    @Accessor("cursorPos")
     void setSelectionStart(int index);
 
     @Accessor
-    int getSelectionEnd();
+    int getHighlightPos();
 
-    @Accessor("selectionEnd")
+    @Accessor("highlightPos")
     void setSelectionEnd(int index);
 
     @Accessor
-    int getFirstCharacterIndex();
+    int getDisplayPos();
 
     @Accessor
-    long getLastSwitchFocusTime();
+    long getFocusedTime();
 
-    @Accessor("lastSwitchFocusTime")
+    @Accessor("focusedTime")
     void setLastSwitchFocusTime(long value);
 
     @Accessor
-    String getText();
+    String getValue();
 
-    @Accessor("text")
+    @Accessor("value")
     void setTextVariable(String text);
 
     @Accessor
     String getSuggestion();
 
     @Accessor
-    static String getHORIZONTAL_CURSOR() {
-        throw new AssertionError();
-    }
+    Font getFont();
 
     @Accessor
-    Predicate<String> getTextPredicate();
-
-    @Accessor
-    TextRenderer getTextRenderer();
-
-    @Accessor
-    Consumer<String> getChangedListener();
+    Consumer<String> getResponder();
 
 }

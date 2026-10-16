@@ -1,8 +1,7 @@
 package me.m0dii.modules.itemdata;
 
 import me.m0dii.modules.getdata.GetDataScreen;
-import net.minecraft.registry.Registries;
-
+import net.minecraft.core.registries.BuiltInRegistries;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
@@ -14,7 +13,7 @@ public final class ItemComponentCatalog {
 
     public static List<String> filterComponentIds(String query, Set<String> presentIds) {
         String normalized = query == null ? "" : query.trim().toLowerCase(Locale.ROOT);
-        return Registries.DATA_COMPONENT_TYPE.getIds().stream()
+        return BuiltInRegistries.DATA_COMPONENT_TYPE.keySet().stream()
                 .map(id -> id.toString())
                 .filter(id -> matchesFilter(id, normalized))
                 .sorted(componentComparator(normalized, presentIds))

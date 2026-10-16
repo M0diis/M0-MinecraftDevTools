@@ -1,13 +1,13 @@
 package me.m0dii.modules.nbthud;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import lombok.Getter;
 import me.m0dii.M0DevToolsClient;
 import me.m0dii.modules.Module;
 import me.m0dii.utils.KeybindCatalog;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
-import net.minecraft.client.util.InputUtil;
-import net.minecraft.util.Identifier;
+import net.minecraft.resources.Identifier;
 
 public class NBTInfoHudModule extends Module {
 
@@ -23,12 +23,12 @@ public class NBTInfoHudModule extends Module {
     @Override
     public void register() {
         HudElementRegistry.attachElementBefore(VanillaHudElements.CHAT,
-                Identifier.of(M0DevToolsClient.MOD_ID, "nbt_info_hud"),
+                Identifier.fromNamespaceAndPath(M0DevToolsClient.MOD_ID, "nbt_info_hud"),
                 renderer::onHudRender
         );
 
         registerPressedKeybind(KeybindCatalog.BLOCK_INSPECTOR_TOGGLE.translationKey(),
-                InputUtil.Type.KEYSYM,
+                InputConstants.Type.KEYBOARD,
                 KeybindCatalog.BLOCK_INSPECTOR_TOGGLE.defaultKey(),
                 client -> toggleEnabled());
     }

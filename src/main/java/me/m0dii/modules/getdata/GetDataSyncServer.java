@@ -2,10 +2,10 @@ package me.m0dii.modules.getdata;
 
 import me.m0dii.utils.NbtExtractors;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
-import net.minecraft.nbt.NbtCompound;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.util.math.BlockPos;
+import net.minecraft.core.BlockPos;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 
 public final class GetDataSyncServer {
     private static boolean registered = false;
@@ -24,9 +24,9 @@ public final class GetDataSyncServer {
         });
     }
 
-    private static void handleBlockRequest(ServerPlayerEntity player, long requestId, BlockPos pos) {
-        ServerWorld world = player.getEntityWorld();
-        NbtCompound nbt = NbtExtractors.extractBlockData(world, pos);
+    private static void handleBlockRequest(ServerPlayer player, long requestId, BlockPos pos) {
+        ServerLevel world = player.level();
+        CompoundTag nbt = NbtExtractors.extractBlockData(world, pos);
         ServerPlayNetworking.send(player, new GetDataSyncPayloads.BlockNbtResponsePayload(requestId, pos, nbt));
     }
 }

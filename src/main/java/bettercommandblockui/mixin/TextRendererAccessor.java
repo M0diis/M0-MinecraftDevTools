@@ -1,12 +1,12 @@
 package bettercommandblockui.mixin;
 
-import net.minecraft.client.font.TextHandler;
-import net.minecraft.client.font.TextRenderer;
+import net.minecraft.client.StringSplitter;
+import net.minecraft.client.gui.Font;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Accessor;
 
-@Mixin(TextRenderer.class)
+@Mixin(Font.class)
 public interface TextRendererAccessor {
     @Accessor
-    TextHandler getHandler();
+    StringSplitter getSplitter();
 }

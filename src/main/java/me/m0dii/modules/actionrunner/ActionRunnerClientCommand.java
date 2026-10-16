@@ -5,15 +5,14 @@ import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.suggestion.Suggestions;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
-import net.minecraft.command.CommandSource;
-import net.minecraft.text.Text;
-
+import net.minecraft.commands.SharedSuggestionProvider;
+import net.minecraft.network.chat.Component;
 import java.util.Arrays;
 import java.util.Locale;
 import java.util.concurrent.CompletableFuture;
 
-import static net.fabricmc.fabric.api.client.command.v2.ClientCommandManager.argument;
-import static net.fabricmc.fabric.api.client.command.v2.ClientCommandManager.literal;
+import static net.fabricmc.fabric.api.client.command.v2.ClientCommands.argument;
+import static net.fabricmc.fabric.api.client.command.v2.ClientCommands.literal;
 
 public class ActionRunnerClientCommand {
     private static final String[] ACTION_NAMES = Arrays.stream(ActionRunnerModule.Action.Type.values())
@@ -29,7 +28,7 @@ public class ActionRunnerClientCommand {
                 .then(literal("add")
                         .then(argument("delay", IntegerArgumentType.integer(0))
                                 .then(argument("action", StringArgumentType.word())
-                                        .suggests((ctx, builder) -> CommandSource.suggestMatching(ACTION_NAMES, builder))
+                                        .suggests((ctx, builder) -> SharedSuggestionProvider.suggest(ACTION_NAMES, builder))
                                         .then(argument("param", StringArgumentType.greedyString())
                                                 .suggests(ActionRunnerClientCommand::suggestParamForAction)
                                                 .executes(ctx -> {
@@ -37,7 +36,7 @@ public class ActionRunnerClientCommand {
                                                     String actionType = StringArgumentType.getString(ctx, "action");
                                                     ActionRunnerModule.Action.Type type = parseActionType(actionType);
                                                     if (type == null) {
-                                                        ctx.getSource().sendError(Text.literal("[ActionRunner] Unknown action: " + actionType));
+                                                        ctx.getSource().sendError(Component.literal("[ActionRunner] Unknown action: " + actionType));
                                                         return 0;
                                                     }
 
@@ -47,7 +46,7 @@ public class ActionRunnerClientCommand {
                                                     ActionRunnerModule.getInstance().addAction(
                                                             new ActionRunnerModule.Action(delay, type, command)
                                                     );
-                                                    ctx.getSource().sendFeedback(Text.literal("[ActionRunner] Added " + type.name() + " with delay " + delay + (command != null ? ": " + command : "")));
+                                                    ctx.getSource().sendFeedback(Component.literal("[ActionRunner] Added " + type.name() + " with delay " + delay + (command != null ? ": " + command : "")));
                                                     return 1;
                                                 }))
                                         .executes(ctx -> {
@@ -55,18 +54,18 @@ public class ActionRunnerClientCommand {
                                             String actionType = StringArgumentType.getString(ctx, "action");
                                             ActionRunnerModule.Action.Type type = parseActionType(actionType);
                                             if (type == null) {
-                                                ctx.getSource().sendError(Text.literal("[ActionRunner] Unknown action: " + actionType));
+                                                ctx.getSource().sendError(Component.literal("[ActionRunner] Unknown action: " + actionType));
                                                 return 0;
                                             }
                                             if (type == ActionRunnerModule.Action.Type.COMMAND || type == ActionRunnerModule.Action.Type.SELECT_HOTBAR_SLOT) {
-                                                ctx.getSource().sendError(Text.literal("[ActionRunner] " + type.name() + " requires a parameter."));
+                                                ctx.getSource().sendError(Component.literal("[ActionRunner] " + type.name() + " requires a parameter."));
                                                 return 0;
                                             }
 
                                             ActionRunnerModule.getInstance().addAction(
                                                     new ActionRunnerModule.Action(delay, type, null)
                                             );
-                                            ctx.getSource().sendFeedback(Text.literal("[ActionRunner] Added " + type.name() + " with delay " + delay));
+                                            ctx.getSource().sendFeedback(Component.literal("[ActionRunner] Added " + type.name() + " with delay " + delay));
                                             return 1;
                                         })
                                 )
@@ -81,16 +80,16 @@ public class ActionRunnerClientCommand {
                 .then(literal("clear")
                         .executes(ctx -> {
                             ActionRunnerModule.getInstance().clear();
-                            ctx.getSource().sendFeedback(Text.literal("[ActionRunner] Cleared all actions"));
+                            ctx.getSource().sendFeedback(Component.literal("[ActionRunner] Cleared all actions"));
                             return 1;
                         })
                 )
                 .then(literal("list")
                         .executes(ctx -> {
-                            ctx.getSource().sendFeedback(Text.literal("[ActionRunner] Listing actions:"));
+                            ctx.getSource().sendFeedback(Component.literal("[ActionRunner] Listing actions:"));
                             int index = 1;
                             for (ActionRunnerModule.Action action : ActionRunnerModule.getInstance().getActions()) {
-                                ctx.getSource().sendFeedback(Text.literal(index + ". " + action.getActionInfo()));
+                                ctx.getSource().sendFeedback(Component.literal(index + ". " + action.getActionInfo()));
                                 index++;
                             }
                             return 1;
@@ -117,7 +116,7 @@ public class ActionRunnerClientCommand {
         }
 
         return switch (type) {
-            case SELECT_HOTBAR_SLOT -> CommandSource.suggestMatching(HOTBAR_SLOT_SUGGESTIONS, builder);
+            case SELECT_HOTBAR_SLOT -> SharedSuggestionProvider.suggest(HOTBAR_SLOT_SUGGESTIONS, builder);
             case COMMAND -> {
                 if (builder.getRemaining().isEmpty()) {
                     builder.suggest("/");

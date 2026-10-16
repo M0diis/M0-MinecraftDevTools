@@ -1,29 +1,29 @@
 package me.m0dii.mixin.tweaks;
 
 import me.m0dii.modules.tweaks.TweaksModule;
-import net.minecraft.client.render.Camera;
-import net.minecraft.client.render.RenderTickCounter;
-import net.minecraft.client.render.fog.AtmosphericFogModifier;
-import net.minecraft.client.render.fog.FogData;
-import net.minecraft.client.world.ClientWorld;
-import net.minecraft.world.World;
+import net.minecraft.client.Camera;
+import net.minecraft.client.DeltaTracker;
+import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.client.renderer.fog.FogData;
+import net.minecraft.client.renderer.fog.environment.AtmosphericFogEnvironment;
+import net.minecraft.world.level.Level;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-@Mixin(AtmosphericFogModifier.class)
+@Mixin(AtmosphericFogEnvironment.class)
 public class AtmosphericFogModifierMixin {
 
-    @Inject(method = "applyStartEndModifier", at = @At("RETURN"))
+    @Inject(method = "setupFog", at = @At("RETURN"))
     private void applyFogTweaks(FogData fogData,
                                 Camera camera,
-                                ClientWorld world,
+                                ClientLevel world,
                                 float viewDistance,
-                                RenderTickCounter tickCounter,
+                                DeltaTracker tickCounter,
                                 CallbackInfo ci) {
         boolean disableRenderDistanceFog = TweaksModule.INSTANCE.disableRenderDistanceFog();
-        boolean disableNetherFog = TweaksModule.INSTANCE.disableNetherFog() && world.getRegistryKey() == World.NETHER;
+        boolean disableNetherFog = TweaksModule.INSTANCE.disableNetherFog() && world.dimension() == Level.NETHER;
         if (!disableRenderDistanceFog && !disableNetherFog) {
             return;
         }

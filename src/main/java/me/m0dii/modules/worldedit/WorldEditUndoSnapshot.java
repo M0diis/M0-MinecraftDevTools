@@ -1,14 +1,13 @@
 package me.m0dii.modules.worldedit;
 
 import me.m0dii.utils.NbtExtractors;
-import net.minecraft.client.world.ClientWorld;
-import net.minecraft.nbt.NbtCompound;
-import net.minecraft.registry.Registries;
-import net.minecraft.state.property.Property;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.chunk.ChunkStatus;
-
+import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.level.block.state.properties.Property;
+import net.minecraft.world.level.chunk.status.ChunkStatus;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -23,11 +22,11 @@ public final class WorldEditUndoSnapshot {
         return this.entries.isEmpty();
     }
 
-    public static WorldEditUndoSnapshot capture(ClientWorld world, WorldEditSelection selection) {
+    public static WorldEditUndoSnapshot capture(ClientLevel world, WorldEditSelection selection) {
         return selection == null ? null : capture(world, List.of(selection));
     }
 
-    public static WorldEditUndoSnapshot capture(ClientWorld world, List<WorldEditSelection> selections) {
+    public static WorldEditUndoSnapshot capture(ClientLevel world, List<WorldEditSelection> selections) {
         if (world == null || selections == null || selections.isEmpty()) {
             return null;
         }
@@ -47,7 +46,7 @@ public final class WorldEditUndoSnapshot {
         return new WorldEditUndoSnapshot(entries);
     }
 
-    private static boolean captureSelection(ClientWorld world, WorldEditSelection selection, List<RestoreEntry> entries) {
+    private static boolean captureSelection(ClientLevel world, WorldEditSelection selection, List<RestoreEntry> entries) {
         if (world == null || selection == null) {
             return false;
         }
@@ -107,11 +106,11 @@ public final class WorldEditUndoSnapshot {
         return planner.buildCommands();
     }
 
-    public static boolean isFullyLoaded(ClientWorld world, WorldEditSelection selection) {
+    public static boolean isFullyLoaded(ClientLevel world, WorldEditSelection selection) {
         return selection != null && isFullyLoaded(world, List.of(selection));
     }
 
-    public static boolean isFullyLoaded(ClientWorld world, List<WorldEditSelection> selections) {
+    public static boolean isFullyLoaded(ClientLevel world, List<WorldEditSelection> selections) {
         if (world == null || selections == null || selections.isEmpty()) {
             return false;
         }
@@ -125,7 +124,7 @@ public final class WorldEditUndoSnapshot {
             int maxChunkZ = selection.max().getZ() >> 4;
             for (int chunkX = minChunkX; chunkX <= maxChunkX; chunkX++) {
                 for (int chunkZ = minChunkZ; chunkZ <= maxChunkZ; chunkZ++) {
-                    if (world.getChunkManager().getChunk(chunkX, chunkZ, ChunkStatus.FULL, false) == null) {
+                    if (world.getChunkSource().getChunk(chunkX, chunkZ, ChunkStatus.FULL, false) == null) {
                         return false;
                     }
                 }
@@ -134,16 +133,16 @@ public final class WorldEditUndoSnapshot {
         return true;
     }
 
-    private static RestoreEntry captureEntry(ClientWorld world, BlockPos pos) {
+    private static RestoreEntry captureEntry(ClientLevel world, BlockPos pos) {
         var state = world.getBlockState(pos);
         String stateString = formatBlockState(state);
 
-        NbtCompound blockData = NbtExtractors.extractBlockData(world, pos);
+        CompoundTag blockData = NbtExtractors.extractBlockData(world, pos);
         if (blockData == null) {
             return new RestoreEntry(pos, pos, stateString, null);
         }
 
-        NbtCompound blockEntityData = blockData.copy();
+        CompoundTag blockEntityData = blockData.copy();
         blockEntityData.remove("id");
         blockEntityData.remove("Properties");
         blockEntityData.remove("x");
@@ -155,8 +154,8 @@ public final class WorldEditUndoSnapshot {
         return new RestoreEntry(pos, pos, stateString, nbtSuffix);
     }
 
-    private static String formatBlockState(net.minecraft.block.BlockState state) {
-        Identifier id = Registries.BLOCK.getId(state.getBlock());
+    private static String formatBlockState(net.minecraft.world.level.block.state.BlockState state) {
+        Identifier id = BuiltInRegistries.BLOCK.getKey(state.getBlock());
         String base = id == null ? "minecraft:air" : id.toString();
         if (state.getProperties().isEmpty()) {
             return base;
@@ -170,9 +169,9 @@ public final class WorldEditUndoSnapshot {
     }
 
     @SuppressWarnings("unchecked")
-    private static <T extends Comparable<T>> String propertyValue(net.minecraft.block.BlockState state, Property<?> property) {
+    private static <T extends Comparable<T>> String propertyValue(net.minecraft.world.level.block.state.BlockState state, Property<?> property) {
         Property<T> typed = (Property<T>) property;
-        return typed.name(state.get(typed));
+        return typed.getName(state.getValue(typed));
     }
 
     private record RestoreEntry(BlockPos min, BlockPos max, String blockState, String blockEntityData) {

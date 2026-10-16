@@ -1,7 +1,7 @@
 package me.m0dii.modules.hungertweaks;
 
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.entity.player.HungerManager;
+import net.minecraft.client.Minecraft;
+import net.minecraft.world.food.FoodData;
 
 import java.text.DecimalFormat;
 import java.util.List;
@@ -22,12 +22,12 @@ public class HungerTweaksDebugInfoHandler {
             return;
         }
 
-        MinecraftClient client = MinecraftClient.getInstance();
+        Minecraft client = Minecraft.getInstance();
         if (client == null || client.player == null) {
             return;
         }
 
-        HungerManager stats = client.player.getHungerManager();
+        FoodData stats = client.player.getFoodData();
         leftDebugInfo.add("hunger: " + stats.getFoodLevel()
                 + ", sat: " + SATURATION_DF.format(stats.getSaturationLevel())
                 + ", exh: " + EXHAUSTION_VALUE_DF.format(HungerTweaksFoodHelper.getExhaustion(stats))

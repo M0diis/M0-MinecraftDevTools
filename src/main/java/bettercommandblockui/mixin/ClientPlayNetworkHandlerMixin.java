@@ -1,32 +1,32 @@
 package bettercommandblockui.mixin;
 
 import bettercommandblockui.main.ui.screen.BetterCommandBlockScreen;
-import net.minecraft.block.entity.CommandBlockBlockEntity;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.network.ClientPlayNetworkHandler;
-import net.minecraft.nbt.NbtCompound;
-import net.minecraft.network.packet.s2c.play.BlockEntityUpdateS2CPacket;
-import net.minecraft.util.math.BlockPos;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ClientPacketListener;
+import net.minecraft.core.BlockPos;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
+import net.minecraft.world.level.block.entity.CommandBlockEntity;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-@Mixin(ClientPlayNetworkHandler.class)
+@Mixin(ClientPacketListener.class)
 public class ClientPlayNetworkHandlerMixin {
 
-    @Inject(method = "onBlockEntityUpdate(Lnet/minecraft/network/packet/s2c/play/BlockEntityUpdateS2CPacket;)V",
+    @Inject(method = "handleBlockEntityData(Lnet/minecraft/network/protocol/game/ClientboundBlockEntityDataPacket;)V",
             at = @At("TAIL"))
-    public void blockEntityUpdateInject(BlockEntityUpdateS2CPacket packet, CallbackInfo ci) {
+    public void blockEntityUpdateInject(ClientboundBlockEntityDataPacket packet, CallbackInfo ci) {
         BlockPos blockPos = packet.getPos();
-        MinecraftClient client = ((ClientCommonNetworkHandlerAccessor) this).getClient();
-        client.world.getBlockEntity(blockPos, packet.getBlockEntityType()).ifPresent(blockEntity -> {
-            NbtCompound nbtCompound = packet.getNbt();
+        Minecraft client = ((ClientCommonNetworkHandlerAccessor) this).getMinecraft();
+        client.level.getBlockEntity(blockPos, packet.getType()).ifPresent(blockEntity -> {
+            CompoundTag nbtCompound = packet.getTag();
             /*if (nbtCompound != null) {
                 blockEntity.readNbt(nbtCompound);
             }*/
-            if (blockEntity instanceof CommandBlockBlockEntity && client.currentScreen instanceof BetterCommandBlockScreen) {
-                ((BetterCommandBlockScreen) client.currentScreen).updateCommandBlock();
+            if (blockEntity instanceof CommandBlockEntity && client.gui.screen() instanceof BetterCommandBlockScreen) {
+                ((BetterCommandBlockScreen) client.gui.screen()).updateCommandBlock();
             }
         });
     }

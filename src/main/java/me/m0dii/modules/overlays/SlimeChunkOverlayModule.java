@@ -1,19 +1,19 @@
 package me.m0dii.modules.overlays;
 
+import com.mojang.blaze3d.platform.InputConstants;
+import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.VertexConsumer;
 import me.m0dii.modules.Module;
+import me.m0dii.render.OverlayBufferSource;
+import me.m0dii.render.OverlayRenderEvents;
 import me.m0dii.utils.DrawUtil;
 import me.m0dii.utils.KeybindCatalog;
-import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.render.Camera;
-import net.minecraft.client.render.RenderLayers;
-import net.minecraft.client.render.VertexConsumer;
-import net.minecraft.client.render.VertexConsumerProvider;
-import net.minecraft.client.util.InputUtil;
-import net.minecraft.client.util.math.MatrixStack;
+import net.minecraft.client.Camera;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.util.math.ChunkPos;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.NotNull;
 import org.joml.Matrix4f;
 
@@ -33,46 +33,46 @@ public class SlimeChunkOverlayModule extends Module {
 
     @Override
     public void register() {
-        WorldRenderEvents.AFTER_ENTITIES.register(getAfterEntities());
+        OverlayRenderEvents.AFTER_ENTITIES.register(getAfterEntities());
 
         registerPressedKeybind(KeybindCatalog.SLIME_OVERLAY_TOGGLE.translationKey(),
-                InputUtil.Type.KEYSYM,
+                InputConstants.Type.KEYBOARD,
                 KeybindCatalog.SLIME_OVERLAY_TOGGLE.defaultKey(),
                 client -> toggleEnabled());
     }
 
-    private WorldRenderEvents.@NotNull AfterEntities getAfterEntities() {
+    private OverlayRenderEvents.@NotNull AfterEntities getAfterEntities() {
         return context -> {
             if (!isEnabled() || isClientNull()) {
                 return;
             }
 
             long seed;
-            MinecraftServer server = getClient().getServer();
+            MinecraftServer server = getClient().getSingleplayerServer();
             if (server != null) {
-                seed = server.getSaveProperties().getGeneratorOptions().getSeed();
+                seed = server.getWorldGenSettings().options().seed();
             } else {
                 return; // Seed not available
             }
 
-            MatrixStack matrices = context.matrices();
-            Camera camera = context.gameRenderer().getCamera();
+            PoseStack matrices = context.matrices();
+            Camera camera = context.gameRenderer().mainCamera();
             if (matrices == null || camera == null) {
                 return;
             }
 
-            Vec3d cameraPos = camera.getCameraPos();
-            ChunkPos playerChunk = new ChunkPos(getClient().player.getBlockPos());
+            Vec3 cameraPos = camera.position();
+            ChunkPos playerChunk = ChunkPos.containing(getClient().player.blockPosition());
 
-            VertexConsumerProvider vcp = context.consumers();
+            OverlayBufferSource vcp = context.consumers();
             if (vcp == null) {
-                vcp = getClient().getBufferBuilders().getEntityVertexConsumers();
+                vcp = OverlayBufferSource.current();
             }
 
             int chunkRadius = Math.max(1, XZ_RADIUS / 16);
             for (int dx = -chunkRadius; dx <= chunkRadius; dx++) {
                 for (int dz = -chunkRadius; dz <= chunkRadius; dz++) {
-                    ChunkPos chunkPos = new ChunkPos(playerChunk.x + dx, playerChunk.z + dz);
+                    ChunkPos chunkPos = new ChunkPos(playerChunk.x() + dx, playerChunk.z() + dz);
                     if (isSlimeChunk(seed, chunkPos)) {
                         renderChunkBorder(matrices, cameraPos, chunkPos, vcp);
                     }
@@ -105,22 +105,22 @@ public class SlimeChunkOverlayModule extends Module {
     }
 
     private static boolean isSlimeChunk(long seed, ChunkPos pos) {
-        int x = pos.x;
-        int z = pos.z;
+        int x = pos.x();
+        int z = pos.z();
         return new Random(seed + (x * x * 0x4c1906L) + (x * 0x5ac0dbL) + (z * z * 0x4307a7L) + (z * 0x5f24fL) ^ 0x3ad8025fL).nextInt(10) == 0;
     }
 
-    private static void renderChunkBorder(MatrixStack matrices, Vec3d cameraPos, ChunkPos chunkPos, VertexConsumerProvider vcp) {
-        matrices.push();
+    private static void renderChunkBorder(PoseStack matrices, Vec3 cameraPos, ChunkPos chunkPos, OverlayBufferSource vcp) {
+        matrices.pushPose();
 
         // Chunk boundaries
-        float minX = (float) (chunkPos.getStartX() - cameraPos.x);
-        float minZ = (float) (chunkPos.getStartZ() - cameraPos.z);
-        float maxX = (float) (chunkPos.getEndX() + 1 - cameraPos.x);
-        float maxZ = (float) (chunkPos.getEndZ() + 1 - cameraPos.z);
+        float minX = (float) (chunkPos.getMinBlockX() - cameraPos.x);
+        float minZ = (float) (chunkPos.getMinBlockZ() - cameraPos.z);
+        float maxX = (float) (chunkPos.getMaxBlockX() + 1 - cameraPos.x);
+        float maxZ = (float) (chunkPos.getMaxBlockZ() + 1 - cameraPos.z);
 
         // Use the player's Y position as reference
-        MinecraftClient client = MinecraftClient.getInstance();
+        Minecraft client = Minecraft.getInstance();
         if (client.player == null) {
             return;
         }
@@ -128,8 +128,8 @@ public class SlimeChunkOverlayModule extends Module {
         float minY = (float) (playerY - 5f - cameraPos.y);
         float maxY = (float) (playerY + 5f - cameraPos.y);
 
-        VertexConsumer vertexConsumer = vcp.getBuffer(RenderLayers.LINES);
-        Matrix4f matrix = matrices.peek().getPositionMatrix();
+        VertexConsumer vertexConsumer = vcp.getBuffer(RenderTypes.LINES);
+        Matrix4f matrix = matrices.last().pose();
 
         DrawUtil.drawLine(vertexConsumer, matrix, minX, minY, minZ, minX, maxY, minZ,
                 0.0f, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f);
@@ -140,6 +140,6 @@ public class SlimeChunkOverlayModule extends Module {
         DrawUtil.drawLine(vertexConsumer, matrix, maxX, minY, maxZ, maxX, maxY, maxZ,
                 0.0f, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f);
 
-        matrices.pop();
+        matrices.popPose();
     }
 }

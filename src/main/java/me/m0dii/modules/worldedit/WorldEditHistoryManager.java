@@ -1,11 +1,10 @@
 package me.m0dii.modules.worldedit;
 
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.text.Text;
-
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.List;
+import net.minecraft.client.Minecraft;
+import net.minecraft.network.chat.Component;
 
 public final class WorldEditHistoryManager {
     private static final int MAX_HISTORY = 15;
@@ -24,26 +23,26 @@ public final class WorldEditHistoryManager {
     }
 
     public static List<String> prepareTrackedOperation(String label, List<WorldEditSelection> touchedSelections, List<String> redoCommands) {
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (client.world == null || client.player == null) {
+        Minecraft client = Minecraft.getInstance();
+        if (client.level == null || client.player == null) {
             return null;
         }
         if (touchedSelections == null || touchedSelections.isEmpty()) {
             return null;
         }
-        if (!WorldEditUndoSnapshot.isFullyLoaded(client.world, touchedSelections)) {
-            client.player.sendMessage(Text.literal("[WE] Selection includes unloaded chunks. Load the area first for tracked edits and undo/redo."), false);
+        if (!WorldEditUndoSnapshot.isFullyLoaded(client.level, touchedSelections)) {
+            client.player.sendSystemMessage(Component.literal("[WE] Selection includes unloaded chunks. Load the area first for tracked edits and undo/redo."));
             return null;
         }
 
-        WorldEditUndoSnapshot undoSnapshot = WorldEditUndoSnapshot.capture(client.world, touchedSelections);
+        WorldEditUndoSnapshot undoSnapshot = WorldEditUndoSnapshot.capture(client.level, touchedSelections);
         if (undoSnapshot == null) {
-            client.player.sendMessage(Text.literal("[WE] Failed to snapshot the current selection for undo."), false);
+            client.player.sendSystemMessage(Component.literal("[WE] Failed to snapshot the current selection for undo."));
             return null;
         }
 
         if (undoSnapshot.isEmpty()) {
-            client.player.sendMessage(Text.literal("[WE] Undo snapshot was empty; aborting tracked edit."), false);
+            client.player.sendSystemMessage(Component.literal("[WE] Undo snapshot was empty; aborting tracked edit."));
             return null;
         }
 

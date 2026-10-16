@@ -1,14 +1,14 @@
 package me.m0dii.modules.hungertweaks;
 
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gl.RenderPipelines;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.entity.effect.StatusEffects;
-import net.minecraft.entity.player.HungerManager;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.item.ItemStack;
-import net.minecraft.util.Identifier;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.Difficulty;
+import net.minecraft.world.effect.MobEffects;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.food.FoodData;
+import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Random;
@@ -28,27 +28,27 @@ public class HungerTweaksHUDOverlayHandler {
         INSTANCE = new HungerTweaksHUDOverlayHandler();
     }
 
-    public void onPreRenderFood(DrawContext context, PlayerEntity player, int top, int right) {
+    public void onPreRenderFood(GuiGraphicsExtractor context, Player player, int top, int right) {
         if (player == null || !HungerTweaksModule.INSTANCE.showFoodExhaustionHudUnderlay()) {
             return;
         }
 
-        drawExhaustionOverlay(context, HungerTweaksFoodHelper.getExhaustion(player.getHungerManager()), right, top);
+        drawExhaustionOverlay(context, HungerTweaksFoodHelper.getExhaustion(player.getFoodData()), right, top);
     }
 
-    public void onRenderFood(DrawContext context, PlayerEntity player, int top, int right) {
+    public void onRenderFood(GuiGraphicsExtractor context, Player player, int top, int right) {
         if (player == null || !shouldRenderAnyOverlays()) {
             return;
         }
 
-        MinecraftClient client = MinecraftClient.getInstance();
-        HungerManager stats = player.getHungerManager();
+        Minecraft client = Minecraft.getInstance();
+        FoodData stats = player.getFoodData();
 
         if (HungerTweaksModule.INSTANCE.showSaturationHudOverlay()) {
-            drawSaturationOverlay(context, 0, stats.getSaturationLevel(), right, top, client.inGameHud.getTicks());
+            drawSaturationOverlay(context, 0, stats.getSaturationLevel(), right, top, client.gui.hud.getGuiTicks());
         }
 
-        HungerTweaksFoodHelper.QueriedFoodResult result = heldFood.result(client.inGameHud.getTicks(), player);
+        HungerTweaksFoodHelper.QueriedFoodResult result = heldFood.result(client.gui.hud.getGuiTicks(), player);
         if (result == null) {
             resetFlash();
             return;
@@ -60,7 +60,7 @@ public class HungerTweaksHUDOverlayHandler {
         int foodHunger = result.modifiedFoodComponent().nutrition();
         float foodSaturationIncrement = result.modifiedFoodComponent().saturation();
         drawHungerOverlay(context, foodHunger, stats.getFoodLevel(), right, top, flashAlpha,
-                HungerTweaksFoodHelper.isRotten(result.modifiedFoodComponent()), client.inGameHud.getTicks());
+                HungerTweaksFoodHelper.isRotten(result.modifiedFoodComponent()), client.gui.hud.getGuiTicks());
 
         if (HungerTweaksModule.INSTANCE.showSaturationHudOverlay()) {
             int newFoodValue = stats.getFoodLevel() + foodHunger;
@@ -68,24 +68,24 @@ public class HungerTweaksHUDOverlayHandler {
             float saturationGained = newSaturationValue > newFoodValue
                     ? newFoodValue - stats.getSaturationLevel()
                     : foodSaturationIncrement;
-            drawSaturationOverlay(context, saturationGained, stats.getSaturationLevel(), right, top, client.inGameHud.getTicks());
+            drawSaturationOverlay(context, saturationGained, stats.getSaturationLevel(), right, top, client.gui.hud.getGuiTicks());
         }
     }
 
-    public void onRenderHealth(DrawContext context, PlayerEntity player, int left, int top, int lines,
+    public void onRenderHealth(GuiGraphicsExtractor context, Player player, int left, int top, int lines,
                                int regeneratingHeartIndex, float maxHealth, int lastHealth, int health,
                                int absorption, boolean blinking) {
         if (player == null || !shouldRenderAnyOverlays()) {
             return;
         }
 
-        MinecraftClient client = MinecraftClient.getInstance();
-        HungerTweaksFoodHelper.QueriedFoodResult result = heldFood.result(client.inGameHud.getTicks(), player);
+        Minecraft client = Minecraft.getInstance();
+        HungerTweaksFoodHelper.QueriedFoodResult result = heldFood.result(client.gui.hud.getGuiTicks(), player);
         if (result == null) {
             resetFlash();
             return;
         }
-        if (!shouldShowEstimatedHealth(player, client.inGameHud.getTicks())) {
+        if (!shouldShowEstimatedHealth(player, client.gui.hud.getGuiTicks())) {
             return;
         }
 
@@ -93,11 +93,11 @@ public class HungerTweaksHUDOverlayHandler {
         float currentHealth = player.getHealth();
         float modifiedHealth = Math.min(currentHealth + foodHealthIncrement, player.getMaxHealth());
         if (currentHealth < modifiedHealth) {
-            drawHealthOverlay(context, currentHealth, modifiedHealth, left, top, flashAlpha, client.inGameHud.getTicks());
+            drawHealthOverlay(context, currentHealth, modifiedHealth, left, top, flashAlpha, client.gui.hud.getGuiTicks());
         }
     }
 
-    public void drawSaturationOverlay(DrawContext context, float saturationGained, float saturationLevel, int right, int top, int guiTicks) {
+    public void drawSaturationOverlay(GuiGraphicsExtractor context, float saturationGained, float saturationLevel, int right, int top, int guiTicks) {
         if (saturationLevel + saturationGained < 0) {
             return;
         }
@@ -107,18 +107,18 @@ public class HungerTweaksHUDOverlayHandler {
         int endSaturationBar = (int) Math.ceil(modifiedSaturation / 2.0F);
         int iconSize = 9;
 
-        var foodBarOffsets = barOffsets.foodBarOffsets(guiTicks, MinecraftClient.getInstance().player);
+        var foodBarOffsets = barOffsets.foodBarOffsets(guiTicks, Minecraft.getInstance().player);
         for (int i = startSaturationBar; i < endSaturationBar; ++i) {
             IntPoint offset = i < foodBarOffsets.size() ? foodBarOffsets.get(i) : new IntPoint();
             int x = right + offset.x;
             int y = top + offset.y;
             float effectiveSaturationOfBar = (modifiedSaturation / 2.0F) - i;
             int u = effectiveSaturationOfBar >= 1 ? 27 : effectiveSaturationOfBar > .5 ? 18 : effectiveSaturationOfBar > .25 ? 9 : 0;
-            context.drawTexture(RenderPipelines.GUI_TEXTURED, HungerTweaksTextureHelper.MOD_ICONS, x, y, (float) u, 0f, iconSize, iconSize, 256, 256);
+            context.blit(RenderPipelines.GUI_TEXTURED, HungerTweaksTextureHelper.MOD_ICONS, x, y, (float) u, 0f, iconSize, iconSize, 256, 256);
         }
     }
 
-    public void drawHungerOverlay(DrawContext context, int hungerRestored, int foodLevel, int right, int top,
+    public void drawHungerOverlay(GuiGraphicsExtractor context, int hungerRestored, int foodLevel, int right, int top,
                                   float alpha, boolean rotten, int guiTicks) {
         if (hungerRestored <= 0) {
             return;
@@ -129,28 +129,28 @@ public class HungerTweaksHUDOverlayHandler {
         int endFoodBars = (int) Math.ceil(modifiedFood / 2.0F);
         int iconSize = 9;
 
-        var foodBarOffsets = barOffsets.foodBarOffsets(guiTicks, MinecraftClient.getInstance().player);
+        var foodBarOffsets = barOffsets.foodBarOffsets(guiTicks, Minecraft.getInstance().player);
         for (int i = startFoodBars; i < endFoodBars; ++i) {
             IntPoint offset = i < foodBarOffsets.size() ? foodBarOffsets.get(i) : new IntPoint();
             int x = right + offset.x;
             int y = top + offset.y;
             Identifier backgroundSprite = HungerTweaksTextureHelper.getFoodTexture(rotten, HungerTweaksTextureHelper.FoodType.EMPTY);
-            context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, backgroundSprite, x, y, iconSize, iconSize, alpha * 0.25f);
+            context.blitSprite(RenderPipelines.GUI_TEXTURED, backgroundSprite, x, y, iconSize, iconSize, alpha * 0.25f);
 
             boolean half = i * 2 + 1 == modifiedFood;
             Identifier iconSprite = HungerTweaksTextureHelper.getFoodTexture(rotten, half ? HungerTweaksTextureHelper.FoodType.HALF : HungerTweaksTextureHelper.FoodType.FULL);
-            context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, iconSprite, x, y, iconSize, iconSize, alpha);
+            context.blitSprite(RenderPipelines.GUI_TEXTURED, iconSprite, x, y, iconSize, iconSize, alpha);
         }
     }
 
-    public void drawHealthOverlay(DrawContext context, float health, float modifiedHealth, int right, int top, float alpha, int guiTicks) {
+    public void drawHealthOverlay(GuiGraphicsExtractor context, float health, float modifiedHealth, int right, int top, float alpha, int guiTicks) {
         if (modifiedHealth <= health) {
             return;
         }
 
-        MinecraftClient client = MinecraftClient.getInstance();
+        Minecraft client = Minecraft.getInstance();
         int fixedModifiedHealth = (int) Math.ceil(modifiedHealth);
-        boolean hardcore = client.world != null && client.world.getLevelProperties().isHardcore();
+        boolean hardcore = client.level != null && client.level.getLevelData().isHardcore();
         int startHealthBars = (int) Math.max(0, Math.ceil(health) / 2.0F);
         int endHealthBars = (int) Math.max(0, Math.ceil(modifiedHealth / 2.0F));
         int iconSize = 9;
@@ -161,18 +161,18 @@ public class HungerTweaksHUDOverlayHandler {
             int x = right + offset.x;
             int y = top + offset.y;
             Identifier backgroundSprite = HungerTweaksTextureHelper.getHeartTexture(hardcore, HungerTweaksTextureHelper.HeartType.CONTAINER);
-            context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, backgroundSprite, x, y, iconSize, iconSize, alpha * 0.25f);
+            context.blitSprite(RenderPipelines.GUI_TEXTURED, backgroundSprite, x, y, iconSize, iconSize, alpha * 0.25f);
 
             boolean half = i * 2 + 1 == fixedModifiedHealth;
             Identifier iconSprite = HungerTweaksTextureHelper.getHeartTexture(hardcore, half ? HungerTweaksTextureHelper.HeartType.HALF : HungerTweaksTextureHelper.HeartType.FULL);
-            context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, iconSprite, x, y, iconSize, iconSize, alpha);
+            context.blitSprite(RenderPipelines.GUI_TEXTURED, iconSprite, x, y, iconSize, iconSize, alpha);
         }
     }
 
-    public void drawExhaustionOverlay(DrawContext context, float exhaustion, int right, int top) {
+    public void drawExhaustionOverlay(GuiGraphicsExtractor context, float exhaustion, int right, int top) {
         float ratio = Math.clamp(exhaustion / HungerTweaksFoodHelper.MAX_EXHAUSTION, 0, 1);
         int width = (int) (ratio * 81);
-        context.drawTexture(RenderPipelines.GUI_TEXTURED, HungerTweaksTextureHelper.MOD_ICONS, right - width, top, (float) (81 - width), 18f, width, 9, 256, 256);
+        context.blit(RenderPipelines.GUI_TEXTURED, HungerTweaksTextureHelper.MOD_ICONS, right - width, top, (float) (81 - width), 18f, width, 9, 256, 256);
     }
 
     public void onClientTick() {
@@ -197,20 +197,20 @@ public class HungerTweaksHUDOverlayHandler {
                 || HungerTweaksModule.INSTANCE.showFoodHealthHudOverlay();
     }
 
-    private boolean shouldShowEstimatedHealth(PlayerEntity player, int guiTicks) {
+    private boolean shouldShowEstimatedHealth(Player player, int guiTicks) {
         if (!HungerTweaksModule.INSTANCE.showFoodHealthHudOverlay()) {
             return false;
         }
         if (barOffsets.healthBarOffsets(guiTicks, player).isEmpty()) {
             return false;
         }
-        HungerManager stats = player.getHungerManager();
-        if (player.getEntityWorld().getDifficulty() == Difficulty.PEACEFUL || stats.getFoodLevel() >= 18) {
+        FoodData stats = player.getFoodData();
+        if (player.level().getDifficulty() == Difficulty.PEACEFUL || stats.getFoodLevel() >= 18) {
             return false;
         }
-        return !player.hasStatusEffect(StatusEffects.POISON)
-                && !player.hasStatusEffect(StatusEffects.WITHER)
-                && !player.hasStatusEffect(StatusEffects.REGENERATION);
+        return !player.hasEffect(MobEffects.POISON)
+                && !player.hasEffect(MobEffects.WITHER)
+                && !player.hasEffect(MobEffects.REGENERATION);
     }
 
     private static class OffsetsCache {
@@ -219,7 +219,7 @@ public class HungerTweaksHUDOverlayHandler {
         public int lastGuiTick = 0;
         protected final Random random = new Random();
 
-        protected void generate(int guiTicks, PlayerEntity player) {
+        protected void generate(int guiTicks, Player player) {
             final int preferHealthBars = 10;
             final int preferFoodBars = 10;
             float maxHealth = player.getMaxHealth();
@@ -235,7 +235,7 @@ public class HungerTweaksHUDOverlayHandler {
             boolean animatedHealth = false;
             boolean animatedFood = false;
             if (HungerTweaksModule.INSTANCE.showVanillaAnimationsOverlay()) {
-                HungerManager hungerManager = player.getHungerManager();
+                FoodData hungerManager = player.getFoodData();
                 float saturationLevel = hungerManager.getSaturationLevel();
                 int foodLevel = hungerManager.getFoodLevel();
                 animatedFood = saturationLevel <= 0.0F && guiTicks % (foodLevel * 3 + 1) == 0;
@@ -284,7 +284,7 @@ public class HungerTweaksHUDOverlayHandler {
             }
         }
 
-        public Vector<IntPoint> healthBarOffsets(int guiTick, PlayerEntity player) {
+        public Vector<IntPoint> healthBarOffsets(int guiTick, Player player) {
             if (guiTick != lastGuiTick) {
                 generate(guiTick, player);
                 lastGuiTick = guiTick;
@@ -292,7 +292,7 @@ public class HungerTweaksHUDOverlayHandler {
             return healthBarOffsets;
         }
 
-        public Vector<IntPoint> foodBarOffsets(int guiTick, PlayerEntity player) {
+        public Vector<IntPoint> foodBarOffsets(int guiTick, Player player) {
             if (guiTick != lastGuiTick) {
                 generate(guiTick, player);
                 lastGuiTick = guiTick;
@@ -306,12 +306,12 @@ public class HungerTweaksHUDOverlayHandler {
         protected HungerTweaksFoodHelper.QueriedFoodResult result;
         public int lastGuiTick = 0;
 
-        protected void query(PlayerEntity player) {
-            ItemStack heldItem = player.getMainHandStack();
+        protected void query(Player player) {
+            ItemStack heldItem = player.getMainHandItem();
             HungerTweaksFoodHelper.QueriedFoodResult heldFood = HungerTweaksFoodHelper.query(heldItem, player);
             boolean canConsume = heldFood != null && HungerTweaksFoodHelper.canConsume(player, heldFood.modifiedFoodComponent());
             if (HungerTweaksModule.INSTANCE.showFoodValuesHudOverlayWhenOffhand() && !canConsume) {
-                heldItem = player.getOffHandStack();
+                heldItem = player.getOffhandItem();
                 heldFood = HungerTweaksFoodHelper.query(heldItem, player);
                 canConsume = heldFood != null && HungerTweaksFoodHelper.canConsume(player, heldFood.modifiedFoodComponent());
             }
@@ -323,7 +323,7 @@ public class HungerTweaksHUDOverlayHandler {
             this.result = heldFood;
         }
 
-        public HungerTweaksFoodHelper.QueriedFoodResult result(int guiTick, PlayerEntity player) {
+        public HungerTweaksFoodHelper.QueriedFoodResult result(int guiTick, Player player) {
             if (guiTick != lastGuiTick) {
                 query(player);
                 lastGuiTick = guiTick;

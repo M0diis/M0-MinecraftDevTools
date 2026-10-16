@@ -1,16 +1,15 @@
 package me.m0dii.modules.actionrunner;
 
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.network.ClientPlayerEntity;
-import net.minecraft.client.network.ClientPlayerInteractionManager;
-import net.minecraft.item.ItemStack;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.text.Text;
-import net.minecraft.util.Hand;
-import net.minecraft.util.hit.BlockHitResult;
-import net.minecraft.util.hit.HitResult;
-
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.MultiPlayerGameMode;
+import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -37,13 +36,13 @@ public class ActionRunnerModule {
         currentIndex = 0;
     }
 
-    public void run(ServerPlayerEntity player) {
+    public void run(ServerPlayer player) {
         if (queue.isEmpty() || running) {
             return;
         }
         running = true;
         currentIndex = 0;
-        player.sendMessage(Text.literal("[ActionRunner] Running queued actions..."));
+        player.sendSystemMessage(Component.literal("[ActionRunner] Running queued actions..."));
     }
 
     public void runClient(FabricClientCommandSource source) {
@@ -53,7 +52,7 @@ public class ActionRunnerModule {
         running = true;
         currentIndex = 0;
         globalTick = 0; // Reset global tick on run
-        source.sendFeedback(Text.literal("[ActionRunner] Running queued actions..."));
+        source.sendFeedback(Component.literal("[ActionRunner] Running queued actions..."));
     }
 
     public void onClientTick() {
@@ -61,9 +60,9 @@ public class ActionRunnerModule {
             return;
         }
         globalTick++;
-        var mc = MinecraftClient.getInstance();
+        var mc = Minecraft.getInstance();
         var player = mc.player;
-        var manager = mc.interactionManager;
+        var manager = mc.gameMode;
         if (player == null || manager == null) {
             return;
         }
@@ -86,76 +85,76 @@ public class ActionRunnerModule {
             }
         }
         if (currentIndex >= queue.size() && executedAny) {
-            player.sendMessage(Text.literal("[ActionRunner] All actions executed."), false);
+            player.sendSystemMessage(Component.literal("[ActionRunner] All actions executed."));
             clear();
         }
     }
 
-    private void executeAction(Action action, MinecraftClient mc, ClientPlayerEntity player, ClientPlayerInteractionManager manager, int tick) {
+    private void executeAction(Action action, Minecraft mc, LocalPlayer player, MultiPlayerGameMode manager, int tick) {
         switch (action.type) {
             case ITEM_USE -> {
-                manager.interactItem(player, Hand.MAIN_HAND);
-                player.sendMessage(Text.literal("[ActionRunner] Executed ITEM_USE at tick " + tick), false);
+                manager.useItem(player, InteractionHand.MAIN_HAND);
+                player.sendSystemMessage(Component.literal("[ActionRunner] Executed ITEM_USE at tick " + tick));
             }
             case ITEM_USE_OFFHAND -> {
-                manager.interactItem(player, Hand.OFF_HAND);
-                player.sendMessage(Text.literal("[ActionRunner] Executed ITEM_USE_OFFHAND at tick " + tick), false);
+                manager.useItem(player, InteractionHand.OFF_HAND);
+                player.sendSystemMessage(Component.literal("[ActionRunner] Executed ITEM_USE_OFFHAND at tick " + tick));
             }
             case LEFT_CLICK -> {
-                var crosshair = mc.crosshairTarget;
+                var crosshair = mc.hitResult;
                 if (crosshair != null && crosshair.getType() == HitResult.Type.BLOCK) {
                     var blockHit = (BlockHitResult) crosshair;
-                    manager.attackBlock(blockHit.getBlockPos(), blockHit.getSide());
-                    player.sendMessage(Text.literal("[ActionRunner] Executed LEFT_CLICK on block at tick " + tick), false);
+                    manager.startDestroyBlock(blockHit.getBlockPos(), blockHit.getDirection());
+                    player.sendSystemMessage(Component.literal("[ActionRunner] Executed LEFT_CLICK on block at tick " + tick));
                 } else {
-                    player.sendMessage(Text.literal("[ActionRunner] No block to LEFT_CLICK at tick " + tick), false);
+                    player.sendSystemMessage(Component.literal("[ActionRunner] No block to LEFT_CLICK at tick " + tick));
                 }
             }
             case SNEAK -> {
-                mc.options.sneakKey.setPressed(true);
-                player.sendMessage(Text.literal("[ActionRunner] Executed SNEAK at tick " + tick), false);
+                mc.options.keyShift.setDown(true);
+                player.sendSystemMessage(Component.literal("[ActionRunner] Executed SNEAK at tick " + tick));
             }
             case JUMP -> {
-                mc.options.jumpKey.setPressed(true);
-                player.sendMessage(Text.literal("[ActionRunner] Executed JUMP at tick " + tick), false);
+                mc.options.keyJump.setDown(true);
+                player.sendSystemMessage(Component.literal("[ActionRunner] Executed JUMP at tick " + tick));
             }
             case DROP -> {
-                player.dropSelectedItem(false);
-                player.sendMessage(Text.literal("[ActionRunner] Executed DROP at tick " + tick), false);
+                mc.gameMode.dropItem(player, false);
+                player.sendSystemMessage(Component.literal("[ActionRunner] Executed DROP at tick " + tick));
             }
             case COMMAND -> {
-                player.networkHandler.sendChatCommand(action.command);
-                player.sendMessage(Text.literal("[ActionRunner] Executed COMMAND: /" + action.command + " at tick " + tick), false);
+                player.connection.sendCommand(action.command);
+                player.sendSystemMessage(Component.literal("[ActionRunner] Executed COMMAND: /" + action.command + " at tick " + tick));
             }
             case SWAP_OFFHAND -> {
                 int mainSlot = player.getInventory().getSelectedSlot();
                 int offhandSlot = 40;
 
-                ItemStack main = player.getInventory().getStack(mainSlot);
-                ItemStack off = player.getInventory().getStack(offhandSlot);
+                ItemStack main = player.getInventory().getItem(mainSlot);
+                ItemStack off = player.getInventory().getItem(offhandSlot);
 
-                player.getInventory().setStack(mainSlot, off);
-                player.getInventory().setStack(offhandSlot, main);
+                player.getInventory().setItem(mainSlot, off);
+                player.getInventory().setItem(offhandSlot, main);
 
-                mc.player.getInventory().updateItems();
-                player.playerScreenHandler.sendContentUpdates();
-                player.sendMessage(Text.literal("[ActionRunner] Executed SWAP_OFFHAND at tick " + tick), false);
+                mc.player.getInventory().tick();
+                player.inventoryMenu.broadcastChanges();
+                player.sendSystemMessage(Component.literal("[ActionRunner] Executed SWAP_OFFHAND at tick " + tick));
             }
             case SELECT_HOTBAR_SLOT -> {
                 if (action.command == null) {
-                    player.sendMessage(Text.literal("[ActionRunner] No slot provided for SELECT_HOTBAR_SLOT at tick " + tick), false);
+                    player.sendSystemMessage(Component.literal("[ActionRunner] No slot provided for SELECT_HOTBAR_SLOT at tick " + tick));
                     break;
                 }
                 try {
                     int slot = Integer.parseInt(action.command);
                     if (slot >= 0 && slot <= 8) {
                         mc.player.getInventory().setSelectedSlot(slot);
-                        player.sendMessage(Text.literal("[ActionRunner] Selected hotbar slot " + slot + " at tick " + tick), false);
+                        player.sendSystemMessage(Component.literal("[ActionRunner] Selected hotbar slot " + slot + " at tick " + tick));
                     } else {
-                        player.sendMessage(Text.literal("[ActionRunner] Invalid hotbar slot: " + slot + " at tick " + tick), false);
+                        player.sendSystemMessage(Component.literal("[ActionRunner] Invalid hotbar slot: " + slot + " at tick " + tick));
                     }
                 } catch (NumberFormatException e) {
-                    player.sendMessage(Text.literal("[ActionRunner] Invalid hotbar slot command: " + action.command + " at tick " + tick), false);
+                    player.sendSystemMessage(Component.literal("[ActionRunner] Invalid hotbar slot command: " + action.command + " at tick " + tick));
                 }
             }
         }

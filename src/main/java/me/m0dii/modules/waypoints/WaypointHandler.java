@@ -5,12 +5,11 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
 import lombok.Getter;
 import net.fabricmc.loader.api.FabricLoader;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.text.Style;
-import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
-import net.minecraft.util.math.Vec3d;
-
+import net.minecraft.ChatFormatting;
+import net.minecraft.client.Minecraft;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.Style;
+import net.minecraft.world.phys.Vec3;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -25,11 +24,11 @@ public class WaypointHandler {
     public static class Waypoint {
         public String id;
         public String name;
-        public Vec3d position;
+        public Vec3 position;
         public String dimension;
         public long createdTime;
 
-        public Waypoint(String id, String name, Vec3d position, String dimension) {
+        public Waypoint(String id, String name, Vec3 position, String dimension) {
             this.id = id;
             this.name = name;
             this.position = position;
@@ -74,13 +73,13 @@ public class WaypointHandler {
     }
 
     public static void addWaypoint() {
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (client.player == null || client.world == null) {
+        Minecraft client = Minecraft.getInstance();
+        if (client.player == null || client.level == null) {
             return;
         }
 
-        Vec3d pos = new Vec3d(client.player.getX(), client.player.getY(), client.player.getZ());
-        String dimension = client.world.getRegistryKey().getValue().toString();
+        Vec3 pos = new Vec3(client.player.getX(), client.player.getY(), client.player.getZ());
+        String dimension = client.level.dimension().identifier().toString();
         String id = UUID.randomUUID().toString().substring(0, 8);
         String name = "Waypoint " + (waypoints.size() + 1);
 
@@ -88,125 +87,125 @@ public class WaypointHandler {
         waypoints.add(waypoint);
         saveWaypoints();
 
-        Text message = Text.literal("")
-                .append(Text.literal("✓ ").formatted(Formatting.GREEN))
-                .append(Text.literal("Waypoint added: ").formatted(Formatting.GRAY))
-                .append(Text.literal(name).formatted(Formatting.AQUA))
-                .append(Text.literal(" at ").formatted(Formatting.GRAY))
-                .append(Text.literal(String.format("%.0f, %.0f, %.0f", pos.x, pos.y, pos.z)).formatted(Formatting.WHITE));
+        Component message = Component.literal("")
+                .append(Component.literal("✓ ").withStyle(ChatFormatting.GREEN))
+                .append(Component.literal("Waypoint added: ").withStyle(ChatFormatting.GRAY))
+                .append(Component.literal(name).withStyle(ChatFormatting.AQUA))
+                .append(Component.literal(" at ").withStyle(ChatFormatting.GRAY))
+                .append(Component.literal(String.format("%.0f, %.0f, %.0f", pos.x, pos.y, pos.z)).withStyle(ChatFormatting.WHITE));
 
-        client.player.sendMessage(message, false);
+        client.player.sendSystemMessage(message);
     }
 
     public static void listWaypoints() {
-        MinecraftClient client = MinecraftClient.getInstance();
+        Minecraft client = Minecraft.getInstance();
         if (client.player == null) {
             return;
         }
 
         if (waypoints.isEmpty()) {
-            Text message = Text.literal("No waypoints saved").formatted(Formatting.GRAY);
-            client.player.sendMessage(message, false);
+            Component message = Component.literal("No waypoints saved").withStyle(ChatFormatting.GRAY);
+            client.player.sendSystemMessage(message);
             return;
         }
 
-        Text header = Text.literal("")
-                .append(Text.literal("════════════").formatted(Formatting.GOLD))
-                .append(Text.literal("\n"))
-                .append(Text.literal("WAYPOINTS").formatted(Formatting.GOLD, Formatting.BOLD))
-                .append(Text.literal("\n"))
-                .append(Text.literal("════════════").formatted(Formatting.GOLD));
+        Component header = Component.literal("")
+                .append(Component.literal("════════════").withStyle(ChatFormatting.GOLD))
+                .append(Component.literal("\n"))
+                .append(Component.literal("WAYPOINTS").withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD))
+                .append(Component.literal("\n"))
+                .append(Component.literal("════════════").withStyle(ChatFormatting.GOLD));
 
-        client.player.sendMessage(header, false);
+        client.player.sendSystemMessage(header);
 
         for (int i = 0; i < waypoints.size(); i++) {
             Waypoint wp = waypoints.get(i);
             String dimName = wp.dimension.substring(wp.dimension.lastIndexOf(":") + 1);
-            double distance = new Vec3d(client.player.getX(), client.player.getY(), client.player.getZ()).distanceTo(wp.position);
+            double distance = new Vec3(client.player.getX(), client.player.getY(), client.player.getZ()).distanceTo(wp.position);
 
-            Text teleportButton = Text.literal("TP")
+            Component teleportButton = Component.literal("TP")
                     .setStyle(Style.EMPTY
-                            .withColor(Formatting.GREEN)
+                            .withColor(ChatFormatting.GREEN)
                             .withBold(true));
 
-            Text deleteButton = Text.literal("DEL")
+            Component deleteButton = Component.literal("DEL")
                     .setStyle(Style.EMPTY
-                            .withColor(Formatting.RED)
+                            .withColor(ChatFormatting.RED)
                             .withBold(true));
 
-            Text renameButton = Text.literal("RENAME")
+            Component renameButton = Component.literal("RENAME")
                     .setStyle(Style.EMPTY
-                            .withColor(Formatting.YELLOW)
+                            .withColor(ChatFormatting.YELLOW)
                             .withBold(true));
 
-            Text waypointInfo = Text.literal("")
-                    .append(Text.literal((i + 1) + ". ").formatted(Formatting.GRAY))
-                    .append(Text.literal(wp.name).formatted(Formatting.AQUA, Formatting.BOLD))
-                    .append(Text.literal(" [" + dimName + "]").formatted(Formatting.DARK_GRAY))
-                    .append(Text.literal(" • ").formatted(Formatting.YELLOW))
-                    .append(Text.literal(String.format("%.0f, %.0f, %.0f", wp.position.x, wp.position.y, wp.position.z)).formatted(Formatting.WHITE))
-                    .append(Text.literal(" (").formatted(Formatting.GRAY))
-                    .append(Text.literal(String.format("%.0fm", distance)).formatted(Formatting.GOLD))
-                    .append(Text.literal(")").formatted(Formatting.GRAY))
-                    .append(Text.literal("\n   "))
+            Component waypointInfo = Component.literal("")
+                    .append(Component.literal((i + 1) + ". ").withStyle(ChatFormatting.GRAY))
+                    .append(Component.literal(wp.name).withStyle(ChatFormatting.AQUA, ChatFormatting.BOLD))
+                    .append(Component.literal(" [" + dimName + "]").withStyle(ChatFormatting.DARK_GRAY))
+                    .append(Component.literal(" • ").withStyle(ChatFormatting.YELLOW))
+                    .append(Component.literal(String.format("%.0f, %.0f, %.0f", wp.position.x, wp.position.y, wp.position.z)).withStyle(ChatFormatting.WHITE))
+                    .append(Component.literal(" (").withStyle(ChatFormatting.GRAY))
+                    .append(Component.literal(String.format("%.0fm", distance)).withStyle(ChatFormatting.GOLD))
+                    .append(Component.literal(")").withStyle(ChatFormatting.GRAY))
+                    .append(Component.literal("\n   "))
                     .append(teleportButton)
-                    .append(Text.literal("  "))
+                    .append(Component.literal("  "))
                     .append(renameButton)
-                    .append(Text.literal("  "))
+                    .append(Component.literal("  "))
                     .append(deleteButton);
 
-            client.player.sendMessage(waypointInfo, false);
+            client.player.sendSystemMessage(waypointInfo);
 
             if (i < waypoints.size() - 1) {
-                client.player.sendMessage(Text.literal("------------").formatted(Formatting.DARK_GRAY), false);
+                client.player.sendSystemMessage(Component.literal("------------").withStyle(ChatFormatting.DARK_GRAY));
             }
         }
 
-        Text footer = Text.literal("════════════").formatted(Formatting.GOLD);
+        Component footer = Component.literal("════════════").withStyle(ChatFormatting.GOLD);
 
-        client.player.sendMessage(footer, false);
+        client.player.sendSystemMessage(footer);
     }
 
     public static void teleportToWaypoint(String waypointId) {
-        MinecraftClient client = MinecraftClient.getInstance();
+        Minecraft client = Minecraft.getInstance();
         if (client.player == null) {
             return;
         }
 
         Waypoint waypoint = findWaypointById(waypointId);
         if (waypoint == null) {
-            client.player.sendMessage(Text.literal("❌ Waypoint not found!").formatted(Formatting.RED), false);
+            client.player.sendSystemMessage(Component.literal("❌ Waypoint not found!").withStyle(ChatFormatting.RED));
             return;
         }
 
         // Check if in creative mode or has permissions
-        if (!client.player.getAbilities().creativeMode) {
-            client.player.sendMessage(Text.literal("❌ You need creative mode to teleport!").formatted(Formatting.RED), false);
+        if (!client.player.getAbilities().instabuild) {
+            client.player.sendSystemMessage(Component.literal("❌ You need creative mode to teleport!").withStyle(ChatFormatting.RED));
             return;
         }
 
         // Teleport
-        client.player.setPosition(waypoint.position.x, waypoint.position.y, waypoint.position.z);
+        client.player.setPos(waypoint.position.x, waypoint.position.y, waypoint.position.z);
 
         // Success message
-        Text message = Text.literal("")
-                .append(Text.literal("🚀 ").formatted(Formatting.GREEN))
-                .append(Text.literal("Teleported to ").formatted(Formatting.GRAY))
-                .append(Text.literal(waypoint.name).formatted(Formatting.AQUA))
-                .append(Text.literal("!").formatted(Formatting.GRAY));
+        Component message = Component.literal("")
+                .append(Component.literal("🚀 ").withStyle(ChatFormatting.GREEN))
+                .append(Component.literal("Teleported to ").withStyle(ChatFormatting.GRAY))
+                .append(Component.literal(waypoint.name).withStyle(ChatFormatting.AQUA))
+                .append(Component.literal("!").withStyle(ChatFormatting.GRAY));
 
-        client.player.sendMessage(message, true); // Action bar
+        client.player.sendOverlayMessage(message); // Action bar
     }
 
     public static void deleteWaypoint(String waypointId) {
-        MinecraftClient client = MinecraftClient.getInstance();
+        Minecraft client = Minecraft.getInstance();
         if (client.player == null) {
             return;
         }
 
         Waypoint waypoint = findWaypointById(waypointId);
         if (waypoint == null) {
-            client.player.sendMessage(Text.literal("❌ Waypoint not found!").formatted(Formatting.RED), false);
+            client.player.sendSystemMessage(Component.literal("❌ Waypoint not found!").withStyle(ChatFormatting.RED));
             return;
         }
 
@@ -214,21 +213,21 @@ public class WaypointHandler {
         saveWaypoints();
 
         // Success message
-        Text message = Text.literal("Deleted waypoint ").formatted(Formatting.GRAY)
-                .append(Text.literal(waypoint.name).formatted(Formatting.AQUA));
+        Component message = Component.literal("Deleted waypoint ").withStyle(ChatFormatting.GRAY)
+                .append(Component.literal(waypoint.name).withStyle(ChatFormatting.AQUA));
 
-        client.player.sendMessage(message, false);
+        client.player.sendSystemMessage(message);
     }
 
     public static void renameWaypoint(String waypointId, String newName) {
-        MinecraftClient client = MinecraftClient.getInstance();
+        Minecraft client = Minecraft.getInstance();
         if (client.player == null) {
             return;
         }
 
         Waypoint waypoint = findWaypointById(waypointId);
         if (waypoint == null) {
-            client.player.sendMessage(Text.literal("Waypoint not found!").formatted(Formatting.RED), false);
+            client.player.sendSystemMessage(Component.literal("Waypoint not found!").withStyle(ChatFormatting.RED));
             return;
         }
 
@@ -237,14 +236,14 @@ public class WaypointHandler {
         saveWaypoints();
 
         // Success message
-        Text message = Text.literal("")
-                .append(Text.literal("✏️ ").formatted(Formatting.YELLOW))
-                .append(Text.literal("Renamed ").formatted(Formatting.GRAY))
-                .append(Text.literal(oldName).formatted(Formatting.DARK_AQUA))
-                .append(Text.literal(" to ").formatted(Formatting.GRAY))
-                .append(Text.literal(waypoint.name).formatted(Formatting.AQUA));
+        Component message = Component.literal("")
+                .append(Component.literal("✏️ ").withStyle(ChatFormatting.YELLOW))
+                .append(Component.literal("Renamed ").withStyle(ChatFormatting.GRAY))
+                .append(Component.literal(oldName).withStyle(ChatFormatting.DARK_AQUA))
+                .append(Component.literal(" to ").withStyle(ChatFormatting.GRAY))
+                .append(Component.literal(waypoint.name).withStyle(ChatFormatting.AQUA));
 
-        client.player.sendMessage(message, false);
+        client.player.sendSystemMessage(message);
     }
 
     private static Waypoint findWaypointById(String id) {

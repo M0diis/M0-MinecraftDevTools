@@ -1,9 +1,9 @@
 package me.m0dii.utils;
 
-import net.minecraft.nbt.NbtCompound;
-import net.minecraft.nbt.NbtInt;
-import net.minecraft.nbt.NbtList;
-import net.minecraft.nbt.NbtString;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.IntTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.StringTag;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -14,15 +14,15 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 class NbtEditorUtilsTest {
     @Test
     void resolvesCompoundAndListPaths() {
-        NbtCompound root = new NbtCompound();
+        CompoundTag root = new CompoundTag();
         root.putFloat("Health", 20.0f);
 
-        NbtCompound offer = new NbtCompound();
+        CompoundTag offer = new CompoundTag();
         offer.putString("id", "minecraft:emerald");
-        NbtList recipes = new NbtList();
+        ListTag recipes = new ListTag();
         recipes.add(offer);
 
-        NbtCompound offers = new NbtCompound();
+        CompoundTag offers = new CompoundTag();
         offers.put("Recipes", recipes);
         root.put("Offers", offers);
 
@@ -34,18 +34,18 @@ class NbtEditorUtilsTest {
 
     @Test
     void updatesAndRemovesChildren() {
-        NbtCompound root = new NbtCompound();
-        root.put("foo", NbtString.of("bar"));
+        CompoundTag root = new CompoundTag();
+        root.put("foo", StringTag.valueOf("bar"));
 
-        NbtList list = new NbtList();
-        list.add(NbtInt.of(1));
-        list.add(NbtInt.of(2));
+        ListTag list = new ListTag();
+        list.add(IntTag.valueOf(1));
+        list.add(IntTag.valueOf(2));
         root.put("list", list);
 
-        NbtEditorUtils.setChild(root, "foo", NbtString.of("baz"));
+        NbtEditorUtils.setChild(root, "foo", StringTag.valueOf("baz"));
         assertEquals("\"baz\"", root.get("foo").toString());
 
-        NbtEditorUtils.setChild(list, "1", NbtInt.of(5));
+        NbtEditorUtils.setChild(list, "1", IntTag.valueOf(5));
         assertEquals("5", list.get(1).toString());
 
         NbtEditorUtils.removeChild(root, "foo");

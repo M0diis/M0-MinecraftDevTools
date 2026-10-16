@@ -1,11 +1,11 @@
 package me.m0dii.modules.scripting;
 
-import net.minecraft.client.MinecraftClient;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
+import net.minecraft.client.Minecraft;
 
 public final class ScriptTypes {
     public static final String GROOVY_EXT = ".groovy";
@@ -50,14 +50,14 @@ public final class ScriptTypes {
     }
 
     public static @NotNull Map<String, Object> defaultContext() {
-        MinecraftClient client = MinecraftClient.getInstance();
+        Minecraft client = Minecraft.getInstance();
         Map<String, Object> context = new LinkedHashMap<>();
         context.put("client", client);
         context.put("source", client.player);
         context.put("player", client.player);
-        context.put("world", client.world);
+        context.put("world", client.level);
         context.put("options", client.options);
-        context.put("server", client.getServer());
+        context.put("server", client.getSingleplayerServer());
         return context;
     }
 

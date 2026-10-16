@@ -1,5 +1,6 @@
 package me.m0dii.modules.entityradar;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import me.m0dii.M0DevToolsClient;
 import me.m0dii.modules.Module;
 import me.m0dii.modules.optin.RestrictedModuleOptInNetworking;
@@ -7,14 +8,13 @@ import me.m0dii.utils.KeybindCatalog;
 import me.m0dii.utils.ModConfig;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
-import net.minecraft.client.util.InputUtil;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.mob.Monster;
-import net.minecraft.entity.passive.AnimalEntity;
-import net.minecraft.entity.passive.PassiveEntity;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.math.Box;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.entity.AgeableMob;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.animal.Animal;
+import net.minecraft.world.entity.monster.Enemy;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -35,16 +35,16 @@ public class EntityRadarModule extends Module {
     @Override
     public void register() {
         HudElementRegistry.attachElementBefore(VanillaHudElements.CHAT,
-                Identifier.of(M0DevToolsClient.MOD_ID, "entity_radar_hud"),
+                Identifier.fromNamespaceAndPath(M0DevToolsClient.MOD_ID, "entity_radar_hud"),
                 hudRenderer::onHudRender
         );
 
         worldRenderer.register();
 
         registerPressedKeybind(KeybindCatalog.ENTITY_RADAR_SCREEN.translationKey(),
-                InputUtil.Type.KEYSYM,
+                InputConstants.Type.KEYBOARD,
                 KeybindCatalog.ENTITY_RADAR_SCREEN.defaultKey(),
-                client -> client.setScreen(EntityRadarScreen.create(client.currentScreen)));
+                client -> client.gui.setScreen(EntityRadarScreen.create(client.gui.screen())));
     }
 
     @Override
@@ -97,26 +97,26 @@ public class EntityRadarModule extends Module {
     }
 
     public List<Entity> getEntities() {
-        if (getClient().player == null || getClient().world == null) {
+        if (getClient().player == null || getClient().level == null) {
             return List.of();
         }
 
-        var playerPos = new Vec3d(getClient().player.getX(), getClient().player.getY(), getClient().player.getZ());
-        Box box = new Box(playerPos, playerPos).expand(ModConfig.entityRadarRadius);
-        return getClient().world.getOtherEntities(getClient().player, box).stream()
+        var playerPos = new Vec3(getClient().player.getX(), getClient().player.getY(), getClient().player.getZ());
+        AABB box = new AABB(playerPos, playerPos).inflate(ModConfig.entityRadarRadius);
+        return getClient().level.getEntities(getClient().player, box).stream()
                 .sorted((a, b) -> Double.compare(a.distanceTo(getClient().player), b.distanceTo(getClient().player)))
                 .toList();
     }
 
     public int getPassiveCount() {
         return (int) getEntities().stream()
-                .filter(entity -> entity instanceof PassiveEntity || entity instanceof AnimalEntity)
+                .filter(entity -> entity instanceof AgeableMob || entity instanceof Animal)
                 .count();
     }
 
     public int getHostileCount() {
         return (int) getEntities().stream()
-                .filter(Monster.class::isInstance)
+                .filter(Enemy.class::isInstance)
                 .count();
     }
 

@@ -1,23 +1,22 @@
 package me.m0dii.utils;
 
-import net.minecraft.entity.player.PlayerInventory;
-import net.minecraft.item.ItemStack;
-
 import java.util.List;
 import java.util.function.BiPredicate;
 import java.util.function.Predicate;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.item.ItemStack;
 
 public final class PickBlockHotbarSlotResolver {
     private PickBlockHotbarSlotResolver() {
     }
 
-    public static int resolveTargetSlot(PlayerInventory inventory, ItemStack target) {
-        int selectedSlot = Math.clamp(inventory.getSelectedSlot(), 0, PlayerInventory.HOTBAR_SIZE - 1);
+    public static int resolveTargetSlot(Inventory inventory, ItemStack target) {
+        int selectedSlot = Math.clamp(inventory.getSelectedSlot(), 0, Inventory.SELECTION_SIZE - 1);
         int firstEmptySlot = -1;
 
-        for (int slot = 0; slot < PlayerInventory.HOTBAR_SIZE; slot++) {
-            ItemStack existing = inventory.getStack(slot);
-            if (ItemStack.areItemsAndComponentsEqual(existing, target)) {
+        for (int slot = 0; slot < Inventory.SELECTION_SIZE; slot++) {
+            ItemStack existing = inventory.getItem(slot);
+            if (ItemStack.isSameItemSameComponents(existing, target)) {
                 return slot;
             }
             if (firstEmptySlot < 0 && existing.isEmpty()) {
@@ -34,7 +33,7 @@ public final class PickBlockHotbarSlotResolver {
                 selectedSlot,
                 target,
                 ItemStack::isEmpty,
-                ItemStack::areItemsAndComponentsEqual
+                ItemStack::isSameItemSameComponents
         );
     }
 
@@ -45,9 +44,9 @@ public final class PickBlockHotbarSlotResolver {
             Predicate<T> isEmpty,
             BiPredicate<T, T> matches
     ) {
-        int fallbackSlot = Math.clamp(selectedSlot, 0, PlayerInventory.HOTBAR_SIZE - 1);
+        int fallbackSlot = Math.clamp(selectedSlot, 0, Inventory.SELECTION_SIZE - 1);
         int firstEmptySlot = -1;
-        int limit = Math.min(hotbarStacks.size(), PlayerInventory.HOTBAR_SIZE);
+        int limit = Math.min(hotbarStacks.size(), Inventory.SELECTION_SIZE);
 
         for (int slot = 0; slot < limit; slot++) {
             T existing = hotbarStacks.get(slot);

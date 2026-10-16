@@ -3,20 +3,20 @@ package me.m0dii.modules.mousetweaks;
 import me.m0dii.mixin.HandledScreenAccessor;
 import me.m0dii.modules.mousetweaks.api.MouseTweaksDisableWheelTweak;
 import me.m0dii.modules.mousetweaks.api.MouseTweaksIgnore;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.screen.ingame.HandledScreen;
-import net.minecraft.entity.player.PlayerInventory;
-import net.minecraft.screen.slot.*;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.inventory.*;
 
 import java.util.List;
 
 class HandledScreenMouseTweaksHandler implements MouseTweaksScreenHandler {
-    protected final MinecraftClient client;
-    private final HandledScreen<?> screen;
+    protected final Minecraft client;
+    private final AbstractContainerScreen<?> screen;
     private final HandledScreenAccessor accessor;
 
-    HandledScreenMouseTweaksHandler(HandledScreen<?> screen) {
-        this.client = MinecraftClient.getInstance();
+    HandledScreenMouseTweaksHandler(AbstractContainerScreen<?> screen) {
+        this.client = Minecraft.getInstance();
         this.screen = screen;
         this.accessor = (HandledScreenAccessor) screen;
     }
@@ -33,7 +33,7 @@ class HandledScreenMouseTweaksHandler implements MouseTweaksScreenHandler {
 
     @Override
     public List<Slot> getSlots() {
-        return screen.getScreenHandler().slots;
+        return screen.getMenu().slots;
     }
 
     @Override
@@ -52,14 +52,14 @@ class HandledScreenMouseTweaksHandler implements MouseTweaksScreenHandler {
 
     @Override
     public void clickSlot(Slot slot, MouseTweaksButton mouseButton, boolean shiftPressed) {
-        accessor.m0dev$invokeOnMouseClick(slot, slot.id, mouseButton.getId(), shiftPressed ? SlotActionType.QUICK_MOVE : SlotActionType.PICKUP);
+        accessor.m0dev$invokeOnMouseClick(slot, slot.index, mouseButton.getId(), shiftPressed ? ContainerInput.QUICK_MOVE : ContainerInput.PICKUP);
     }
 
     @Override
     public boolean isCraftingOutput(Slot slot) {
-        return slot instanceof CraftingResultSlot
-                || slot instanceof FurnaceOutputSlot
-                || slot instanceof TradeOutputSlot;
+        return slot instanceof ResultSlot
+                || slot instanceof FurnaceResultSlot
+                || slot instanceof MerchantResultSlot;
     }
 
     @Override
@@ -71,7 +71,7 @@ class HandledScreenMouseTweaksHandler implements MouseTweaksScreenHandler {
         if (client.player == null) {
             return false;
         }
-        PlayerInventory inventory = client.player.getInventory();
-        return slot.inventory == inventory;
+        Inventory inventory = client.player.getInventory();
+        return slot.container == inventory;
     }
 }

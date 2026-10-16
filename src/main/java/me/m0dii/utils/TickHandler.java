@@ -11,7 +11,7 @@ public class TickHandler {
             boolean cameraRequired = FreecamModule.INSTANCE.isEnabled() || CameraEntity.hasController();
 
             if (cameraRequired) {
-                if (client.player == null || client.world == null) {
+                if (client.player == null || client.level == null) {
                     if (FreecamModule.INSTANCE.isEnabled()) {
                         FreecamModule.INSTANCE.setEnabled(false);
                     }

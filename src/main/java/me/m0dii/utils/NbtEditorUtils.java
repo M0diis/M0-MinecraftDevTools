@@ -11,18 +11,18 @@ public final class NbtEditorUtils {
     private NbtEditorUtils() {
     }
 
-    public record ChildEntry(String segment, String label, NbtElement value) {
+    public record ChildEntry(String segment, String label, Tag value) {
     }
 
-    public static NbtElement parseElement(String raw) throws CommandSyntaxException {
-        return StringNbtReader.fromOps(NbtOps.INSTANCE).readAsArgument(new StringReader(raw));
+    public static Tag parseElement(String raw) throws CommandSyntaxException {
+        return TagParser.create(NbtOps.INSTANCE).parseAsArgument(new StringReader(raw));
     }
 
-    public static NbtCompound parseCompound(String raw) throws CommandSyntaxException {
-        return StringNbtReader.readCompoundAsArgument(new StringReader(raw));
+    public static CompoundTag parseCompound(String raw) throws CommandSyntaxException {
+        return TagParser.parseCompoundAsArgument(new StringReader(raw));
     }
 
-    public static NbtCompound parseCompoundOrNull(String raw) {
+    public static CompoundTag parseCompoundOrNull(String raw) {
         try {
             return parseCompound(raw);
         } catch (CommandSyntaxException ignored) {
@@ -72,38 +72,38 @@ public final class NbtEditorUtils {
         return out.toString();
     }
 
-    public static boolean isContainer(NbtElement element) {
-        return element instanceof NbtCompound || element instanceof NbtList;
+    public static boolean isContainer(Tag element) {
+        return element instanceof CompoundTag || element instanceof ListTag;
     }
 
-    public static String typeName(NbtElement element) {
+    public static String typeName(Tag element) {
         return switch (element) {
             case null -> "null";
-            case NbtString ignored -> "string";
-            case NbtCompound ignored -> "compound";
-            case NbtList ignored -> "list";
-            case NbtByte ignored -> "byte/boolean";
-            case NbtShort ignored -> "short";
-            case NbtInt ignored -> "int";
-            case NbtLong ignored -> "long";
-            case NbtFloat ignored -> "float";
-            case NbtDouble ignored -> "double";
-            case NbtByteArray ignored -> "byte[]";
-            case NbtIntArray ignored -> "int[]";
-            case NbtLongArray ignored -> "long[]";
+            case StringTag ignored -> "string";
+            case CompoundTag ignored -> "compound";
+            case ListTag ignored -> "list";
+            case ByteTag ignored -> "byte/boolean";
+            case ShortTag ignored -> "short";
+            case IntTag ignored -> "int";
+            case LongTag ignored -> "long";
+            case FloatTag ignored -> "float";
+            case DoubleTag ignored -> "double";
+            case ByteArrayTag ignored -> "byte[]";
+            case IntArrayTag ignored -> "int[]";
+            case LongArrayTag ignored -> "long[]";
             default -> element.getClass().getSimpleName();
         };
     }
 
-    public static String summary(NbtElement element) {
+    public static String summary(Tag element) {
         switch (element) {
             case null -> {
                 return "(missing)";
             }
-            case NbtCompound compound -> {
-                return "compound (" + compound.getKeys().size() + " keys)";
+            case CompoundTag compound -> {
+                return "compound (" + compound.keySet().size() + " keys)";
             }
-            case NbtList list -> {
+            case ListTag list -> {
                 return "list (" + list.size() + " entries)";
             }
             default -> {
@@ -116,8 +116,8 @@ public final class NbtEditorUtils {
         return raw.substring(0, 53) + "...";
     }
 
-    public static NbtElement resolvePath(NbtElement root, List<String> pathSegments) {
-        NbtElement current = root;
+    public static Tag resolvePath(Tag root, List<String> pathSegments) {
+        Tag current = root;
         if (pathSegments == null) {
             return current;
         }
@@ -130,11 +130,11 @@ public final class NbtEditorUtils {
         return current;
     }
 
-    public static NbtElement resolveChild(NbtElement container, String segment) {
-        if (container instanceof NbtCompound compound) {
+    public static Tag resolveChild(Tag container, String segment) {
+        if (container instanceof CompoundTag compound) {
             return compound.get(segment);
         }
-        if (container instanceof NbtList list) {
+        if (container instanceof ListTag list) {
             int index = parseIndex(segment);
             if (index >= 0 && index < list.size()) {
                 return list.get(index);
@@ -143,15 +143,15 @@ public final class NbtEditorUtils {
         return null;
     }
 
-    public static List<ChildEntry> childEntries(NbtElement container) {
+    public static List<ChildEntry> childEntries(Tag container) {
         List<ChildEntry> entries = new ArrayList<>();
-        if (container instanceof NbtCompound compound) {
-            compound.getKeys().stream()
+        if (container instanceof CompoundTag compound) {
+            compound.keySet().stream()
                     .sorted(String.CASE_INSENSITIVE_ORDER)
                     .forEach(key -> entries.add(new ChildEntry(key, key, compound.get(key))));
             return entries;
         }
-        if (container instanceof NbtList list) {
+        if (container instanceof ListTag list) {
             for (int i = 0; i < list.size(); i++) {
                 entries.add(new ChildEntry(Integer.toString(i), "[" + i + "]", list.get(i)));
             }
@@ -159,12 +159,12 @@ public final class NbtEditorUtils {
         return entries;
     }
 
-    public static void setChild(NbtElement container, String segment, NbtElement value) {
-        if (container instanceof NbtCompound compound) {
+    public static void setChild(Tag container, String segment, Tag value) {
+        if (container instanceof CompoundTag compound) {
             compound.put(segment, value.copy());
             return;
         }
-        if (container instanceof NbtList list) {
+        if (container instanceof ListTag list) {
             int index = parseIndex(segment);
             if (index >= 0 && index < list.size()) {
                 list.set(index, value.copy());
@@ -172,12 +172,12 @@ public final class NbtEditorUtils {
         }
     }
 
-    public static void removeChild(NbtElement container, String segment) {
-        if (container instanceof NbtCompound compound) {
+    public static void removeChild(Tag container, String segment) {
+        if (container instanceof CompoundTag compound) {
             compound.remove(segment);
             return;
         }
-        if (container instanceof NbtList list) {
+        if (container instanceof ListTag list) {
             int index = parseIndex(segment);
             if (index >= 0 && index < list.size()) {
                 list.remove(index);
@@ -211,12 +211,12 @@ public final class NbtEditorUtils {
         return entry.label() + " = " + preview;
     }
 
-    public static boolean isNumeric(NbtElement element) {
-        return element instanceof AbstractNbtNumber;
+    public static boolean isNumeric(Tag element) {
+        return element instanceof NumericTag;
     }
 
-    public static boolean isFloating(NbtElement element) {
-        return element instanceof NbtFloat || element instanceof NbtDouble;
+    public static boolean isFloating(Tag element) {
+        return element instanceof FloatTag || element instanceof DoubleTag;
     }
 
     private static int parseIndex(String segment) {

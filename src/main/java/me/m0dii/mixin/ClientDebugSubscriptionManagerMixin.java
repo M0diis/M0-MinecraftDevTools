@@ -1,9 +1,9 @@
 package me.m0dii.mixin;
 
 import me.m0dii.modules.mobai.MobAiVisualizerModule;
-import net.minecraft.client.network.ClientDebugSubscriptionManager;
-import net.minecraft.world.debug.DebugSubscriptionType;
-import net.minecraft.world.debug.DebugSubscriptionTypes;
+import net.minecraft.client.multiplayer.ClientDebugSubscriber;
+import net.minecraft.util.debug.DebugSubscription;
+import net.minecraft.util.debug.DebugSubscriptions;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -11,18 +11,18 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import java.util.Set;
 
-@Mixin(ClientDebugSubscriptionManager.class)
+@Mixin(ClientDebugSubscriber.class)
 public class ClientDebugSubscriptionManagerMixin {
 
-    @Inject(method = "getRequestedSubscriptions", at = @At("RETURN"), cancellable = true)
-    private void m0dev$addMobAiSubscriptions(CallbackInfoReturnable<Set<DebugSubscriptionType<?>>> cir) {
+    @Inject(method = "requestedSubscriptions", at = @At("RETURN"), cancellable = true)
+    private void m0dev$addMobAiSubscriptions(CallbackInfoReturnable<Set<DebugSubscription<?>>> cir) {
         if (!MobAiVisualizerModule.INSTANCE.shouldRequestServerDebugData()) {
             return;
         }
 
-        Set<DebugSubscriptionType<?>> subscriptions = cir.getReturnValue();
-        subscriptions.add(DebugSubscriptionTypes.ENTITY_PATHS);
-        subscriptions.add(DebugSubscriptionTypes.BRAINS);
+        Set<DebugSubscription<?>> subscriptions = cir.getReturnValue();
+        subscriptions.add(DebugSubscriptions.ENTITY_PATHS);
+        subscriptions.add(DebugSubscriptions.BRAINS);
         cir.setReturnValue(subscriptions);
     }
 }

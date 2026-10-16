@@ -2,8 +2,7 @@ package me.m0dii.modules.macros.gui;
 
 import me.m0dii.gui.local.UiRect;
 import me.m0dii.modules.macros.hud.MacroHudDataHandler;
-import net.minecraft.client.gui.Click;
-
+import net.minecraft.client.input.MouseButtonEvent;
 import java.util.function.Consumer;
 
 public final class MacroWorkbenchAdvancedClickSupport {
@@ -11,7 +10,7 @@ public final class MacroWorkbenchAdvancedClickSupport {
     }
 
     public interface Ops {
-        boolean contains(Click click, UiRect rect);
+        boolean contains(MouseButtonEvent click, UiRect rect);
 
         int stepInt(int base);
 
@@ -20,7 +19,7 @@ public final class MacroWorkbenchAdvancedClickSupport {
         void adjustBackgroundAlpha(MacroHudDataHandler.HudElement element, int delta);
     }
 
-    public static boolean handleApplyCancel(Click click,
+    public static boolean handleApplyCancel(MouseButtonEvent click,
                                             UiRect apply,
                                             UiRect cancel,
                                             Ops ops,
@@ -37,7 +36,7 @@ public final class MacroWorkbenchAdvancedClickSupport {
         return false;
     }
 
-    public static boolean handleBackgroundColorButtons(Click click,
+    public static boolean handleBackgroundColorButtons(MouseButtonEvent click,
                                                        boolean forward,
                                                        UiRect minus,
                                                        UiRect plus,
@@ -75,7 +74,7 @@ public final class MacroWorkbenchAdvancedClickSupport {
         return false;
     }
 
-    public static boolean handleColorCycleButtons(Click click,
+    public static boolean handleColorCycleButtons(MouseButtonEvent click,
                                                   UiRect minus,
                                                   UiRect plus,
                                                   int currentColor,

@@ -1,10 +1,10 @@
 package me.m0dii.modules.xray;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import me.m0dii.modules.Module;
 import me.m0dii.modules.xray.network.XrayOptInNetworking;
 import me.m0dii.utils.KeybindCatalog;
-import net.minecraft.client.util.InputUtil;
-import net.minecraft.util.Identifier;
+import net.minecraft.resources.Identifier;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -23,14 +23,14 @@ public class XrayModule extends Module {
         XrayOutlineRenderer.register();
 
         registerPressedKeybind(KeybindCatalog.XRAY_TOGGLE.translationKey(),
-                InputUtil.Type.KEYSYM,
+                InputConstants.Type.KEYBOARD,
                 KeybindCatalog.XRAY_TOGGLE.defaultKey(),
                 client -> toggleEnabled());
 
         registerPressedKeybind(KeybindCatalog.XRAY_MENU.translationKey(),
-                InputUtil.Type.KEYSYM,
+                InputConstants.Type.KEYBOARD,
                 KeybindCatalog.XRAY_MENU.defaultKey(),
-                client -> client.setScreen(XrayConfigScreen.create(client.currentScreen)));
+                client -> client.gui.setScreen(XrayConfigScreen.create(client.gui.screen())));
     }
 
     @Override

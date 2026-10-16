@@ -1,10 +1,10 @@
 package me.m0dii.modules.macros;
 
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.math.BlockPos;
+import net.minecraft.client.Minecraft;
+import net.minecraft.core.BlockPos;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.player.Player;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -16,8 +16,8 @@ final class PlaceholderRegistry {
         String resolve(Context context);
     }
 
-    record Context(MinecraftClient client,
-                   PlayerEntity player,
+    record Context(Minecraft client,
+                   Player player,
                    Identifier dimensionId,
                    BlockPos lookBlock,
                    Entity lookEntity,

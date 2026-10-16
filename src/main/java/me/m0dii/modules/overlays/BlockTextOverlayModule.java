@@ -1,13 +1,13 @@
 package me.m0dii.modules.overlays;
 
+import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.math.Axis;
 import me.m0dii.modules.Module;
-import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
-import net.minecraft.client.font.TextRenderer;
-import net.minecraft.client.render.VertexConsumerProvider;
-import net.minecraft.client.util.math.MatrixStack;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.RotationAxis;
-import net.minecraft.util.math.Vec3d;
+import me.m0dii.render.OverlayRenderEvents;
+import net.minecraft.client.gui.Font;
+import me.m0dii.render.OverlayBufferSource;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4f;
@@ -23,30 +23,30 @@ public abstract class BlockTextOverlayModule extends Module {
 
     @Override
     public void register() {
-        WorldRenderEvents.AFTER_ENTITIES.register(getAfterEntities());
+        OverlayRenderEvents.AFTER_ENTITIES.register(getAfterEntities());
     }
 
     /**
      * Get the rendering event handler.
      */
-    private WorldRenderEvents.@NotNull AfterEntities getAfterEntities() {
+    private OverlayRenderEvents.@NotNull AfterEntities getAfterEntities() {
         return context -> {
             if (!isEnabled() || isClientNull()) {
                 return;
             }
 
-            MatrixStack matrices = context.matrices();
+            PoseStack matrices = context.matrices();
             if (matrices == null) {
-                matrices = new MatrixStack();
+                matrices = new PoseStack();
             }
 
-            TextRenderer textRenderer = getClient().textRenderer;
-            Vec3d cameraPos = context.gameRenderer().getCamera().getCameraPos();
-            BlockPos playerPos = getClient().player.getBlockPos();
+            Font textRenderer = getClient().font;
+            Vec3 cameraPos = context.gameRenderer().mainCamera().position();
+            BlockPos playerPos = getClient().player.blockPosition();
 
-            VertexConsumerProvider vcp = context.consumers();
+            OverlayBufferSource vcp = context.consumers();
             if (vcp == null) {
-                vcp = getClient().getBufferBuilders().getEntityVertexConsumers();
+                vcp = OverlayBufferSource.current();
             }
 
             int xzRadius = getXZRadius();
@@ -55,15 +55,15 @@ public abstract class BlockTextOverlayModule extends Module {
             for (int x = -xzRadius; x <= xzRadius; x++) {
                 for (int y = -yRadius; y <= yRadius; y++) {
                     for (int z = -xzRadius; z <= xzRadius; z++) {
-                        BlockPos pos = playerPos.add(x, y, z);
+                        BlockPos pos = playerPos.offset(x, y, z);
 
                         TextRenderInfo renderInfo = shouldRender(pos, cameraPos);
                         if (renderInfo == null) {
                             continue;
                         }
 
-                        Vec3d renderPos = getRenderPosition(pos, renderInfo);
-                        double distSq = cameraPos.squaredDistanceTo(renderPos);
+                        Vec3 renderPos = getRenderPosition(pos, renderInfo);
+                        double distSq = cameraPos.distanceToSqr(renderPos);
                         if (distSq > xzRadius * xzRadius) {
                             continue;
                         }
@@ -78,50 +78,50 @@ public abstract class BlockTextOverlayModule extends Module {
     /**
      * Render text at the specified position.
      */
-    protected void renderText(MatrixStack matrices,
-                              TextRenderer textRenderer,
-                              VertexConsumerProvider vcp,
-                              Vec3d cameraPos,
-                              Vec3d renderPos,
+    protected void renderText(PoseStack matrices,
+                              Font textRenderer,
+                              OverlayBufferSource vcp,
+                              Vec3 cameraPos,
+                              Vec3 renderPos,
                               TextRenderInfo renderInfo) {
-        matrices.push();
+        matrices.pushPose();
 
         matrices.translate(renderPos.x - cameraPos.x, renderPos.y - cameraPos.y, renderPos.z - cameraPos.z);
 
         // Keep text aligned to the top face of the block.
-        matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(renderInfo.rotationX));
-        matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(renderInfo.rotationY));
-        matrices.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(renderInfo.rotationZ));
+        matrices.rotate(Axis.XP.rotationDegrees(renderInfo.rotationX));
+        matrices.rotate(Axis.YP.rotationDegrees(renderInfo.rotationY));
+        matrices.rotate(Axis.ZP.rotationDegrees(renderInfo.rotationZ));
 
         float scale = renderInfo.scale;
         matrices.scale(scale, scale, scale);
 
         String text = renderInfo.text;
-        int textWidth = textRenderer.getWidth(text);
-        Matrix4f model = matrices.peek().getPositionMatrix();
+        int textWidth = textRenderer.width(text);
+        Matrix4f model = matrices.last().pose();
         int brightness = renderInfo.brightness;
         int textColor = toOpaqueColor(renderInfo.color);
 
-        textRenderer.draw(text,
+        OverlayBufferSource.drawText(textRenderer, text,
                 -textWidth / 2f,
                 0,
                 textColor,
                 true,
                 model,
                 vcp,
-                TextRenderer.TextLayerType.POLYGON_OFFSET,
+                Font.DisplayMode.POLYGON_OFFSET,
                 0,
                 brightness);
 
-        matrices.pop();
+        matrices.popPose();
     }
 
     /**
      * Get the render position for the given block position.
      * Override to customize where text appears relative to the block.
      */
-    protected Vec3d getRenderPosition(BlockPos pos, TextRenderInfo renderInfo) {
-        return new Vec3d(
+    protected Vec3 getRenderPosition(BlockPos pos, TextRenderInfo renderInfo) {
+        return new Vec3(
                 pos.getX() + renderInfo.offsetX,
                 pos.getY() + renderInfo.offsetY,
                 pos.getZ() + renderInfo.offsetZ
@@ -137,7 +137,7 @@ public abstract class BlockTextOverlayModule extends Module {
      * @return TextRenderInfo if should render, null otherwise
      */
     @Nullable
-    protected abstract TextRenderInfo shouldRender(BlockPos pos, Vec3d cameraPos);
+    protected abstract TextRenderInfo shouldRender(BlockPos pos, Vec3 cameraPos);
 
     /**
      * Get the XZ radius for scanning blocks around the player.

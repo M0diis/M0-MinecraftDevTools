@@ -6,14 +6,13 @@ import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.suggestion.Suggestions;
 import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 import me.m0dii.modules.hudcanvas.HudCanvasDataHandler;
-import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
+import net.fabricmc.fabric.api.client.command.v2.ClientCommands;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.command.CommandSource;
-import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
-
+import net.minecraft.ChatFormatting;
+import net.minecraft.client.Minecraft;
+import net.minecraft.commands.SharedSuggestionProvider;
+import net.minecraft.network.chat.Component;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -28,125 +27,125 @@ public final class SecondaryChatCommands {
 
     private static void registerCommands(CommandDispatcher<FabricClientCommandSource> dispatcher) {
         dispatcher.register(
-                ClientCommandManager.literal("secondarychat")
-                        .then(ClientCommandManager.literal("config")
+                ClientCommands.literal("secondarychat")
+                        .then(ClientCommands.literal("config")
                                 .executes(SecondaryChatCommands::openConfig))
-                        .then(ClientCommandManager.literal("toggle")
+                        .then(ClientCommands.literal("toggle")
                                 .executes(SecondaryChatCommands::toggleEnabled))
-                        .then(ClientCommandManager.literal("clear")
+                        .then(ClientCommands.literal("clear")
                                 .executes(SecondaryChatCommands::clearBuffer))
-                        .then(ClientCommandManager.literal("render")
-                                .then(ClientCommandManager.literal("addon")
+                        .then(ClientCommands.literal("render")
+                                .then(ClientCommands.literal("addon")
                                         .executes(ctx -> setRenderMode(ctx, SecondaryChatSettings.RenderMode.ADDON)))
-                                .then(ClientCommandManager.literal("replace")
+                                .then(ClientCommands.literal("replace")
                                         .executes(ctx -> setRenderMode(ctx, SecondaryChatSettings.RenderMode.REPLACE))))
-                        .then(ClientCommandManager.literal("addregex")
-                                .then(ClientCommandManager.argument("pattern", StringArgumentType.greedyString())
+                        .then(ClientCommands.literal("addregex")
+                                .then(ClientCommands.argument("pattern", StringArgumentType.greedyString())
                                         .executes(SecondaryChatCommands::addRegex)))
-                        .then(ClientCommandManager.literal("listregex")
+                        .then(ClientCommands.literal("listregex")
                                 .executes(SecondaryChatCommands::listRegex))
-                        .then(ClientCommandManager.literal("clearregex")
+                        .then(ClientCommands.literal("clearregex")
                                 .executes(SecondaryChatCommands::clearRegex))
-                        .then(ClientCommandManager.literal("mode")
-                                .then(ClientCommandManager.literal("copy")
+                        .then(ClientCommands.literal("mode")
+                                .then(ClientCommands.literal("copy")
                                         .executes(ctx -> setMode(ctx, SecondaryChatSettings.InterceptMode.COPY)))
-                                .then(ClientCommandManager.literal("move")
+                                .then(ClientCommands.literal("move")
                                         .executes(ctx -> setMode(ctx, SecondaryChatSettings.InterceptMode.MOVE))))
-                        .then(ClientCommandManager.literal("window")
-                                .then(ClientCommandManager.literal("list")
+                        .then(ClientCommands.literal("window")
+                                .then(ClientCommands.literal("list")
                                         .executes(SecondaryChatCommands::listWindows))
-                                .then(ClientCommandManager.literal("add")
-                                        .then(ClientCommandManager.argument("id", StringArgumentType.word())
-                                                .then(ClientCommandManager.argument("title", StringArgumentType.greedyString())
+                                .then(ClientCommands.literal("add")
+                                        .then(ClientCommands.argument("id", StringArgumentType.word())
+                                                .then(ClientCommands.argument("title", StringArgumentType.greedyString())
                                                         .executes(SecondaryChatCommands::addWindow))))
-                                .then(ClientCommandManager.literal("remove")
-                                        .then(ClientCommandManager.argument("id", StringArgumentType.word())
+                                .then(ClientCommands.literal("remove")
+                                        .then(ClientCommands.argument("id", StringArgumentType.word())
                                                 .suggests(SecondaryChatCommands::suggestWindows)
                                                 .executes(SecondaryChatCommands::removeWindow)))
-                                .then(ClientCommandManager.literal("toggle")
-                                        .then(ClientCommandManager.argument("id", StringArgumentType.word())
+                                .then(ClientCommands.literal("toggle")
+                                        .then(ClientCommands.argument("id", StringArgumentType.word())
                                                 .suggests(SecondaryChatCommands::suggestWindows)
                                                 .executes(SecondaryChatCommands::toggleWindow))))
-                        .then(ClientCommandManager.literal("tab")
-                                .then(ClientCommandManager.literal("list")
-                                        .then(ClientCommandManager.argument("window", StringArgumentType.word())
+                        .then(ClientCommands.literal("tab")
+                                .then(ClientCommands.literal("list")
+                                        .then(ClientCommands.argument("window", StringArgumentType.word())
                                                 .suggests(SecondaryChatCommands::suggestWindows)
                                                 .executes(SecondaryChatCommands::listTabs)))
-                                .then(ClientCommandManager.literal("add")
-                                        .then(ClientCommandManager.argument("window", StringArgumentType.word())
+                                .then(ClientCommands.literal("add")
+                                        .then(ClientCommands.argument("window", StringArgumentType.word())
                                                 .suggests(SecondaryChatCommands::suggestWindows)
-                                                .then(ClientCommandManager.argument("id", StringArgumentType.word())
-                                                        .then(ClientCommandManager.argument("name", StringArgumentType.greedyString())
+                                                .then(ClientCommands.argument("id", StringArgumentType.word())
+                                                        .then(ClientCommands.argument("name", StringArgumentType.greedyString())
                                                                 .executes(SecondaryChatCommands::addTab)))))
-                                .then(ClientCommandManager.literal("remove")
-                                        .then(ClientCommandManager.argument("window", StringArgumentType.word())
+                                .then(ClientCommands.literal("remove")
+                                        .then(ClientCommands.argument("window", StringArgumentType.word())
                                                 .suggests(SecondaryChatCommands::suggestWindows)
-                                                .then(ClientCommandManager.argument("tab", StringArgumentType.word())
+                                                .then(ClientCommands.argument("tab", StringArgumentType.word())
                                                         .suggests(SecondaryChatCommands::suggestTabs)
                                                         .executes(SecondaryChatCommands::removeTab))))
-                                .then(ClientCommandManager.literal("select")
-                                        .then(ClientCommandManager.argument("window", StringArgumentType.word())
+                                .then(ClientCommands.literal("select")
+                                        .then(ClientCommands.argument("window", StringArgumentType.word())
                                                 .suggests(SecondaryChatCommands::suggestWindows)
-                                                .then(ClientCommandManager.argument("tab", StringArgumentType.word())
+                                                .then(ClientCommands.argument("tab", StringArgumentType.word())
                                                         .suggests(SecondaryChatCommands::suggestTabs)
                                                         .executes(SecondaryChatCommands::selectTab))))
-                                .then(ClientCommandManager.literal("catchall")
-                                        .then(ClientCommandManager.argument("window", StringArgumentType.word())
+                                .then(ClientCommands.literal("catchall")
+                                        .then(ClientCommands.argument("window", StringArgumentType.word())
                                                 .suggests(SecondaryChatCommands::suggestWindows)
-                                                .then(ClientCommandManager.argument("tab", StringArgumentType.word())
+                                                .then(ClientCommands.argument("tab", StringArgumentType.word())
                                                         .suggests(SecondaryChatCommands::suggestTabs)
                                                         .executes(SecondaryChatCommands::toggleCatchAll))))
-                                .then(ClientCommandManager.literal("addregex")
-                                        .then(ClientCommandManager.argument("window", StringArgumentType.word())
+                                .then(ClientCommands.literal("addregex")
+                                        .then(ClientCommands.argument("window", StringArgumentType.word())
                                                 .suggests(SecondaryChatCommands::suggestWindows)
-                                                .then(ClientCommandManager.argument("tab", StringArgumentType.word())
+                                                .then(ClientCommands.argument("tab", StringArgumentType.word())
                                                         .suggests(SecondaryChatCommands::suggestTabs)
-                                                        .then(ClientCommandManager.argument("pattern", StringArgumentType.greedyString())
+                                                        .then(ClientCommands.argument("pattern", StringArgumentType.greedyString())
                                                                 .executes(SecondaryChatCommands::addTabRegex)))))
-                                .then(ClientCommandManager.literal("clearregex")
-                                        .then(ClientCommandManager.argument("window", StringArgumentType.word())
+                                .then(ClientCommands.literal("clearregex")
+                                        .then(ClientCommands.argument("window", StringArgumentType.word())
                                                 .suggests(SecondaryChatCommands::suggestWindows)
-                                                .then(ClientCommandManager.argument("tab", StringArgumentType.word())
+                                                .then(ClientCommands.argument("tab", StringArgumentType.word())
                                                         .suggests(SecondaryChatCommands::suggestTabs)
                                                         .executes(SecondaryChatCommands::clearTabRegex)))))
-                        .then(ClientCommandManager.literal("status")
+                        .then(ClientCommands.literal("status")
                                 .executes(SecondaryChatCommands::showStatus))
         );
     }
 
     private static int openConfig(CommandContext<FabricClientCommandSource> ctx) {
-        MinecraftClient client = MinecraftClient.getInstance();
-        client.setScreen(new SecondaryChatConfigScreen(client.currentScreen));
+        Minecraft client = Minecraft.getInstance();
+        client.gui.setScreen(new SecondaryChatConfigScreen(client.gui.screen()));
         return 1;
     }
 
     private static int toggleEnabled(CommandContext<FabricClientCommandSource> ctx) {
         SecondaryChatModule.INSTANCE.setEnabled(!SecondaryChatModule.INSTANCE.isEnabled());
         boolean enabled = SecondaryChatSettings.get().enabled;
-        ctx.getSource().sendFeedback(Text.literal("Secondary Chat: ")
-                .append(Text.literal(enabled ? "ON" : "OFF")
-                        .formatted(enabled ? Formatting.GREEN : Formatting.RED)));
+        ctx.getSource().sendFeedback(Component.literal("Secondary Chat: ")
+                .append(Component.literal(enabled ? "ON" : "OFF")
+                        .withStyle(enabled ? ChatFormatting.GREEN : ChatFormatting.RED)));
         return 1;
     }
 
     private static int clearBuffer(CommandContext<FabricClientCommandSource> ctx) {
         SecondaryChatManager.clear();
-        ctx.getSource().sendFeedback(Text.literal("Secondary chat buffers cleared").formatted(Formatting.GREEN));
+        ctx.getSource().sendFeedback(Component.literal("Secondary chat buffers cleared").withStyle(ChatFormatting.GREEN));
         return 1;
     }
 
     private static int setRenderMode(CommandContext<FabricClientCommandSource> ctx, SecondaryChatSettings.RenderMode mode) {
         SecondaryChatSettings.updateAndSave(() -> SecondaryChatSettings.get().renderMode = mode);
-        ctx.getSource().sendFeedback(Text.literal("Secondary chat render mode: ")
-                .append(Text.literal(mode.name()).formatted(Formatting.YELLOW)));
+        ctx.getSource().sendFeedback(Component.literal("Secondary chat render mode: ")
+                .append(Component.literal(mode.name()).withStyle(ChatFormatting.YELLOW)));
         return 1;
     }
 
     private static int addRegex(CommandContext<FabricClientCommandSource> ctx) {
         String pattern = StringArgumentType.getString(ctx, "pattern");
         SecondaryChatSettings.updateAndSave(() -> SecondaryChatSettings.get().regexList.add(pattern));
-        ctx.getSource().sendFeedback(Text.literal("Added global regex: ")
-                .append(Text.literal(pattern).formatted(Formatting.YELLOW)));
+        ctx.getSource().sendFeedback(Component.literal("Added global regex: ")
+                .append(Component.literal(pattern).withStyle(ChatFormatting.YELLOW)));
 
         return 1;
     }
@@ -154,17 +153,17 @@ public final class SecondaryChatCommands {
     private static int listRegex(CommandContext<FabricClientCommandSource> ctx) {
         List<String> list = SecondaryChatSettings.get().regexList;
         if (list == null || list.isEmpty()) {
-            ctx.getSource().sendFeedback(Text.literal("No global regex patterns configured").formatted(Formatting.GRAY));
+            ctx.getSource().sendFeedback(Component.literal("No global regex patterns configured").withStyle(ChatFormatting.GRAY));
             return 1;
         }
 
-        ctx.getSource().sendFeedback(Text.literal("=== Global Regex Patterns ===").formatted(Formatting.GOLD));
+        ctx.getSource().sendFeedback(Component.literal("=== Global Regex Patterns ===").withStyle(ChatFormatting.GOLD));
         int i = 1;
         for (String p : list) {
             String trimmed = p.trim();
             if (!trimmed.isEmpty()) {
-                ctx.getSource().sendFeedback(Text.literal(i + ". ")
-                        .append(Text.literal(trimmed).formatted(Formatting.YELLOW)));
+                ctx.getSource().sendFeedback(Component.literal(i + ". ")
+                        .append(Component.literal(trimmed).withStyle(ChatFormatting.YELLOW)));
                 i++;
             }
         }
@@ -173,23 +172,23 @@ public final class SecondaryChatCommands {
 
     private static int clearRegex(CommandContext<FabricClientCommandSource> ctx) {
         SecondaryChatSettings.updateAndSave(() -> SecondaryChatSettings.get().regexList.clear());
-        ctx.getSource().sendFeedback(Text.literal("Cleared all global regex patterns").formatted(Formatting.GREEN));
+        ctx.getSource().sendFeedback(Component.literal("Cleared all global regex patterns").withStyle(ChatFormatting.GREEN));
         return 1;
     }
 
     private static int setMode(CommandContext<FabricClientCommandSource> ctx, SecondaryChatSettings.InterceptMode mode) {
         SecondaryChatSettings.updateAndSave(() -> SecondaryChatSettings.get().interceptMode = mode);
-        ctx.getSource().sendFeedback(Text.literal("Secondary chat intercept mode: ")
-                .append(Text.literal(mode.name()).formatted(Formatting.YELLOW)));
+        ctx.getSource().sendFeedback(Component.literal("Secondary chat intercept mode: ")
+                .append(Component.literal(mode.name()).withStyle(ChatFormatting.YELLOW)));
         return 1;
     }
 
     private static int listWindows(CommandContext<FabricClientCommandSource> ctx) {
-        ctx.getSource().sendFeedback(Text.literal("=== Secondary Chat Windows ===").formatted(Formatting.GOLD));
+        ctx.getSource().sendFeedback(Component.literal("=== Secondary Chat Windows ===").withStyle(ChatFormatting.GOLD));
         for (SecondaryChatSettings.WindowConfig window : SecondaryChatSettings.get().windows) {
-            ctx.getSource().sendFeedback(Text.literal(window.id + " ")
-                    .formatted(window.visible ? Formatting.GREEN : Formatting.DARK_GRAY)
-                    .append(Text.literal("\"" + window.title + "\" tabs=" + window.tabs.size()
+            ctx.getSource().sendFeedback(Component.literal(window.id + " ")
+                    .withStyle(window.visible ? ChatFormatting.GREEN : ChatFormatting.DARK_GRAY)
+                    .append(Component.literal("\"" + window.title + "\" tabs=" + window.tabs.size()
                             + " selected=" + window.selectedTabId)));
         }
         return 1;
@@ -217,20 +216,20 @@ public final class SecondaryChatCommands {
             window.selectedTabId = all.id;
             settings.windows.add(window);
         });
-        ctx.getSource().sendFeedback(Text.literal("Added window: ")
-                .append(Text.literal(id).formatted(Formatting.YELLOW)));
+        ctx.getSource().sendFeedback(Component.literal("Added window: ")
+                .append(Component.literal(id).withStyle(ChatFormatting.YELLOW)));
         return 1;
     }
 
     private static int removeWindow(CommandContext<FabricClientCommandSource> ctx) {
         String id = StringArgumentType.getString(ctx, "id");
         if ("main".equals(id)) {
-            ctx.getSource().sendError(Text.literal("The main Secondary Chat window cannot be removed."));
+            ctx.getSource().sendError(Component.literal("The main Secondary Chat window cannot be removed."));
             return 0;
         }
         SecondaryChatSettings.updateAndSave(() -> SecondaryChatSettings.get().windows.removeIf(window -> window.id.equals(id)));
-        ctx.getSource().sendFeedback(Text.literal("Removed window: ")
-                .append(Text.literal(id).formatted(Formatting.YELLOW)));
+        ctx.getSource().sendFeedback(Component.literal("Removed window: ")
+                .append(Component.literal(id).withStyle(ChatFormatting.YELLOW)));
         return 1;
     }
 
@@ -243,9 +242,9 @@ public final class SecondaryChatCommands {
             }
         });
         SecondaryChatSettings.WindowConfig window = findWindow(SecondaryChatSettings.get().windows, id);
-        ctx.getSource().sendFeedback(Text.literal("Window " + id + ": ")
-                .append(Text.literal(window != null && window.visible ? "VISIBLE" : "HIDDEN")
-                        .formatted(window != null && window.visible ? Formatting.GREEN : Formatting.RED)));
+        ctx.getSource().sendFeedback(Component.literal("Window " + id + ": ")
+                .append(Component.literal(window != null && window.visible ? "VISIBLE" : "HIDDEN")
+                        .withStyle(window != null && window.visible ? ChatFormatting.GREEN : ChatFormatting.RED)));
         return 1;
     }
 
@@ -253,14 +252,14 @@ public final class SecondaryChatCommands {
         String windowId = StringArgumentType.getString(ctx, "window");
         SecondaryChatSettings.WindowConfig window = findWindow(SecondaryChatSettings.get().windows, windowId);
         if (window == null) {
-            ctx.getSource().sendError(Text.literal("Unknown window: " + windowId));
+            ctx.getSource().sendError(Component.literal("Unknown window: " + windowId));
             return 0;
         }
-        ctx.getSource().sendFeedback(Text.literal("=== Tabs for " + window.id + " ===").formatted(Formatting.GOLD));
+        ctx.getSource().sendFeedback(Component.literal("=== Tabs for " + window.id + " ===").withStyle(ChatFormatting.GOLD));
         for (SecondaryChatSettings.TabConfig tab : window.tabs) {
-            ctx.getSource().sendFeedback(Text.literal(tab.id + " ")
-                    .formatted(tab.id.equals(window.selectedTabId) ? Formatting.GREEN : Formatting.GRAY)
-                    .append(Text.literal("\"" + tab.name + "\" regex=" + tab.regexList.size()
+            ctx.getSource().sendFeedback(Component.literal(tab.id + " ")
+                    .withStyle(tab.id.equals(window.selectedTabId) ? ChatFormatting.GREEN : ChatFormatting.GRAY)
+                    .append(Component.literal("\"" + tab.name + "\" regex=" + tab.regexList.size()
                             + " priority=" + tab.priority
                             + " catchAll=" + tab.catchAll)));
         }
@@ -282,8 +281,8 @@ public final class SecondaryChatCommands {
             tab.catchAll = false;
             window.tabs.add(tab);
         });
-        ctx.getSource().sendFeedback(Text.literal("Added tab: ")
-                .append(Text.literal(tabId).formatted(Formatting.YELLOW)));
+        ctx.getSource().sendFeedback(Component.literal("Added tab: ")
+                .append(Component.literal(tabId).withStyle(ChatFormatting.YELLOW)));
         return 1;
     }
 
@@ -301,8 +300,8 @@ public final class SecondaryChatCommands {
             }
         });
         SecondaryChatManager.clear(windowId, tabId);
-        ctx.getSource().sendFeedback(Text.literal("Removed tab: ")
-                .append(Text.literal(tabId).formatted(Formatting.YELLOW)));
+        ctx.getSource().sendFeedback(Component.literal("Removed tab: ")
+                .append(Component.literal(tabId).withStyle(ChatFormatting.YELLOW)));
         return 1;
     }
 
@@ -310,8 +309,8 @@ public final class SecondaryChatCommands {
         String windowId = StringArgumentType.getString(ctx, "window");
         String tabId = StringArgumentType.getString(ctx, "tab");
         SecondaryChatManager.selectTab(windowId, tabId);
-        ctx.getSource().sendFeedback(Text.literal("Selected tab: ")
-                .append(Text.literal(windowId + "/" + tabId).formatted(Formatting.YELLOW)));
+        ctx.getSource().sendFeedback(Component.literal("Selected tab: ")
+                .append(Component.literal(windowId + "/" + tabId).withStyle(ChatFormatting.YELLOW)));
         return 1;
     }
 
@@ -326,9 +325,9 @@ public final class SecondaryChatCommands {
             }
         });
         SecondaryChatSettings.TabConfig tab = tab(windowId, tabId);
-        ctx.getSource().sendFeedback(Text.literal("Tab catch-all: ")
-                .append(Text.literal(tab != null && tab.catchAll ? "ON" : "OFF")
-                        .formatted(tab != null && tab.catchAll ? Formatting.GREEN : Formatting.RED)));
+        ctx.getSource().sendFeedback(Component.literal("Tab catch-all: ")
+                .append(Component.literal(tab != null && tab.catchAll ? "ON" : "OFF")
+                        .withStyle(tab != null && tab.catchAll ? ChatFormatting.GREEN : ChatFormatting.RED)));
         return 1;
     }
 
@@ -342,8 +341,8 @@ public final class SecondaryChatCommands {
                 tab.regexList.add(pattern);
             }
         });
-        ctx.getSource().sendFeedback(Text.literal("Added tab regex: ")
-                .append(Text.literal(pattern).formatted(Formatting.YELLOW)));
+        ctx.getSource().sendFeedback(Component.literal("Added tab regex: ")
+                .append(Component.literal(pattern).withStyle(ChatFormatting.YELLOW)));
         return 1;
     }
 
@@ -356,8 +355,8 @@ public final class SecondaryChatCommands {
                 tab.regexList = new ArrayList<>();
             }
         });
-        ctx.getSource().sendFeedback(Text.literal("Cleared regexes for tab: ")
-                .append(Text.literal(windowId + "/" + tabId).formatted(Formatting.YELLOW)));
+        ctx.getSource().sendFeedback(Component.literal("Cleared regexes for tab: ")
+                .append(Component.literal(windowId + "/" + tabId).withStyle(ChatFormatting.YELLOW)));
         return 1;
     }
 
@@ -367,20 +366,20 @@ public final class SecondaryChatCommands {
                 HudCanvasDataHandler.ELEMENT_SECONDARY_CHAT,
                 SecondaryChatOverlay::defaultCanvasElement
         );
-        ctx.getSource().sendFeedback(Text.literal("=== Secondary Chat Status ===").formatted(Formatting.GOLD));
-        ctx.getSource().sendFeedback(Text.literal("Enabled: ")
-                .append(Text.literal(String.valueOf(settings.enabled))
-                        .formatted(settings.enabled ? Formatting.GREEN : Formatting.RED)));
-        ctx.getSource().sendFeedback(Text.literal("Render: ")
-                .append(Text.literal(settings.renderMode.name()).formatted(Formatting.YELLOW)));
-        ctx.getSource().sendFeedback(Text.literal("Intercept: ")
-                .append(Text.literal(settings.interceptMode.name()).formatted(Formatting.YELLOW)));
-        ctx.getSource().sendFeedback(Text.literal("Windows: ")
-                .append(Text.literal(String.valueOf(settings.windows.size())).formatted(Formatting.AQUA)));
-        ctx.getSource().sendFeedback(Text.literal("Main position: ")
-                .append(Text.literal(canvas.x + ", " + canvas.y).formatted(Formatting.GRAY)));
-        ctx.getSource().sendFeedback(Text.literal("Main size: ")
-                .append(Text.literal(canvas.width + "x" + canvas.height).formatted(Formatting.GRAY)));
+        ctx.getSource().sendFeedback(Component.literal("=== Secondary Chat Status ===").withStyle(ChatFormatting.GOLD));
+        ctx.getSource().sendFeedback(Component.literal("Enabled: ")
+                .append(Component.literal(String.valueOf(settings.enabled))
+                        .withStyle(settings.enabled ? ChatFormatting.GREEN : ChatFormatting.RED)));
+        ctx.getSource().sendFeedback(Component.literal("Render: ")
+                .append(Component.literal(settings.renderMode.name()).withStyle(ChatFormatting.YELLOW)));
+        ctx.getSource().sendFeedback(Component.literal("Intercept: ")
+                .append(Component.literal(settings.interceptMode.name()).withStyle(ChatFormatting.YELLOW)));
+        ctx.getSource().sendFeedback(Component.literal("Windows: ")
+                .append(Component.literal(String.valueOf(settings.windows.size())).withStyle(ChatFormatting.AQUA)));
+        ctx.getSource().sendFeedback(Component.literal("Main position: ")
+                .append(Component.literal(canvas.x + ", " + canvas.y).withStyle(ChatFormatting.GRAY)));
+        ctx.getSource().sendFeedback(Component.literal("Main size: ")
+                .append(Component.literal(canvas.width + "x" + canvas.height).withStyle(ChatFormatting.GRAY)));
         return 1;
     }
 
@@ -409,7 +408,7 @@ public final class SecondaryChatCommands {
 
     private static CompletableFuture<Suggestions> suggestWindows(CommandContext<FabricClientCommandSource> ctx,
                                                                   SuggestionsBuilder builder) {
-        return CommandSource.suggestMatching(windowIds(), builder);
+        return SharedSuggestionProvider.suggest(windowIds(), builder);
     }
 
     private static CompletableFuture<Suggestions> suggestTabs(CommandContext<FabricClientCommandSource> ctx,
@@ -420,7 +419,7 @@ public final class SecondaryChatCommands {
         } catch (IllegalArgumentException ignored) {
             windowId = "";
         }
-        return CommandSource.suggestMatching(tabIds(windowId), builder);
+        return SharedSuggestionProvider.suggest(tabIds(windowId), builder);
     }
 
     private static List<String> windowIds() {

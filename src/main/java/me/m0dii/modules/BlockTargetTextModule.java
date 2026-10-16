@@ -1,17 +1,17 @@
 package me.m0dii.modules;
 
-import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext;
-import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
-import net.minecraft.block.BlockState;
-import net.minecraft.client.font.TextRenderer;
-import net.minecraft.client.render.Camera;
-import net.minecraft.client.render.VertexConsumerProvider;
-import net.minecraft.client.util.math.MatrixStack;
-import net.minecraft.util.hit.BlockHitResult;
-import net.minecraft.util.hit.HitResult;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.RotationAxis;
-import net.minecraft.util.math.Vec3d;
+import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.math.Axis;
+import me.m0dii.render.OverlayBufferSource;
+import me.m0dii.render.OverlayRenderEvents;
+import me.m0dii.render.OverlayRenderEvents.OverlayRenderContext;
+import net.minecraft.client.Camera;
+import net.minecraft.client.gui.Font;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
+import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4f;
@@ -27,25 +27,25 @@ public abstract class BlockTargetTextModule extends Module {
 
     @Override
     public void register() {
-        WorldRenderEvents.AFTER_ENTITIES.register(this::onAfterEntities);
+        OverlayRenderEvents.AFTER_ENTITIES.register(this::onAfterEntities);
     }
 
-    private void onAfterEntities(WorldRenderContext context) {
+    private void onAfterEntities(OverlayRenderContext context) {
         if (!isEnabled() || isClientNull()) {
             return;
         }
 
-        MatrixStack matrices = context.matrices();
-        Camera camera = context.gameRenderer().getCamera();
+        PoseStack matrices = context.matrices();
+        Camera camera = context.gameRenderer().mainCamera();
 
         if (camera == null) {
             return;
         }
         if (matrices == null) {
-            matrices = new MatrixStack();
+            matrices = new PoseStack();
         }
 
-        HitResult hitResult = getClient().crosshairTarget;
+        HitResult hitResult = getClient().hitResult;
         if (hitResult == null || hitResult.getType() != HitResult.Type.BLOCK) {
             return;
         }
@@ -78,7 +78,7 @@ public abstract class BlockTargetTextModule extends Module {
      * @param pos        The block position
      * @param blockState The block state
      */
-    protected abstract void renderText(@NotNull MatrixStack matrices,
+    protected abstract void renderText(@NotNull PoseStack matrices,
                                        @NotNull Camera camera,
                                        @NotNull BlockPos pos,
                                        @NotNull BlockState blockState);
@@ -94,9 +94,9 @@ public abstract class BlockTargetTextModule extends Module {
      * @param color     The text color (ARGB format)
      * @param scale     The text scale
      */
-    protected void renderFloatingText(@NotNull MatrixStack matrices,
-                                      @NotNull Vec3d worldPos,
-                                      @NotNull Vec3d cameraPos,
+    protected void renderFloatingText(@NotNull PoseStack matrices,
+                                      @NotNull Vec3 worldPos,
+                                      @NotNull Vec3 cameraPos,
                                       @Nullable String text,
                                       @NotNull Camera camera,
                                       int color,
@@ -105,7 +105,7 @@ public abstract class BlockTargetTextModule extends Module {
             return;
         }
 
-        matrices.push();
+        matrices.pushPose();
 
         // Translate to world position
         matrices.translate(
@@ -115,23 +115,23 @@ public abstract class BlockTargetTextModule extends Module {
         );
 
         // Face the camera
-        matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(-camera.getYaw()));
-        matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(camera.getPitch()));
+        matrices.rotate(Axis.YP.rotationDegrees(-camera.yRot()));
+        matrices.rotate(Axis.XP.rotationDegrees(camera.xRot()));
 
         // Apply scale (negative to flip text)
         matrices.scale(-scale, -scale, scale);
 
-        Matrix4f matrix = matrices.peek().getPositionMatrix();
-        VertexConsumerProvider.Immediate immediate = getClient().getBufferBuilders().getEntityVertexConsumers();
+        Matrix4f matrix = matrices.last().pose();
+        OverlayBufferSource immediate = OverlayBufferSource.current();
 
         // Center the text
-        float textWidth = getClient().textRenderer.getWidth(text);
+        float textWidth = getClient().font.width(text);
         float x = -textWidth / 2f;
 
         // Full brightness so text is always visible
         int fullBright = 0x00F000F0;
 
-        getClient().textRenderer.draw(
+        OverlayBufferSource.drawText(getClient().font, 
                 text,
                 x,
                 0,
@@ -139,14 +139,13 @@ public abstract class BlockTargetTextModule extends Module {
                 false,
                 matrix,
                 immediate,
-                TextRenderer.TextLayerType.SEE_THROUGH,
+                Font.DisplayMode.SEE_THROUGH,
                 0,
                 fullBright
         );
 
-        immediate.draw();
 
-        matrices.pop();
+        matrices.popPose();
     }
 
     /**
@@ -158,9 +157,9 @@ public abstract class BlockTargetTextModule extends Module {
      * @param text      The text to render
      * @param camera    The camera
      */
-    protected void renderFloatingText(@NotNull MatrixStack matrices,
-                                      @NotNull Vec3d worldPos,
-                                      @NotNull Vec3d cameraPos,
+    protected void renderFloatingText(@NotNull PoseStack matrices,
+                                      @NotNull Vec3 worldPos,
+                                      @NotNull Vec3 cameraPos,
                                       @Nullable String text,
                                       @NotNull Camera camera) {
         renderFloatingText(matrices, worldPos, cameraPos, text, camera, 0xFFFFFF, 0.025f);
@@ -173,8 +172,8 @@ public abstract class BlockTargetTextModule extends Module {
      * @param verticalOffset The vertical offset from block center
      * @return The world position to render at
      */
-    protected Vec3d getBlockCenterWithVerticalOffset(BlockPos pos, double verticalOffset) {
-        return Vec3d.of(pos).add(0.5, 0.5 + verticalOffset, 0.5);
+    protected Vec3 getBlockCenterWithVerticalOffset(BlockPos pos, double verticalOffset) {
+        return Vec3.atLowerCornerOf(pos).add(0.5, 0.5 + verticalOffset, 0.5);
     }
 
     private static int toOpaqueColor(int color) {

@@ -3,6 +3,7 @@ package me.m0dii.modules.chat;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
+import com.mojang.blaze3d.platform.InputConstants;
 import com.mojang.serialization.JsonOps;
 import me.m0dii.mixin.ScreenClickEventInvoker;
 import me.m0dii.modules.hudcanvas.HudCanvasDataHandler;
@@ -10,18 +11,16 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenKeyboardEvents;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenMouseEvents;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.Click;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.input.KeyInput;
-import net.minecraft.client.util.InputUtil;
-import net.minecraft.registry.RegistryWrapper;
-import net.minecraft.text.ClickEvent;
-import net.minecraft.text.Style;
-import net.minecraft.text.Text;
-import net.minecraft.text.TextCodecs;
-import net.minecraft.util.Formatting;
-
+import net.minecraft.ChatFormatting;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.KeyEvent;
+import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.network.chat.ClickEvent;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.ComponentSerialization;
+import net.minecraft.network.chat.Style;
 import java.util.List;
 import java.util.Locale;
 
@@ -67,20 +66,21 @@ public final class SecondaryChatInteraction {
         });
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
-            if (client.currentScreen != lastScreen) {
+            if (client.gui.screen() != lastScreen) {
                 saveIfDirty();
 
-                if (client.currentScreen == null) {
+                if (client.gui.screen() == null) {
                     stopDragging();
                 }
 
-                lastScreen = client.currentScreen;
+                lastScreen = client.gui.screen();
             }
         });
     }
 
-    private static boolean allowMouseClick(Screen screen, Click click) {
-        if (screen instanceof SecondaryChatConfigScreen) {
+    private static boolean allowMouseClick(Screen screen, MouseButtonEvent click) {
+        if (screen instanceof SecondaryChatConfigScreen
+                || screen instanceof me.m0dii.modules.macros.gui.MacroWorkbenchScreen) {
             return true;
         }
 
@@ -89,13 +89,13 @@ public final class SecondaryChatInteraction {
             return true;
         }
 
-        boolean leftClick = click.button() == 0;
-        boolean rightClick = click.button() == 1;
+        boolean leftClick = click.button() == InputConstants.MOUSE_BUTTON_LEFT;
+        boolean rightClick = click.button() == InputConstants.MOUSE_BUTTON_RIGHT;
         if (!leftClick && !rightClick) {
             return true;
         }
 
-        MinecraftClient client = MinecraftClient.getInstance();
+        Minecraft client = Minecraft.getInstance();
         if (client == null) {
             return true;
         }
@@ -128,7 +128,7 @@ public final class SecondaryChatInteraction {
             openMenuWindowId = "";
 
             if (leftClick) {
-                SecondaryChatWindowLayout.TabHit tabHit = SecondaryChatWindowLayout.tabAt(frame, mouseX, mouseY, client.textRenderer);
+                SecondaryChatWindowLayout.TabHit tabHit = SecondaryChatWindowLayout.tabAt(frame, mouseX, mouseY, client.font);
                 if (tabHit != null) {
                     SecondaryChatManager.selectTab(tabHit.window.id, tabHit.tab.id);
                     clearSelectionForWindow(tabHit.window.id);
@@ -136,7 +136,7 @@ public final class SecondaryChatInteraction {
                 }
             }
 
-            SecondaryChatTextLayout.Hit hit = SecondaryChatTextLayout.hitAt(frame, client.textRenderer, mouseX, mouseY);
+            SecondaryChatTextLayout.Hit hit = SecondaryChatTextLayout.hitAt(frame, client.font, mouseX, mouseY);
             if (hit != null) {
                 selectMessage(frame, hit);
                 if (rightClick) {
@@ -208,8 +208,8 @@ public final class SecondaryChatInteraction {
         }
     }
 
-    private static void handleMouseRelease(Screen screen, Click click) {
-        if (click.button() != 0 || dragMode == DragMode.NONE) {
+    private static void handleMouseRelease(Screen screen, MouseButtonEvent click) {
+        if (click.button() != InputConstants.MOUSE_BUTTON_LEFT || dragMode == DragMode.NONE) {
             return;
         }
 
@@ -250,7 +250,7 @@ public final class SecondaryChatInteraction {
         return true;
     }
 
-    private static boolean allowKeyPress(Screen screen, KeyInput key) {
+    private static boolean allowKeyPress(Screen screen, KeyEvent key) {
         if (screen instanceof SecondaryChatConfigScreen) {
             return true;
         }
@@ -259,8 +259,8 @@ public final class SecondaryChatInteraction {
             return true;
         }
 
-        boolean copyShortcut = key.key() == InputUtil.GLFW_KEY_C
-                && (key.modifiers() & (InputUtil.GLFW_MOD_CONTROL | InputUtil.GLFW_MOD_SUPER)) != 0;
+        boolean copyShortcut = key.key() == InputConstants.KEY_C
+                && (key.modifiers() & (InputConstants.MOD_CONTROL | InputConstants.MOD_SUPER)) != 0;
         if (!copyShortcut || !isMouseOverSelectedWindow()) {
             return true;
         }
@@ -296,7 +296,7 @@ public final class SecondaryChatInteraction {
     }
 
     static SecondaryChatTextLayout.Hit hoveredMessageHit(SecondaryChatWindowLayout.Frame frame,
-                                                         net.minecraft.client.font.TextRenderer textRenderer) {
+                                                         net.minecraft.client.gui.Font textRenderer) {
         if (frame == null || !isTopmostWindowAtMouse(frame.window.id)) {
             return null;
         }
@@ -456,10 +456,10 @@ public final class SecondaryChatInteraction {
     }
 
     private static void openEditor() {
-        MinecraftClient client = MinecraftClient.getInstance();
+        Minecraft client = Minecraft.getInstance();
         if (client != null) {
             openMenuWindowId = "";
-            client.setScreen(new SecondaryChatConfigScreen(client.currentScreen));
+            client.gui.setScreen(new SecondaryChatConfigScreen(client.gui.screen()));
         }
     }
 
@@ -525,7 +525,7 @@ public final class SecondaryChatInteraction {
             return;
         }
 
-        MinecraftClient client = MinecraftClient.getInstance();
+        Minecraft client = Minecraft.getInstance();
         if (client != null) {
             ScreenClickEventInvoker.invokeHandleClickEvent(clickEvent, client, screen);
         }
@@ -542,14 +542,14 @@ public final class SecondaryChatInteraction {
     }
 
     private static void copyMessage(SecondaryChatManager.ChatMessage message) {
-        MinecraftClient client = MinecraftClient.getInstance();
+        Minecraft client = Minecraft.getInstance();
         if (client == null || message == null) {
             return;
         }
 
-        client.keyboard.setClipboard(message.plainText());
+        client.keyboardHandler.setClipboard(message.plainText());
         if (client.player != null) {
-            client.player.sendMessage(Text.literal("Copied chat message").formatted(Formatting.GRAY), true);
+            client.player.sendOverlayMessage(Component.literal("Copied chat message").withStyle(ChatFormatting.GRAY));
         }
     }
 
@@ -578,25 +578,25 @@ public final class SecondaryChatInteraction {
             return;
         }
 
-        MinecraftClient client = MinecraftClient.getInstance();
+        Minecraft client = Minecraft.getInstance();
         if (client == null) {
             return;
         }
 
-        client.keyboard.setClipboard(toComponentJson(selected.text()));
+        client.keyboardHandler.setClipboard(toComponentJson(selected.text()));
         if (client.player != null) {
-            client.player.sendMessage(Text.literal("Copied chat component JSON").formatted(Formatting.GRAY), true);
+            client.player.sendOverlayMessage(Component.literal("Copied chat component JSON").withStyle(ChatFormatting.GRAY));
         }
     }
 
-    private static String toComponentJson(Text text) {
-        MinecraftClient client = MinecraftClient.getInstance();
-        RegistryWrapper.WrapperLookup registryLookup = client == null || client.world == null
+    private static String toComponentJson(Component text) {
+        Minecraft client = Minecraft.getInstance();
+        HolderLookup.Provider registryLookup = client == null || client.level == null
                 ? null
-                : client.world.getRegistryManager();
+                : client.level.registryAccess();
 
-        return TextCodecs.CODEC.encodeStart(
-                        registryLookup == null ? JsonOps.INSTANCE : registryLookup.getOps(JsonOps.INSTANCE),
+        return ComponentSerialization.CODEC.encodeStart(
+                        registryLookup == null ? JsonOps.INSTANCE : registryLookup.createSerializationContext(JsonOps.INSTANCE),
                         text
                 )
                 .result()

@@ -2,16 +2,15 @@ package me.m0dii.modules.heldlight;
 
 import me.m0dii.modules.Module;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.render.WorldRenderer;
-import net.minecraft.item.ItemStack;
-import net.minecraft.registry.Registries;
-import net.minecraft.registry.RegistryKeys;
-import net.minecraft.registry.tag.TagKey;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.ChunkPos;
-
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.LevelRenderer;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.Identifier;
+import net.minecraft.tags.TagKey;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.ChunkPos;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -30,7 +29,7 @@ public class HeldLightModule extends Module {
 
     private static int cachedWhitelistHash;
     private static Set<String> cachedItemWhitelist = Set.of();
-    private static List<TagKey<net.minecraft.item.Item>> cachedTagWhitelist = List.of();
+    private static List<TagKey<net.minecraft.world.item.Item>> cachedTagWhitelist = List.of();
 
     private HeldLightModule() {
         super("held_light", "Held Light", false);
@@ -42,8 +41,8 @@ public class HeldLightModule extends Module {
         ClientTickEvents.END_CLIENT_TICK.register(this::onEndTick);
     }
 
-    private void onEndTick(MinecraftClient client) {
-        if (client == null || client.player == null || client.world == null || client.worldRenderer == null) {
+    private void onEndTick(Minecraft client) {
+        if (client == null || client.player == null || client.level == null || client.levelRenderer == null) {
             lastLightChunkPos = null;
             lastRefreshBlockPos = null;
             lastChunkRadius = 0;
@@ -55,8 +54,8 @@ public class HeldLightModule extends Module {
         HeldLightConfigDataHandler.Config cfg = HeldLightConfigDataHandler.get();
         refreshWhitelistCache(cfg);
 
-        boolean hasLightSource = isLightSource(client.player.getMainHandStack(), cfg)
-                || isLightSource(client.player.getOffHandStack(), cfg);
+        boolean hasLightSource = isLightSource(client.player.getMainHandItem(), cfg)
+                || isLightSource(client.player.getOffhandItem(), cfg);
         boolean active = isEnabled() && hasLightSource && cfg.falloffDistance > 0.0 && cfg.brightness > 0;
 
         if (active) {
@@ -70,7 +69,7 @@ public class HeldLightModule extends Module {
 
         if (!active) {
             if (lastHadLightSource && lastLightChunkPos != null) {
-                scheduleChunkRange(client.worldRenderer, lastLightChunkPos, Math.max(1, lastChunkRadius), client.world.getBottomY(), client.world.getTopYInclusive() + 1);
+                scheduleChunkRange(client.levelRenderer, lastLightChunkPos, Math.max(1, lastChunkRadius), client.level.getMinY(), client.level.getMaxY() + 1);
             }
             lastLightChunkPos = null;
             lastRefreshBlockPos = null;
@@ -80,20 +79,20 @@ public class HeldLightModule extends Module {
         }
 
         int chunkRadius = Math.max(1, (int) Math.ceil(cfg.falloffDistance / 16.0) + 1);
-        BlockPos currentBlockPos = client.player.getBlockPos();
-        ChunkPos currentChunk = new ChunkPos(currentBlockPos);
+        BlockPos currentBlockPos = client.player.blockPosition();
+        ChunkPos currentChunk = ChunkPos.containing(currentBlockPos);
         boolean movedEnough = lastRefreshBlockPos == null
                 || Math.abs(currentBlockPos.getX() - lastRefreshBlockPos.getX()) >= 2
                 || Math.abs(currentBlockPos.getY() - lastRefreshBlockPos.getY()) >= 2
                 || Math.abs(currentBlockPos.getZ() - lastRefreshBlockPos.getZ()) >= 2;
 
         if (!lastHadLightSource || lastLightChunkPos == null || !lastLightChunkPos.equals(currentChunk) || lastChunkRadius != chunkRadius || movedEnough) {
-            int minY = client.world.getBottomY();
-            int maxY = client.world.getTopYInclusive() + 1;
+            int minY = client.level.getMinY();
+            int maxY = client.level.getMaxY() + 1;
             if (lastHadLightSource && lastLightChunkPos != null) {
-                scheduleChunkRange(client.worldRenderer, lastLightChunkPos, Math.max(1, Math.max(lastChunkRadius, chunkRadius)), minY, maxY);
+                scheduleChunkRange(client.levelRenderer, lastLightChunkPos, Math.max(1, Math.max(lastChunkRadius, chunkRadius)), minY, maxY);
             }
-            scheduleChunkRange(client.worldRenderer, currentChunk, chunkRadius, minY, maxY);
+            scheduleChunkRange(client.levelRenderer, currentChunk, chunkRadius, minY, maxY);
             lastLightChunkPos = currentChunk;
             lastRefreshBlockPos = currentBlockPos;
             lastChunkRadius = chunkRadius;
@@ -101,12 +100,12 @@ public class HeldLightModule extends Module {
         }
     }
 
-    private static void scheduleChunkRange(WorldRenderer renderer, ChunkPos centerChunk, int chunkRadius, int minY, int maxY) {
-        for (int cz = centerChunk.z - chunkRadius; cz <= centerChunk.z + chunkRadius; cz++) {
-            for (int cx = centerChunk.x - chunkRadius; cx <= centerChunk.x + chunkRadius; cx++) {
+    private static void scheduleChunkRange(LevelRenderer renderer, ChunkPos centerChunk, int chunkRadius, int minY, int maxY) {
+        for (int cz = centerChunk.z() - chunkRadius; cz <= centerChunk.z() + chunkRadius; cz++) {
+            for (int cx = centerChunk.x() - chunkRadius; cx <= centerChunk.x() + chunkRadius; cx++) {
                 int minX = cx << 4;
                 int minZ = cz << 4;
-                renderer.scheduleBlockRenders(minX, minY, minZ, minX + 16, maxY, minZ + 16);
+                Minecraft.getInstance().levelExtractor.setBlocksDirty(minX, minY, minZ, minX + 16, maxY, minZ + 16);
             }
         }
     }
@@ -120,25 +119,25 @@ public class HeldLightModule extends Module {
             return false;
         }
         refreshWhitelistCache(cfg);
-        String id = Registries.ITEM.getId(stack.getItem()).toString();
+        String id = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
         if (cachedItemWhitelist.contains(id)) {
             return true;
         }
-        for (TagKey<net.minecraft.item.Item> tag : cachedTagWhitelist) {
-            if (stack.isIn(tag)) {
+        for (TagKey<net.minecraft.world.item.Item> tag : cachedTagWhitelist) {
+            if (stack.is(tag)) {
                 return true;
             }
         }
         return false;
     }
 
-    public static int getHeldLightLevel(MinecraftClient client, BlockPos pos) {
+    public static int getHeldLightLevel(Minecraft client, BlockPos pos) {
         if (!INSTANCE.isEnabled() || client == null || client.player == null || pos == null || !cachedLightActive) {
             return 0;
         }
 
         double playerX = client.player.getX();
-        double playerY = client.player.getY() + client.player.getStandingEyeHeight();
+        double playerY = client.player.getY() + client.player.getEyeHeight();
         double playerZ = client.player.getZ();
 
         double dx = pos.getX() + 0.5 - playerX;
@@ -163,11 +162,11 @@ public class HeldLightModule extends Module {
         cachedWhitelistHash = currentHash;
         cachedItemWhitelist = new HashSet<>(cfg.itemWhitelist);
 
-        List<TagKey<net.minecraft.item.Item>> tags = new ArrayList<>();
+        List<TagKey<net.minecraft.world.item.Item>> tags = new ArrayList<>();
         for (String tagId : cfg.tagWhitelist) {
             Identifier parsed = Identifier.tryParse(tagId);
             if (parsed != null) {
-                tags.add(TagKey.of(RegistryKeys.ITEM, parsed));
+                tags.add(TagKey.create(Registries.ITEM, parsed));
             }
         }
         cachedTagWhitelist = List.copyOf(tags);

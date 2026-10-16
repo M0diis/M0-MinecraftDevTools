@@ -3,11 +3,10 @@ package me.m0dii.modules.entityradar;
 import lombok.Getter;
 import lombok.Setter;
 import me.m0dii.modules.Toggleable;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.render.RenderTickCounter;
-import net.minecraft.entity.Entity;
-
+import net.minecraft.client.DeltaTracker;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.world.entity.Entity;
 import java.util.List;
 
 public class EntityRadarHudOverlay implements Toggleable {
@@ -16,12 +15,12 @@ public class EntityRadarHudOverlay implements Toggleable {
     @Setter
     private boolean enabled = false;
 
-    public void onHudRender(DrawContext context, RenderTickCounter tickCounter) {
+    public void onHudRender(GuiGraphicsExtractor context, DeltaTracker tickCounter) {
         if (!enabled) {
             return;
         }
 
-        MinecraftClient client = MinecraftClient.getInstance();
+        Minecraft client = Minecraft.getInstance();
         if (client.player == null) {
             return;
         }
@@ -35,8 +34,8 @@ public class EntityRadarHudOverlay implements Toggleable {
 
         float scale = 0.75f;
 
-        context.getMatrices().pushMatrix();
-        context.getMatrices().scale(scale, scale);
+        context.pose().pushMatrix();
+        context.pose().scale(scale, scale);
 
         int x = Math.round(10 / scale);
         int y = Math.round(10 / scale);
@@ -44,19 +43,19 @@ public class EntityRadarHudOverlay implements Toggleable {
 
         String countText = String.format("Entities: %d (§aP:%d §7N:%d §cH:%d§r)",
                 totalCount, passiveCount, neutralCount, hostileCount);
-        context.drawTextWithShadow(client.textRenderer, countText, x, y, 0xFFFFFFFF);
+        context.text(client.font, countText, x, y, 0xFFFFFFFF);
         y += Math.round(12 / scale);
 
-        context.drawTextWithShadow(client.textRenderer, "─────────────────", x, y, 0xFF808080);
+        context.text(client.font, "─────────────────", x, y, 0xFF808080);
         y += lineHeight;
 
         for (Entity entity : entities) {
             String text = String.format("%s - %.2fm", entity.getName().getString(), entity.distanceTo(client.player));
-            context.drawTextWithShadow(client.textRenderer, text, x, y, 0xFFFFFFFF);
+            context.text(client.font, text, x, y, 0xFFFFFFFF);
             y += lineHeight;
         }
 
-        context.getMatrices().popMatrix();
+        context.pose().popMatrix();
     }
 }
 

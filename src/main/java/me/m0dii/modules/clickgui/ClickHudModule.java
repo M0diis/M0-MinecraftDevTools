@@ -1,5 +1,6 @@
 package me.m0dii.modules.clickgui;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import lombok.Getter;
 import me.m0dii.M0DevToolsClient;
 import me.m0dii.modules.Module;
@@ -7,8 +8,7 @@ import me.m0dii.utils.KeybindCatalog;
 import me.m0dii.utils.ModConfig;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
-import net.minecraft.client.util.InputUtil;
-import net.minecraft.util.Identifier;
+import net.minecraft.resources.Identifier;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -29,13 +29,13 @@ public class ClickHudModule extends Module {
         this.renderer = new ClickHudRenderer();
 
         HudElementRegistry.attachElementBefore(VanillaHudElements.CHAT,
-                Identifier.of(M0DevToolsClient.MOD_ID, "click_hud"),
+                Identifier.fromNamespaceAndPath(M0DevToolsClient.MOD_ID, "click_hud"),
                 renderer::onHudRender
         );
 
         registerPressedKeybind(
                 KeybindCatalog.CLICKGUI_TOGGLE.translationKey(),
-                InputUtil.Type.KEYSYM,
+                InputConstants.Type.KEYBOARD,
                 KeybindCatalog.CLICKGUI_TOGGLE.defaultKey(),
                 client -> renderer.toggle()
         );

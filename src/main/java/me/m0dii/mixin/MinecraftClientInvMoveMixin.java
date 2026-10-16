@@ -6,20 +6,20 @@ import me.m0dii.modules.bridging.BridgingTweaksState;
 import me.m0dii.modules.fastblockplacement.FastBlockPlacementModule;
 import me.m0dii.modules.inventorymove.InventoryMoveModule;
 import me.m0dii.modules.tweaks.TweaksModule;
-import net.minecraft.block.BlockState;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.screen.ingame.HandledScreen;
-import net.minecraft.client.network.ClientPlayerInteractionManager;
-import net.minecraft.item.BlockItem;
-import net.minecraft.item.ItemStack;
-import net.minecraft.util.ActionResult;
-import net.minecraft.util.Hand;
-import net.minecraft.util.hit.BlockHitResult;
-import net.minecraft.util.hit.HitResult;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Direction;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.client.multiplayer.MultiPlayerGameMode;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.item.BlockItem;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
+import net.minecraft.world.phys.Vec3;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
@@ -30,29 +30,29 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import java.util.LinkedHashSet;
 import java.util.Set;
 
-import static net.minecraft.client.util.InputUtil.*;
+import static com.mojang.blaze3d.platform.InputConstants.*;
 
-@Mixin(MinecraftClient.class)
+@Mixin(Minecraft.class)
 public class MinecraftClientInvMoveMixin {
 
     @Shadow
-    private int itemUseCooldown;
+    private int rightClickDelay;
 
     @Shadow
-    public HitResult crosshairTarget;
+    public HitResult hitResult;
 
     @Shadow
-    public ClientPlayerInteractionManager interactionManager;
+    public MultiPlayerGameMode gameMode;
 
     @Inject(method = "tick", at = @At("TAIL"))
     private void onClientTick(CallbackInfo ci) {
-        MinecraftClient client = MinecraftClient.getInstance();
+        Minecraft client = Minecraft.getInstance();
         if (client.player == null) {
             return;
         }
 
         if (FastBlockPlacementModule.INSTANCE.isEnabled()) {
-            this.itemUseCooldown = 0;
+            this.rightClickDelay = 0;
         }
 
         BridgingTweaksState.tick(client);
@@ -61,22 +61,22 @@ public class MinecraftClientInvMoveMixin {
             return;
         }
 
-        Screen screen = client.currentScreen;
+        Screen screen = client.gui.screen();
 
-        if (screen instanceof HandledScreen) {
-            client.options.forwardKey.setPressed(isKeyPressed(client.getWindow(), GLFW_KEY_W));
-            client.options.leftKey.setPressed(isKeyPressed(client.getWindow(), GLFW_KEY_A));
-            client.options.backKey.setPressed(isKeyPressed(client.getWindow(), GLFW_KEY_S));
-            client.options.rightKey.setPressed(isKeyPressed(client.getWindow(), GLFW_KEY_D));
-            client.options.jumpKey.setPressed(isKeyPressed(client.getWindow(), GLFW_KEY_SPACE));
-            client.options.sprintKey.setPressed(isKeyPressed(client.getWindow(), GLFW_KEY_LEFT_CONTROL));
+        if (screen instanceof AbstractContainerScreen) {
+            client.options.keyUp.setDown(isKeyDown(KEY_W));
+            client.options.keyLeft.setDown(isKeyDown(KEY_A));
+            client.options.keyDown.setDown(isKeyDown(KEY_S));
+            client.options.keyRight.setDown(isKeyDown(KEY_D));
+            client.options.keyJump.setDown(isKeyDown(KEY_SPACE));
+            client.options.keySprint.setDown(isKeyDown(KEY_LCONTROL));
         }
     }
 
-    @Inject(method = "doItemUse", at = @At("HEAD"), cancellable = true)
+    @Inject(method = "startUseItem", at = @At("HEAD"), cancellable = true)
     private void applyPlacementTweaks(CallbackInfo ci) {
-        if (BridgingTweaksLogic.tryBridgePlacement(MinecraftClient.getInstance(), this.interactionManager)) {
-            this.itemUseCooldown = BridgingTweaksModule.INSTANCE.delayPostBridging();
+        if (BridgingTweaksLogic.tryBridgePlacement(Minecraft.getInstance(), this.gameMode)) {
+            this.rightClickDelay = BridgingTweaksModule.INSTANCE.delayPostBridging();
             ci.cancel();
             return;
         }
@@ -85,63 +85,77 @@ public class MinecraftClientInvMoveMixin {
             return;
         }
 
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (client.player == null || client.world == null || this.interactionManager == null) {
+        Minecraft client = Minecraft.getInstance();
+        if (client.player == null || client.level == null || this.gameMode == null) {
             return;
         }
 
-        if (this.crosshairTarget != null && this.crosshairTarget.getType() != HitResult.Type.MISS) {
+        if (this.hitResult != null && this.hitResult.getType() != HitResult.Type.MISS) {
             return;
         }
 
-        if (client.player.getPitch() < 35.0f) {
-            return;
-        }
-
-        Hand hand = getBlockPlacingHand(client);
+        InteractionHand hand = getBlockPlacingHand(client);
         if (hand == null) {
             return;
         }
 
-        BlockHitResult hitResult = findAngelPlacementHit(client);
+        // Looking down at a ledge: attach to a neighbouring block; otherwise place in mid-air ahead.
+        BlockHitResult hitResult = client.player.getXRot() >= 35.0f ? findAngelPlacementHit(client) : null;
+        if (hitResult == null) {
+            hitResult = findMidAirPlacementHit(client);
+        }
         if (hitResult == null) {
             return;
         }
 
-        ActionResult result = this.interactionManager.interactBlock(client.player, hand, hitResult);
-        if (result.isAccepted()) {
-            client.player.swingHand(hand);
+        InteractionResult result = this.gameMode.useItemOn(client.player, hand, hitResult);
+        // Same cooldown vanilla applies; without it the next tick places again against the new block.
+        this.rightClickDelay = 4;
+        if (result.consumesAction()) {
+            client.player.swing(hand, client.player.getItemInHand(hand).getInteractAnimation(), false);
             ci.cancel();
         }
     }
 
     @Unique
-    private static Hand getBlockPlacingHand(MinecraftClient client) {
-        ItemStack mainHand = client.player.getMainHandStack();
+    private static BlockHitResult findMidAirPlacementHit(Minecraft client) {
+        Vec3 eye = client.player.getEyePosition();
+        BlockPos pos = BlockPos.containing(eye.add(client.player.getViewVector(1.0f).scale(2.5)));
+        BlockState state = client.level.getBlockState(pos);
+        if (!state.isAir() && !state.canBeReplaced()) {
+            return null;
+        }
+        // Clicking a replaceable (air) block places the item at that position.
+        return new BlockHitResult(Vec3.atCenterOf(pos), Direction.UP, pos, false);
+    }
+
+    @Unique
+    private static InteractionHand getBlockPlacingHand(Minecraft client) {
+        ItemStack mainHand = client.player.getMainHandItem();
         if (mainHand.getItem() instanceof BlockItem) {
-            return Hand.MAIN_HAND;
+            return InteractionHand.MAIN_HAND;
         }
 
-        ItemStack offHand = client.player.getOffHandStack();
+        ItemStack offHand = client.player.getOffhandItem();
         if (offHand.getItem() instanceof BlockItem) {
-            return Hand.OFF_HAND;
+            return InteractionHand.OFF_HAND;
         }
 
         return null;
     }
 
     @Unique
-    private static BlockHitResult findAngelPlacementHit(MinecraftClient client) {
-        if (client.player == null || client.world == null) {
+    private static BlockHitResult findAngelPlacementHit(Minecraft client) {
+        if (client.player == null || client.level == null) {
             return null;
         }
 
-        Vec3d look = client.player.getRotationVec(1.0f);
+        Vec3 look = client.player.getViewVector(1.0f);
         Set<BlockPos> candidates = new LinkedHashSet<>();
 
-        BlockPos center = BlockPos.ofFloored(client.player.getX(), client.player.getY() - 1.0, client.player.getZ());
-        BlockPos forward = BlockPos.ofFloored(client.player.getX() + look.x, client.player.getY() - 1.0, client.player.getZ() + look.z);
-        BlockPos forwardFar = BlockPos.ofFloored(client.player.getX() + (look.x * 2.0), client.player.getY() - 1.0, client.player.getZ() + (look.z * 2.0));
+        BlockPos center = BlockPos.containing(client.player.getX(), client.player.getY() - 1.0, client.player.getZ());
+        BlockPos forward = BlockPos.containing(client.player.getX() + look.x, client.player.getY() - 1.0, client.player.getZ() + look.z);
+        BlockPos forwardFar = BlockPos.containing(client.player.getX() + (look.x * 2.0), client.player.getY() - 1.0, client.player.getZ() + (look.z * 2.0));
 
         candidates.add(forward);
         candidates.add(forwardFar);
@@ -151,8 +165,8 @@ public class MinecraftClientInvMoveMixin {
         addNearbyCandidates(candidates, forward);
 
         for (BlockPos placePos : candidates) {
-            BlockState placeState = client.world.getBlockState(placePos);
-            if (!placeState.isAir() && !placeState.isReplaceable()) {
+            BlockState placeState = client.level.getBlockState(placePos);
+            if (!placeState.isAir() && !placeState.canBeReplaced()) {
                 continue;
             }
 
@@ -169,26 +183,26 @@ public class MinecraftClientInvMoveMixin {
     private static void addNearbyCandidates(Set<BlockPos> candidates, BlockPos origin) {
         for (int dx = -1; dx <= 1; dx++) {
             for (int dz = -1; dz <= 1; dz++) {
-                candidates.add(origin.add(dx, 0, dz));
+                candidates.add(origin.offset(dx, 0, dz));
             }
         }
     }
 
     @Unique
-    private static BlockHitResult findPlacementHit(MinecraftClient client, BlockPos placePos) {
+    private static BlockHitResult findPlacementHit(Minecraft client, BlockPos placePos) {
         Direction[] priority = new Direction[]{
                 Direction.DOWN, Direction.NORTH, Direction.SOUTH, Direction.WEST, Direction.EAST
         };
 
         for (Direction direction : priority) {
-            BlockPos supportPos = placePos.offset(direction);
-            BlockState supportState = client.world.getBlockState(supportPos);
+            BlockPos supportPos = placePos.relative(direction);
+            BlockState supportState = client.level.getBlockState(supportPos);
             if (supportState.isAir()) {
                 continue;
             }
 
             Direction side = direction.getOpposite();
-            Vec3d hitPos = Vec3d.ofCenter(supportPos).add(Vec3d.of(side.getVector()).multiply(0.5));
+            Vec3 hitPos = Vec3.atCenterOf(supportPos).add(Vec3.atLowerCornerOf(side.getUnitVec3i()).scale(0.5));
             return new BlockHitResult(hitPos, side, supportPos, false);
         }
 

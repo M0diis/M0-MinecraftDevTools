@@ -2,7 +2,7 @@ package me.m0dii.modules.hudtweaks;
 import me.m0dii.modules.Module;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
-import net.minecraft.util.Identifier;
+import net.minecraft.resources.Identifier;
 import java.util.List;
 import java.util.Locale;
 
@@ -32,7 +32,7 @@ public final class HudTweaksModule extends Module {
         bind(VanillaHudElements.EXPERIENCE_LEVEL, HudTweaksSettings.ElementType.HOTBAR_GROUP);
         bind(VanillaHudElements.HELD_ITEM_TOOLTIP, HudTweaksSettings.ElementType.HOTBAR_GROUP);
         bind(VanillaHudElements.SPECTATOR_TOOLTIP, HudTweaksSettings.ElementType.HOTBAR_GROUP);
-        bind(VanillaHudElements.STATUS_EFFECTS, HudTweaksSettings.ElementType.STATUS_EFFECT);
+        bind(VanillaHudElements.MOB_EFFECTS, HudTweaksSettings.ElementType.STATUS_EFFECT);
         bind(VanillaHudElements.SCOREBOARD, HudTweaksSettings.ElementType.SCOREBOARD);
         bind(VanillaHudElements.OVERLAY_MESSAGE, HudTweaksSettings.ElementType.ACTION_BAR);
         bind(VanillaHudElements.TITLE_AND_SUBTITLE, HudTweaksSettings.ElementType.SCREEN_TITLE);
@@ -71,7 +71,7 @@ public final class HudTweaksModule extends Module {
     private static void bind(Identifier elementId, HudTweaksSettings.ElementType type) {
         HudElementRegistry.replaceElement(elementId, original -> (context, tickCounter) -> {
             if (!INSTANCE.isEnabled()) {
-                original.render(context, tickCounter);
+                original.extractRenderState(context, tickCounter);
                 return;
             }
             HudTweaksSettings.ElementConfig cfg = HudTweaksSettings.getElement(type);
@@ -79,13 +79,13 @@ public final class HudTweaksModule extends Module {
                 return;
             }
 
-            if (!HudTweaksRenderState.begin(type, context.getMatrices())) {
+            if (!HudTweaksRenderState.begin(type, context.pose())) {
                 return;
             }
             try {
-                original.render(context, tickCounter);
+                original.extractRenderState(context, tickCounter);
             } finally {
-                HudTweaksRenderState.end(context.getMatrices());
+                HudTweaksRenderState.end(context.pose());
             }
         });
     }

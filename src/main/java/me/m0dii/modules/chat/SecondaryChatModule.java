@@ -1,8 +1,8 @@
 package me.m0dii.modules.chat;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import me.m0dii.modules.Module;
 import me.m0dii.utils.KeybindCatalog;
-import net.minecraft.client.util.InputUtil;
 
 public class SecondaryChatModule extends Module {
 
@@ -21,7 +21,7 @@ public class SecondaryChatModule extends Module {
         SecondaryChatInteraction.register();
 
         registerPressedKeybind(KeybindCatalog.SECONDARY_CHAT_TOGGLE.translationKey(),
-                InputUtil.Type.KEYSYM,
+                InputConstants.Type.KEYBOARD,
                 KeybindCatalog.SECONDARY_CHAT_TOGGLE.defaultKey(),
                 client -> toggleEnabled());
     }

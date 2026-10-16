@@ -2,15 +2,15 @@ package me.m0dii.modules.itemdata;
 
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import me.m0dii.mixin.HandledScreenAccessor;
-import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
+import net.fabricmc.fabric.api.client.command.v2.ClientCommands;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.screen.ingame.HandledScreen;
-import net.minecraft.entity.player.PlayerInventory;
-import net.minecraft.item.ItemStack;
-import net.minecraft.screen.slot.Slot;
-import net.minecraft.text.Text;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.inventory.Slot;
+import net.minecraft.world.item.ItemStack;
 
 public final class ItemDataClientCommand {
     private ItemDataClientCommand() {
@@ -18,16 +18,16 @@ public final class ItemDataClientCommand {
 
     public static void register() {
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) ->
-                dispatcher.register(ClientCommandManager.literal("itemdata")
+                dispatcher.register(ClientCommands.literal("itemdata")
                         .executes(context -> openDefault(context.getSource()))
-                        .then(ClientCommandManager.literal("mainhand")
+                        .then(ClientCommands.literal("mainhand")
                                 .executes(context -> openSlot(context.getSource(), context.getSource().getClient().player == null
                                         ? -1
                                         : context.getSource().getClient().player.getInventory().getSelectedSlot())))
-                        .then(ClientCommandManager.literal("offhand")
-                                .executes(context -> openSlot(context.getSource(), PlayerInventory.OFF_HAND_SLOT)))
-                        .then(ClientCommandManager.literal("slot")
-                                .then(ClientCommandManager.argument("slot", IntegerArgumentType.integer(0, PlayerInventory.OFF_HAND_SLOT))
+                        .then(ClientCommands.literal("offhand")
+                                .executes(context -> openSlot(context.getSource(), Inventory.SLOT_OFFHAND)))
+                        .then(ClientCommands.literal("slot")
+                                .then(ClientCommands.argument("slot", IntegerArgumentType.integer(0, Inventory.SLOT_OFFHAND))
                                         .executes(context -> openSlot(
                                                 context.getSource(),
                                                 IntegerArgumentType.getInteger(context, "slot")
@@ -35,9 +35,9 @@ public final class ItemDataClientCommand {
     }
 
     public static int openDefault(FabricClientCommandSource source) {
-        MinecraftClient client = source.getClient();
-        if (client.player == null || client.world == null) {
-            source.sendError(Text.literal("You must be in a world to use this command."));
+        Minecraft client = source.getClient();
+        if (client.player == null || client.level == null) {
+            source.sendError(Component.literal("You must be in a world to use this command."));
             return 0;
         }
 
@@ -49,69 +49,69 @@ public final class ItemDataClientCommand {
     }
 
     public static int openSlot(FabricClientCommandSource source, int slotIndex) {
-        MinecraftClient client = source.getClient();
-        if (client.player == null || client.world == null) {
-            source.sendError(Text.literal("You must be in a world to use this command."));
+        Minecraft client = source.getClient();
+        if (client.player == null || client.level == null) {
+            source.sendError(Component.literal("You must be in a world to use this command."));
             return 0;
         }
-        if (slotIndex < 0 || slotIndex > PlayerInventory.OFF_HAND_SLOT) {
-            source.sendError(Text.literal("Invalid inventory slot."));
+        if (slotIndex < 0 || slotIndex > Inventory.SLOT_OFFHAND) {
+            source.sendError(Component.literal("Invalid inventory slot."));
             return 0;
         }
 
-        ItemStack localStack = client.player.getInventory().getStack(slotIndex);
+        ItemStack localStack = client.player.getInventory().getItem(slotIndex);
         if (localStack == null || localStack.isEmpty()) {
-            source.sendError(Text.literal("The target inventory slot is empty."));
+            source.sendError(Component.literal("The target inventory slot is empty."));
             return 0;
         }
 
-        ItemDataReference reference = new ItemDataReference(slotIndex, describeSlot(slotIndex, client.player.getInventory().getSelectedSlot()), localStack.getName().getString());
+        ItemDataReference reference = new ItemDataReference(slotIndex, describeSlot(slotIndex, client.player.getInventory().getSelectedSlot()), localStack.getHoverName().getString());
         boolean sent = ItemDataSyncClient.requestItemData(slotIndex, payload -> {
             if (client.player == null) {
                 return;
             }
             if (!payload.found() || payload.itemData() == null || payload.itemData().isEmpty()) {
-                client.player.sendMessage(Text.literal("[ItemData] The server could not provide data for " + reference.slotLabel() + "."), false);
+                client.player.sendSystemMessage(Component.literal("[ItemData] The server could not provide data for " + reference.slotLabel() + "."));
                 return;
             }
-            client.setScreen(new ItemDataScreen(client.currentScreen, reference, payload.itemData()));
+            client.gui.setScreen(new ItemDataScreen(client.gui.screen(), reference, payload.itemData()));
         });
 
         if (!sent) {
-            source.sendError(Text.literal("Unable to request item data from the server."));
+            source.sendError(Component.literal("Unable to request item data from the server."));
             return 0;
         }
 
-        source.sendFeedback(Text.literal("Requesting item data for " + reference.slotLabel() + "..."));
+        source.sendFeedback(Component.literal("Requesting item data for " + reference.slotLabel() + "..."));
         return 1;
     }
 
-    private static int findHoveredPlayerInventorySlot(MinecraftClient client) {
-        if (client.player == null || !(client.currentScreen instanceof HandledScreen<?> handledScreen)) {
+    private static int findHoveredPlayerInventorySlot(Minecraft client) {
+        if (client.player == null || !(client.gui.screen() instanceof AbstractContainerScreen<?> handledScreen)) {
             return -1;
         }
 
-        double mouseX = client.mouse.getX() * client.getWindow().getScaledWidth() / client.getWindow().getWidth();
-        double mouseY = client.mouse.getY() * client.getWindow().getScaledHeight() / client.getWindow().getHeight();
+        double mouseX = client.mouseHandler.xpos() * client.getWindow().getGuiScaledWidth() / client.getWindow().getScreenWidth();
+        double mouseY = client.mouseHandler.ypos() * client.getWindow().getGuiScaledHeight() / client.getWindow().getScreenHeight();
         Slot slot = ((HandledScreenAccessor) handledScreen).m0dev$invokeGetSlotAt(mouseX, mouseY);
-        if (slot == null || slot.inventory != client.player.getInventory() || !slot.hasStack()) {
+        if (slot == null || slot.container != client.player.getInventory() || !slot.hasItem()) {
             return -1;
         }
-        return slot.getIndex();
+        return slot.getContainerSlot();
     }
 
     private static String describeSlot(int slotIndex, int selectedSlot) {
-        if (slotIndex == PlayerInventory.OFF_HAND_SLOT) {
+        if (slotIndex == Inventory.SLOT_OFFHAND) {
             return "Offhand";
         }
         if (slotIndex == selectedSlot) {
             return "Main Hand";
         }
-        if (slotIndex < PlayerInventory.HOTBAR_SIZE) {
+        if (slotIndex < Inventory.SELECTION_SIZE) {
             return "Hotbar " + (slotIndex + 1);
         }
-        if (slotIndex < PlayerInventory.MAIN_SIZE) {
-            return "Inventory " + (slotIndex - PlayerInventory.HOTBAR_SIZE + 1);
+        if (slotIndex < Inventory.INVENTORY_SIZE) {
+            return "Inventory " + (slotIndex - Inventory.SELECTION_SIZE + 1);
         }
         return "Slot " + slotIndex;
     }

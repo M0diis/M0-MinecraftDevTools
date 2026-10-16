@@ -1,15 +1,29 @@
 package me.m0dii.modules.macros.gui;
 
-import me.m0dii.modules.macros.hud.MacroHudDataHandler;
-import net.minecraft.client.gui.Click;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.client.gui.widget.TextFieldWidget;
-import net.minecraft.text.Text;
-import org.lwjgl.glfw.GLFW;
 
-public class MacroHudEditorScreen extends Screen {
+import me.m0dii.gui.theme.ThemedScreen;
+import com.mojang.blaze3d.platform.InputConstants;
+import me.m0dii.modules.macros.hud.MacroHudDataHandler;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.network.chat.Component;
+
+public class MacroHudEditorScreen extends Screen implements ThemedScreen {
+    /** Left button state; MouseHandler#isLeftPressed only updates while no screen is open (26.x). */
+    private boolean leftMouseDown = false;
+
+    @Override
+    public boolean mouseReleased(net.minecraft.client.input.MouseButtonEvent event) {
+        if (event.button() == com.mojang.blaze3d.platform.InputConstants.MOUSE_BUTTON_LEFT) {
+            this.leftMouseDown = false;
+        }
+        return super.mouseReleased(event);
+    }
+
 
     private static final int TOOLBAR_H = 32;
 
@@ -20,11 +34,11 @@ public class MacroHudEditorScreen extends Screen {
     private int dragOffsetX = 0;
     private int dragOffsetY = 0;
 
-    private TextFieldWidget primaryField;
-    private TextFieldWidget macroField;
+    private EditBox primaryField;
+    private EditBox macroField;
 
     public MacroHudEditorScreen(Screen parent) {
-        super(Text.literal("Macro HUD Editor"));
+        super(Component.literal("Macro HUD Editor"));
         this.parent = parent;
     }
 
@@ -37,7 +51,7 @@ public class MacroHudEditorScreen extends Screen {
         super.init();
         this.working = MacroHudDataHandler.getConfigCopy();
 
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("Add Button"), b -> {
+        this.addRenderableWidget(Button.builder(Component.literal("Add Button"), b -> {
                     MacroHudDataHandler.HudElement element = MacroHudDataHandler.createElement(MacroHudDataHandler.ElementType.BUTTON);
                     element.x = 20;
                     element.y = 50;
@@ -45,10 +59,10 @@ public class MacroHudEditorScreen extends Screen {
                     this.working.elements.add(element);
                     this.selected = element;
                     syncFieldsFromSelection();
-                }).dimensions(8, 8, 80, 20)
+                }).bounds(8, 8, 80, 20)
                 .build());
 
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("Add Text"), b -> {
+        this.addRenderableWidget(Button.builder(Component.literal("Add Text"), b -> {
                     MacroHudDataHandler.HudElement element = MacroHudDataHandler.createElement(MacroHudDataHandler.ElementType.TEXT);
                     element.x = 20;
                     element.y = 80;
@@ -56,52 +70,52 @@ public class MacroHudEditorScreen extends Screen {
                     this.working.elements.add(element);
                     this.selected = element;
                     syncFieldsFromSelection();
-                }).dimensions(92, 8, 70, 20)
+                }).bounds(92, 8, 70, 20)
                 .build());
 
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("Delete"), b -> {
+        this.addRenderableWidget(Button.builder(Component.literal("Delete"), b -> {
                     if (selected != null) {
                         this.working.elements.removeIf(e -> e.id.equals(selected.id));
                         this.selected = null;
                         syncFieldsFromSelection();
                     }
-                }).dimensions(166, 8, 58, 20)
+                }).bounds(166, 8, 58, 20)
                 .build());
 
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("Save"), b -> {
+        this.addRenderableWidget(Button.builder(Component.literal("Save"), b -> {
                     applyFieldEdits();
                     MacroHudDataHandler.setConfig(this.working);
-                }).dimensions(this.width - 152, 8, 66, 20)
+                }).bounds(this.width - 152, 8, 66, 20)
                 .build());
 
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("Done"), b -> {
+        this.addRenderableWidget(Button.builder(Component.literal("Done"), b -> {
                     applyFieldEdits();
                     MacroHudDataHandler.setConfig(this.working);
-                    close();
-                }).dimensions(this.width - 82, 8, 66, 20)
+                    onClose();
+                }).bounds(this.width - 82, 8, 66, 20)
                 .build());
 
-        this.primaryField = new TextFieldWidget(this.textRenderer, this.width - 220, 44, 200, 18, Text.literal("Label/Text"));
+        this.primaryField = new EditBox(this.font, this.width - 220, 44, 200, 18, Component.literal("Label/Text"));
         this.primaryField.setMaxLength(80);
-        this.addDrawableChild(this.primaryField);
+        this.addRenderableWidget(this.primaryField);
 
-        this.macroField = new TextFieldWidget(this.textRenderer, this.width - 220, 74, 200, 18, Text.literal("Macro Id"));
+        this.macroField = new EditBox(this.font, this.width - 220, 74, 200, 18, Component.literal("Macro Id"));
         this.macroField.setMaxLength(80);
-        this.addDrawableChild(this.macroField);
+        this.addRenderableWidget(this.macroField);
 
         syncFieldsFromSelection();
     }
 
     @Override
-    public void render(DrawContext context, int mouseX, int mouseY, float delta) {
+    public void extractRenderState(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
         applyFieldEdits();
         updateDragging(mouseX, mouseY);
 
         context.fill(0, 0, this.width, this.height, 0xD0101010);
         context.fill(0, TOOLBAR_H, this.width, TOOLBAR_H + 1, 0x80FFFFFF);
 
-        context.drawTextWithShadow(this.textRenderer, "Drag elements on canvas. Buttons are clickable when chat is open.", 8, TOOLBAR_H + 6, 0xFFE0E0E0);
-        context.drawTextWithShadow(this.textRenderer, "Selection fields", this.width - 220, 30, 0xFFFFFF);
+        context.text(this.font, "Drag elements on canvas. Buttons are clickable when chat is open.", 8, TOOLBAR_H + 6, 0xFFE0E0E0);
+        context.text(this.font, "Selection fields", this.width - 220, 30, 0xFFFFFF);
 
         int canvasRight = this.width - 240;
         context.fill(canvasRight, TOOLBAR_H, canvasRight + 1, this.height, 0x60FFFFFF);
@@ -114,22 +128,25 @@ public class MacroHudEditorScreen extends Screen {
         }
 
         if (selected != null) {
-            context.drawTextWithShadow(this.textRenderer, "Type: " + selected.type.name(), this.width - 220, 98, 0xFFB0B0B0);
-            context.drawTextWithShadow(this.textRenderer, "Pos: " + selected.x + ", " + selected.y, this.width - 220, 112, 0xFFB0B0B0);
-            context.drawTextWithShadow(this.textRenderer, "Size: " + selected.width + " x " + selected.height, this.width - 220, 126, 0xFFB0B0B0);
-            context.drawTextWithShadow(this.textRenderer, "Use mouse wheel to resize width", this.width - 220, 144, 0xFF808080);
+            context.text(this.font, "Type: " + selected.type.name(), this.width - 220, 98, 0xFFB0B0B0);
+            context.text(this.font, "Pos: " + selected.x + ", " + selected.y, this.width - 220, 112, 0xFFB0B0B0);
+            context.text(this.font, "Size: " + selected.width + " x " + selected.height, this.width - 220, 126, 0xFFB0B0B0);
+            context.text(this.font, "Use mouse wheel to resize width", this.width - 220, 144, 0xFF808080);
         }
 
-        super.render(context, mouseX, mouseY, delta);
+        super.extractRenderState(context, mouseX, mouseY, delta);
     }
 
     @Override
-    public boolean mouseClicked(Click click, boolean doubled) {
+    public boolean mouseClicked(MouseButtonEvent click, boolean doubled) {
+        if (click.button() == InputConstants.MOUSE_BUTTON_LEFT) {
+            this.leftMouseDown = true;
+        }
         if (super.mouseClicked(click, doubled)) {
             return true;
         }
 
-        if (click.button() != 0) {
+        if (click.button() != InputConstants.MOUSE_BUTTON_LEFT) {
             return false;
         }
 
@@ -170,12 +187,12 @@ public class MacroHudEditorScreen extends Screen {
     }
 
     private void updateDragging(int mouseX, int mouseY) {
-        if (!dragging || selected == null || this.client == null) {
+        if (!dragging || selected == null || this.minecraft == null) {
             return;
         }
 
-        long handle = this.client.getWindow().getHandle();
-        if (GLFW.glfwGetMouseButton(handle, GLFW.GLFW_MOUSE_BUTTON_LEFT) != GLFW.GLFW_PRESS) {
+        long handle = this.minecraft.getWindow().handle();
+        if (!this.leftMouseDown) {
             dragging = false;
             return;
         }
@@ -186,19 +203,19 @@ public class MacroHudEditorScreen extends Screen {
         selected.y = Math.clamp(mouseY - dragOffsetY, TOOLBAR_H + 2, Math.max(TOOLBAR_H + 2, maxY));
     }
 
-    private void drawElement(DrawContext context, MacroHudDataHandler.HudElement element) {
+    private void drawElement(GuiGraphicsExtractor context, MacroHudDataHandler.HudElement element) {
         int x1 = element.x;
         int y1 = element.y;
         int x2 = element.x + element.width;
         int y2 = element.y + element.height;
 
         if (element.type == MacroHudDataHandler.ElementType.TEXT) {
-            context.drawTextWithShadow(this.textRenderer, element.text, element.x, element.y, element.textColor);
+            context.text(this.font, element.text, element.x, element.y, element.textColor);
         } else {
             context.fill(x1, y1, x2, y2, element.backgroundColor);
-            int textX = x1 + (element.width - this.textRenderer.getWidth(element.label)) / 2;
+            int textX = x1 + (element.width - this.font.width(element.label)) / 2;
             int textY = y1 + (element.height - 8) / 2;
-            context.drawTextWithShadow(this.textRenderer, element.label, textX, textY, element.textColor);
+            context.text(this.font, element.label, textX, textY, element.textColor);
         }
 
         if (selected != null && selected.id.equals(element.id)) {
@@ -217,15 +234,15 @@ public class MacroHudEditorScreen extends Screen {
         if (selected == null) {
             this.primaryField.setEditable(false);
             this.macroField.setEditable(false);
-            this.primaryField.setText("");
-            this.macroField.setText("");
+            this.primaryField.setValue("");
+            this.macroField.setValue("");
             return;
         }
 
         this.primaryField.setEditable(true);
         this.macroField.setEditable(selected.type == MacroHudDataHandler.ElementType.BUTTON);
-        this.primaryField.setText(selected.type == MacroHudDataHandler.ElementType.BUTTON ? selected.label : selected.text);
-        this.macroField.setText(selected.macroId == null ? "" : selected.macroId);
+        this.primaryField.setValue(selected.type == MacroHudDataHandler.ElementType.BUTTON ? selected.label : selected.text);
+        this.macroField.setValue(selected.macroId == null ? "" : selected.macroId);
     }
 
     private void applyFieldEdits() {
@@ -233,10 +250,10 @@ public class MacroHudEditorScreen extends Screen {
             return;
         }
 
-        String primary = this.primaryField.getText();
+        String primary = this.primaryField.getValue();
         if (selected.type == MacroHudDataHandler.ElementType.BUTTON) {
             selected.label = primary == null || primary.isBlank() ? "Button" : primary.trim();
-            selected.macroId = this.macroField.getText() == null ? "" : this.macroField.getText().trim();
+            selected.macroId = this.macroField.getValue() == null ? "" : this.macroField.getValue().trim();
         } else {
             selected.text = primary == null || primary.isBlank() ? "Text" : primary.trim();
         }
@@ -247,14 +264,14 @@ public class MacroHudEditorScreen extends Screen {
     }
 
     @Override
-    public void close() {
-        if (this.client != null) {
-            this.client.setScreen(parent);
+    public void onClose() {
+        if (this.minecraft != null) {
+            this.minecraft.gui.setScreen(parent);
         }
     }
 
     @Override
-    public boolean shouldPause() {
+    public boolean isPauseScreen() {
         return false;
     }
 }

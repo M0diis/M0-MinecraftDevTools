@@ -5,18 +5,17 @@ import lombok.Setter;
 import me.m0dii.modules.Toggleable;
 import me.m0dii.modules.hudcanvas.HudCanvasDataHandler;
 import me.m0dii.utils.NbtExtractors;
-import net.minecraft.block.BlockState;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.font.TextRenderer;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.render.RenderTickCounter;
-import net.minecraft.nbt.NbtCompound;
-import net.minecraft.state.property.Property;
-import net.minecraft.util.hit.BlockHitResult;
-import net.minecraft.util.hit.EntityHitResult;
-import net.minecraft.util.hit.HitResult;
-import net.minecraft.world.LightType;
-
+import net.minecraft.client.DeltaTracker;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Font;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.world.level.LightLayer;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.Property;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.EntityHitResult;
+import net.minecraft.world.phys.HitResult;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -26,8 +25,8 @@ public class NBTInfoHudRenderer implements Toggleable {
     @Setter
     private boolean enabled = false;
 
-    public void onHudRender(DrawContext ctx, RenderTickCounter tickCounter) {
-        MinecraftClient client = MinecraftClient.getInstance();
+    public void onHudRender(GuiGraphicsExtractor ctx, DeltaTracker tickCounter) {
+        Minecraft client = Minecraft.getInstance();
         if (client == null || client.player == null || !enabled) {
             return;
         }
@@ -45,13 +44,13 @@ public class NBTInfoHudRenderer implements Toggleable {
             return;
         }
 
-        TextRenderer tr = client.textRenderer;
+        Font tr = client.font;
 
         float scale = Math.clamp(canvas.fontScale, 0.25f, 5.0f);
         int panelW = Math.max(40, canvas.width);
         int panelH = Math.max(20, canvas.height);
-        int screenW = client.getWindow().getScaledWidth();
-        int screenH = client.getWindow().getScaledHeight();
+        int screenW = client.getWindow().getGuiScaledWidth();
+        int screenH = client.getWindow().getGuiScaledHeight();
         int startX = resolvePanelX(canvas, panelW, screenW);
         int startY = resolvePanelY(canvas, panelH, screenH);
         int lineH = Math.max(6, canvas.lineHeight);
@@ -87,27 +86,27 @@ public class NBTInfoHudRenderer implements Toggleable {
         int textLogicalX = alignedTextX(canvas, tr, drawLines, logicalInnerW);
         int textLogicalY = alignedTextY(canvas, logicalInnerH, textBlockHeight);
 
-        ctx.getMatrices().pushMatrix();
-        ctx.getMatrices().scale(scale, scale);
+        ctx.pose().pushMatrix();
+        ctx.pose().scale(scale, scale);
 
         int logicalX = Math.round(startX / scale) + padding + textLogicalX;
         int logicalY = Math.round(startY / scale) + padding + textLogicalY;
         int y = logicalY;
         for (String s : drawLines) {
-            ctx.drawText(tr, s, logicalX, y, canvas.textColor, false);
+            ctx.text(tr, s, logicalX, y, canvas.textColor, false);
             y += lineH;
         }
-        ctx.getMatrices().popMatrix();
+        ctx.pose().popMatrix();
     }
 
-    private static String trimTextToWidth(TextRenderer tr, String raw, int maxWidth) {
+    private static String trimTextToWidth(Font tr, String raw, int maxWidth) {
         String text = raw == null ? "" : raw;
-        if (maxWidth <= 0 || tr.getWidth(text) <= maxWidth) {
+        if (maxWidth <= 0 || tr.width(text) <= maxWidth) {
             return text;
         }
         final String ellipsis = "...";
         int keep = text.length();
-        while (keep > 0 && tr.getWidth(text.substring(0, keep) + ellipsis) > maxWidth) {
+        while (keep > 0 && tr.width(text.substring(0, keep) + ellipsis) > maxWidth) {
             keep--;
         }
         return keep <= 0 ? ellipsis : text.substring(0, keep) + ellipsis;
@@ -154,13 +153,13 @@ public class NBTInfoHudRenderer implements Toggleable {
         };
     }
 
-    private static int alignedTextX(HudCanvasDataHandler.HudCanvasElement canvas, TextRenderer tr, List<String> lines, int logicalInnerW) {
+    private static int alignedTextX(HudCanvasDataHandler.HudCanvasElement canvas, Font tr, List<String> lines, int logicalInnerW) {
         if (canvas.horizontalAlign == HudCanvasDataHandler.HudCanvasElement.HorizontalAlign.LEFT) {
             return 0;
         }
         int maxLineWidth = 0;
         for (String line : lines) {
-            maxLineWidth = Math.max(maxLineWidth, tr.getWidth(line));
+            maxLineWidth = Math.max(maxLineWidth, tr.width(line));
         }
         return switch (canvas.horizontalAlign) {
             case CENTER -> Math.max(0, (logicalInnerW - maxLineWidth) / 2);
@@ -180,25 +179,25 @@ public class NBTInfoHudRenderer implements Toggleable {
     private static List<String> getInfoLines() {
         List<String> lines = new ArrayList<>();
 
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (client == null || client.player == null || client.world == null) {
+        Minecraft client = Minecraft.getInstance();
+        if (client == null || client.player == null || client.level == null) {
             return List.of();
         }
 
-        HitResult hit = client.crosshairTarget;
+        HitResult hit = client.hitResult;
         if (hit == null || hit.getType() == HitResult.Type.MISS) {
             return List.of();
         }
 
         if (hit instanceof BlockHitResult blockHit) {
             var pos = blockHit.getBlockPos();
-            BlockState state = client.world.getBlockState(pos);
+            BlockState state = client.level.getBlockState(pos);
             var block = state.getBlock();
-            var biome = client.world.getBiome(pos).getIdAsString();
-            int blockLight = client.world.getLightLevel(LightType.BLOCK, pos);
-            int skyLight = client.world.getLightLevel(LightType.SKY, pos);
-            int totalLight = client.world.getLightLevel(pos);
-            int power = client.world.getReceivedRedstonePower(pos);
+            var biome = client.level.getBiome(pos).getRegisteredName();
+            int blockLight = client.level.getBrightness(LightLayer.BLOCK, pos);
+            int skyLight = client.level.getBrightness(LightLayer.SKY, pos);
+            int totalLight = client.level.getMaxLocalRawBrightness(pos);
+            int power = client.level.getBestNeighborSignal(pos);
 
             lines.add("§f" + block.getName().getString());
             lines.add("§7Pos: §f" + pos.getX() + ", " + pos.getY() + ", " + pos.getZ());
@@ -221,12 +220,12 @@ public class NBTInfoHudRenderer implements Toggleable {
 
             // data for containers, crops, etc. can be added here
             if (state.hasBlockEntity()) {
-                var blockEntity = client.world.getBlockEntity(pos);
+                var blockEntity = client.level.getBlockEntity(pos);
                 if (blockEntity != null) {
-                    var nbt = blockEntity.createNbt(client.world.getRegistryManager());
+                    var nbt = blockEntity.saveWithoutMetadata(client.level.registryAccess());
                     if (!nbt.isEmpty()) {
-                        lines.add("§7NBT: §e" + nbt.getSize() + " tags");
-                        for (String key : nbt.getKeys()) {
+                        lines.add("§7NBT: §e" + nbt.size() + " tags");
+                        for (String key : nbt.keySet()) {
                             var val = nbt.get(key);
                             lines.add(" §8- §7" + key + ": §f" + (val != null ? val.asString() : ""));
                         }
@@ -244,16 +243,16 @@ public class NBTInfoHudRenderer implements Toggleable {
             }
             lines.add("§f" + entityName);
             lines.add("§7Type: §b" + entityType);
-            lines.add("§7UUID: §8" + entity.getUuidAsString());
-            if (entity instanceof net.minecraft.entity.LivingEntity living) {
+            lines.add("§7UUID: §8" + entity.getStringUUID());
+            if (entity instanceof net.minecraft.world.entity.LivingEntity living) {
                 lines.add("§7Health: §c" + String.format("%.1f", living.getHealth()) + "/" + String.format("%.1f", living.getMaxHealth()));
             }
 
-            NbtCompound entityNbt = NbtExtractors.extractEntityNbt(entity);
+            CompoundTag entityNbt = NbtExtractors.extractEntityNbt(entity);
             if (entityNbt != null && !entityNbt.isEmpty()) {
-                lines.add("§7Entity NBT: §e" + entityNbt.getSize() + " tags");
+                lines.add("§7Entity NBT: §e" + entityNbt.size() + " tags");
                 int count = 0;
-                for (String key : entityNbt.getKeys()) {
+                for (String key : entityNbt.keySet()) {
                     var val = entityNbt.get(key);
                     lines.add(" §8- §7" + key + ": §f" + (val != null ? val.asString() : ""));
                     count++;
@@ -271,8 +270,8 @@ public class NBTInfoHudRenderer implements Toggleable {
     @SuppressWarnings("unchecked")
     private static <T extends Comparable<T>> String getPropertyValueAsString(BlockState state, Property<?> property) {
         Property<T> typedProperty = (Property<T>) property;
-        T value = state.get(typedProperty);
-        return typedProperty.name(value);
+        T value = state.getValue(typedProperty);
+        return typedProperty.getName(value);
     }
 
 

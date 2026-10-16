@@ -4,9 +4,8 @@ import me.m0dii.modules.macros.MacroPlaceholders;
 import me.m0dii.modules.macros.hud.MacroHudDataHandler;
 import me.m0dii.modules.scripting.ScriptStorage;
 import me.m0dii.utils.StringUtils;
-import net.minecraft.registry.Registries;
-import net.minecraft.util.Identifier;
-
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.Identifier;
 import java.util.*;
 
 public final class MacroWorkbenchActionSuggestions {
@@ -146,9 +145,9 @@ public final class MacroWorkbenchActionSuggestions {
             ));
 
             grouped.get("Script").addAll(List.of(
-                    "groovy:player.sendMessage(net.minecraft.text.Text.literal('Hi from Groovy'), false)",
-                    "kotlin:player.sendMessage(net.minecraft.text.Text.literal(\"Hi from Kotlin\"), false)",
-                    "js:player.sendMessage(Java.type('net.minecraft.text.Text').literal('Hi from JavaScript'), false)",
+                    "groovy:player.sendSystemMessage(net.minecraft.network.chat.Component.literal('Hi from Groovy'))",
+                    "kotlin:player.sendSystemMessage(net.minecraft.network.chat.Component.literal(\"Hi from Kotlin\"))",
+                    "js:player.sendSystemMessage(Java.type('net.minecraft.network.chat.Component').literal('Hi from JavaScript'))",
                     "example.groovy",
                     "example.kts",
                     "example.js"
@@ -211,15 +210,15 @@ public final class MacroWorkbenchActionSuggestions {
         if (allItemIds != null && allBlockIds != null && allEntityIds != null) {
             return;
         }
-        allItemIds = Registries.ITEM.getIds().stream()
+        allItemIds = BuiltInRegistries.ITEM.keySet().stream()
                 .map(Identifier::toString)
                 .sorted()
                 .toList();
-        allBlockIds = Registries.BLOCK.getIds().stream()
+        allBlockIds = BuiltInRegistries.BLOCK.keySet().stream()
                 .map(Identifier::toString)
                 .sorted()
                 .toList();
-        allEntityIds = Registries.ENTITY_TYPE.getIds().stream()
+        allEntityIds = BuiltInRegistries.ENTITY_TYPE.keySet().stream()
                 .map(Identifier::toString)
                 .sorted()
                 .toList();

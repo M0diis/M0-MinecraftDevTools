@@ -1,8 +1,7 @@
 {
   "required": true,
   "package": "me.m0dii.mixin",
-  "compatibilityLevel": "JAVA_21",
-  "refmap": "m0dev.refmap.json",
+  "compatibilityLevel": "JAVA_25",
   "injectors": {
     "defaultRequire": 1
   },
@@ -43,12 +42,10 @@
     "ScreenClickEventInvoker",
     "SimpleOptionMixin",
     "WorldRendererHeldLightMixin",
-    "WorldRendererMixin",
     "hudtweaks.BossBarHudMixin",
     "hudtweaks.ContextualBarMixin",
     "hudtweaks.DebugHudMixin",
     "hudtweaks.DrawContextMixin",
-    "hudtweaks.GuiRendererMixin",
     "hudtweaks.GuiRenderStateMixin",
     "hudtweaks.ItemGuiElementRenderStateMixin",
     "hudtweaks.OversizedItemRendererMixin",
@@ -80,6 +77,11 @@
     "uiutilities.HandledScreenMixin",
     "uiutilities.MultiplayerScreenMixin",
     "uiutilities.SignEditScreenMixin",
-    "uiutilities.SleepingChatScreenMixin"
+    "uiutilities.SleepingChatScreenMixin",
+    "CameraMixin",
+    "FreecamSwingMixin",
+    "GuiRendererScissorMixin",
+    "theme.ThemedButtonMixin",
+    "theme.ThemedEditBoxMixin"
   ]
 }

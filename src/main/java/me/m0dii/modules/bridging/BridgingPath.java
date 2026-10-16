@@ -1,7 +1,7 @@
 package me.m0dii.modules.bridging;
 
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -10,7 +10,7 @@ import java.util.Set;
 
 final class BridgingPath {
     static final double NEAR_ZERO = 0.01D;
-    private static final Vec3d CUBE_EXTENT = new Vec3d(0.5D, 0.5D, 0.5D);
+    private static final Vec3 CUBE_EXTENT = new Vec3(0.5D, 0.5D, 0.5D);
 
     private BridgingPath() {
     }
@@ -30,8 +30,8 @@ final class BridgingPath {
         int yStep = Integer.compare(delta.getY(), 0);
         int zStep = Integer.compare(delta.getZ(), 0);
 
-        Vec3d workingVec = new Vec3d(startPos.getX(), startPos.getY(), startPos.getZ());
-        Vec3d targetVec = new Vec3d(endPos.getX(), endPos.getY(), endPos.getZ());
+        Vec3 workingVec = new Vec3(startPos.getX(), startPos.getY(), startPos.getZ());
+        Vec3 targetVec = new Vec3(endPos.getX(), endPos.getY(), endPos.getZ());
 
         if (dx >= dy && dx >= dz) {
             int point1 = (2 * dy) - dx;
@@ -49,7 +49,7 @@ final class BridgingPath {
                 }
                 point1 += 2 * dy;
                 point2 += 2 * dz;
-                addPoint(points, BlockPos.ofFloored(workingVec), startPos, endPos, adjacency, extentMultiplier);
+                addPoint(points, BlockPos.containing(workingVec), startPos, endPos, adjacency, extentMultiplier);
             }
             return points;
         }
@@ -70,7 +70,7 @@ final class BridgingPath {
                 }
                 point1 += 2 * dx;
                 point2 += 2 * dz;
-                addPoint(points, BlockPos.ofFloored(workingVec), startPos, endPos, adjacency, extentMultiplier);
+                addPoint(points, BlockPos.containing(workingVec), startPos, endPos, adjacency, extentMultiplier);
             }
             return points;
         }
@@ -90,7 +90,7 @@ final class BridgingPath {
             }
             point1 += 2 * dy;
             point2 += 2 * dx;
-            addPoint(points, BlockPos.ofFloored(workingVec), startPos, endPos, adjacency, extentMultiplier);
+            addPoint(points, BlockPos.containing(workingVec), startPos, endPos, adjacency, extentMultiplier);
         }
 
         return points;
@@ -120,7 +120,7 @@ final class BridgingPath {
 
         BlockPos lastPoint = points.getLast();
         BlockPos delta = newPoint.subtract(lastPoint);
-        int distance = newPoint.getManhattanDistance(lastPoint);
+        int distance = newPoint.distManhattan(lastPoint);
 
         if (distance <= 1) {
             return List.of();
@@ -139,7 +139,7 @@ final class BridgingPath {
             }
         }
 
-        Vec3d extent = CUBE_EXTENT.multiply(extentMultiplier);
+        Vec3 extent = CUBE_EXTENT.scale(extentMultiplier);
         return reviewPositions.stream()
                 .filter(pos -> intersectsLineBox(pos, lineStart, lineEnd, extent))
                 .toList();
@@ -153,38 +153,38 @@ final class BridgingPath {
         BlockPos y = new BlockPos(0, delta.getY(), 0);
         BlockPos z = new BlockPos(0, 0, delta.getZ());
 
-        if (!x.equals(BlockPos.ORIGIN)) {
-            reviewPositions.add(lastPoint.add(x));
+        if (!x.equals(BlockPos.ZERO)) {
+            reviewPositions.add(lastPoint.offset(x));
         }
-        if (!y.equals(BlockPos.ORIGIN)) {
-            reviewPositions.add(lastPoint.add(y));
+        if (!y.equals(BlockPos.ZERO)) {
+            reviewPositions.add(lastPoint.offset(y));
         }
-        if (!z.equals(BlockPos.ORIGIN)) {
-            reviewPositions.add(lastPoint.add(z));
+        if (!z.equals(BlockPos.ZERO)) {
+            reviewPositions.add(lastPoint.offset(z));
         }
 
         if (!pairAxes) {
             return;
         }
 
-        if (!x.equals(BlockPos.ORIGIN) && !y.equals(BlockPos.ORIGIN)) {
-            reviewPositions.add(lastPoint.add(x).add(y));
+        if (!x.equals(BlockPos.ZERO) && !y.equals(BlockPos.ZERO)) {
+            reviewPositions.add(lastPoint.offset(x).offset(y));
         }
-        if (!x.equals(BlockPos.ORIGIN) && !z.equals(BlockPos.ORIGIN)) {
-            reviewPositions.add(lastPoint.add(x).add(z));
+        if (!x.equals(BlockPos.ZERO) && !z.equals(BlockPos.ZERO)) {
+            reviewPositions.add(lastPoint.offset(x).offset(z));
         }
-        if (!y.equals(BlockPos.ORIGIN) && !z.equals(BlockPos.ORIGIN)) {
-            reviewPositions.add(lastPoint.add(y).add(z));
+        if (!y.equals(BlockPos.ZERO) && !z.equals(BlockPos.ZERO)) {
+            reviewPositions.add(lastPoint.offset(y).offset(z));
         }
     }
 
-    private static boolean intersectsLineBox(BlockPos pos, BlockPos lineStart, BlockPos lineEnd, Vec3d extent) {
-        Vec3d transform = Vec3d.of(pos);
-        Vec3d lineStartLocal = Vec3d.of(lineStart).subtract(transform);
-        Vec3d lineEndLocal = Vec3d.of(lineEnd).subtract(transform);
-        Vec3d lineMid = lineStartLocal.add(lineEndLocal).multiply(0.5D);
-        Vec3d line = lineStartLocal.subtract(lineMid);
-        Vec3d lineExt = new Vec3d(Math.abs(line.x), Math.abs(line.y), Math.abs(line.z));
+    private static boolean intersectsLineBox(BlockPos pos, BlockPos lineStart, BlockPos lineEnd, Vec3 extent) {
+        Vec3 transform = Vec3.atLowerCornerOf(pos);
+        Vec3 lineStartLocal = Vec3.atLowerCornerOf(lineStart).subtract(transform);
+        Vec3 lineEndLocal = Vec3.atLowerCornerOf(lineEnd).subtract(transform);
+        Vec3 lineMid = lineStartLocal.add(lineEndLocal).scale(0.5D);
+        Vec3 line = lineStartLocal.subtract(lineMid);
+        Vec3 lineExt = new Vec3(Math.abs(line.x), Math.abs(line.y), Math.abs(line.z));
 
         if (Math.abs(lineMid.x) > extent.x + lineExt.x) {
             return false;

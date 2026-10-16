@@ -1,6 +1,6 @@
 package me.m0dii.modules.watson;
 
-import net.minecraft.util.math.BlockPos;
+import net.minecraft.core.BlockPos;
 
 import java.util.Optional;
 import java.util.regex.Matcher;

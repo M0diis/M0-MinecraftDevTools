@@ -1,8 +1,8 @@
 package me.m0dii.modules.messagehistory;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import me.m0dii.modules.Module;
 import me.m0dii.utils.KeybindCatalog;
-import net.minecraft.client.util.InputUtil;
 
 public class MessageHistoryModule extends Module {
 
@@ -15,8 +15,8 @@ public class MessageHistoryModule extends Module {
     @Override
     public void register() {
         registerPressedKeybind(KeybindCatalog.MESSAGE_HISTORY.translationKey(),
-                InputUtil.Type.KEYSYM,
+                InputConstants.Type.KEYBOARD,
                 KeybindCatalog.MESSAGE_HISTORY.defaultKey(),
-                client -> client.setScreen(MessageHistoryScreen.create(client.currentScreen)));
+                client -> client.gui.setScreen(MessageHistoryScreen.create(client.gui.screen())));
     }
 }

@@ -1,9 +1,8 @@
 package me.m0dii.modules.worldedit;
 
 import me.m0dii.modules.debugdraw.DebugDrawManager;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Direction;
-
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -45,14 +44,14 @@ public record WorldEditSelection(BlockPos min, BlockPos max) {
     }
 
     public WorldEditSelection shift(int dx, int dy, int dz) {
-        return new WorldEditSelection(this.min.add(dx, dy, dz), this.max.add(dx, dy, dz));
+        return new WorldEditSelection(this.min.offset(dx, dy, dz), this.max.offset(dx, dy, dz));
     }
 
     public WorldEditSelection shift(Direction direction, int amount) {
         return shift(
-                direction.getOffsetX() * amount,
-                direction.getOffsetY() * amount,
-                direction.getOffsetZ() * amount
+                direction.getStepX() * amount,
+                direction.getStepY() * amount,
+                direction.getStepZ() * amount
         );
     }
 

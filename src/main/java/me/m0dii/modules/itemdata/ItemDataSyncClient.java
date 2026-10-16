@@ -1,9 +1,8 @@
 package me.m0dii.modules.itemdata;
 
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.nbt.NbtCompound;
-
+import net.minecraft.client.Minecraft;
+import net.minecraft.nbt.CompoundTag;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
@@ -33,8 +32,8 @@ public final class ItemDataSyncClient {
     }
 
     public static boolean requestItemData(int slotIndex, Consumer<ItemDataPayloads.ItemStackResponsePayload> callback) {
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (client.getNetworkHandler() == null || callback == null) {
+        Minecraft client = Minecraft.getInstance();
+        if (client.getConnection() == null || callback == null) {
             return false;
         }
 
@@ -44,9 +43,9 @@ public final class ItemDataSyncClient {
         return true;
     }
 
-    public static boolean saveItemData(int slotIndex, NbtCompound itemData) {
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (client.getNetworkHandler() == null || itemData == null) {
+    public static boolean saveItemData(int slotIndex, CompoundTag itemData) {
+        Minecraft client = Minecraft.getInstance();
+        if (client.getConnection() == null || itemData == null) {
             return false;
         }
 

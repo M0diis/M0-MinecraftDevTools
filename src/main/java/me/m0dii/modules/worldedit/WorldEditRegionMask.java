@@ -1,7 +1,7 @@
 package me.m0dii.modules.worldedit;
 
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Direction;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 
 import java.util.function.Consumer;
 
@@ -104,7 +104,7 @@ final class WorldEditRegionMask {
     }
 
     WorldEditRegionMask shifted(Direction direction, int amount) {
-        return shifted(direction.getOffsetX() * amount, direction.getOffsetY() * amount, direction.getOffsetZ() * amount);
+        return shifted(direction.getStepX() * amount, direction.getStepY() * amount, direction.getStepZ() * amount);
     }
 
     void forEach(Consumer<BlockPos> consumer) {

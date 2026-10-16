@@ -1,19 +1,19 @@
 package me.m0dii.modules.bridging;
 
+import com.mojang.blaze3d.vertex.VertexConsumer;
+import me.m0dii.render.OverlayBufferSource;
+import me.m0dii.render.OverlayRenderEvents;
+import me.m0dii.render.OverlayRenderEvents.OverlayRenderContext;
 import me.m0dii.utils.CustomRenderLayers;
 import me.m0dii.utils.DrawUtil;
 import me.m0dii.utils.ModConfig;
-import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext;
-import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.render.RenderLayers;
-import net.minecraft.client.render.RenderTickCounter;
-import net.minecraft.client.render.VertexConsumer;
-import net.minecraft.client.render.VertexConsumerProvider;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Direction;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.client.DeltaTracker;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.renderer.rendertype.RenderTypes;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.world.phys.Vec3;
 
 import java.util.List;
 
@@ -34,18 +34,18 @@ final class BridgingTweaksRenderer {
             return;
         }
         this.registered = true;
-        WorldRenderEvents.AFTER_ENTITIES.register(this::onAfterEntities);
+        OverlayRenderEvents.AFTER_ENTITIES.register(this::onAfterEntities);
     }
 
-    void onHudRender(DrawContext context, RenderTickCounter tickCounter) {
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (client == null || client.player == null || client.options.hudHidden) {
+    void onHudRender(GuiGraphicsExtractor context, DeltaTracker tickCounter) {
+        Minecraft client = Minecraft.getInstance();
+        if (client == null || client.player == null || client.gui.hud.isHidden()) {
             return;
         }
         if (!BridgingTweaksModule.INSTANCE.isEnabled() || !BridgingTweaksModule.INSTANCE.showCrosshair()) {
             return;
         }
-        if (BridgingTweaksModule.INSTANCE.onlyBridgeWhenCrouched() && !client.player.isSneaking()) {
+        if (BridgingTweaksModule.INSTANCE.onlyBridgeWhenCrouched() && !client.player.isShiftKeyDown()) {
             return;
         }
 
@@ -54,21 +54,21 @@ final class BridgingTweaksRenderer {
             return;
         }
 
-        int centerX = client.getWindow().getScaledWidth() / 2;
-        int centerY = client.getWindow().getScaledHeight() / 2;
+        int centerX = client.getWindow().getGuiScaledWidth() / 2;
+        int centerY = client.getWindow().getGuiScaledHeight() / 2;
         int color = 0xFFE6F0FF;
         drawCrosshairIndicator(context, centerX, centerY, target.supportDirection(), color);
     }
 
-    private void onAfterEntities(WorldRenderContext context) {
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (client == null || client.player == null || client.world == null) {
+    private void onAfterEntities(OverlayRenderContext context) {
+        Minecraft client = Minecraft.getInstance();
+        if (client == null || client.player == null || client.level == null) {
             return;
         }
 
         boolean debugHud = isDebugHudVisible(client);
         boolean bridgingActive = BridgingTweaksModule.INSTANCE.isEnabled()
-                && (!BridgingTweaksModule.INSTANCE.onlyBridgeWhenCrouched() || client.player.isSneaking());
+                && (!BridgingTweaksModule.INSTANCE.onlyBridgeWhenCrouched() || client.player.isShiftKeyDown());
         boolean renderBridgeOutline = bridgingActive && (debugHud ? BridgingTweaksModule.INSTANCE.debugHighlight() : BridgingTweaksModule.INSTANCE.showOutline());
         boolean renderNonBridgeOutline = (debugHud ? BridgingTweaksModule.INSTANCE.debugNonBridgingHighlight() : BridgingTweaksModule.INSTANCE.showOutlineWhenNotBridging())
                 && (bridgingActive || !BridgingTweaksModule.INSTANCE.nonBridgeOutlineRespectsCrouchRules());
@@ -78,14 +78,14 @@ final class BridgingTweaksRenderer {
             return;
         }
 
-        VertexConsumerProvider consumers = context.consumers();
+        OverlayBufferSource consumers = context.consumers();
         if (consumers == null) {
-            consumers = client.getBufferBuilders().getEntityVertexConsumers();
+            consumers = OverlayBufferSource.current();
         }
 
-        VertexConsumer visible = consumers.getBuffer(RenderLayers.LINES);
+        VertexConsumer visible = consumers.getBuffer(RenderTypes.LINES);
         VertexConsumer occluded = consumers.getBuffer(CustomRenderLayers.LINES_NO_DEPTH);
-        Vec3d cameraPos = context.gameRenderer().getCamera().getCameraPos();
+        Vec3 cameraPos = context.gameRenderer().mainCamera().position();
 
         if (renderTrace) {
             List<BlockPos> path = BridgingTweaksLogic.getViewBlockPath(client, client.player, BridgingPerspective.resolve(client, client.player));
@@ -107,11 +107,6 @@ final class BridgingTweaksRenderer {
                 drawOutline(visible, occluded, nonBridgeTarget, cameraPos);
             }
         }
-
-        if (consumers instanceof VertexConsumerProvider.Immediate immediate) {
-            immediate.draw(RenderLayers.LINES);
-            immediate.draw(CustomRenderLayers.LINES_NO_DEPTH);
-        }
     }
 
     static int nextOutlineColor(int current, boolean forward) {
@@ -132,15 +127,15 @@ final class BridgingTweaksRenderer {
         return OUTLINE_COLORS[next];
     }
 
-    private static boolean isDebugHudVisible(MinecraftClient client) {
+    private static boolean isDebugHudVisible(Minecraft client) {
         try {
-            return client.getDebugHud().shouldShowDebugHud();
+            return client.getDebugOverlay().showDebugScreen();
         } catch (Throwable ignored) {
             return false;
         }
     }
 
-    private static void drawOutline(VertexConsumer visible, VertexConsumer occluded, BlockPos pos, Vec3d cameraPos) {
+    private static void drawOutline(VertexConsumer visible, VertexConsumer occluded, BlockPos pos, Vec3 cameraPos) {
         int argb = ModConfig.bridgingOutlineColor;
         float a = ((argb >>> 24) & 0xFF) / 255.0f;
         float r = ((argb >>> 16) & 0xFF) / 255.0f;
@@ -151,14 +146,14 @@ final class BridgingTweaksRenderer {
         drawBox(occluded, pos, cameraPos, r, g, b, Math.max(a * 0.6f, 0.22f));
     }
 
-    private static void drawBox(VertexConsumer buffer, BlockPos pos, Vec3d cameraPos, float r, float g, float b, float a) {
+    private static void drawBox(VertexConsumer buffer, BlockPos pos, Vec3 cameraPos, float r, float g, float b, float a) {
         double minX = pos.getX() - cameraPos.x;
         double minY = pos.getY() - cameraPos.y;
         double minZ = pos.getZ() - cameraPos.z;
         DrawUtil.drawOutlinedBoxSafe(buffer, minX, minY, minZ, minX + 1.0D, minY + 1.0D, minZ + 1.0D, r, g, b, a, 1.4f);
     }
 
-    private static void drawCrosshairIndicator(DrawContext context, int x, int y, Direction supportDirection, int color) {
+    private static void drawCrosshairIndicator(GuiGraphicsExtractor context, int x, int y, Direction supportDirection, int color) {
         switch (supportDirection) {
             case DOWN -> drawUpMarker(context, x, y, color);
             case UP -> drawDownMarker(context, x, y, color);
@@ -166,17 +161,17 @@ final class BridgingTweaksRenderer {
         }
     }
 
-    private static void drawUpMarker(DrawContext context, int x, int y, int color) {
+    private static void drawUpMarker(GuiGraphicsExtractor context, int x, int y, int color) {
         context.fill(x - 1, y - 10, x + 1, y - 4, color);
         context.fill(x - 4, y - 7, x + 4, y - 5, color);
     }
 
-    private static void drawDownMarker(DrawContext context, int x, int y, int color) {
+    private static void drawDownMarker(GuiGraphicsExtractor context, int x, int y, int color) {
         context.fill(x - 1, y + 4, x + 1, y + 10, color);
         context.fill(x - 4, y + 5, x + 4, y + 7, color);
     }
 
-    private static void drawHorizontalMarker(DrawContext context, int x, int y, int color) {
+    private static void drawHorizontalMarker(GuiGraphicsExtractor context, int x, int y, int color) {
         context.fill(x - 10, y - 1, x - 4, y + 1, color);
         context.fill(x + 4, y - 1, x + 10, y + 1, color);
     }

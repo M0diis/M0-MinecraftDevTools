@@ -1,5 +1,8 @@
 package me.m0dii.modules.getdata;
 
+
+import me.m0dii.gui.theme.ThemedScreen;
+import com.mojang.blaze3d.platform.InputConstants;
 import com.mojang.brigadier.StringReader;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.mojang.brigadier.exceptions.SimpleCommandExceptionType;
@@ -7,25 +10,23 @@ import me.m0dii.gui.local.FormPanel;
 import me.m0dii.gui.local.ListPanel;
 import me.m0dii.gui.local.UiTheme;
 import me.m0dii.utils.NbtEditorUtils;
-import net.minecraft.client.gui.Click;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.client.gui.widget.TextFieldWidget;
-import net.minecraft.client.input.CharInput;
-import net.minecraft.client.input.KeyInput;
-import net.minecraft.client.util.InputUtil;
-import net.minecraft.nbt.NbtCompound;
-import net.minecraft.nbt.NbtElement;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.CharacterEvent;
+import net.minecraft.client.input.KeyEvent;
+import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtOps;
-import net.minecraft.nbt.StringNbtReader;
-import net.minecraft.text.Text;
-import org.lwjgl.glfw.GLFW;
+import net.minecraft.nbt.Tag;
+import net.minecraft.nbt.TagParser;
+import net.minecraft.network.chat.Component;
 
 import java.util.ArrayList;
 import java.util.List;
 
-public class GetDataScreen extends Screen implements GetDataTargetView {
+public class GetDataScreen extends Screen implements GetDataTargetView, ThemedScreen {
     private static final int BUTTON_BAR_HEIGHT = 34;
     private static final int NO_PATH_BOTTOM_RESERVE = 90;
     private static final int PATH_BOTTOM_RESERVE = 84;
@@ -49,7 +50,7 @@ public class GetDataScreen extends Screen implements GetDataTargetView {
     }
 
     private final Screen parent;
-    private final Text screenTitle;
+    private final Component screenTitle;
     private final String targetName;
     private final String targetToken;
     private final String helperText;
@@ -60,7 +61,7 @@ public class GetDataScreen extends Screen implements GetDataTargetView {
     private final SaveAction saveAction;
     private final InputValidator inputValidator;
     private final InlineSuggestionProvider inlineSuggestionProvider;
-    private TextFieldWidget pathField;
+    private EditBox pathField;
 
     private String editorText = "{}";
     private int cursor = 0;
@@ -86,7 +87,7 @@ public class GetDataScreen extends Screen implements GetDataTargetView {
     private boolean syncedPayloadApplied = false;
 
     private GetDataScreen(Screen parent,
-                          Text screenTitle,
+                          Component screenTitle,
                           String targetName,
                           String targetToken,
                           String initialData,
@@ -115,7 +116,7 @@ public class GetDataScreen extends Screen implements GetDataTargetView {
     public static Screen create(Screen parent, String targetName, String targetToken, String initialData) {
         return new GetDataScreen(
                 parent,
-                Text.literal("GetData Editor"),
+                Component.literal("GetData Editor"),
                 targetName,
                 targetToken,
                 initialData,
@@ -130,7 +131,7 @@ public class GetDataScreen extends Screen implements GetDataTargetView {
     }
 
     public static Screen createStandalone(Screen parent,
-                                          Text screenTitle,
+                                          Component screenTitle,
                                           String targetName,
                                           String initialData,
                                           String helperText,
@@ -152,7 +153,7 @@ public class GetDataScreen extends Screen implements GetDataTargetView {
     }
 
     public static Screen createStandalone(Screen parent,
-                                          Text screenTitle,
+                                          Component screenTitle,
                                           String targetName,
                                           String initialData,
                                           String helperText,
@@ -175,7 +176,7 @@ public class GetDataScreen extends Screen implements GetDataTargetView {
     }
 
     public static Screen createStandalone(Screen parent,
-                                          Text screenTitle,
+                                          Component screenTitle,
                                           String targetName,
                                           String initialData,
                                           String helperText,
@@ -215,89 +216,89 @@ public class GetDataScreen extends Screen implements GetDataTargetView {
 
         this.pathField = null;
         if (this.supportsPathField) {
-            this.pathField = new TextFieldWidget(this.textRenderer, 12, this.height - 98, this.width - 24, 18, Text.literal("Path"));
+            this.pathField = new EditBox(this.font, 12, this.height - 98, this.width - 24, 18, Component.literal("Path"));
             this.pathField.setMaxLength(120);
-            this.pathField.setText("");
-            this.pathField.setChangedListener(value -> {
+            this.pathField.setValue("");
+            this.pathField.setResponder(value -> {
                 updatePathSuggestionHint();
                 validateEditorSnbt();
             });
-            this.addDrawableChild(this.pathField);
+            this.addRenderableWidget(this.pathField);
             updatePathSuggestionHint();
         }
 
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("Save"), b -> saveChanges())
-                .dimensions(12, this.height - BUTTON_BAR_HEIGHT, 60, 20)
+        this.addRenderableWidget(Button.builder(Component.literal("Save"), b -> saveChanges())
+                .bounds(12, this.height - BUTTON_BAR_HEIGHT, 60, 20)
                 .build());
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("Copy"), b -> {
-                    if (this.client != null) {
-                        this.client.keyboard.setClipboard(this.editorText);
+        this.addRenderableWidget(Button.builder(Component.literal("Copy"), b -> {
+                    if (this.minecraft != null) {
+                        this.minecraft.keyboardHandler.setClipboard(this.editorText);
                     }
-                }).dimensions(76, this.height - BUTTON_BAR_HEIGHT, 60, 20)
+                }).bounds(76, this.height - BUTTON_BAR_HEIGHT, 60, 20)
                 .build());
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("Done"), b -> close())
-                .dimensions(this.width - 72, this.height - BUTTON_BAR_HEIGHT, 60, 20)
+        this.addRenderableWidget(Button.builder(Component.literal("Done"), b -> onClose())
+                .bounds(this.width - 72, this.height - BUTTON_BAR_HEIGHT, 60, 20)
                 .build());
     }
 
     private void saveChanges() {
-        if (this.client == null || this.client.player == null) {
+        if (this.minecraft == null || this.minecraft.player == null) {
             return;
         }
 
         String raw = this.editorText;
         try {
-            String path = this.pathField == null ? "" : this.pathField.getText().trim();
+            String path = this.pathField == null ? "" : this.pathField.getValue().trim();
             validateRawInput(raw, path);
             this.saveAction.save(this, raw, path);
             if (this.closeAfterSave) {
-                close();
+                onClose();
             }
         } catch (CommandSyntaxException e) {
-            this.client.player.sendMessage(Text.literal("[GetData] Invalid NBT/SNBT: " + e.getMessage()), false);
+            this.minecraft.player.sendSystemMessage(Component.literal("[GetData] Invalid NBT/SNBT: " + e.getMessage()));
         }
     }
 
     private static void saveGetDataChanges(GetDataScreen screen, String raw, String path) throws CommandSyntaxException {
-        if (screen.client == null || screen.client.player == null || screen.targetToken == null) {
+        if (screen.minecraft == null || screen.minecraft.player == null || screen.targetToken == null) {
             return;
         }
 
         if (path == null || path.isBlank()) {
-            GetDataTargetActions.saveTargetPayload(screen.client, screen.targetToken, raw);
+            GetDataTargetActions.saveTargetPayload(screen.minecraft, screen.targetToken, raw);
             return;
         }
 
-        GetDataTargetActions.saveTargetPathValue(screen.client, screen.targetToken, raw, path);
+        GetDataTargetActions.saveTargetPathValue(screen.minecraft, screen.targetToken, raw, path);
     }
 
     @Override
-    public boolean shouldPause() {
+    public boolean isPauseScreen() {
         return false;
     }
 
     @Override
-    public void close() {
-        if (this.client != null) {
-            this.client.setScreen(this.parent);
+    public void onClose() {
+        if (this.minecraft != null) {
+            this.minecraft.gui.setScreen(this.parent);
         }
     }
 
     @Override
-    public void render(DrawContext context, int mouseX, int mouseY, float delta) {
+    public void extractRenderState(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
         context.fill(0, 0, this.width, this.height, UiTheme.BG);
-        context.drawTextWithShadow(this.textRenderer, "Target: " + this.targetName, 12, 10, UiTheme.TEXT);
-        context.drawTextWithShadow(this.textRenderer, this.helperText, 12, 22, UiTheme.TEXT_MUTED);
+        context.text(this.font, "Target: " + this.targetName, 12, 10, UiTheme.TEXT);
+        context.text(this.font, this.helperText, 12, 22, UiTheme.TEXT_MUTED);
         int statusColor = this.parseError == null ? 0xFF70D070 : 0xFFFF7070;
         String statusPrefix = this.inputValidator == null ? "SNBT" : "Input";
         String status = this.parseError == null ? statusPrefix + " valid" : statusPrefix + " error: " + this.parseError;
         if (this.syncedPayloadApplied && this.parseError == null) {
             status = status + " (server sync)";
         }
-        context.drawTextWithShadow(this.textRenderer, status, 12, this.supportsPathField ? this.height - 76 : this.height - 50, statusColor);
+        context.text(this.font, status, 12, this.supportsPathField ? this.height - 76 : this.height - 50, statusColor);
 
         FormPanel editorPanel = new FormPanel(this.boxX, this.boxY, this.boxW, this.boxH);
-        editorPanel.render(context);
+        editorPanel.extractRenderState(context);
 
         List<String> suggestionRows = this.pathSuggestions.stream().limit(6).map(s -> "- " + s).toList();
         if (!this.supportsPathField && this.inlineSuggestions != null && this.inlineSuggestions.suggestions() != null) {
@@ -313,9 +314,9 @@ public class GetDataScreen extends Screen implements GetDataTargetView {
             this.suggestionPanelW = suggestionW;
             this.suggestionPanelRows = Math.min(6, suggestionRows.size());
             ListPanel listPanel = new ListPanel(suggestionX, suggestionY, suggestionW, suggestionH);
-            listPanel.render(context, this.textRenderer, suggestionRows, -1, 0, 10);
+            listPanel.extractRenderState(context, this.font, suggestionRows, -1, 0, 10);
             if (!this.supportsPathField) {
-                context.drawTextWithShadow(this.textRenderer, "Tab or click to insert", suggestionX + 6, suggestionY + suggestionH - 12, UiTheme.TEXT_MUTED);
+                context.text(this.font, "Tab or click to insert", suggestionX + 6, suggestionY + suggestionH - 12, UiTheme.TEXT_MUTED);
             }
         } else {
             this.suggestionPanelX = -1;
@@ -332,10 +333,10 @@ public class GetDataScreen extends Screen implements GetDataTargetView {
 
         drawSelection(context);
         drawTextAndCursor(context);
-        super.render(context, mouseX, mouseY, delta);
+        super.extractRenderState(context, mouseX, mouseY, delta);
     }
 
-    private void drawTextAndCursor(DrawContext context) {
+    private void drawTextAndCursor(GuiGraphicsExtractor context) {
         int x = this.boxX + 6;
         int y = this.boxY + 6;
         int maxY = this.boxY + this.boxH - 12;
@@ -357,7 +358,7 @@ public class GetDataScreen extends Screen implements GetDataTargetView {
             drawHighlightedLine(context, line, x, y);
             int end = i + line.length();
             if (this.cursor >= i && this.cursor <= end) {
-                cursorX = x + this.textRenderer.getWidth(line.substring(0, Math.max(0, this.cursor - i)));
+                cursorX = x + this.font.width(line.substring(0, Math.max(0, this.cursor - i)));
                 cursorY = y;
             }
             i = end + 1;
@@ -373,7 +374,7 @@ public class GetDataScreen extends Screen implements GetDataTargetView {
         context.fill(cursorX, cursorY, cursorX + 1, cursorY + (this.lineHeight - 1), 0xFFFFFFFF);
     }
 
-    private void drawSelection(DrawContext context) {
+    private void drawSelection(GuiGraphicsExtractor context) {
         if (this.selectionAnchor < 0 || this.selectionAnchor == this.cursor) {
             return;
         }
@@ -396,8 +397,8 @@ public class GetDataScreen extends Screen implements GetDataTargetView {
             int overlapStart = Math.max(selStart, lineStart);
             int overlapEnd = Math.min(selEnd, lineEnd);
             if (overlapStart < overlapEnd) {
-                int sx = x + this.textRenderer.getWidth(line.substring(0, overlapStart - lineStart));
-                int ex = x + this.textRenderer.getWidth(line.substring(0, overlapEnd - lineStart));
+                int sx = x + this.font.width(line.substring(0, overlapStart - lineStart));
+                int ex = x + this.font.width(line.substring(0, overlapEnd - lineStart));
                 context.fill(sx, y, ex, y + this.lineHeight - 1, 0x80448CCF);
             }
             i = lineEnd + 1;
@@ -406,11 +407,11 @@ public class GetDataScreen extends Screen implements GetDataTargetView {
     }
 
     @Override
-    public boolean mouseClicked(Click click, boolean doubled) {
+    public boolean mouseClicked(MouseButtonEvent click, boolean doubled) {
         if (super.mouseClicked(click, doubled)) {
             return true;
         }
-        if (click.button() != 0) {
+        if (click.button() != InputConstants.MOUSE_BUTTON_LEFT) {
             return false;
         }
         if (tryApplyInlineSuggestionClick(click)) {
@@ -427,8 +428,8 @@ public class GetDataScreen extends Screen implements GetDataTargetView {
     }
 
     @Override
-    public boolean mouseDragged(Click click, double deltaX, double deltaY) {
-        if (click.button() != 0) {
+    public boolean mouseDragged(MouseButtonEvent click, double deltaX, double deltaY) {
+        if (click.button() != InputConstants.MOUSE_BUTTON_LEFT) {
             return super.mouseDragged(click, deltaX, deltaY);
         }
         if (click.x() < this.boxX || click.x() > this.boxX + this.boxW || click.y() < this.boxY || click.y() > this.boxY + this.boxH) {
@@ -455,7 +456,7 @@ public class GetDataScreen extends Screen implements GetDataTargetView {
     }
 
     @Override
-    public boolean charTyped(CharInput input) {
+    public boolean charTyped(CharacterEvent input) {
         if (this.pathField != null && this.pathField.isFocused()) {
             return super.charTyped(input);
         }
@@ -468,55 +469,55 @@ public class GetDataScreen extends Screen implements GetDataTargetView {
     }
 
     @Override
-    public boolean keyPressed(KeyInput input) {
-        int keyCode = input.getKeycode();
-        if (this.pathField != null && this.pathField.isFocused() && keyCode != GLFW.GLFW_KEY_TAB) {
+    public boolean keyPressed(KeyEvent input) {
+        int keyCode = input.input();
+        if (this.pathField != null && this.pathField.isFocused() && keyCode != InputConstants.KEY_TAB) {
             return super.keyPressed(input);
         }
-        var window = this.client == null ? null : this.client.getWindow();
-        boolean ctrl = window != null && (InputUtil.isKeyPressed(window, GLFW.GLFW_KEY_LEFT_CONTROL)
-                || InputUtil.isKeyPressed(window, GLFW.GLFW_KEY_RIGHT_CONTROL));
-        boolean shift = window != null && (InputUtil.isKeyPressed(window, GLFW.GLFW_KEY_LEFT_SHIFT)
-                || InputUtil.isKeyPressed(window, GLFW.GLFW_KEY_RIGHT_SHIFT));
+        var window = this.minecraft == null ? null : this.minecraft.getWindow();
+        boolean ctrl = window != null && (InputConstants.isKeyDown(InputConstants.KEY_LCONTROL)
+                || InputConstants.isKeyDown(InputConstants.KEY_RCONTROL));
+        boolean shift = window != null && (InputConstants.isKeyDown(InputConstants.KEY_LSHIFT)
+                || InputConstants.isKeyDown(InputConstants.KEY_RSHIFT));
 
-        if (keyCode == GLFW.GLFW_KEY_TAB && this.pathField != null && this.pathField.isFocused()) {
+        if (keyCode == InputConstants.KEY_TAB && this.pathField != null && this.pathField.isFocused()) {
             if (this.activePathSuggestion != null && !this.activePathSuggestion.isBlank()) {
-                this.pathField.setText(this.activePathSuggestion);
-                this.pathField.setCursor(this.pathField.getText().length(), false);
+                this.pathField.setValue(this.activePathSuggestion);
+                this.pathField.moveCursorTo(this.pathField.getValue().length(), false);
                 updatePathSuggestionHint();
                 return true;
             }
             return super.keyPressed(input);
         }
-        if (keyCode == GLFW.GLFW_KEY_TAB && applyInlineSuggestion(0)) {
+        if (keyCode == InputConstants.KEY_TAB && applyInlineSuggestion(0)) {
             return true;
         }
 
-        if (ctrl && keyCode == GLFW.GLFW_KEY_A) {
+        if (ctrl && keyCode == InputConstants.KEY_A) {
             this.selectionAnchor = 0;
             this.cursor = this.editorText.length();
             return true;
         }
-        if (ctrl && keyCode == GLFW.GLFW_KEY_C) {
+        if (ctrl && keyCode == InputConstants.KEY_C) {
             copySelection();
             return true;
         }
-        if (ctrl && keyCode == GLFW.GLFW_KEY_X) {
+        if (ctrl && keyCode == InputConstants.KEY_X) {
             copySelection();
             deleteSelection();
             return true;
         }
-        if (ctrl && keyCode == GLFW.GLFW_KEY_V) {
-            if (this.client != null) {
-                replaceSelectionOrInsert(this.client.keyboard.getClipboard());
+        if (ctrl && keyCode == InputConstants.KEY_V) {
+            if (this.minecraft != null) {
+                replaceSelectionOrInsert(this.minecraft.keyboardHandler.getClipboard());
             }
             return true;
         }
-        if (keyCode == GLFW.GLFW_KEY_ENTER || keyCode == GLFW.GLFW_KEY_KP_ENTER) {
+        if (keyCode == InputConstants.KEY_RETURN || keyCode == InputConstants.KEY_NUMPADENTER) {
             replaceSelectionOrInsert("\n");
             return true;
         }
-        if (keyCode == GLFW.GLFW_KEY_BACKSPACE) {
+        if (keyCode == InputConstants.KEY_BACKSPACE) {
             if (!deleteSelection() && this.cursor > 0) {
                 this.editorText = this.editorText.substring(0, this.cursor - 1) + this.editorText.substring(this.cursor);
                 this.cursor--;
@@ -524,7 +525,7 @@ public class GetDataScreen extends Screen implements GetDataTargetView {
             }
             return true;
         }
-        if (keyCode == GLFW.GLFW_KEY_DELETE) {
+        if (keyCode == InputConstants.KEY_DELETE) {
             if (!deleteSelection() && this.cursor < this.editorText.length()) {
                 this.editorText = this.editorText.substring(0, this.cursor) + this.editorText.substring(this.cursor + 1);
                 onEditorTextChanged();
@@ -533,22 +534,22 @@ public class GetDataScreen extends Screen implements GetDataTargetView {
         }
 
         int prev = this.cursor;
-        if (keyCode == GLFW.GLFW_KEY_LEFT) {
+        if (keyCode == InputConstants.KEY_LEFT) {
             this.cursor = Math.max(0, this.cursor - 1);
         }
-        if (keyCode == GLFW.GLFW_KEY_RIGHT) {
+        if (keyCode == InputConstants.KEY_RIGHT) {
             this.cursor = Math.min(this.editorText.length(), this.cursor + 1);
         }
-        if (keyCode == GLFW.GLFW_KEY_HOME) {
+        if (keyCode == InputConstants.KEY_HOME) {
             this.cursor = lineStart(this.cursor);
         }
-        if (keyCode == GLFW.GLFW_KEY_END) {
+        if (keyCode == InputConstants.KEY_END) {
             this.cursor = lineEnd(this.cursor);
         }
-        if (keyCode == GLFW.GLFW_KEY_UP) {
+        if (keyCode == InputConstants.KEY_UP) {
             this.cursor = moveVertical(this.cursor, -1);
         }
-        if (keyCode == GLFW.GLFW_KEY_DOWN) {
+        if (keyCode == InputConstants.KEY_DOWN) {
             this.cursor = moveVertical(this.cursor, 1);
         }
 
@@ -596,12 +597,12 @@ public class GetDataScreen extends Screen implements GetDataTargetView {
     }
 
     private void copySelection() {
-        if (this.client == null || this.selectionAnchor < 0 || this.selectionAnchor == this.cursor) {
+        if (this.minecraft == null || this.selectionAnchor < 0 || this.selectionAnchor == this.cursor) {
             return;
         }
         int start = Math.min(this.selectionAnchor, this.cursor);
         int end = Math.max(this.selectionAnchor, this.cursor);
-        this.client.keyboard.setClipboard(this.editorText.substring(start, end));
+        this.minecraft.keyboardHandler.setClipboard(this.editorText.substring(start, end));
     }
 
     private int cursorFromMouse(int mouseX, int mouseY) {
@@ -616,7 +617,7 @@ public class GetDataScreen extends Screen implements GetDataTargetView {
         int targetX = mouseX - (this.boxX + 6);
         int best = 0;
         for (int i = 0; i <= line.length(); i++) {
-            if (this.textRenderer.getWidth(line.substring(0, i)) >= targetX) {
+            if (this.font.width(line.substring(0, i)) >= targetX) {
                 best = i;
                 break;
             }
@@ -652,7 +653,7 @@ public class GetDataScreen extends Screen implements GetDataTargetView {
     }
 
     private void validateEditorSnbt() {
-        String path = this.pathField == null ? "" : this.pathField.getText().trim();
+        String path = this.pathField == null ? "" : this.pathField.getValue().trim();
         try {
             validateRawInput(this.editorText, path);
             this.parseError = null;
@@ -671,31 +672,31 @@ public class GetDataScreen extends Screen implements GetDataTargetView {
 
         if (path == null || path.isBlank()) {
             if (this.requireCompoundRootWhenPathBlank) {
-                StringNbtReader.readCompoundAsArgument(new StringReader(raw));
+                TagParser.parseCompoundAsArgument(new StringReader(raw));
                 return;
             }
-            StringNbtReader.fromOps(NbtOps.INSTANCE).readAsArgument(new StringReader(raw));
+            TagParser.create(NbtOps.INSTANCE).parseAsArgument(new StringReader(raw));
             return;
         }
 
-        NbtElement value = StringNbtReader.fromOps(NbtOps.INSTANCE).readAsArgument(new StringReader(raw));
+        Tag value = TagParser.create(NbtOps.INSTANCE).parseAsArgument(new StringReader(raw));
         String valueError = validatePathValue(path, value, raw);
         if (valueError != null) {
-            throw new SimpleCommandExceptionType(Text.literal(valueError)).create();
+            throw new SimpleCommandExceptionType(Component.literal(valueError)).create();
         }
     }
 
-    private String validatePathValue(String path, NbtElement value, String raw) {
+    private String validatePathValue(String path, Tag value, String raw) {
         String normalized = raw == null ? "" : raw.trim().toLowerCase();
         if ("tru".equals(normalized) || "flase".equals(normalized) || "fasle".equals(normalized)) {
             return "Did you mean true/false?";
         }
 
-        NbtCompound initialRoot = parseRootCompound(this.initialData);
+        CompoundTag initialRoot = parseRootCompound(this.initialData);
         if (initialRoot == null) {
             return null;
         }
-        NbtElement expected = resolvePathValue(initialRoot, path);
+        Tag expected = resolvePathValue(initialRoot, path);
         if (expected == null) {
             return null;
         }
@@ -719,14 +720,14 @@ public class GetDataScreen extends Screen implements GetDataTargetView {
         return null;
     }
 
-    private NbtElement resolvePathValue(NbtCompound root, String path) {
+    private Tag resolvePathValue(CompoundTag root, String path) {
         if (root == null || path == null || path.isBlank()) {
             return null;
         }
         String[] parts = path.split("\\.");
-        NbtElement current = root;
+        Tag current = root;
         for (String part : parts) {
-            if (!(current instanceof NbtCompound compound) || part.isBlank()) {
+            if (!(current instanceof CompoundTag compound) || part.isBlank()) {
                 return null;
             }
             current = compound.get(part);
@@ -742,29 +743,29 @@ public class GetDataScreen extends Screen implements GetDataTargetView {
         if (!this.supportsPathField) {
             return;
         }
-        NbtCompound root = parseRootCompound(this.editorText);
+        CompoundTag root = parseRootCompound(this.editorText);
         if (root == null) {
             return;
         }
         collectCompoundPaths(root, "", 0);
     }
 
-    private NbtCompound parseRootCompound(String raw) {
+    private CompoundTag parseRootCompound(String raw) {
         return NbtEditorUtils.parseCompoundOrNull(raw);
     }
 
-    private void collectCompoundPaths(NbtCompound compound, String prefix, int depth) {
+    private void collectCompoundPaths(CompoundTag compound, String prefix, int depth) {
         if (depth > 4 || this.pathSuggestions.size() >= MAX_SUGGESTIONS) {
             return;
         }
-        for (String key : compound.getKeys()) {
+        for (String key : compound.keySet()) {
             String path = prefix.isEmpty() ? key : (prefix + "." + key);
             this.pathSuggestions.add(path);
             if (this.pathSuggestions.size() >= MAX_SUGGESTIONS) {
                 return;
             }
-            NbtElement child = compound.get(key);
-            if (child instanceof NbtCompound childCompound) {
+            Tag child = compound.get(key);
+            if (child instanceof CompoundTag childCompound) {
                 collectCompoundPaths(childCompound, path, depth + 1);
             }
         }
@@ -775,7 +776,7 @@ public class GetDataScreen extends Screen implements GetDataTargetView {
             return;
         }
 
-        String typed = this.pathField.getText() == null ? "" : this.pathField.getText().trim();
+        String typed = this.pathField.getValue() == null ? "" : this.pathField.getValue().trim();
         this.activePathSuggestion = null;
         String hint = null;
 
@@ -829,8 +830,8 @@ public class GetDataScreen extends Screen implements GetDataTargetView {
         return true;
     }
 
-    private boolean tryApplyInlineSuggestionClick(Click click) {
-        if (this.supportsPathField || this.inlineSuggestions == null || this.suggestionPanelX < 0 || click.button() != 0) {
+    private boolean tryApplyInlineSuggestionClick(MouseButtonEvent click) {
+        if (this.supportsPathField || this.inlineSuggestions == null || this.suggestionPanelX < 0 || click.button() != InputConstants.MOUSE_BUTTON_LEFT) {
             return false;
         }
         if (click.x() < this.suggestionPanelX || click.x() > this.suggestionPanelX + this.suggestionPanelW) {
@@ -874,7 +875,7 @@ public class GetDataScreen extends Screen implements GetDataTargetView {
         return line;
     }
 
-    private void drawHighlightedLine(DrawContext context, String line, int x, int y) {
+    private void drawHighlightedLine(GuiGraphicsExtractor context, String line, int x, int y) {
         int cursorX = x;
         int i = 0;
         while (i < line.length()) {
@@ -922,9 +923,9 @@ public class GetDataScreen extends Screen implements GetDataTargetView {
         }
     }
 
-    private int drawToken(DrawContext context, String token, int x, int y, int color) {
-        context.drawTextWithShadow(this.textRenderer, token, x, y, color);
-        return x + this.textRenderer.getWidth(token);
+    private int drawToken(GuiGraphicsExtractor context, String token, int x, int y, int color) {
+        context.text(this.font, token, x, y, color);
+        return x + this.font.width(token);
     }
 
     private int classifyTokenColor(String line, int tokenStart, int tokenEnd, String token) {

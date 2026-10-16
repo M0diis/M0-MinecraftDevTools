@@ -1,21 +1,21 @@
 package me.m0dii.modules.freecam;
 
 
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.network.ClientPlayNetworkHandler;
-import net.minecraft.client.network.ClientPlayerEntity;
-import net.minecraft.client.option.GameOptions;
-import net.minecraft.client.recipebook.ClientRecipeBook;
-import net.minecraft.client.world.ClientWorld;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.MovementType;
-import net.minecraft.stat.StatHandler;
-import net.minecraft.util.math.MathHelper;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.client.ClientRecipeBook;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.Options;
+import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.client.multiplayer.ClientPacketListener;
+import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.stats.StatsCounter;
+import net.minecraft.util.Mth;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.MoverType;
+import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-public class CameraEntity extends ClientPlayerEntity {
+public class CameraEntity extends LocalPlayer {
     public interface CameraController {
         void tick(CameraEntity camera);
 
@@ -33,20 +33,20 @@ public class CameraEntity extends ClientPlayerEntity {
     private static Entity originalCameraEntity;
     @Nullable
     private static CameraController controller;
-    private static Vec3d cameraMotion = new Vec3d(0.0, 0.0, 0.0);
+    private static Vec3 cameraMotion = new Vec3(0.0, 0.0, 0.0);
 
     private static boolean cullChunksOriginal;
     private static boolean sprinting;
     private static boolean originalCameraWasPlayer;
 
-    private CameraEntity(@NotNull MinecraftClient mc,
-                         @NotNull ClientWorld world,
-                         @NotNull ClientPlayNetworkHandler netHandler,
-                         @NotNull StatHandler stats,
+    private CameraEntity(@NotNull Minecraft mc,
+                         @NotNull ClientLevel world,
+                         @NotNull ClientPacketListener netHandler,
+                         @NotNull StatsCounter stats,
                          @NotNull ClientRecipeBook recipeBook) {
         // MinecraftClient client, ClientWorld world, ClientPlayNetworkHandler networkHandler,
         // StatHandler stats, ClientRecipeBook recipeBook, PlayerInput lastPlayerInput, boolean lastSprinting
-        super(mc, world, netHandler, stats, recipeBook, null, false);
+        super(mc, world, netHandler, stats, recipeBook, null, false, mc.player.chatAbilities(), new net.minecraft.client.player.ItemActivation());
     }
 
     @Override
@@ -68,13 +68,13 @@ public class CameraEntity extends ClientPlayerEntity {
                 return;
             }
 
-            GameOptions options = MinecraftClient.getInstance().options;
+            Options options = Minecraft.getInstance().options;
 
             camera.updateLastTickPosition();
 
-            if (options.sprintKey.isPressed()) {
+            if (options.keySprint.isDown()) {
                 sprinting = true;
-            } else if (!options.forwardKey.isPressed() && !options.backKey.isPressed()) {
+            } else if (!options.keyUp.isDown() && !options.keyDown.isDown()) {
                 sprinting = false;
             }
 
@@ -85,30 +85,30 @@ public class CameraEntity extends ClientPlayerEntity {
         }
     }
 
-    public static Vec3d calculatePlayerMotionWithDeceleration(@NotNull Vec3d lastMotion,
+    public static Vec3 calculatePlayerMotionWithDeceleration(@NotNull Vec3 lastMotion,
                                                               double rampAmount,
                                                               double decelerationFactor) {
-        GameOptions options = MinecraftClient.getInstance().options;
+        Options options = Minecraft.getInstance().options;
         int forward = 0;
         int vertical = 0;
         int strafe = 0;
 
-        if (options.forwardKey.isPressed()) {
+        if (options.keyUp.isDown()) {
             forward += 1;
         }
-        if (options.backKey.isPressed()) {
+        if (options.keyDown.isDown()) {
             forward -= 1;
         }
-        if (options.leftKey.isPressed()) {
+        if (options.keyLeft.isDown()) {
             strafe += 1;
         }
-        if (options.rightKey.isPressed()) {
+        if (options.keyRight.isDown()) {
             strafe -= 1;
         }
-        if (options.jumpKey.isPressed()) {
+        if (options.keyJump.isDown()) {
             vertical += 1;
         }
-        if (options.sneakKey.isPressed()) {
+        if (options.keyShift.isDown()) {
             vertical -= 1;
         }
 
@@ -117,7 +117,7 @@ public class CameraEntity extends ClientPlayerEntity {
         double verticalRamped = getRampedMotion(lastMotion.y, vertical, rampAmount, decelerationFactor);
         double strafeRamped = getRampedMotion(lastMotion.z, strafe, rampAmount, decelerationFactor) / speed;
 
-        return new Vec3d(forwardRamped, verticalRamped, strafeRamped);
+        return new Vec3(forwardRamped, verticalRamped, strafeRamped);
     }
 
     public static double getRampedMotion(double current, int input, double rampAmount, double decelerationFactor) {
@@ -131,7 +131,7 @@ public class CameraEntity extends ClientPlayerEntity {
                 current = 0.0;
             }
 
-            current = MathHelper.clamp(current + rampAmount, -1.0, 1.0);
+            current = Mth.clamp(current + rampAmount, -1.0, 1.0);
         } else {
             current *= decelerationFactor;
         }
@@ -145,7 +145,7 @@ public class CameraEntity extends ClientPlayerEntity {
     }
 
     private void handleMotion(double forward, double up, double strafe) {
-        float yaw = this.getYaw();
+        float yaw = this.getYRot();
         double scale = getMoveSpeed();
         double xFactor = Math.sin(yaw * Math.PI / 180.0);
         double zFactor = Math.cos(yaw * Math.PI / 180.0);
@@ -154,76 +154,76 @@ public class CameraEntity extends ClientPlayerEntity {
         double y = up * scale;
         double z = (forward * zFactor + strafe * xFactor) * scale;
 
-        this.setVelocity(new Vec3d(x, y, z));
-        this.move(MovementType.SELF, this.getVelocity());
+        this.setDeltaMovement(new Vec3(x, y, z));
+        this.move(MoverType.SELF, this.getDeltaMovement());
     }
 
     private void updateLastTickPosition() {
         // Camera interpolation uses lastX/lastY/lastZ and lastYaw/lastPitch.
         // Keep them in sync before applying this tick's movement.
-        this.lastX = this.getX();
-        this.lastY = this.getY();
-        this.lastZ = this.getZ();
-        this.lastYaw = this.getYaw();
-        this.lastPitch = this.getPitch();
-        this.lastHeadYaw = this.headYaw;
+        this.xo = this.getX();
+        this.yo = this.getY();
+        this.zo = this.getZ();
+        this.yRotO = this.getYRot();
+        this.xRotO = this.getXRot();
+        this.yHeadRotO = this.yHeadRot;
 
         // Keep render history aligned as well.
-        this.lastRenderX = this.lastX;
-        this.lastRenderY = this.lastY;
-        this.lastRenderZ = this.lastZ;
+        this.xOld = this.xo;
+        this.yOld = this.yo;
+        this.zOld = this.zo;
     }
 
     public void setCameraRotations(float yaw, float pitch) {
-        this.setYaw(yaw);
-        this.setPitch(pitch);
+        this.setYRot(yaw);
+        this.setXRot(pitch);
 
-        this.headYaw = yaw;
+        this.yHeadRot = yaw;
     }
 
-    public void setScriptedPose(Vec3d position, float yaw, float pitch) {
-        this.setPosition(position.x, position.y, position.z);
-        this.setRotation(yaw, pitch);
+    public void setScriptedPose(Vec3 position, float yaw, float pitch) {
+        this.setPos(position.x, position.y, position.z);
+        this.setRot(yaw, pitch);
         this.setCameraRotations(yaw, pitch);
-        this.setVelocity(Vec3d.ZERO);
+        this.setDeltaMovement(Vec3.ZERO);
     }
 
-    public void setRenderPoseExact(Vec3d position, float yaw, float pitch) {
-        this.lastX = position.x;
-        this.lastY = position.y;
-        this.lastZ = position.z;
-        this.lastRenderX = position.x;
-        this.lastRenderY = position.y;
-        this.lastRenderZ = position.z;
-        this.lastYaw = yaw;
-        this.lastPitch = pitch;
-        this.lastHeadYaw = yaw;
+    public void setRenderPoseExact(Vec3 position, float yaw, float pitch) {
+        this.xo = position.x;
+        this.yo = position.y;
+        this.zo = position.z;
+        this.xOld = position.x;
+        this.yOld = position.y;
+        this.zOld = position.z;
+        this.yRotO = yaw;
+        this.xRotO = pitch;
+        this.yHeadRotO = yaw;
         this.setScriptedPose(position, yaw, pitch);
     }
 
     public void updateCameraRotations(float yawChange, float pitchChange) {
-        float yaw = this.getYaw() + yawChange * 0.15F;
-        float pitch = MathHelper.clamp(this.getPitch() + pitchChange * 0.15F, -90F, 90F);
+        float yaw = this.getYRot() + yawChange * 0.15F;
+        float pitch = Mth.clamp(this.getXRot() + pitchChange * 0.15F, -90F, 90F);
 
-        this.setYaw(yaw);
-        this.setPitch(pitch);
+        this.setYRot(yaw);
+        this.setXRot(pitch);
 
         this.setCameraRotations(yaw, pitch);
     }
 
-    private static CameraEntity create(@NotNull MinecraftClient mc) {
-        ClientPlayerEntity player = mc.player;
-        if (player == null || mc.world == null) {
+    private static CameraEntity create(@NotNull Minecraft mc) {
+        LocalPlayer player = mc.player;
+        if (player == null || mc.level == null) {
             return null;
         }
 
-        CameraEntity camera = new CameraEntity(mc, mc.world, player.networkHandler, player.getStatHandler(), player.getRecipeBook());
-        camera.noClip = true;
-        float yaw = player.getYaw();
-        float pitch = player.getPitch();
+        CameraEntity camera = new CameraEntity(mc, mc.level, player.connection, player.getStats(), player.getRecipeBook());
+        camera.noPhysics = true;
+        float yaw = player.getYRot();
+        float pitch = player.getXRot();
 
-        camera.refreshPositionAndAngles(player.getX(), player.getY(), player.getZ(), yaw, pitch);
-        camera.setRotation(yaw, pitch);
+        camera.snapTo(player.getX(), player.getY(), player.getZ(), yaw, pitch);
+        camera.setRot(yaw, pitch);
 
         return camera;
     }
@@ -250,9 +250,9 @@ public class CameraEntity extends ClientPlayerEntity {
     }
 
     public static void setCameraState(boolean enabled) {
-        MinecraftClient mc = MinecraftClient.getInstance();
+        Minecraft mc = Minecraft.getInstance();
 
-        if (mc.world != null && mc.player != null) {
+        if (mc.level != null && mc.player != null) {
             if (enabled) {
                 createAndSetCamera(mc);
             } else {
@@ -263,7 +263,7 @@ public class CameraEntity extends ClientPlayerEntity {
         }
     }
 
-    private static void createAndSetCamera(MinecraftClient mc) {
+    private static void createAndSetCamera(Minecraft mc) {
         camera = create(mc);
         if (camera == null) {
             return;
@@ -271,22 +271,22 @@ public class CameraEntity extends ClientPlayerEntity {
 
         originalCameraEntity = mc.getCameraEntity();
         originalCameraWasPlayer = originalCameraEntity == mc.player;
-        cullChunksOriginal = mc.chunkCullingEnabled;
-        cameraMotion = Vec3d.ZERO;
+        cullChunksOriginal = mc.smartCull;
+        cameraMotion = Vec3.ZERO;
         sprinting = false;
 
         mc.setCameraEntity(camera);
-        mc.chunkCullingEnabled = false; // Disable chunk culling
+        mc.smartCull = false; // Disable chunk culling
     }
 
-    private static void removeCamera(MinecraftClient mc) {
-        if (mc.world != null && camera != null) {
+    private static void removeCamera(Minecraft mc) {
+        if (mc.level != null && camera != null) {
             // Re-fetch the player entity, in case the player died while in Free Camera mode and the instance changed
             mc.setCameraEntity(originalCameraWasPlayer ? mc.player : originalCameraEntity);
-            mc.chunkCullingEnabled = cullChunksOriginal;
+            mc.smartCull = cullChunksOriginal;
 
-            final int chunkX = MathHelper.floor(camera.getX()) >> 4;
-            final int chunkZ = MathHelper.floor(camera.getZ()) >> 4;
+            final int chunkX = Mth.floor(camera.getX()) >> 4;
+            final int chunkZ = Mth.floor(camera.getZ()) >> 4;
             CameraUtils.markChunksForRebuildOnDeactivation(chunkX, chunkZ);
         }
 
@@ -294,7 +294,7 @@ public class CameraEntity extends ClientPlayerEntity {
         originalCameraWasPlayer = false;
         camera = null;
         controller = null;
-        cameraMotion = Vec3d.ZERO;
+        cameraMotion = Vec3.ZERO;
         sprinting = false;
     }
 }

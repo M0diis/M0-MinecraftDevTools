@@ -1,7 +1,7 @@
 package me.m0dii.modules.itemdata;
 
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
-import net.minecraft.nbt.NbtCompound;
+import net.minecraft.nbt.CompoundTag;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -19,7 +19,7 @@ class ItemComponentMetadataTest {
 
     @Test
     void countHelpersRoundTripAndValidate() throws CommandSyntaxException {
-        NbtCompound itemData = new NbtCompound();
+        CompoundTag itemData = new CompoundTag();
         assertEquals(1, ItemDataCodec.readCount(itemData));
 
         ItemDataCodec.applyCount(itemData, "16");

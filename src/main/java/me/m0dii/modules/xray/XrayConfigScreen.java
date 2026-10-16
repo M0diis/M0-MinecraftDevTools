@@ -1,17 +1,21 @@
 package me.m0dii.modules.xray;
 
-import net.minecraft.client.gui.Click;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.client.gui.widget.ClickableWidget;
-import net.minecraft.client.gui.widget.TextFieldWidget;
-import net.minecraft.text.Text;
+
+
+import me.m0dii.gui.theme.ThemedScreen;
+import com.mojang.blaze3d.platform.InputConstants;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.AbstractWidget;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.network.chat.Component;
 
 import java.util.ArrayList;
 import java.util.List;
 
-public final class XrayConfigScreen extends Screen {
+public final class XrayConfigScreen extends Screen implements ThemedScreen {
     private static final int[] COLOR_SWATCHES = {
             // Common X-Ray palette choices (ores/chests/structures)
             0x55FF55, 0x00FF66, 0x00FFFF, 0x55FFFF, 0x33CCFF, 0x4FA8FF,
@@ -20,12 +24,12 @@ public final class XrayConfigScreen extends Screen {
     };
 
     private final Screen parent;
-    private final List<ClickableWidget> dynamicWidgets = new ArrayList<>();
+    private final List<AbstractWidget> dynamicWidgets = new ArrayList<>();
     private List<String> visibleIds = new ArrayList<>();
 
-    private TextFieldWidget addField;
-    private TextFieldWidget rangeField;
-    private TextFieldWidget colorField;
+    private EditBox addField;
+    private EditBox rangeField;
+    private EditBox colorField;
 
     private int scroll = 0;
     private int availableRows = 1;
@@ -46,7 +50,7 @@ public final class XrayConfigScreen extends Screen {
     private static final int SWATCH_COLUMNS = 9;
 
     private XrayConfigScreen(Screen parent) {
-        super(Text.literal("Xray Configuration"));
+        super(Component.literal("Xray Configuration"));
         this.parent = parent;
     }
 
@@ -56,11 +60,11 @@ public final class XrayConfigScreen extends Screen {
 
     @Override
     protected void init() {
-        String pendingAdd = this.addField == null ? "" : this.addField.getText();
-        String pendingRange = this.rangeField == null ? Integer.toString(XrayManager.getDisplayRange()) : this.rangeField.getText();
-        String pendingColor = this.colorField == null ? "" : this.colorField.getText();
+        String pendingAdd = this.addField == null ? "" : this.addField.getValue();
+        String pendingRange = this.rangeField == null ? Integer.toString(XrayManager.getDisplayRange()) : this.rangeField.getValue();
+        String pendingColor = this.colorField == null ? "" : this.colorField.getValue();
 
-        this.clearChildren();
+        this.clearWidgets();
         this.dynamicWidgets.clear();
         this.visibleIds = new ArrayList<>(XrayManager.getBlockIds());
         if (this.visibleIds.isEmpty()) {
@@ -108,20 +112,20 @@ public final class XrayConfigScreen extends Screen {
             addFieldW = Math.max(120, addButtonX - addX - 6);
         }
 
-        this.addField = new TextFieldWidget(this.textRenderer, addX, addRowY, addFieldW, 20, Text.literal("minecraft:block_id"));
+        this.addField = new EditBox(this.font, addX, addRowY, addFieldW, 20, Component.literal("minecraft:block_id"));
         this.addField.setMaxLength(100);
-        this.addField.setText(pendingAdd);
-        this.addDrawableChild(this.addField);
+        this.addField.setValue(pendingAdd);
+        this.addRenderableWidget(this.addField);
 
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("Add"), b -> {
-            String id = this.addField.getText() == null ? "" : this.addField.getText().trim();
+        this.addRenderableWidget(Button.builder(Component.literal("Add"), b -> {
+            String id = this.addField.getValue() == null ? "" : this.addField.getValue().trim();
             if (!id.isEmpty()) {
                 XrayManager.addBlock(id);
                 this.selectedIndex = Math.max(0, XrayManager.getBlockIds().size() - 1);
-                this.addField.setText("");
+                this.addField.setValue("");
                 this.init();
             }
-        }).dimensions(addButtonX, addRowY, addButtonW, 20).build());
+        }).bounds(addButtonX, addRowY, addButtonW, 20).build());
 
         int doneW = 76;
         int doneX = Math.max(this.listLeft, this.width - this.listLeft - doneW);
@@ -131,41 +135,41 @@ public final class XrayConfigScreen extends Screen {
             toggleW = Math.max(80, doneX - 8 - this.listLeft);
         }
 
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("Xray: " + (XrayModule.INSTANCE.isEnabled() ? "ON" : "OFF")), b -> {
+        this.addRenderableWidget(Button.builder(Component.literal("Xray: " + (XrayModule.INSTANCE.isEnabled() ? "ON" : "OFF")), b -> {
             XrayModule.INSTANCE.setEnabled(!XrayModule.INSTANCE.isEnabled());
             this.init();
-        }).dimensions(toggleX, 6, toggleW, 20).build());
+        }).bounds(toggleX, 6, toggleW, 20).build());
 
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("Done"), b -> close())
-                .dimensions(doneX, 6, doneW, 20)
+        this.addRenderableWidget(Button.builder(Component.literal("Done"), b -> onClose())
+                .bounds(doneX, 6, doneW, 20)
                 .build());
 
         int rangeStartX = compactTop ? this.listLeft : Math.max(this.listLeft, this.width - this.listLeft - (20 + 50 + 20 + 76 + (3 * 4)));
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("-"), b -> {
+        this.addRenderableWidget(Button.builder(Component.literal("-"), b -> {
             XrayManager.adjustDisplayRange(-4);
-            this.rangeField.setText(Integer.toString(XrayManager.getDisplayRange()));
-        }).dimensions(rangeStartX, rangeRowY, 20, 20).build());
+            this.rangeField.setValue(Integer.toString(XrayManager.getDisplayRange()));
+        }).bounds(rangeStartX, rangeRowY, 20, 20).build());
 
-        this.rangeField = new TextFieldWidget(this.textRenderer, rangeStartX + 24, rangeRowY, 50, 20, Text.literal("Range"));
+        this.rangeField = new EditBox(this.font, rangeStartX + 24, rangeRowY, 50, 20, Component.literal("Range"));
         this.rangeField.setMaxLength(3);
-        this.rangeField.setText(pendingRange);
-        this.addDrawableChild(this.rangeField);
+        this.rangeField.setValue(pendingRange);
+        this.addRenderableWidget(this.rangeField);
 
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("+"), b -> {
+        this.addRenderableWidget(Button.builder(Component.literal("+"), b -> {
             XrayManager.adjustDisplayRange(4);
-            this.rangeField.setText(Integer.toString(XrayManager.getDisplayRange()));
-        }).dimensions(rangeStartX + 78, rangeRowY, 20, 20).build());
+            this.rangeField.setValue(Integer.toString(XrayManager.getDisplayRange()));
+        }).bounds(rangeStartX + 78, rangeRowY, 20, 20).build());
 
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("Apply"), b -> applyRangeField())
-                .dimensions(rangeStartX + 102, rangeRowY, 76, 20)
+        this.addRenderableWidget(Button.builder(Component.literal("Apply"), b -> applyRangeField())
+                .bounds(rangeStartX + 102, rangeRowY, 76, 20)
                 .build());
 
         rebuildRows(this.listTop, rowHeight, paneX, paneW, pendingColor);
     }
 
     private void rebuildRows(int listTop, int rowHeight, int paneX, int paneW, String pendingColor) {
-        for (ClickableWidget widget : this.dynamicWidgets) {
-            this.remove(widget);
+        for (AbstractWidget widget : this.dynamicWidgets) {
+            this.removeWidget(widget);
         }
         this.dynamicWidgets.clear();
 
@@ -177,35 +181,35 @@ public final class XrayConfigScreen extends Screen {
             boolean selected = i == this.selectedIndex;
 
             String label = (selected ? "> " : "") + shorten(id, 32);
-            ButtonWidget select = ButtonWidget.builder(Text.literal(label), b -> {
+            Button select = Button.builder(Component.literal(label), b -> {
                         this.selectedIndex = index;
                         this.init();
                     })
-                    .dimensions(this.listLeft, y, Math.max(64, this.listWidth - 106), 20)
+                    .bounds(this.listLeft, y, Math.max(64, this.listWidth - 106), 20)
                     .build();
 
-            ButtonWidget toggle = ButtonWidget.builder(Text.literal(cfg.enabled ? "ON" : "OFF"), b -> {
+            Button toggle = Button.builder(Component.literal(cfg.enabled ? "ON" : "OFF"), b -> {
                         cfg.enabled = !cfg.enabled;
                         XrayManager.save();
                         this.init();
                     })
-                    .dimensions(this.listLeft + this.listWidth - 100, y, 46, 20)
+                    .bounds(this.listLeft + this.listWidth - 100, y, 46, 20)
                     .build();
 
-            ButtonWidget remove = ButtonWidget.builder(Text.literal("X"), b -> {
+            Button remove = Button.builder(Component.literal("X"), b -> {
                         XrayManager.removeBlock(id);
                         this.selectedIndex = Math.max(0, this.selectedIndex - 1);
                         this.init();
                     })
-                    .dimensions(this.listLeft + this.listWidth - 50, y, 44, 20)
+                    .bounds(this.listLeft + this.listWidth - 50, y, 44, 20)
                     .build();
 
             this.dynamicWidgets.add(select);
             this.dynamicWidgets.add(toggle);
             this.dynamicWidgets.add(remove);
-            this.addDrawableChild(select);
-            this.addDrawableChild(toggle);
-            this.addDrawableChild(remove);
+            this.addRenderableWidget(select);
+            this.addRenderableWidget(toggle);
+            this.addRenderableWidget(remove);
 
             y += rowHeight;
         }
@@ -226,27 +230,27 @@ public final class XrayConfigScreen extends Screen {
         this.editorPaneW = paneW;
 
         int colorFieldW = Math.max(40, paneW - 104);
-        this.colorField = new TextFieldWidget(this.textRenderer, paneX, paneY + 15, colorFieldW, 20, Text.literal("#RRGGBB"));
+        this.colorField = new EditBox(this.font, paneX, paneY + 15, colorFieldW, 20, Component.literal("#RRGGBB"));
         this.colorField.setMaxLength(7);
-        this.colorField.setText((pendingColor == null || pendingColor.isBlank()) ? String.format("#%06X", cfg.color & 0xFFFFFF) : pendingColor);
-        this.addDrawableChild(this.colorField);
+        this.colorField.setValue((pendingColor == null || pendingColor.isBlank()) ? String.format("#%06X", cfg.color & 0xFFFFFF) : pendingColor);
+        this.addRenderableWidget(this.colorField);
         this.dynamicWidgets.add(this.colorField);
 
-        ButtonWidget applyColor = ButtonWidget.builder(Text.literal("Set"), b -> applyColorFromField(cfg))
-                .dimensions(paneX + paneW - 98, paneY + 15, 58, 20)
+        Button applyColor = Button.builder(Component.literal("Set"), b -> applyColorFromField(cfg))
+                .bounds(paneX + paneW - 98, paneY + 15, 58, 20)
                 .build();
 
         this.dynamicWidgets.add(applyColor);
-        this.addDrawableChild(applyColor);
+        this.addRenderableWidget(applyColor);
         this.swatchStartX = paneX + 4;
         this.swatchStartY = paneY + 44;
     }
 
     @Override
-    public void render(DrawContext context, int mouseX, int mouseY, float delta) {
+    public void extractRenderState(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
         context.fill(0, 0, this.width, this.height, 0xD0101010);
-        context.drawTextWithShadow(this.textRenderer, "Xray Configuration", 12, 10, 0xFFFFFFFF);
-        context.drawTextWithShadow(this.textRenderer,
+        context.text(this.font, "Xray Configuration", 12, 10, 0xFFFFFFFF);
+        context.text(this.font,
                 "Manage tracked blocks, tune range, and set colors manually or via swatches.",
                 12, 20, 0xFFB8B8B8);
 
@@ -257,7 +261,7 @@ public final class XrayConfigScreen extends Screen {
         if (!this.visibleIds.isEmpty() && this.selectedIndex >= 0 && this.selectedIndex < this.visibleIds.size()) {
             String id = this.visibleIds.get(this.selectedIndex);
             XrayManager.XrayBlockConfig cfg = XrayManager.getOrCreate(id);
-            context.drawTextWithShadow(this.textRenderer, "Color (hex)", this.editorPaneX + 4, this.listTop + 6, 0xFFD0D0D0);
+            context.text(this.font, "Color (hex)", this.editorPaneX + 4, this.listTop + 6, 0xFFD0D0D0);
 
             int previewColor = 0xFF000000 | (cfg.color & 0xFFFFFF);
             int previewX = this.editorPaneX + this.editorPaneW - 28;
@@ -280,19 +284,19 @@ public final class XrayConfigScreen extends Screen {
                 context.fill(x + SWATCH_SIZE, y, x + SWATCH_SIZE + 1, y + SWATCH_SIZE, border);
             }
         } else {
-            context.drawTextWithShadow(this.textRenderer, "No block selected.", this.editorPaneX, this.listTop + 8, 0xFFAAAAAA);
+            context.text(this.font, "No block selected.", this.editorPaneX, this.listTop + 8, 0xFFAAAAAA);
         }
 
-        super.render(context, mouseX, mouseY, delta);
+        super.extractRenderState(context, mouseX, mouseY, delta);
     }
 
     private void applyRangeField() {
         try {
-            int parsed = Integer.parseInt(this.rangeField.getText().trim());
+            int parsed = Integer.parseInt(this.rangeField.getValue().trim());
             XrayManager.setDisplayRange(parsed);
-            this.rangeField.setText(Integer.toString(XrayManager.getDisplayRange()));
+            this.rangeField.setValue(Integer.toString(XrayManager.getDisplayRange()));
         } catch (Exception ignored) {
-            this.rangeField.setText(Integer.toString(XrayManager.getDisplayRange()));
+            this.rangeField.setValue(Integer.toString(XrayManager.getDisplayRange()));
         }
     }
 
@@ -315,14 +319,14 @@ public final class XrayConfigScreen extends Screen {
     }
 
     private void applyColorFromField(XrayManager.XrayBlockConfig cfg) {
-        Integer parsed = parseHexColor(this.colorField.getText());
+        Integer parsed = parseHexColor(this.colorField.getValue());
         if (parsed == null) {
-            this.colorField.setText(String.format("#%06X", cfg.color & 0xFFFFFF));
+            this.colorField.setValue(String.format("#%06X", cfg.color & 0xFFFFFF));
             return;
         }
         cfg.color = parsed;
         XrayManager.save();
-        this.colorField.setText(String.format("#%06X", parsed));
+        this.colorField.setValue(String.format("#%06X", parsed));
     }
 
     private static String shorten(String value, int max) {
@@ -333,10 +337,10 @@ public final class XrayConfigScreen extends Screen {
     }
 
     @Override
-    public void close() {
+    public void onClose() {
         XrayManager.save();
-        if (this.client != null) {
-            this.client.setScreen(this.parent);
+        if (this.minecraft != null) {
+            this.minecraft.gui.setScreen(this.parent);
         }
     }
 
@@ -352,11 +356,11 @@ public final class XrayConfigScreen extends Screen {
     }
 
     @Override
-    public boolean mouseClicked(Click click, boolean doubled) {
+    public boolean mouseClicked(MouseButtonEvent click, boolean doubled) {
         if (super.mouseClicked(click, doubled)) {
             return true;
         }
-        if (click.button() != 0 || this.visibleIds.isEmpty() || this.selectedIndex < 0 || this.selectedIndex >= this.visibleIds.size()) {
+        if (click.button() != InputConstants.MOUSE_BUTTON_LEFT || this.visibleIds.isEmpty() || this.selectedIndex < 0 || this.selectedIndex >= this.visibleIds.size()) {
             return false;
         }
 
@@ -388,7 +392,7 @@ public final class XrayConfigScreen extends Screen {
         cfg.color = COLOR_SWATCHES[swatchIndex];
         XrayManager.save();
         if (this.colorField != null) {
-            this.colorField.setText(String.format("#%06X", cfg.color & 0xFFFFFF));
+            this.colorField.setValue(String.format("#%06X", cfg.color & 0xFFFFFF));
         }
         return true;
     }

@@ -4,10 +4,9 @@ import me.m0dii.modules.Module;
 import me.m0dii.modules.macros.MacroPlaceholderProvider;
 import me.m0dii.modules.macros.MacroPlaceholders;
 import me.m0dii.utils.KeybindCatalog;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.util.InputUtil;
-import net.minecraft.entity.player.PlayerEntity;
-
+import net.minecraft.client.Minecraft;
+import net.minecraft.world.entity.player.Player;
+import com.mojang.blaze3d.platform.InputConstants;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -68,7 +67,7 @@ public final class WatsonCoreProtectModule extends Module {
         }
 
         @Override
-        public String resolvePlaceholder(String token, MinecraftClient client, PlayerEntity player, boolean canvasMode) {
+        public String resolvePlaceholder(String token, Minecraft client, Player player, boolean canvasMode) {
             if (token != null && token.matches("watson\\.entries\\.last\\.\\d+")) {
                 int amount = 0;
 
@@ -176,7 +175,7 @@ public final class WatsonCoreProtectModule extends Module {
 
         registerPressedKeybind(
                 KeybindCatalog.WATSON_COREPROTECT_TOGGLE.translationKey(),
-                InputUtil.Type.KEYSYM,
+                InputConstants.Type.KEYBOARD,
                 KeybindCatalog.WATSON_COREPROTECT_TOGGLE.defaultKey(),
                 client -> toggleEnabled()
         );

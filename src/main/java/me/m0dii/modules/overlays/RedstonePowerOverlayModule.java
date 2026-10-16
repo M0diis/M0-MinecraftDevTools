@@ -1,11 +1,11 @@
 package me.m0dii.modules.overlays;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import me.m0dii.utils.KeybindCatalog;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.RedstoneWireBlock;
-import net.minecraft.client.util.InputUtil;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.block.RedstoneWireBlock;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -27,15 +27,15 @@ public class RedstonePowerOverlayModule extends BlockTextOverlayModule {
         super.register();
 
         registerPressedKeybind(KeybindCatalog.REDSTONE_OVERLAY_TOGGLE.translationKey(),
-                InputUtil.Type.KEYSYM,
+                InputConstants.Type.KEYBOARD,
                 KeybindCatalog.REDSTONE_OVERLAY_TOGGLE.defaultKey(),
                 client -> toggleEnabled());
     }
 
     @Nullable
     @Override
-    protected TextRenderInfo shouldRender(BlockPos pos, Vec3d cameraPos) {
-        BlockState state = getClient().world.getBlockState(pos);
+    protected TextRenderInfo shouldRender(BlockPos pos, Vec3 cameraPos) {
+        BlockState state = getClient().level.getBlockState(pos);
         if (state.isAir()) {
             return null;
         }
@@ -46,7 +46,7 @@ public class RedstonePowerOverlayModule extends BlockTextOverlayModule {
 
         int wirePower;
         try {
-            wirePower = state.get(RedstoneWireBlock.POWER);
+            wirePower = state.getValue(RedstoneWireBlock.POWER);
         } catch (Exception e) {
             return null;
         }

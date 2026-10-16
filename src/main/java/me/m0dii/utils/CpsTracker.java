@@ -1,5 +1,7 @@
 package me.m0dii.utils;
 
+
+import com.mojang.blaze3d.platform.InputConstants;
 public final class CpsTracker {
     private static final int WINDOW_SECONDS = 4;
     private static final int[][] BUCKETS = new int[2][WINDOW_SECONDS];
@@ -9,8 +11,8 @@ public final class CpsTracker {
     }
 
     public static synchronized void registerClick(int button) {
-        int index = button == 1 ? 1 : 0;
-        if (button != 0 && button != 1) {
+        int index = button == InputConstants.MOUSE_BUTTON_RIGHT ? 1 : 0;
+        if (button != InputConstants.MOUSE_BUTTON_LEFT && button != InputConstants.MOUSE_BUTTON_RIGHT) {
             return;
         }
         rollWindow();

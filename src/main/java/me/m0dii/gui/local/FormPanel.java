@@ -1,7 +1,7 @@
 package me.m0dii.gui.local;
 
-import net.minecraft.client.font.TextRenderer;
-import net.minecraft.client.gui.DrawContext;
+import net.minecraft.client.gui.Font;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 
 public final class FormPanel {
     private final int x;
@@ -20,12 +20,12 @@ public final class FormPanel {
         this(bounds.x(), bounds.y(), bounds.width(), bounds.height());
     }
 
-    public void render(DrawContext context) {
+    public void extractRenderState(GuiGraphicsExtractor context) {
         UiForms.drawPanel(context, x, y, width, height);
     }
 
-    public void drawLabel(DrawContext context, TextRenderer textRenderer, String label, int offsetX, int offsetY) {
-        context.drawTextWithShadow(textRenderer, label, x + offsetX, y + offsetY, UiTheme.TEXT_MUTED);
+    public void drawLabel(GuiGraphicsExtractor context, Font textRenderer, String label, int offsetX, int offsetY) {
+        context.text(textRenderer, label, x + offsetX, y + offsetY, UiTheme.TEXT_MUTED);
     }
 }
 

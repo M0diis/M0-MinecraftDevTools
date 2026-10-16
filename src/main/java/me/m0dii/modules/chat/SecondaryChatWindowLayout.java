@@ -1,9 +1,8 @@
 package me.m0dii.modules.chat;
 
 import me.m0dii.modules.hudcanvas.HudCanvasDataHandler;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.font.TextRenderer;
-
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Font;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -145,7 +144,7 @@ final class SecondaryChatWindowLayout {
         return frame;
     }
 
-    static TabHit tabAt(Frame frame, double mouseX, double mouseY, TextRenderer textRenderer) {
+    static TabHit tabAt(Frame frame, double mouseX, double mouseY, Font textRenderer) {
         if (!frame.window.showTabs || mouseY < frame.y || mouseY > frame.y + HEADER_HEIGHT) {
             return null;
         }
@@ -166,8 +165,8 @@ final class SecondaryChatWindowLayout {
         return null;
     }
 
-    static int tabWidth(String windowId, SecondaryChatSettings.TabConfig tab, TextRenderer textRenderer) {
-        return Math.max(28, textRenderer.getWidth(tabLabel(windowId, tab)) + TAB_PAD_X * 2);
+    static int tabWidth(String windowId, SecondaryChatSettings.TabConfig tab, Font textRenderer) {
+        return Math.max(28, textRenderer.width(tabLabel(windowId, tab)) + TAB_PAD_X * 2);
     }
 
     static String tabLabel(String windowId, SecondaryChatSettings.TabConfig tab) {
@@ -230,12 +229,12 @@ final class SecondaryChatWindowLayout {
     }
 
     private static void clampToScreen(Frame frame) {
-        MinecraftClient client = MinecraftClient.getInstance();
+        Minecraft client = Minecraft.getInstance();
         if (client == null || client.getWindow() == null) {
             return;
         }
-        int screenW = client.getWindow().getScaledWidth();
-        int screenH = client.getWindow().getScaledHeight();
+        int screenW = client.getWindow().getGuiScaledWidth();
+        int screenH = client.getWindow().getGuiScaledHeight();
         frame.x = Math.clamp(frame.x, 0, Math.max(0, screenW - 5));
         frame.y = Math.clamp(frame.y, 0, Math.max(0, screenH - 5));
     }

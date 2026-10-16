@@ -1,16 +1,19 @@
 package me.m0dii.modules.macros.gui;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import me.m0dii.gui.local.UiForms;
 import me.m0dii.gui.local.UiSelectionList;
 import me.m0dii.modules.automation.*;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.client.gui.widget.ClickableWidget;
-import net.minecraft.client.gui.widget.TextFieldWidget;
-import net.minecraft.client.input.CharInput;
-import net.minecraft.client.input.KeyInput;
-import net.minecraft.text.Text;
-import org.lwjgl.glfw.GLFW;
+import me.m0dii.gui.theme.Theme;
+import me.m0dii.gui.theme.ThemedWidgets;
+import net.minecraft.client.gui.Font;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.AbstractWidget;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.input.CharacterEvent;
+import net.minecraft.client.input.KeyEvent;
+import net.minecraft.network.chat.Component;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -18,7 +21,12 @@ import java.util.List;
 import java.util.Locale;
 
 final class MacroWorkbenchAutomationTab {
-    private static final int TOP_BAR_H = 54;
+    /** Below this content width the rule list and the rule editor are shown one at a time. */
+    private static final int MASTER_DETAIL_MIN_W = 520;
+    /** Height reserved for the section panels; the detail pane scrolls when the window is shorter. */
+    private static final int SECTION_H = 280;
+    private static final int SCROLL_STEP = 24;
+    private static final int PARKED = -10_000;
     private static final int GAP = 12;
     private static final int PANEL_GAP = 8;
     private static final int PANEL_TITLE_Y = 8;
@@ -45,7 +53,7 @@ final class MacroWorkbenchAutomationTab {
     private static final int CONDITION_VALUE_Y = 200;
 
     private final MacroWorkbenchScreen owner;
-    private final List<ClickableWidget> widgets;
+    private final List<AbstractWidget> widgets;
     private final UiSelectionList ruleList = new UiSelectionList(0, 0, 1, 1);
     private final UiSelectionList filterList = new UiSelectionList(0, 0, 1, 1);
     private final UiSelectionList conditionList = new UiSelectionList(0, 0, 1, 1);
@@ -53,7 +61,7 @@ final class MacroWorkbenchAutomationTab {
     private final UiSelectionList filterPickerList = new UiSelectionList(0, 0, 1, 1);
     private final UiSelectionList conditionPickerList = new UiSelectionList(0, 0, 1, 1);
     private final UiSelectionList fieldPickerList = new UiSelectionList(0, 0, 1, 1);
-    private final TextFieldWidget fieldPickerSearchField;
+    private final EditBox fieldPickerSearchField;
 
     private final List<AutomationRule> rules = new ArrayList<>();
     private List<AutomationFieldCatalog.FieldOption> fieldPickerSourceOptions = List.of();
@@ -74,58 +82,58 @@ final class MacroWorkbenchAutomationTab {
     private String statusMessage = "Automation rules are stored in config/m0-dev-tools-automation.json";
     private int statusColor = 0xFF9FCFCF;
 
-    private ButtonWidget newRuleButton;
-    private ButtonWidget duplicateRuleButton;
-    private ButtonWidget deleteRuleButton;
-    private ButtonWidget reloadButton;
-    private ButtonWidget saveButton;
-    private ButtonWidget testButton;
-    private ButtonWidget overviewTabButton;
-    private ButtonWidget filtersTabButton;
-    private ButtonWidget conditionsTabButton;
-    private ButtonWidget actionsTabButton;
-    private ButtonWidget eventTypeButton;
-    private ButtonWidget enabledButton;
-    private ButtonWidget filterPickButton;
-    private ButtonWidget filterAddButton;
-    private ButtonWidget filterDeleteButton;
-    private ButtonWidget filterFieldButton;
-    private ButtonWidget filterOperatorButton;
-    private ButtonWidget filterIgnoreCaseButton;
-    private ButtonWidget conditionPickButton;
-    private ButtonWidget conditionAddButton;
-    private ButtonWidget conditionDeleteButton;
-    private ButtonWidget conditionSourceButton;
-    private ButtonWidget conditionFieldButton;
-    private ButtonWidget conditionFieldModeButton;
-    private ButtonWidget conditionOperatorButton;
-    private ButtonWidget conditionIgnoreCaseButton;
-    private ButtonWidget actionAddButton;
-    private ButtonWidget actionDeleteButton;
-    private ButtonWidget actionUpButton;
-    private ButtonWidget actionDownButton;
-    private ButtonWidget actionTypeButton;
-    private ButtonWidget actionEnabledButton;
+    private Button newRuleButton;
+    private Button duplicateRuleButton;
+    private Button deleteRuleButton;
+    private Button reloadButton;
+    private Button saveButton;
+    private Button testButton;
+    private Button overviewTabButton;
+    private Button filtersTabButton;
+    private Button conditionsTabButton;
+    private Button actionsTabButton;
+    private Button eventTypeButton;
+    private Button enabledButton;
+    private Button filterPickButton;
+    private Button filterAddButton;
+    private Button filterDeleteButton;
+    private Button filterFieldButton;
+    private Button filterOperatorButton;
+    private Button filterIgnoreCaseButton;
+    private Button conditionPickButton;
+    private Button conditionAddButton;
+    private Button conditionDeleteButton;
+    private Button conditionSourceButton;
+    private Button conditionFieldButton;
+    private Button conditionFieldModeButton;
+    private Button conditionOperatorButton;
+    private Button conditionIgnoreCaseButton;
+    private Button actionAddButton;
+    private Button actionDeleteButton;
+    private Button actionUpButton;
+    private Button actionDownButton;
+    private Button actionTypeButton;
+    private Button actionEnabledButton;
 
-    private TextFieldWidget ruleIdField;
-    private TextFieldWidget ruleNameField;
-    private TextFieldWidget priorityField;
-    private TextFieldWidget cooldownField;
-    private TextFieldWidget debounceField;
-    private TextFieldWidget rateCountField;
-    private TextFieldWidget rateWindowField;
-    private TextFieldWidget filterValueField;
-    private TextFieldWidget conditionFieldManualField;
-    private TextFieldWidget conditionValueField;
-    private TextFieldWidget actionTargetField;
-    private TextFieldWidget actionArgumentField;
+    private EditBox ruleIdField;
+    private EditBox ruleNameField;
+    private EditBox priorityField;
+    private EditBox cooldownField;
+    private EditBox debounceField;
+    private EditBox rateCountField;
+    private EditBox rateWindowField;
+    private EditBox filterValueField;
+    private EditBox conditionFieldManualField;
+    private EditBox conditionValueField;
+    private EditBox actionTargetField;
+    private EditBox actionArgumentField;
     private boolean placeholderConditionManualEntry = false;
 
-    MacroWorkbenchAutomationTab(MacroWorkbenchScreen owner, List<ClickableWidget> widgets) {
+    MacroWorkbenchAutomationTab(MacroWorkbenchScreen owner, List<AbstractWidget> widgets) {
         this.owner = owner;
         this.widgets = widgets;
         this.fieldPickerSearchField = textField(0, 0, FIELD_PICKER_W - 20, 128, "Search placeholders");
-        this.fieldPickerSearchField.setChangedListener(value -> {
+        this.fieldPickerSearchField.setResponder(value -> {
             if (this.syncing) {
                 return;
             }
@@ -134,7 +142,23 @@ final class MacroWorkbenchAutomationTab {
         });
     }
 
+    private enum WidgetGroup {
+        LIST,
+        TABS,
+        DETAIL
+    }
+
+    private record Placed(AbstractWidget widget, WidgetGroup group, int baseX, int baseY) {
+    }
+
+    private final List<Placed> placedWidgets = new ArrayList<>();
+    private int detailScroll = 0;
+    private boolean narrowShowDetail = false;
+    private Button backButton;
+
     void initWidgets() {
+        this.detailScroll = 0;
+        this.placedWidgets.clear();
         Layout layout = layout();
 
         this.ruleList.setRowHeight(18);
@@ -153,38 +177,62 @@ final class MacroWorkbenchAutomationTab {
         this.fieldPickerList.setEmptyText("No fields");
 
         int buttonY = layout.topY;
-        this.newRuleButton = register(ButtonWidget.builder(Text.literal("+ New"), b -> createRule())
-                .dimensions(layout.leftX, buttonY, 64, BUTTON_H)
+        boolean twoRows = layout.leftW < 220;
+        int perRow = twoRows ? 2 : 4;
+        int listButtonW = (layout.leftW - Theme.GAP_S * (perRow - 1)) / perRow;
+        int[][] slots = new int[4][2];
+        for (int i = 0; i < 4; i++) {
+            int col = i % perRow;
+            int row = i / perRow;
+            slots[i][0] = layout.leftX + col * (listButtonW + Theme.GAP_S);
+            slots[i][1] = buttonY + row * (BUTTON_H + Theme.GAP_S);
+        }
+        this.newRuleButton = register(ThemedWidgets.primary(Button.builder(Component.literal("+ New"), b -> createRule())
+                .bounds(slots[0][0], slots[0][1], listButtonW, BUTTON_H)
+                .build()));
+        this.duplicateRuleButton = register(Button.builder(Component.literal("Copy"), b -> duplicateRule())
+                .bounds(slots[1][0], slots[1][1], listButtonW, BUTTON_H)
                 .build());
-        this.duplicateRuleButton = register(ButtonWidget.builder(Text.literal("Duplicate"), b -> duplicateRule())
-                .dimensions(layout.leftX + 68, buttonY, 78, BUTTON_H)
+        this.deleteRuleButton = register(ThemedWidgets.danger(Button.builder(Component.literal("Delete"), b -> deleteRule())
+                .bounds(slots[2][0], slots[2][1], listButtonW, BUTTON_H)
+                .build()));
+        this.reloadButton = register(Button.builder(Component.literal("Reload"), b -> reloadFromDisk())
+                .bounds(slots[3][0], slots[3][1], listButtonW, BUTTON_H)
                 .build());
-        this.deleteRuleButton = register(ButtonWidget.builder(Text.literal("Delete"), b -> deleteRule())
-                .dimensions(layout.leftX + 150, buttonY, 64, BUTTON_H)
+
+        int tabsX = layout.rightX;
+        int tabsW = layout.rightW;
+        if (layout.narrow) {
+            int backW = 52;
+            this.backButton = register(ThemedWidgets.ghost(Button.builder(Component.literal("\u2190 Rules"), b -> this.narrowShowDetail = false)
+                    .bounds(tabsX, buttonY, backW, BUTTON_H)
+                    .build()));
+            tabsX += backW + Theme.GAP_S;
+            tabsW -= backW + Theme.GAP_S;
+        } else {
+            this.backButton = null;
+        }
+        int tabW = (tabsW - Theme.GAP_XS * 3) / 4;
+        this.overviewTabButton = register(Button.builder(Component.literal("Overview"), b -> setActiveSection(EditorSection.OVERVIEW))
+                .bounds(tabsX, buttonY, tabW, BUTTON_H)
                 .build());
-        this.reloadButton = register(ButtonWidget.builder(Text.literal("Reload"), b -> reloadFromDisk())
-                .dimensions(layout.leftX + 218, buttonY, 64, BUTTON_H)
+        this.filtersTabButton = register(Button.builder(Component.literal("Filters"), b -> setActiveSection(EditorSection.FILTERS))
+                .bounds(tabsX + (tabW + Theme.GAP_XS), buttonY, tabW, BUTTON_H)
                 .build());
-        this.overviewTabButton = register(ButtonWidget.builder(Text.literal("Overview"), b -> setActiveSection(EditorSection.OVERVIEW))
-                .dimensions(layout.rightX, buttonY, 74, BUTTON_H)
+        this.conditionsTabButton = register(Button.builder(Component.literal("Conditions"), b -> setActiveSection(EditorSection.CONDITIONS))
+                .bounds(tabsX + (tabW + Theme.GAP_XS) * 2, buttonY, tabW, BUTTON_H)
                 .build());
-        this.filtersTabButton = register(ButtonWidget.builder(Text.literal("Filters"), b -> setActiveSection(EditorSection.FILTERS))
-                .dimensions(layout.rightX + 78, buttonY, 66, BUTTON_H)
-                .build());
-        this.conditionsTabButton = register(ButtonWidget.builder(Text.literal("Conditions"), b -> setActiveSection(EditorSection.CONDITIONS))
-                .dimensions(layout.rightX + 148, buttonY, 84, BUTTON_H)
-                .build());
-        this.actionsTabButton = register(ButtonWidget.builder(Text.literal("Actions"), b -> setActiveSection(EditorSection.ACTIONS))
-                .dimensions(layout.rightX + 236, buttonY, 68, BUTTON_H)
+        this.actionsTabButton = register(Button.builder(Component.literal("Actions"), b -> setActiveSection(EditorSection.ACTIONS))
+                .bounds(tabsX + (tabW + Theme.GAP_XS) * 3, buttonY, tabsW - (tabW + Theme.GAP_XS) * 3, BUTTON_H)
                 .build());
 
         this.ruleIdField = register(textField(layout.rightX + 12, layout.headerY + 20, layout.fieldW, 128, "rule id"));
         this.ruleNameField = register(textField(layout.rightX2 + 12, layout.headerY + 20, layout.fieldW, 128, "name"));
-        this.eventTypeButton = register(ButtonWidget.builder(Text.literal("Event"), b -> cycleEventType())
-                .dimensions(layout.rightX + 12, layout.headerY + 52, layout.fieldW, BUTTON_H)
+        this.eventTypeButton = register(Button.builder(Component.literal("Event"), b -> cycleEventType())
+                .bounds(layout.rightX + 12, layout.headerY + 52, layout.fieldW, BUTTON_H)
                 .build());
-        this.enabledButton = register(ButtonWidget.builder(Text.literal("Enabled"), b -> toggleRuleEnabled())
-                .dimensions(layout.rightX2 + 12, layout.headerY + 52, layout.fieldW, BUTTON_H)
+        this.enabledButton = register(Button.builder(Component.literal("Enabled"), b -> toggleRuleEnabled())
+                .bounds(layout.rightX2 + 12, layout.headerY + 52, layout.fieldW, BUTTON_H)
                 .build());
 
         this.priorityField = register(signedNumberField(layout.rightX + 12, layout.numberRowY, layout.numericW, 8, "0"));
@@ -197,81 +245,82 @@ final class MacroWorkbenchAutomationTab {
         this.conditionList.setBounds(layout.rightX, layout.conditionPanelY + 24, layout.columnW, CONDITION_LIST_H);
         this.actionList.setBounds(layout.rightX2, layout.actionsY + 24, layout.columnW, ACTION_LIST_H);
 
-        this.filterPickButton = register(ButtonWidget.builder(Text.literal("Pick"), b -> openFilterPicker())
-                .dimensions(layout.rightX + layout.columnW - 106, layout.filterPanelY + 4, 44, 18)
+        this.filterPickButton = register(Button.builder(Component.literal("Pick"), b -> openFilterPicker())
+                .bounds(layout.rightX + layout.columnW - 106, layout.filterPanelY + 4, 44, 18)
                 .build());
-        this.filterAddButton = register(ButtonWidget.builder(Text.literal("+"), b -> addFilter())
-                .dimensions(layout.rightX + layout.columnW - 58, layout.filterPanelY + 4, 26, 18)
+        this.filterAddButton = register(Button.builder(Component.literal("+"), b -> addFilter())
+                .bounds(layout.rightX + layout.columnW - 58, layout.filterPanelY + 4, 26, 18)
                 .build());
-        this.filterDeleteButton = register(ButtonWidget.builder(Text.literal("-"), b -> deleteFilter())
-                .dimensions(layout.rightX + layout.columnW - 30, layout.filterPanelY + 4, 26, 18)
+        this.filterDeleteButton = register(Button.builder(Component.literal("-"), b -> deleteFilter())
+                .bounds(layout.rightX + layout.columnW - 30, layout.filterPanelY + 4, 26, 18)
                 .build());
-        this.filterFieldButton = register(ButtonWidget.builder(Text.literal("Field"), b -> openFilterFieldPicker())
-                .dimensions(layout.rightX + 8, layout.filterPanelY + FILTER_FIELD_Y, layout.columnW - 16, BUTTON_H)
+        this.filterFieldButton = register(Button.builder(Component.literal("Field"), b -> openFilterFieldPicker())
+                .bounds(layout.rightX + 8, layout.filterPanelY + FILTER_FIELD_Y, layout.columnW - 16, BUTTON_H)
                 .build());
-        this.filterOperatorButton = register(ButtonWidget.builder(Text.literal("Operator"), b -> cycleFilterOperator())
-                .dimensions(layout.rightX + 8, layout.filterPanelY + FILTER_OPERATOR_Y, Math.max(116, (layout.columnW - 28) / 2), BUTTON_H)
+        this.filterOperatorButton = register(Button.builder(Component.literal("Operator"), b -> cycleFilterOperator())
+                .bounds(layout.rightX + 8, layout.filterPanelY + FILTER_OPERATOR_Y, Math.max(116, (layout.columnW - 28) / 2), BUTTON_H)
                 .build());
-        this.filterIgnoreCaseButton = register(ButtonWidget.builder(Text.literal("Ignore Case"), b -> toggleFilterIgnoreCase())
-                .dimensions(layout.rightX + 16 + Math.max(116, (layout.columnW - 28) / 2), layout.filterPanelY + FILTER_OPERATOR_Y, Math.max(116, (layout.columnW - 28) / 2), BUTTON_H)
+        this.filterIgnoreCaseButton = register(Button.builder(Component.literal("Ignore Case"), b -> toggleFilterIgnoreCase())
+                .bounds(layout.rightX + 16 + Math.max(116, (layout.columnW - 28) / 2), layout.filterPanelY + FILTER_OPERATOR_Y, Math.max(116, (layout.columnW - 28) / 2), BUTTON_H)
                 .build());
         this.filterValueField = register(textField(layout.rightX + 8, layout.filterPanelY + FILTER_VALUE_Y, layout.columnW - 16, 256, "value or regex"));
 
-        this.conditionPickButton = register(ButtonWidget.builder(Text.literal("Pick"), b -> openConditionPicker())
-                .dimensions(layout.rightX + layout.columnW - 106, layout.conditionPanelY + 4, 44, 18)
+        this.conditionPickButton = register(Button.builder(Component.literal("Pick"), b -> openConditionPicker())
+                .bounds(layout.rightX + layout.columnW - 106, layout.conditionPanelY + 4, 44, 18)
                 .build());
-        this.conditionAddButton = register(ButtonWidget.builder(Text.literal("+"), b -> addCondition())
-                .dimensions(layout.rightX + layout.columnW - 58, layout.conditionPanelY + 4, 26, 18)
+        this.conditionAddButton = register(Button.builder(Component.literal("+"), b -> addCondition())
+                .bounds(layout.rightX + layout.columnW - 58, layout.conditionPanelY + 4, 26, 18)
                 .build());
-        this.conditionDeleteButton = register(ButtonWidget.builder(Text.literal("-"), b -> deleteCondition())
-                .dimensions(layout.rightX + layout.columnW - 30, layout.conditionPanelY + 4, 26, 18)
+        this.conditionDeleteButton = register(Button.builder(Component.literal("-"), b -> deleteCondition())
+                .bounds(layout.rightX + layout.columnW - 30, layout.conditionPanelY + 4, 26, 18)
                 .build());
-        this.conditionSourceButton = register(ButtonWidget.builder(Text.literal("Source"), b -> cycleConditionSource())
-                .dimensions(layout.rightX + 8, layout.conditionPanelY + CONDITION_SOURCE_Y, layout.columnW - 16, BUTTON_H)
+        this.conditionSourceButton = register(Button.builder(Component.literal("Source"), b -> cycleConditionSource())
+                .bounds(layout.rightX + 8, layout.conditionPanelY + CONDITION_SOURCE_Y, layout.columnW - 16, BUTTON_H)
                 .build());
         int conditionFieldModeButtonW = 84;
-        this.conditionFieldButton = register(ButtonWidget.builder(Text.literal("Field"), b -> openConditionFieldPicker())
-                .dimensions(layout.rightX + 8, layout.conditionPanelY + CONDITION_FIELD_Y, layout.columnW - 24 - conditionFieldModeButtonW, BUTTON_H)
+        this.conditionFieldButton = register(Button.builder(Component.literal("Field"), b -> openConditionFieldPicker())
+                .bounds(layout.rightX + 8, layout.conditionPanelY + CONDITION_FIELD_Y, layout.columnW - 24 - conditionFieldModeButtonW, BUTTON_H)
                 .build());
-        this.conditionFieldModeButton = register(ButtonWidget.builder(Text.literal("Pick"), b -> togglePlaceholderConditionFieldMode())
-                .dimensions(layout.rightX + layout.columnW - 8 - conditionFieldModeButtonW, layout.conditionPanelY + CONDITION_FIELD_Y, conditionFieldModeButtonW, BUTTON_H)
+        this.conditionFieldModeButton = register(Button.builder(Component.literal("Pick"), b -> togglePlaceholderConditionFieldMode())
+                .bounds(layout.rightX + layout.columnW - 8 - conditionFieldModeButtonW, layout.conditionPanelY + CONDITION_FIELD_Y, conditionFieldModeButtonW, BUTTON_H)
                 .build());
         this.conditionFieldManualField = register(textField(layout.rightX + 8, layout.conditionPanelY + CONDITION_FIELD_Y, layout.columnW - 16, 256, "placeholder token (e.g. player.name)"));
-        this.conditionOperatorButton = register(ButtonWidget.builder(Text.literal("Operator"), b -> cycleConditionOperator())
-                .dimensions(layout.rightX + 8, layout.conditionPanelY + CONDITION_OPERATOR_Y, Math.max(116, (layout.columnW - 28) / 2), BUTTON_H)
+        this.conditionOperatorButton = register(Button.builder(Component.literal("Operator"), b -> cycleConditionOperator())
+                .bounds(layout.rightX + 8, layout.conditionPanelY + CONDITION_OPERATOR_Y, Math.max(116, (layout.columnW - 28) / 2), BUTTON_H)
                 .build());
-        this.conditionIgnoreCaseButton = register(ButtonWidget.builder(Text.literal("Ignore Case"), b -> toggleConditionIgnoreCase())
-                .dimensions(layout.rightX + 16 + Math.max(116, (layout.columnW - 28) / 2), layout.conditionPanelY + CONDITION_OPERATOR_Y, Math.max(116, (layout.columnW - 28) / 2), BUTTON_H)
+        this.conditionIgnoreCaseButton = register(Button.builder(Component.literal("Ignore Case"), b -> toggleConditionIgnoreCase())
+                .bounds(layout.rightX + 16 + Math.max(116, (layout.columnW - 28) / 2), layout.conditionPanelY + CONDITION_OPERATOR_Y, Math.max(116, (layout.columnW - 28) / 2), BUTTON_H)
                 .build());
         this.conditionValueField = register(textField(layout.rightX + 8, layout.conditionPanelY + CONDITION_VALUE_Y, layout.columnW - 16, 256, "expected value"));
 
-        this.actionAddButton = register(ButtonWidget.builder(Text.literal("+ Action"), b -> addAction())
-                .dimensions(layout.rightX2 + layout.columnW - 218, layout.actionsY + 4, 64, 18)
+        this.actionAddButton = register(Button.builder(Component.literal("+ Action"), b -> addAction())
+                .bounds(layout.rightX2 + layout.columnW - 218, layout.actionsY + 4, 64, 18)
                 .build());
-        this.actionDeleteButton = register(ButtonWidget.builder(Text.literal("Delete"), b -> deleteAction())
-                .dimensions(layout.rightX2 + layout.columnW - 150, layout.actionsY + 4, 60, 18)
+        this.actionDeleteButton = register(Button.builder(Component.literal("Delete"), b -> deleteAction())
+                .bounds(layout.rightX2 + layout.columnW - 150, layout.actionsY + 4, 60, 18)
                 .build());
-        this.actionUpButton = register(ButtonWidget.builder(Text.literal("Up"), b -> moveAction(-1))
-                .dimensions(layout.rightX2 + layout.columnW - 86, layout.actionsY + 4, 36, 18)
+        this.actionUpButton = register(Button.builder(Component.literal("Up"), b -> moveAction(-1))
+                .bounds(layout.rightX2 + layout.columnW - 86, layout.actionsY + 4, 36, 18)
                 .build());
-        this.actionDownButton = register(ButtonWidget.builder(Text.literal("Down"), b -> moveAction(1))
-                .dimensions(layout.rightX2 + layout.columnW - 58, layout.actionsY + 4, 48, 18)
+        this.actionDownButton = register(Button.builder(Component.literal("Down"), b -> moveAction(1))
+                .bounds(layout.rightX2 + layout.columnW - 58, layout.actionsY + 4, 48, 18)
                 .build());
-        this.actionTypeButton = register(ButtonWidget.builder(Text.literal("Type"), b -> cycleActionType())
-                .dimensions(layout.rightX2 + 8, layout.actionsY + 128, layout.columnW - 16, BUTTON_H)
+        this.actionTypeButton = register(Button.builder(Component.literal("Type"), b -> cycleActionType())
+                .bounds(layout.rightX2 + 8, layout.actionsY + 128, layout.columnW - 16, BUTTON_H)
                 .build());
         this.actionTargetField = register(textField(layout.rightX2 + 8, layout.actionsY + 160, layout.columnW - 16, 256, "target"));
         this.actionArgumentField = register(textField(layout.rightX2 + 8, layout.actionsY + 208, layout.columnW - 16, 256, "argument"));
-        this.actionEnabledButton = register(ButtonWidget.builder(Text.literal("Enabled"), b -> toggleActionEnabled())
-                .dimensions(layout.rightX2 + 8, layout.actionsY + 232, 140, BUTTON_H)
+        this.actionEnabledButton = register(Button.builder(Component.literal("Enabled"), b -> toggleActionEnabled())
+                .bounds(layout.rightX2 + 8, layout.actionsY + 232, 140, BUTTON_H)
                 .build());
-        this.saveButton = register(ButtonWidget.builder(Text.literal("Save Rules"), b -> commitAll())
-                .dimensions(layout.rightX2 + 8, layout.actionsY + layout.actionsH - 24, 90, BUTTON_H)
-                .build());
-        this.testButton = register(ButtonWidget.builder(Text.literal("Fire Test"), b -> testSelectedRule())
-                .dimensions(layout.rightX2 + 102, layout.actionsY + layout.actionsH - 24, 90, BUTTON_H)
+        this.saveButton = register(ThemedWidgets.primary(Button.builder(Component.literal("Save Rules"), b -> commitAll())
+                .bounds(layout.rightX2 + 8, layout.actionsY + layout.actionsH - 24, 90, BUTTON_H)
+                .build()));
+        this.testButton = register(Button.builder(Component.literal("Fire Test"), b -> testSelectedRule())
+                .bounds(layout.rightX2 + 102, layout.actionsY + layout.actionsH - 24, 90, BUTTON_H)
                 .build());
 
+        classifyWidgets(layout);
         bindListeners();
         reloadFromEngine(null);
         syncAllFields();
@@ -305,39 +354,62 @@ final class MacroWorkbenchAutomationTab {
         status("Automation rules saved.", 0xFF70D070);
     }
 
-    void render(DrawContext context, int mouseX, int mouseY) {
+    void extractRenderState(GuiGraphicsExtractor context, int mouseX, int mouseY) {
         Layout layout = layout();
         int renderMouseX = hasOverlayOpen() ? HOVER_SUPPRESS_MOUSE : mouseX;
         int renderMouseY = hasOverlayOpen() ? HOVER_SUPPRESS_MOUSE : mouseY;
 
-        this.ruleList.setBounds(layout.leftX, layout.topY + 26, layout.leftW, Math.max(120, this.owner.height - (layout.topY + 26) - 10));
+        applyWidgetPlacement(layout);
+        boolean showList = !layout.narrow || !this.narrowShowDetail;
+        boolean showDetail = !layout.narrow || this.narrowShowDetail;
+        Font font = this.owner.workbenchTextRenderer();
+        if (showList) {
+            int listBottom = layout.bottom - 12;
+            this.ruleList.setBounds(layout.leftX, layout.listY, layout.leftW, Math.max(20, listBottom - layout.listY));
+            this.ruleList.extractRenderState(context, font, renderMouseX, renderMouseY);
+            context.text(font, trimToWidth(this.statusMessage, layout.leftW), layout.leftX, layout.bottom - 9, this.statusColor, false);
+        } else {
+            this.ruleList.setBounds(PARKED, PARKED, 1, 1);
+        }
+        if (!showDetail) {
+            this.filterList.setBounds(PARKED, PARKED, 1, 1);
+            this.conditionList.setBounds(PARKED, PARKED, 1, 1);
+            this.actionList.setBounds(PARKED, PARKED, 1, 1);
+            return;
+        }
         this.filterList.setBounds(layout.rightX, layout.filterPanelY + 24, layout.columnW, FILTER_LIST_H);
         this.conditionList.setBounds(layout.rightX, layout.conditionPanelY + 24, layout.columnW, CONDITION_LIST_H);
         this.actionList.setBounds(layout.rightX2, layout.actionsY + 24, layout.columnW, ACTION_LIST_H);
-        this.ruleList.render(context, this.owner.workbenchTextRenderer(), renderMouseX, renderMouseY);
 
-        context.drawTextWithShadow(this.owner.workbenchTextRenderer(), "Automation", layout.leftX, TOP_BAR_H + 6, 0xFFFFFFFF);
-        context.drawTextWithShadow(this.owner.workbenchTextRenderer(), "Rules", layout.leftX, layout.topY + 10, 0xFFFFFFFF);
-        context.drawTextWithShadow(this.owner.workbenchTextRenderer(), "Rule Details", layout.rightX, TOP_BAR_H + 6, 0xFFFFFFFF);
-
+        context.enableScissor(layout.rightX, layout.detailTop, layout.rightX + layout.rightW, layout.bottom);
         UiForms.drawPanel(context, layout.rightX, layout.headerY, layout.rightW, layout.headerH);
         syncSectionButtons();
 
-        context.drawTextWithShadow(this.owner.workbenchTextRenderer(), "Id", layout.rightX + 12, layout.headerY + PANEL_TITLE_Y, 0xFFB8B8B8);
-        context.drawTextWithShadow(this.owner.workbenchTextRenderer(), "Name", layout.rightX2 + 12, layout.headerY + PANEL_TITLE_Y, 0xFFB8B8B8);
-        context.drawTextWithShadow(this.owner.workbenchTextRenderer(), "Priority", layout.rightX + 12, layout.headerY + 78, 0xFFB8B8B8);
-        context.drawTextWithShadow(this.owner.workbenchTextRenderer(), "Cooldown", layout.rightX + 12 + (layout.numericW + PANEL_GAP), layout.headerY + 78, 0xFFB8B8B8);
-        context.drawTextWithShadow(this.owner.workbenchTextRenderer(), "Debounce", layout.rightX + 12 + ((layout.numericW + PANEL_GAP) * 2), layout.headerY + 78, 0xFFB8B8B8);
-        context.drawTextWithShadow(this.owner.workbenchTextRenderer(), "Rate", layout.rightX + 12 + ((layout.numericW + PANEL_GAP) * 3), layout.headerY + 78, 0xFFB8B8B8);
-        context.drawTextWithShadow(this.owner.workbenchTextRenderer(), "Window", layout.rightX + 12 + ((layout.numericW + PANEL_GAP) * 4), layout.headerY + 78, 0xFFB8B8B8);
+        context.text(this.owner.workbenchTextRenderer(), "Id", layout.rightX + 12, layout.headerY + PANEL_TITLE_Y, 0xFFB8B8B8);
+        context.text(this.owner.workbenchTextRenderer(), "Name", layout.rightX2 + 12, layout.headerY + PANEL_TITLE_Y, 0xFFB8B8B8);
+        context.text(this.owner.workbenchTextRenderer(), "Priority", layout.rightX + 12, layout.headerY + 78, 0xFFB8B8B8);
+        context.text(this.owner.workbenchTextRenderer(), "Cooldown", layout.rightX + 12 + (layout.numericW + PANEL_GAP), layout.headerY + 78, 0xFFB8B8B8);
+        context.text(this.owner.workbenchTextRenderer(), "Debounce", layout.rightX + 12 + ((layout.numericW + PANEL_GAP) * 2), layout.headerY + 78, 0xFFB8B8B8);
+        context.text(this.owner.workbenchTextRenderer(), "Rate", layout.rightX + 12 + ((layout.numericW + PANEL_GAP) * 3), layout.headerY + 78, 0xFFB8B8B8);
+        context.text(this.owner.workbenchTextRenderer(), "Window", layout.rightX + 12 + ((layout.numericW + PANEL_GAP) * 4), layout.headerY + 78, 0xFFB8B8B8);
 
         AutomationRule rule = selectedRule();
         AutomationEngine.RuleRuntimeSnapshot runtime = rule == null
                 ? new AutomationEngine.RuleRuntimeSnapshot(null, false, 0L)
                 : AutomationModule.INSTANCE.engine().getRuntimeSnapshot(rule.id);
         renderActiveSection(context, layout, rule, runtime, renderMouseX, renderMouseY);
-        context.drawTextWithShadow(this.owner.workbenchTextRenderer(), this.dirty ? "Unsaved changes" : "Saved", layout.rightX2 + 204, layout.actionsY + layout.actionsH - 18, this.dirty ? 0xFFFFFF99 : 0xFF70D070);
-        context.drawTextWithShadow(this.owner.workbenchTextRenderer(), trimToWidth(this.statusMessage, this.owner.width - layout.rightX - 20), layout.rightX, this.owner.height - 12, this.statusColor);
+        context.text(font, trimToWidth(this.dirty ? "Unsaved changes" : "Saved", Math.max(0, layout.columnW - 204)), layout.rightX2 + 204, layout.actionsY + layout.actionsH - 18, this.dirty ? Theme.WARNING : Theme.SUCCESS, false);
+        context.disableScissor();
+
+        int maxScroll = maxDetailScroll(layout);
+        if (maxScroll > 0) {
+            int trackX = layout.rightX + layout.rightW + 3;
+            int trackH = layout.bottom - layout.detailTop;
+            int thumbH = Math.max(12, trackH * trackH / (trackH + maxScroll));
+            int thumbY = layout.detailTop + (trackH - thumbH) * this.detailScroll / maxScroll;
+            context.fill(trackX, layout.detailTop, trackX + 2, layout.bottom, Theme.DIVIDER);
+            context.fill(trackX, thumbY, trackX + 2, thumbY + thumbH, Theme.BORDER_STRONG);
+        }
 
     }
 
@@ -357,13 +429,13 @@ final class MacroWorkbenchAutomationTab {
         if (this.overviewTabButton == null) {
             return;
         }
-        this.overviewTabButton.active = this.activeSection != EditorSection.OVERVIEW;
-        this.filtersTabButton.active = this.activeSection != EditorSection.FILTERS;
-        this.conditionsTabButton.active = this.activeSection != EditorSection.CONDITIONS;
-        this.actionsTabButton.active = this.activeSection != EditorSection.ACTIONS;
+        ThemedWidgets.selected(this.overviewTabButton, this.activeSection == EditorSection.OVERVIEW);
+        ThemedWidgets.selected(this.filtersTabButton, this.activeSection == EditorSection.FILTERS);
+        ThemedWidgets.selected(this.conditionsTabButton, this.activeSection == EditorSection.CONDITIONS);
+        ThemedWidgets.selected(this.actionsTabButton, this.activeSection == EditorSection.ACTIONS);
     }
 
-    private void renderActiveSection(DrawContext context,
+    private void renderActiveSection(GuiGraphicsExtractor context,
                                      Layout layout,
                                      AutomationRule rule,
                                      AutomationEngine.RuleRuntimeSnapshot runtime,
@@ -377,28 +449,28 @@ final class MacroWorkbenchAutomationTab {
         }
     }
 
-    private void renderOverviewSection(DrawContext context,
+    private void renderOverviewSection(GuiGraphicsExtractor context,
                                        Layout layout,
                                        AutomationRule rule,
                                        AutomationEngine.RuleRuntimeSnapshot runtime) {
         UiForms.drawPanel(context, layout.diagnosticsX, layout.diagnosticsY, layout.columnW, layout.diagnosticsH);
         UiForms.drawPanel(context, layout.actionsX, layout.actionsY, layout.columnW, layout.actionsH);
-        context.drawTextWithShadow(this.owner.workbenchTextRenderer(), "Recent Diagnostics", layout.diagnosticsX + 8, layout.diagnosticsY + PANEL_TITLE_Y, 0xFFFFFFFF);
-        context.drawTextWithShadow(this.owner.workbenchTextRenderer(), "Summary", layout.actionsX + 8, layout.actionsY + PANEL_TITLE_Y, 0xFFFFFFFF);
+        context.text(this.owner.workbenchTextRenderer(), "Recent Diagnostics", layout.diagnosticsX + 8, layout.diagnosticsY + PANEL_TITLE_Y, 0xFFFFFFFF);
+        context.text(this.owner.workbenchTextRenderer(), "Summary", layout.actionsX + 8, layout.actionsY + PANEL_TITLE_Y, 0xFFFFFFFF);
         renderDiagnostics(context, layout.diagnosticsX + 8, layout.diagnosticsY + 28, layout.columnW - 16, layout.diagnosticsH - 36);
         renderOverviewSummary(context, layout.actionsX + 8, layout.actionsY + 28, layout.columnW - 16, layout.actionsH - 44, rule, runtime);
     }
 
-    private void renderFiltersSection(DrawContext context,
+    private void renderFiltersSection(GuiGraphicsExtractor context,
                                       Layout layout,
                                       AutomationRule rule,
                                       int mouseX,
                                       int mouseY) {
         UiForms.drawPanel(context, layout.filterPanelX, layout.filterPanelY, layout.columnW, layout.filterPanelH);
         UiForms.drawPanel(context, layout.actionsX, layout.actionsY, layout.columnW, layout.actionsH);
-        context.drawTextWithShadow(this.owner.workbenchTextRenderer(), "Filters", layout.filterPanelX + 8, layout.filterPanelY + PANEL_TITLE_Y, 0xFFFFFFFF);
-        context.drawTextWithShadow(this.owner.workbenchTextRenderer(), "Available Event Fields", layout.actionsX + 8, layout.actionsY + PANEL_TITLE_Y, 0xFFFFFFFF);
-        this.filterList.render(context, this.owner.workbenchTextRenderer(), mouseX, mouseY);
+        context.text(this.owner.workbenchTextRenderer(), "Filters", layout.filterPanelX + 8, layout.filterPanelY + PANEL_TITLE_Y, 0xFFFFFFFF);
+        context.text(this.owner.workbenchTextRenderer(), "Available Event Fields", layout.actionsX + 8, layout.actionsY + PANEL_TITLE_Y, 0xFFFFFFFF);
+        this.filterList.extractRenderState(context, this.owner.workbenchTextRenderer(), mouseX, mouseY);
         renderFilterEditorLabels(context, layout);
         renderFieldCatalog(context,
                 layout.actionsX + 8,
@@ -409,16 +481,16 @@ final class MacroWorkbenchAutomationTab {
                 selectedFilter() == null ? "" : safe(selectedFilter().field));
     }
 
-    private void renderConditionsSection(DrawContext context,
+    private void renderConditionsSection(GuiGraphicsExtractor context,
                                          Layout layout,
                                          AutomationRule rule,
                                          int mouseX,
                                          int mouseY) {
         UiForms.drawPanel(context, layout.conditionPanelX, layout.conditionPanelY, layout.columnW, layout.conditionPanelH);
         UiForms.drawPanel(context, layout.actionsX, layout.actionsY, layout.columnW, layout.actionsH);
-        context.drawTextWithShadow(this.owner.workbenchTextRenderer(), "Conditions", layout.conditionPanelX + 8, layout.conditionPanelY + PANEL_TITLE_Y, 0xFFFFFFFF);
-        context.drawTextWithShadow(this.owner.workbenchTextRenderer(), "Available Source Fields", layout.actionsX + 8, layout.actionsY + PANEL_TITLE_Y, 0xFFFFFFFF);
-        this.conditionList.render(context, this.owner.workbenchTextRenderer(), mouseX, mouseY);
+        context.text(this.owner.workbenchTextRenderer(), "Conditions", layout.conditionPanelX + 8, layout.conditionPanelY + PANEL_TITLE_Y, 0xFFFFFFFF);
+        context.text(this.owner.workbenchTextRenderer(), "Available Source Fields", layout.actionsX + 8, layout.actionsY + PANEL_TITLE_Y, 0xFFFFFFFF);
+        this.conditionList.extractRenderState(context, this.owner.workbenchTextRenderer(), mouseX, mouseY);
         renderConditionEditorLabels(context, layout);
         AutomationRule.Condition condition = selectedCondition();
         AutomationRule.ConditionSource source = condition == null ? AutomationRule.ConditionSource.EVENT : condition.source;
@@ -431,7 +503,7 @@ final class MacroWorkbenchAutomationTab {
                 condition == null ? "" : safe(condition.field));
     }
 
-    private void renderActionsSection(DrawContext context,
+    private void renderActionsSection(GuiGraphicsExtractor context,
                                       Layout layout,
                                       AutomationRule rule,
                                       AutomationEngine.RuleRuntimeSnapshot runtime,
@@ -439,57 +511,57 @@ final class MacroWorkbenchAutomationTab {
                                       int mouseY) {
         UiForms.drawPanel(context, layout.diagnosticsX, layout.diagnosticsY, layout.columnW, layout.diagnosticsH);
         UiForms.drawPanel(context, layout.actionsX, layout.actionsY, layout.columnW, layout.actionsH);
-        context.drawTextWithShadow(this.owner.workbenchTextRenderer(), "Action Notes", layout.diagnosticsX + 8, layout.diagnosticsY + PANEL_TITLE_Y, 0xFFFFFFFF);
-        context.drawTextWithShadow(this.owner.workbenchTextRenderer(), "Actions", layout.actionsX + 8, layout.actionsY + PANEL_TITLE_Y, 0xFFFFFFFF);
-        this.actionList.render(context, this.owner.workbenchTextRenderer(), mouseX, mouseY);
+        context.text(this.owner.workbenchTextRenderer(), "Action Notes", layout.diagnosticsX + 8, layout.diagnosticsY + PANEL_TITLE_Y, 0xFFFFFFFF);
+        context.text(this.owner.workbenchTextRenderer(), "Actions", layout.actionsX + 8, layout.actionsY + PANEL_TITLE_Y, 0xFFFFFFFF);
+        this.actionList.extractRenderState(context, this.owner.workbenchTextRenderer(), mouseX, mouseY);
         renderActionEditorLabels(context, layout);
         renderActionsHelp(context, layout.diagnosticsX + 8, layout.diagnosticsY + 28, layout.columnW - 16, layout.diagnosticsH - 36, rule, runtime);
     }
 
-    private void renderFilterEditorLabels(DrawContext context, Layout layout) {
+    private void renderFilterEditorLabels(GuiGraphicsExtractor context, Layout layout) {
         if (selectedFilter() != null) {
-            context.drawTextWithShadow(this.owner.workbenchTextRenderer(), "Field", this.filterFieldButton.getX(), this.filterFieldButton.getY() - 12, 0xFFB8B8B8);
-            context.drawTextWithShadow(this.owner.workbenchTextRenderer(), "Op / Case", this.filterOperatorButton.getX(), this.filterOperatorButton.getY() - 12, 0xFFB8B8B8);
-            context.drawTextWithShadow(
+            context.text(this.owner.workbenchTextRenderer(), "Field", this.filterFieldButton.getX(), this.filterFieldButton.getY() - 12, 0xFFB8B8B8);
+            context.text(this.owner.workbenchTextRenderer(), "Op / Case", this.filterOperatorButton.getX(), this.filterOperatorButton.getY() - 12, 0xFFB8B8B8);
+            context.text(
                     this.owner.workbenchTextRenderer(),
                     trimToWidth(filterFieldHelpText(), layout.columnW - 16),
                     this.filterFieldButton.getX(),
                     this.filterFieldButton.getY() + BUTTON_H + 6,
                     0xFF909090
             );
-            context.drawTextWithShadow(this.owner.workbenchTextRenderer(), "Value", this.filterValueField.getX(), this.filterValueField.getY() - 12, 0xFFB8B8B8);
+            context.text(this.owner.workbenchTextRenderer(), "Value", this.filterValueField.getX(), this.filterValueField.getY() - 12, 0xFFB8B8B8);
         } else {
-            context.drawTextWithShadow(this.owner.workbenchTextRenderer(), "Select a filter or click + to add one.", layout.filterPanelX + 8, layout.filterPanelY + 78, 0xFF909090);
-            context.drawTextWithShadow(this.owner.workbenchTextRenderer(), "Field choices are tied to the selected event type.", layout.filterPanelX + 8, layout.filterPanelY + 94, 0xFF909090);
+            context.text(this.owner.workbenchTextRenderer(), "Select a filter or click + to add one.", layout.filterPanelX + 8, layout.filterPanelY + 78, 0xFF909090);
+            context.text(this.owner.workbenchTextRenderer(), "Field choices are tied to the selected event type.", layout.filterPanelX + 8, layout.filterPanelY + 94, 0xFF909090);
         }
     }
 
-    private void renderConditionEditorLabels(DrawContext context, Layout layout) {
+    private void renderConditionEditorLabels(GuiGraphicsExtractor context, Layout layout) {
         if (selectedCondition() != null) {
-            context.drawTextWithShadow(this.owner.workbenchTextRenderer(), "Field", this.conditionFieldButton.getX(), this.conditionFieldButton.getY() - 12, 0xFFB8B8B8);
-            context.drawTextWithShadow(this.owner.workbenchTextRenderer(), "Op / Case", this.conditionOperatorButton.getX(), this.conditionOperatorButton.getY() - 12, 0xFFB8B8B8);
-            context.drawTextWithShadow(
+            context.text(this.owner.workbenchTextRenderer(), "Field", this.conditionFieldButton.getX(), this.conditionFieldButton.getY() - 12, 0xFFB8B8B8);
+            context.text(this.owner.workbenchTextRenderer(), "Op / Case", this.conditionOperatorButton.getX(), this.conditionOperatorButton.getY() - 12, 0xFFB8B8B8);
+            context.text(
                     this.owner.workbenchTextRenderer(),
                     trimToWidth(conditionFieldHelpText(), layout.columnW - 16),
                     this.conditionFieldButton.getX(),
                     this.conditionFieldButton.getY() + BUTTON_H + 6,
                     0xFF909090
             );
-            context.drawTextWithShadow(this.owner.workbenchTextRenderer(), "Value", this.conditionValueField.getX(), this.conditionValueField.getY() - 12, 0xFFB8B8B8);
+            context.text(this.owner.workbenchTextRenderer(), "Value", this.conditionValueField.getX(), this.conditionValueField.getY() - 12, 0xFFB8B8B8);
         } else {
-            context.drawTextWithShadow(this.owner.workbenchTextRenderer(), "No condition selected. Click + to add one.", layout.conditionPanelX + 8, layout.conditionPanelY + 72, 0xFF909090);
-            context.drawTextWithShadow(this.owner.workbenchTextRenderer(), "Conditions can read event, client, player, or world fields.", layout.conditionPanelX + 8, layout.conditionPanelY + 94, 0xFF909090);
+            context.text(this.owner.workbenchTextRenderer(), "No condition selected. Click + to add one.", layout.conditionPanelX + 8, layout.conditionPanelY + 72, 0xFF909090);
+            context.text(this.owner.workbenchTextRenderer(), "Conditions can read event, client, player, or world fields.", layout.conditionPanelX + 8, layout.conditionPanelY + 94, 0xFF909090);
         }
     }
 
-    private void renderActionEditorLabels(DrawContext context, Layout layout) {
+    private void renderActionEditorLabels(GuiGraphicsExtractor context, Layout layout) {
         if (selectedAction() != null) {
-            context.drawTextWithShadow(this.owner.workbenchTextRenderer(), "Target", this.actionTargetField.getX(), this.actionTargetField.getY() - 12, 0xFFB8B8B8);
-            context.drawTextWithShadow(this.owner.workbenchTextRenderer(), actionArgumentLabel(), this.actionArgumentField.getX(), this.actionArgumentField.getY() - 12, 0xFFB8B8B8);
-            context.drawTextWithShadow(this.owner.workbenchTextRenderer(), trimToWidth(actionTargetHint(), layout.columnW - 16), layout.actionsX + 8, layout.actionsY + 264, 0xFF9FCFCF);
-            context.drawTextWithShadow(this.owner.workbenchTextRenderer(), "Target and argument expand {event.*}, {client.*}, {player.*}, {world.*}.", layout.actionsX + 8, layout.actionsY + 278, 0xFF9FCFCF);
+            context.text(this.owner.workbenchTextRenderer(), "Target", this.actionTargetField.getX(), this.actionTargetField.getY() - 12, 0xFFB8B8B8);
+            context.text(this.owner.workbenchTextRenderer(), actionArgumentLabel(), this.actionArgumentField.getX(), this.actionArgumentField.getY() - 12, 0xFFB8B8B8);
+            context.text(this.owner.workbenchTextRenderer(), trimToWidth(actionTargetHint(), layout.columnW - 16), layout.actionsX + 8, layout.actionsY + 264, 0xFF9FCFCF);
+            context.text(this.owner.workbenchTextRenderer(), "Target and argument expand {event.*}, {client.*}, {player.*}, {world.*}.", layout.actionsX + 8, layout.actionsY + 278, 0xFF9FCFCF);
         } else {
-            context.drawTextWithShadow(this.owner.workbenchTextRenderer(), "Select an action or click + Action to add one.", layout.actionsX + 8, layout.actionsY + 150, 0xFF909090);
+            context.text(this.owner.workbenchTextRenderer(), "Select an action or click + Action to add one.", layout.actionsX + 8, layout.actionsY + 150, 0xFF909090);
         }
     }
 
@@ -497,7 +569,7 @@ final class MacroWorkbenchAutomationTab {
         return this.fieldPickerOpen || this.filterPickerOpen || this.conditionPickerOpen;
     }
 
-    boolean handleCharTyped(CharInput input) {
+    boolean handleCharTyped(CharacterEvent input) {
         if (!hasOverlayOpen()) {
             return false;
         }
@@ -510,11 +582,11 @@ final class MacroWorkbenchAutomationTab {
         return true;
     }
 
-    boolean handleKeyPressed(KeyInput input) {
+    boolean handleKeyPressed(KeyEvent input) {
         if (!hasOverlayOpen()) {
             return false;
         }
-        if (input.getKeycode() == GLFW.GLFW_KEY_ESCAPE) {
+        if (input.input() == InputConstants.KEY_ESCAPE) {
             closeActiveOverlay();
             return true;
         }
@@ -527,7 +599,7 @@ final class MacroWorkbenchAutomationTab {
         return true;
     }
 
-    void renderOverlay(DrawContext context, int mouseX, int mouseY) {
+    void renderOverlay(GuiGraphicsExtractor context, int mouseX, int mouseY) {
         if (this.fieldPickerOpen) {
             renderFieldPicker(context, mouseX, mouseY);
         } else if (this.filterPickerOpen) {
@@ -547,7 +619,7 @@ final class MacroWorkbenchAutomationTab {
         if (this.conditionPickerOpen) {
             return handleConditionPickerClick(mouseX, mouseY, button);
         }
-        if (button != 0) {
+        if (button != InputConstants.MOUSE_BUTTON_LEFT) {
             return false;
         }
         if (this.ruleList.handleMouseClick(mouseX, mouseY)) {
@@ -560,9 +632,14 @@ final class MacroWorkbenchAutomationTab {
                 this.fieldPickerOpen = false;
                 this.filterPickerOpen = false;
                 this.conditionPickerOpen = false;
+                this.narrowShowDetail = true;
                 syncAllFields();
             }
             return true;
+        }
+        Layout clickLayout = layout();
+        if (mouseY < clickLayout.detailTop || mouseY > clickLayout.bottom) {
+            return false;
         }
         if (this.activeSection == EditorSection.FILTERS && this.filterList.handleMouseClick(mouseX, mouseY)) {
             this.selectedFilterIndex = this.filterList.selectedIndex();
@@ -595,16 +672,28 @@ final class MacroWorkbenchAutomationTab {
         if (this.ruleList.handleMouseScroll(mouseX, mouseY, verticalAmount)) {
             return true;
         }
-        return switch (this.activeSection) {
+        boolean listScrolled = switch (this.activeSection) {
             case FILTERS -> this.filterList.handleMouseScroll(mouseX, mouseY, verticalAmount);
             case CONDITIONS -> this.conditionList.handleMouseScroll(mouseX, mouseY, verticalAmount);
             case ACTIONS -> this.actionList.handleMouseScroll(mouseX, mouseY, verticalAmount);
             case OVERVIEW -> false;
         };
+        if (listScrolled) {
+            return true;
+        }
+        Layout layout = layout();
+        boolean overDetail = mouseX >= layout.rightX && mouseX <= layout.rightX + layout.rightW
+                && mouseY >= layout.detailTop && mouseY <= layout.bottom;
+        int maxScroll = maxDetailScroll(layout);
+        if (!overDetail || maxScroll <= 0) {
+            return false;
+        }
+        this.detailScroll = Math.clamp(this.detailScroll + (verticalAmount > 0 ? -SCROLL_STEP : SCROLL_STEP), 0, maxScroll);
+        return true;
     }
 
     private void bindListeners() {
-        this.ruleIdField.setChangedListener(value -> {
+        this.ruleIdField.setResponder(value -> {
             if (this.syncing) {
                 return;
             }
@@ -617,7 +706,7 @@ final class MacroWorkbenchAutomationTab {
             markDirty();
             refreshRuleRows();
         });
-        this.ruleNameField.setChangedListener(value -> {
+        this.ruleNameField.setResponder(value -> {
             if (this.syncing) {
                 return;
             }
@@ -629,13 +718,13 @@ final class MacroWorkbenchAutomationTab {
             markDirty();
             refreshRuleRows();
         });
-        this.priorityField.setChangedListener(value -> updateRuleInt(value, RuleIntField.PRIORITY));
-        this.cooldownField.setChangedListener(value -> updateRuleLong(value, RuleLongField.COOLDOWN));
-        this.debounceField.setChangedListener(value -> updateRuleLong(value, RuleLongField.DEBOUNCE));
-        this.rateCountField.setChangedListener(value -> updateRuleInt(value, RuleIntField.RATE_COUNT));
-        this.rateWindowField.setChangedListener(value -> updateRuleLong(value, RuleLongField.RATE_WINDOW));
+        this.priorityField.setResponder(value -> updateRuleInt(value, RuleIntField.PRIORITY));
+        this.cooldownField.setResponder(value -> updateRuleLong(value, RuleLongField.COOLDOWN));
+        this.debounceField.setResponder(value -> updateRuleLong(value, RuleLongField.DEBOUNCE));
+        this.rateCountField.setResponder(value -> updateRuleInt(value, RuleIntField.RATE_COUNT));
+        this.rateWindowField.setResponder(value -> updateRuleLong(value, RuleLongField.RATE_WINDOW));
 
-        this.filterValueField.setChangedListener(value -> {
+        this.filterValueField.setResponder(value -> {
             if (this.syncing) {
                 return;
             }
@@ -648,7 +737,7 @@ final class MacroWorkbenchAutomationTab {
             refreshFilterRows();
         });
 
-        this.conditionValueField.setChangedListener(value -> {
+        this.conditionValueField.setResponder(value -> {
             if (this.syncing) {
                 return;
             }
@@ -661,7 +750,7 @@ final class MacroWorkbenchAutomationTab {
             refreshConditionRows();
         });
 
-        this.conditionFieldManualField.setChangedListener(value -> {
+        this.conditionFieldManualField.setResponder(value -> {
             if (this.syncing) {
                 return;
             }
@@ -675,7 +764,7 @@ final class MacroWorkbenchAutomationTab {
             syncConditionFields();
         });
 
-        this.actionTargetField.setChangedListener(value -> {
+        this.actionTargetField.setResponder(value -> {
             if (this.syncing) {
                 return;
             }
@@ -687,7 +776,7 @@ final class MacroWorkbenchAutomationTab {
             markDirty();
             refreshActionRows();
         });
-        this.actionArgumentField.setChangedListener(value -> {
+        this.actionArgumentField.setResponder(value -> {
             if (this.syncing) {
                 return;
             }
@@ -702,6 +791,7 @@ final class MacroWorkbenchAutomationTab {
     }
 
     private void createRule() {
+        this.narrowShowDetail = true;
         AutomationRule rule = new AutomationRule();
         rule.id = AutomationRule.newId();
         rule.name = "New Rule";
@@ -730,6 +820,7 @@ final class MacroWorkbenchAutomationTab {
     }
 
     private void duplicateRule() {
+        this.narrowShowDetail = true;
         AutomationRule rule = selectedRule();
         if (rule == null) {
             return;
@@ -925,7 +1016,7 @@ final class MacroWorkbenchAutomationTab {
         }
         this.placeholderConditionManualEntry = !this.placeholderConditionManualEntry;
         this.syncing = true;
-        this.conditionFieldManualField.setText(normalizePlaceholderField(condition.field));
+        this.conditionFieldManualField.setValue(normalizePlaceholderField(condition.field));
         this.syncing = false;
         syncConditionFields();
     }
@@ -1074,25 +1165,25 @@ final class MacroWorkbenchAutomationTab {
         this.testButton.active = active;
 
         if (active) {
-            this.ruleIdField.setText(safe(rule.id));
-            this.ruleNameField.setText(safe(rule.name));
-            this.priorityField.setText(Integer.toString(rule.priority));
-            this.cooldownField.setText(Long.toString(Math.max(0L, rule.cooldownMs)));
-            this.debounceField.setText(Long.toString(Math.max(0L, rule.debounceMs)));
-            this.rateCountField.setText(Integer.toString(Math.max(0, rule.rateLimitCount)));
-            this.rateWindowField.setText(Long.toString(Math.max(0L, rule.rateLimitWindowMs)));
-            this.eventTypeButton.setMessage(Text.literal("Event: " + rule.eventType.name()));
-            this.enabledButton.setMessage(Text.literal(rule.enabled ? "Enabled" : "Disabled"));
+            this.ruleIdField.setValue(safe(rule.id));
+            this.ruleNameField.setValue(safe(rule.name));
+            this.priorityField.setValue(Integer.toString(rule.priority));
+            this.cooldownField.setValue(Long.toString(Math.max(0L, rule.cooldownMs)));
+            this.debounceField.setValue(Long.toString(Math.max(0L, rule.debounceMs)));
+            this.rateCountField.setValue(Integer.toString(Math.max(0, rule.rateLimitCount)));
+            this.rateWindowField.setValue(Long.toString(Math.max(0L, rule.rateLimitWindowMs)));
+            this.eventTypeButton.setMessage(Component.literal("Event: " + rule.eventType.name()));
+            this.enabledButton.setMessage(Component.literal(rule.enabled ? "Enabled" : "Disabled"));
         } else {
-            this.ruleIdField.setText("");
-            this.ruleNameField.setText("");
-            this.priorityField.setText("0");
-            this.cooldownField.setText("0");
-            this.debounceField.setText("0");
-            this.rateCountField.setText("0");
-            this.rateWindowField.setText("0");
-            this.eventTypeButton.setMessage(Text.literal("Event"));
-            this.enabledButton.setMessage(Text.literal("Disabled"));
+            this.ruleIdField.setValue("");
+            this.ruleNameField.setValue("");
+            this.priorityField.setValue("0");
+            this.cooldownField.setValue("0");
+            this.debounceField.setValue("0");
+            this.rateCountField.setValue("0");
+            this.rateWindowField.setValue("0");
+            this.eventTypeButton.setMessage(Component.literal("Event"));
+            this.enabledButton.setMessage(Component.literal("Disabled"));
         }
         this.syncing = false;
     }
@@ -1136,15 +1227,15 @@ final class MacroWorkbenchAutomationTab {
         setVisible(this.filterOperatorButton, active);
         setVisible(this.filterIgnoreCaseButton, active);
         if (active) {
-            this.filterFieldButton.setMessage(Text.literal(filterFieldButtonLabel(filter)));
-            this.filterValueField.setText(safe(filter.value));
-            this.filterOperatorButton.setMessage(Text.literal("Op: " + filter.operator.name()));
-            this.filterIgnoreCaseButton.setMessage(Text.literal(filter.ignoreCase ? "Ignore Case" : "Case Sensitive"));
+            this.filterFieldButton.setMessage(Component.literal(filterFieldButtonLabel(filter)));
+            this.filterValueField.setValue(safe(filter.value));
+            this.filterOperatorButton.setMessage(Component.literal("Op: " + filter.operator.name()));
+            this.filterIgnoreCaseButton.setMessage(Component.literal(filter.ignoreCase ? "Ignore Case" : "Case Sensitive"));
         } else {
-            this.filterFieldButton.setMessage(Text.literal("Field"));
-            this.filterValueField.setText("");
-            this.filterOperatorButton.setMessage(Text.literal("Op"));
-            this.filterIgnoreCaseButton.setMessage(Text.literal("Ignore Case"));
+            this.filterFieldButton.setMessage(Component.literal("Field"));
+            this.filterValueField.setValue("");
+            this.filterOperatorButton.setMessage(Component.literal("Op"));
+            this.filterIgnoreCaseButton.setMessage(Component.literal("Ignore Case"));
         }
         this.syncing = false;
     }
@@ -1187,21 +1278,21 @@ final class MacroWorkbenchAutomationTab {
         setVisible(this.conditionOperatorButton, active);
         setVisible(this.conditionIgnoreCaseButton, active);
         if (active) {
-            this.conditionFieldButton.setMessage(Text.literal(conditionFieldButtonLabel(condition)));
-            this.conditionFieldModeButton.setMessage(Text.literal(this.placeholderConditionManualEntry ? "Manual" : "Pick"));
-            this.conditionFieldManualField.setText(normalizePlaceholderField(condition.field));
-            this.conditionValueField.setText(safe(condition.value));
-            this.conditionSourceButton.setMessage(Text.literal("Source: " + condition.source.name()));
-            this.conditionOperatorButton.setMessage(Text.literal("Op: " + condition.operator.name()));
-            this.conditionIgnoreCaseButton.setMessage(Text.literal(condition.ignoreCase ? "Ignore Case" : "Case Sensitive"));
+            this.conditionFieldButton.setMessage(Component.literal(conditionFieldButtonLabel(condition)));
+            this.conditionFieldModeButton.setMessage(Component.literal(this.placeholderConditionManualEntry ? "Manual" : "Pick"));
+            this.conditionFieldManualField.setValue(normalizePlaceholderField(condition.field));
+            this.conditionValueField.setValue(safe(condition.value));
+            this.conditionSourceButton.setMessage(Component.literal("Source: " + condition.source.name()));
+            this.conditionOperatorButton.setMessage(Component.literal("Op: " + condition.operator.name()));
+            this.conditionIgnoreCaseButton.setMessage(Component.literal(condition.ignoreCase ? "Ignore Case" : "Case Sensitive"));
         } else {
-            this.conditionFieldButton.setMessage(Text.literal("Field"));
-            this.conditionFieldModeButton.setMessage(Text.literal("Pick"));
-            this.conditionFieldManualField.setText("");
-            this.conditionValueField.setText("");
-            this.conditionSourceButton.setMessage(Text.literal("Source"));
-            this.conditionOperatorButton.setMessage(Text.literal("Op"));
-            this.conditionIgnoreCaseButton.setMessage(Text.literal("Ignore Case"));
+            this.conditionFieldButton.setMessage(Component.literal("Field"));
+            this.conditionFieldModeButton.setMessage(Component.literal("Pick"));
+            this.conditionFieldManualField.setValue("");
+            this.conditionValueField.setValue("");
+            this.conditionSourceButton.setMessage(Component.literal("Source"));
+            this.conditionOperatorButton.setMessage(Component.literal("Op"));
+            this.conditionIgnoreCaseButton.setMessage(Component.literal("Ignore Case"));
         }
         this.syncing = false;
     }
@@ -1237,15 +1328,15 @@ final class MacroWorkbenchAutomationTab {
         setVisible(this.actionArgumentField, active);
         setVisible(this.actionEnabledButton, active);
         if (active) {
-            this.actionTypeButton.setMessage(Text.literal("Type: " + action.type.name()));
-            this.actionTargetField.setText(safe(action.target));
-            this.actionArgumentField.setText(safe(action.argument));
-            this.actionEnabledButton.setMessage(Text.literal(action.enabled ? "Enabled" : "Disabled"));
+            this.actionTypeButton.setMessage(Component.literal("Type: " + action.type.name()));
+            this.actionTargetField.setValue(safe(action.target));
+            this.actionArgumentField.setValue(safe(action.argument));
+            this.actionEnabledButton.setMessage(Component.literal(action.enabled ? "Enabled" : "Disabled"));
         } else {
-            this.actionTypeButton.setMessage(Text.literal("Type"));
-            this.actionTargetField.setText("");
-            this.actionArgumentField.setText("");
-            this.actionEnabledButton.setMessage(Text.literal("Enabled"));
+            this.actionTypeButton.setMessage(Component.literal("Type"));
+            this.actionTargetField.setValue("");
+            this.actionArgumentField.setValue("");
+            this.actionEnabledButton.setMessage(Component.literal("Enabled"));
         }
         this.syncing = false;
     }
@@ -1301,7 +1392,7 @@ final class MacroWorkbenchAutomationTab {
                 && this.selectedActionIndex < rule.actions.size() - 1;
     }
 
-    private void renderOverviewSummary(DrawContext context,
+    private void renderOverviewSummary(GuiGraphicsExtractor context,
                                        int x,
                                        int y,
                                        int width,
@@ -1321,7 +1412,7 @@ final class MacroWorkbenchAutomationTab {
         drawInfoLine(context, x, rowY, width, "Use the section tabs to focus on one editor at a time.", 0xFF9FCFCF);
     }
 
-    private void renderActionsHelp(DrawContext context,
+    private void renderActionsHelp(GuiGraphicsExtractor context,
                                    int x,
                                    int y,
                                    int width,
@@ -1339,12 +1430,12 @@ final class MacroWorkbenchAutomationTab {
         int diagnosticsY = rowY + 6;
         int diagnosticsH = Math.max(24, height - (diagnosticsY - y));
         if (diagnosticsH > 24) {
-            context.drawTextWithShadow(this.owner.workbenchTextRenderer(), "Recent Diagnostics", x, rowY, 0xFFFFFFFF);
+            context.text(this.owner.workbenchTextRenderer(), "Recent Diagnostics", x, rowY, 0xFFFFFFFF);
             renderDiagnostics(context, x, diagnosticsY, width, diagnosticsH);
         }
     }
 
-    private int drawExecutionSummary(DrawContext context,
+    private int drawExecutionSummary(GuiGraphicsExtractor context,
                                      int x,
                                      int y,
                                      int width,
@@ -1362,7 +1453,7 @@ final class MacroWorkbenchAutomationTab {
         return rowY;
     }
 
-    private void renderFieldCatalog(DrawContext context,
+    private void renderFieldCatalog(GuiGraphicsExtractor context,
                                     int x,
                                     int y,
                                     int width,
@@ -1370,7 +1461,7 @@ final class MacroWorkbenchAutomationTab {
                                     List<AutomationFieldCatalog.FieldOption> options,
                                     String selectedKey) {
         if (options == null || options.isEmpty()) {
-            context.drawTextWithShadow(this.owner.workbenchTextRenderer(), "No fields available.", x, y, 0xFF909090);
+            context.text(this.owner.workbenchTextRenderer(), "No fields available.", x, y, 0xFF909090);
             return;
         }
         int x1 = Math.max(0, x - 1);
@@ -1389,13 +1480,13 @@ final class MacroWorkbenchAutomationTab {
             boolean selected = safe(selectedKey).equals(option.key());
             int titleColor = selected ? 0xFFFFFFFF : 0xFFB8E8FF;
             int descColor = selected ? 0xFFDFDFDF : 0xFF909090;
-            context.drawTextWithShadow(this.owner.workbenchTextRenderer(),
+            context.text(this.owner.workbenchTextRenderer(),
                     trimToWidth(option.key() + " - " + option.label(), width),
                     x,
                     rowY,
                     titleColor);
             rowY += 12;
-            context.drawTextWithShadow(this.owner.workbenchTextRenderer(),
+            context.text(this.owner.workbenchTextRenderer(),
                     trimToWidth(option.description(), width - 8),
                     x + 6,
                     rowY,
@@ -1407,8 +1498,8 @@ final class MacroWorkbenchAutomationTab {
         }
     }
 
-    private int drawInfoLine(DrawContext context, int x, int y, int width, String text, int color) {
-        context.drawTextWithShadow(this.owner.workbenchTextRenderer(), trimToWidth(text, width), x, y, color);
+    private int drawInfoLine(GuiGraphicsExtractor context, int x, int y, int width, String text, int color) {
+        context.text(this.owner.workbenchTextRenderer(), trimToWidth(text, width), x, y, color);
         return y + 14;
     }
 
@@ -1416,10 +1507,10 @@ final class MacroWorkbenchAutomationTab {
         return values == null ? 0 : values.size();
     }
 
-    private void renderDiagnostics(DrawContext context, int x, int y, int width, int height) {
+    private void renderDiagnostics(GuiGraphicsExtractor context, int x, int y, int width, int height) {
         List<AutomationEngine.LogEntry> logs = AutomationModule.INSTANCE.engine().getDiagnostics(DIAGNOSTIC_ROWS);
         if (logs.isEmpty()) {
-            context.drawTextWithShadow(this.owner.workbenchTextRenderer(), "No diagnostics yet.", x, y, 0xFF909090);
+            context.text(this.owner.workbenchTextRenderer(), "No diagnostics yet.", x, y, 0xFF909090);
             return;
         }
         int x1 = Math.max(0, x - 1);
@@ -1444,7 +1535,7 @@ final class MacroWorkbenchAutomationTab {
             };
             String prefix = log.ruleId() == null ? "" : "[" + log.ruleId() + "] ";
             String line = log.level() + " " + prefix + log.message();
-            context.drawTextWithShadow(this.owner.workbenchTextRenderer(), trimToWidth(line, width), x, rowY, color);
+            context.text(this.owner.workbenchTextRenderer(), trimToWidth(line, width), x, rowY, color);
             rowY += lineHeight;
         }
         if (scissor) {
@@ -1813,23 +1904,23 @@ final class MacroWorkbenchAutomationTab {
         return value == null ? "" : value;
     }
 
-    private String sanitizeFieldValue(TextFieldWidget widget, String value) {
+    private String sanitizeFieldValue(EditBox widget, String value) {
         String sanitized = sanitizeInlineText(value);
         if (!safe(value).equals(sanitized)) {
             this.syncing = true;
-            widget.setText(sanitized);
+            widget.setValue(sanitized);
             this.syncing = false;
         }
         return sanitized;
     }
 
-    private String sanitizeRuleIdInput(TextFieldWidget widget, String value) {
+    private String sanitizeRuleIdInput(EditBox widget, String value) {
         String sanitized = sanitizeInlineText(value).trim()
                 .toLowerCase(Locale.ROOT)
                 .replaceAll("[^a-z0-9_.-]", "_");
         if (!safe(value).equals(sanitized)) {
             this.syncing = true;
-            widget.setText(sanitized);
+            widget.setValue(sanitized);
             this.syncing = false;
         }
         return sanitized;
@@ -1844,21 +1935,21 @@ final class MacroWorkbenchAutomationTab {
         return values[(current.ordinal() + 1) % values.length];
     }
 
-    private TextFieldWidget textField(int x, int y, int width, int maxLength, String placeholder) {
-        TextFieldWidget widget = new TextFieldWidget(this.owner.workbenchTextRenderer(), x, y, width, FIELD_H, Text.literal(placeholder));
+    private me.m0dii.gui.local.ValidatedEditBox textField(int x, int y, int width, int maxLength, String placeholder) {
+        me.m0dii.gui.local.ValidatedEditBox widget = new me.m0dii.gui.local.ValidatedEditBox(this.owner.workbenchTextRenderer(), x, y, width, FIELD_H, Component.literal(placeholder));
         widget.setMaxLength(maxLength);
         return widget;
     }
 
-    private TextFieldWidget numberField(int x, int y, int width, int maxLength, String placeholder) {
-        TextFieldWidget widget = textField(x, y, width, maxLength, placeholder);
-        widget.setTextPredicate(value -> value == null || value.isEmpty() || value.chars().allMatch(Character::isDigit));
+    private EditBox numberField(int x, int y, int width, int maxLength, String placeholder) {
+        me.m0dii.gui.local.ValidatedEditBox widget = textField(x, y, width, maxLength, placeholder);
+        widget.setFilter(value -> value == null || value.isEmpty() || value.chars().allMatch(Character::isDigit));
         return widget;
     }
 
-    private TextFieldWidget signedNumberField(int x, int y, int width, int maxLength, String placeholder) {
-        TextFieldWidget widget = textField(x, y, width, maxLength, placeholder);
-        widget.setTextPredicate(value -> {
+    private EditBox signedNumberField(int x, int y, int width, int maxLength, String placeholder) {
+        me.m0dii.gui.local.ValidatedEditBox widget = textField(x, y, width, maxLength, placeholder);
+        widget.setFilter(value -> {
             if (value == null || value.isEmpty() || "-".equals(value)) {
                 return true;
             }
@@ -1872,19 +1963,19 @@ final class MacroWorkbenchAutomationTab {
         if (raw == null) {
             return "";
         }
-        if (this.owner.workbenchTextRenderer().getWidth(raw) <= maxWidth) {
+        if (this.owner.workbenchTextRenderer().width(raw) <= maxWidth) {
             return raw;
         }
         String text = raw;
-        while (text.length() > 4 && this.owner.workbenchTextRenderer().getWidth(text + "...") > maxWidth) {
+        while (text.length() > 4 && this.owner.workbenchTextRenderer().width(text + "...") > maxWidth) {
             text = text.substring(0, text.length() - 1);
         }
         return text + "...";
     }
 
-    private <T extends ClickableWidget> T register(T widget) {
+    private <T extends AbstractWidget> T register(T widget) {
         this.widgets.add(widget);
-        this.owner.addDrawableChild(widget);
+        this.owner.addRenderableWidget(widget);
         return widget;
     }
 
@@ -1918,7 +2009,7 @@ final class MacroWorkbenchAutomationTab {
         this.fieldPickerSourceOptions = withCurrentCustomOption(options, normalizePlaceholderField(currentField));
         this.fieldPickerSearchQuery = "";
         this.syncing = true;
-        this.fieldPickerSearchField.setText("");
+        this.fieldPickerSearchField.setValue("");
         this.syncing = false;
         this.fieldPickerSearchField.setFocused(fieldPickerShowsSearch());
         refreshFieldPickerRows(currentField);
@@ -1935,19 +2026,19 @@ final class MacroWorkbenchAutomationTab {
         this.filterPickerList.setSelectedIndex(this.selectedFilterIndex);
     }
 
-    private void renderFilterPicker(DrawContext context, int mouseX, int mouseY) {
+    private void renderFilterPicker(GuiGraphicsExtractor context, int mouseX, int mouseY) {
         FilterPickerLayout layout = filterPickerLayout();
         context.fill(0, 0, this.owner.width, this.owner.height, MODAL_SCRIM_COLOR);
         UiForms.drawPanel(context, layout.x(), layout.y(), layout.width(), layout.height());
-        context.drawTextWithShadow(this.owner.workbenchTextRenderer(), "Select Filter", layout.x() + 10, layout.y() + 8, 0xFFFFFFFF);
-        context.drawTextWithShadow(this.owner.workbenchTextRenderer(), "Click a filter to edit it.", layout.x() + 10, layout.y() + 22, 0xFFB8B8B8);
-        context.drawTextWithShadow(this.owner.workbenchTextRenderer(), "Close", layout.closeX(), layout.y() + 8, 0xFFFFFFFF);
+        context.text(this.owner.workbenchTextRenderer(), "Select Filter", layout.x() + 10, layout.y() + 8, 0xFFFFFFFF);
+        context.text(this.owner.workbenchTextRenderer(), "Click a filter to edit it.", layout.x() + 10, layout.y() + 22, 0xFFB8B8B8);
+        context.text(this.owner.workbenchTextRenderer(), "Close", layout.closeX(), layout.y() + 8, 0xFFFFFFFF);
         this.filterPickerList.setBounds(layout.listX(), layout.listY(), layout.listW(), layout.listH());
-        this.filterPickerList.render(context, this.owner.workbenchTextRenderer(), mouseX, mouseY);
+        this.filterPickerList.extractRenderState(context, this.owner.workbenchTextRenderer(), mouseX, mouseY);
     }
 
     private boolean handleFilterPickerClick(double mouseX, double mouseY, int button) {
-        if (button != 0) {
+        if (button != InputConstants.MOUSE_BUTTON_LEFT) {
             return true;
         }
         FilterPickerLayout layout = filterPickerLayout();
@@ -1985,19 +2076,19 @@ final class MacroWorkbenchAutomationTab {
         this.conditionPickerList.setSelectedIndex(this.selectedConditionIndex);
     }
 
-    private void renderConditionPicker(DrawContext context, int mouseX, int mouseY) {
+    private void renderConditionPicker(GuiGraphicsExtractor context, int mouseX, int mouseY) {
         ConditionPickerLayout layout = conditionPickerLayout();
         context.fill(0, 0, this.owner.width, this.owner.height, MODAL_SCRIM_COLOR);
         UiForms.drawPanel(context, layout.x(), layout.y(), layout.width(), layout.height());
-        context.drawTextWithShadow(this.owner.workbenchTextRenderer(), "Select Condition", layout.x() + 10, layout.y() + 8, 0xFFFFFFFF);
-        context.drawTextWithShadow(this.owner.workbenchTextRenderer(), "Click a condition to edit it.", layout.x() + 10, layout.y() + 22, 0xFFB8B8B8);
-        context.drawTextWithShadow(this.owner.workbenchTextRenderer(), "Close", layout.closeX(), layout.y() + 8, 0xFFFFFFFF);
+        context.text(this.owner.workbenchTextRenderer(), "Select Condition", layout.x() + 10, layout.y() + 8, 0xFFFFFFFF);
+        context.text(this.owner.workbenchTextRenderer(), "Click a condition to edit it.", layout.x() + 10, layout.y() + 22, 0xFFB8B8B8);
+        context.text(this.owner.workbenchTextRenderer(), "Close", layout.closeX(), layout.y() + 8, 0xFFFFFFFF);
         this.conditionPickerList.setBounds(layout.listX(), layout.listY(), layout.listW(), layout.listH());
-        this.conditionPickerList.render(context, this.owner.workbenchTextRenderer(), mouseX, mouseY);
+        this.conditionPickerList.extractRenderState(context, this.owner.workbenchTextRenderer(), mouseX, mouseY);
     }
 
     private boolean handleConditionPickerClick(double mouseX, double mouseY, int button) {
-        if (button != 0) {
+        if (button != InputConstants.MOUSE_BUTTON_LEFT) {
             return true;
         }
         ConditionPickerLayout layout = conditionPickerLayout();
@@ -2018,30 +2109,30 @@ final class MacroWorkbenchAutomationTab {
         return true;
     }
 
-    private void renderFieldPicker(DrawContext context, int mouseX, int mouseY) {
+    private void renderFieldPicker(GuiGraphicsExtractor context, int mouseX, int mouseY) {
         FieldPickerLayout layout = fieldPickerLayout();
         context.fill(0, 0, this.owner.width, this.owner.height, MODAL_SCRIM_COLOR);
         UiForms.drawPanel(context, layout.x(), layout.y(), layout.width(), layout.height());
-        context.drawTextWithShadow(this.owner.workbenchTextRenderer(), fieldPickerTitle(), layout.x() + 10, layout.y() + 8, 0xFFFFFFFF);
-        context.drawTextWithShadow(this.owner.workbenchTextRenderer(), trimToWidth(fieldPickerSubtitle(), layout.width() - 72), layout.x() + 10, layout.y() + 22, 0xFFB8B8B8);
-        context.drawTextWithShadow(this.owner.workbenchTextRenderer(), "Close", layout.closeX(), layout.y() + 8, 0xFFFFFFFF);
+        context.text(this.owner.workbenchTextRenderer(), fieldPickerTitle(), layout.x() + 10, layout.y() + 8, 0xFFFFFFFF);
+        context.text(this.owner.workbenchTextRenderer(), trimToWidth(fieldPickerSubtitle(), layout.width() - 72), layout.x() + 10, layout.y() + 22, 0xFFB8B8B8);
+        context.text(this.owner.workbenchTextRenderer(), "Close", layout.closeX(), layout.y() + 8, 0xFFFFFFFF);
         int listY = layout.listY();
         int listH = layout.listH();
         if (fieldPickerShowsSearch()) {
             this.fieldPickerSearchField.setX(layout.listX());
             this.fieldPickerSearchField.setY(layout.listY());
             this.fieldPickerSearchField.setWidth(layout.listW());
-            this.fieldPickerSearchField.render(context, mouseX, mouseY, 0.0F);
+            this.fieldPickerSearchField.extractRenderState(context, mouseX, mouseY, 0.0F);
             listY += 24;
             listH -= 24;
         }
         this.fieldPickerList.setBounds(layout.listX(), listY, layout.listW(), listH);
-        this.fieldPickerList.render(context, this.owner.workbenchTextRenderer(), mouseX, mouseY);
+        this.fieldPickerList.extractRenderState(context, this.owner.workbenchTextRenderer(), mouseX, mouseY);
 
         AutomationFieldCatalog.FieldOption option = selectedFieldPickerOption();
         if (option != null) {
             String key = fieldPickerShowsSearch() ? formatPlaceholderKey(option.key()) : option.key();
-            context.drawTextWithShadow(
+            context.text(
                     this.owner.workbenchTextRenderer(),
                     trimToWidth(key + ": " + option.description(), layout.width() - 20),
                     layout.x() + 10,
@@ -2052,7 +2143,7 @@ final class MacroWorkbenchAutomationTab {
     }
 
     private boolean handleFieldPickerClick(double mouseX, double mouseY, int button) {
-        if (button != 0) {
+        if (button != InputConstants.MOUSE_BUTTON_LEFT) {
             return true;
         }
         FieldPickerLayout layout = fieldPickerLayout();
@@ -2083,12 +2174,12 @@ final class MacroWorkbenchAutomationTab {
         return true;
     }
 
-    private static void setWidgetState(ClickableWidget widget, boolean visible, boolean active) {
+    private static void setWidgetState(AbstractWidget widget, boolean visible, boolean active) {
         widget.visible = visible;
         widget.active = visible && active;
     }
 
-    private static void setVisible(ClickableWidget widget, boolean visible) {
+    private static void setVisible(AbstractWidget widget, boolean visible) {
         widget.visible = visible;
         widget.active = visible;
     }
@@ -2381,21 +2472,30 @@ final class MacroWorkbenchAutomationTab {
     }
 
     private Layout layout() {
-        int leftX = 12;
-        int topY = TOP_BAR_H + 18;
-        int leftW = Math.max(248, this.owner.width / 4);
-        int rightX = leftX + leftW + GAP;
-        int rightW = Math.max(420, this.owner.width - rightX - 12);
-        int headerY = topY + 26;
+        int left = this.owner.contentLeft();
+        int top = this.owner.contentTop();
+        int right = this.owner.contentRight();
+        int bottom = this.owner.contentBottom();
+        boolean narrow = this.owner.contentWidth() < MASTER_DETAIL_MIN_W;
+
+        int leftW = narrow ? this.owner.contentWidth() : Math.clamp(Math.round(this.owner.contentWidth() * 0.27f), 140, 220);
+        int listButtonRows = leftW < 220 ? 2 : 1;
+        int listY = top + listButtonRows * (BUTTON_H + Theme.GAP_S);
+        int rightX = narrow ? left : left + leftW + GAP;
+        int rightW = right - rightX - (narrow ? 0 : 6);
+        int detailTop = top + BUTTON_H + Theme.GAP_S;
+
+        int headerY = detailTop - this.detailScroll;
         int headerH = 118;
         int columnW = (rightW - GAP) / 2;
         int rightX2 = rightX + columnW + GAP;
-        int fieldW = Math.max(140, columnW - 12);
-        int numericW = Math.max(62, (rightW - 24 - (PANEL_GAP * 4)) / 5);
+        int fieldW = Math.max(20, columnW - 20);
+        int numericW = Math.max(20, (rightW - 24 - (PANEL_GAP * 4)) / 5);
         int numberRowY = headerY + 86;
         int contentY = headerY + headerH + PANEL_GAP;
-        int contentH = Math.max(320, this.owner.height - contentY - 20);
-        return new Layout(leftX, topY, leftW, rightX, rightW, headerY, headerH, columnW, rightX2, fieldW,
+        int contentH = SECTION_H;
+        return new Layout(narrow, left, top, leftW, listY, rightX, rightW, detailTop, bottom,
+                headerY, headerH, columnW, rightX2, fieldW,
                 numericW, numberRowY,
                 rightX, contentY, contentH,
                 rightX, contentY, contentH,
@@ -2403,11 +2503,60 @@ final class MacroWorkbenchAutomationTab {
                 rightX2, contentY, contentH);
     }
 
-    private record Layout(int leftX,
+    private int maxDetailScroll(Layout layout) {
+        int unscrolledBottom = layout.actionsY() + this.detailScroll + layout.actionsH();
+        return Math.max(0, unscrolledBottom - layout.bottom);
+    }
+
+    /** Records each widget's group and unscrolled position; called once after all widgets are created. */
+    private void classifyWidgets(Layout layout) {
+        for (AbstractWidget widget : this.widgets) {
+            WidgetGroup group;
+            if (widget == this.newRuleButton || widget == this.duplicateRuleButton
+                    || widget == this.deleteRuleButton || widget == this.reloadButton) {
+                group = WidgetGroup.LIST;
+            } else if (widget.getY() < layout.detailTop) {
+                group = WidgetGroup.TABS;
+            } else {
+                group = WidgetGroup.DETAIL;
+            }
+            this.placedWidgets.add(new Placed(widget, group, widget.getX(), widget.getY()));
+        }
+    }
+
+    /**
+     * Applies scrolling and the narrow master/detail switch by moving widgets; widgets that are out of view are
+     * parked off-screen so their visibility flags (owned by the section logic) stay untouched.
+     */
+    private void applyWidgetPlacement(Layout layout) {
+        this.detailScroll = Math.clamp(this.detailScroll, 0, maxDetailScroll(layout));
+        boolean showList = !layout.narrow || !this.narrowShowDetail;
+        boolean showDetail = !layout.narrow || this.narrowShowDetail;
+        for (Placed placed : this.placedWidgets) {
+            AbstractWidget widget = placed.widget();
+            boolean shown = placed.group() == WidgetGroup.LIST ? showList : showDetail;
+            int y = placed.group() == WidgetGroup.DETAIL ? placed.baseY() - this.detailScroll : placed.baseY();
+            boolean inView = placed.group() != WidgetGroup.DETAIL
+                    || (y >= layout.detailTop && y + widget.getHeight() <= layout.bottom);
+            if (shown && inView) {
+                widget.setX(placed.baseX());
+                widget.setY(y);
+            } else {
+                widget.setX(PARKED);
+                widget.setY(PARKED);
+            }
+        }
+    }
+
+    private record Layout(boolean narrow,
+                          int leftX,
                           int topY,
                           int leftW,
+                          int listY,
                           int rightX,
                           int rightW,
+                          int detailTop,
+                          int bottom,
                           int headerY,
                           int headerH,
                           int columnW,

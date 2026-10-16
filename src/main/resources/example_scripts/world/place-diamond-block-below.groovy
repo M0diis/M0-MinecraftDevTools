@@ -1,17 +1,16 @@
-import net.minecraft.block.Blocks
-import net.minecraft.server.world.ServerWorld
-import net.minecraft.util.math.BlockPos
+import net.minecraft.core.BlockPos
+import net.minecraft.world.level.block.Blocks
 
 if (player == null || world == null || server == null) {
     return "This example requires a loaded server world and player."
 }
 
-ServerWorld serverWorld = server.getWorld(world.registryKey)
-if (serverWorld == null) {
-    return "Couldn't resolve the matching server world."
-}
+def dimension = world.dimension()
+def pos = BlockPos.containing(player.getX(), player.getY() - 1.0, player.getZ())
 
-def pos = BlockPos.ofFloored(player.x, player.y - 1.0, player.z)
-serverWorld.setBlockState(pos, Blocks.DIAMOND_BLOCK.defaultState)
+// World edits must run on the server thread.
+server.execute {
+    server.getLevel(dimension)?.setBlockAndUpdate(pos, Blocks.DIAMOND_BLOCK.defaultBlockState())
+}
 
 "Placed a diamond block below the player."

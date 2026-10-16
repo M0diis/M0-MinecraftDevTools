@@ -1,24 +1,24 @@
 package me.m0dii.gui.local;
 
-import net.minecraft.client.font.TextRenderer;
-import net.minecraft.client.gui.widget.TextFieldWidget;
-import net.minecraft.text.Text;
+import net.minecraft.client.gui.Font;
+import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.network.chat.Component;
 
 import java.util.function.Consumer;
 
 public final class UiBoundTextField {
-    private final TextFieldWidget widget;
+    private final EditBox widget;
     private Consumer<String> saveConsumer = ignored -> {
     };
 
-    public UiBoundTextField(TextRenderer textRenderer,
+    public UiBoundTextField(Font textRenderer,
                             int x,
                             int y,
                             int width,
                             int height,
                             String placeholder) {
-        this.widget = new TextFieldWidget(textRenderer, x, y, width, height, Text.literal(placeholder == null ? "" : placeholder));
-        this.widget.setChangedListener(this::handleChanged);
+        this.widget = new EditBox(textRenderer, x, y, width, height, Component.literal(placeholder == null ? "" : placeholder));
+        this.widget.setResponder(this::handleChanged);
     }
 
     public UiBoundTextField setSaveConsumer(Consumer<String> consumer) {
@@ -38,15 +38,15 @@ public final class UiBoundTextField {
     }
 
     public UiBoundTextField setText(String value) {
-        this.widget.setText(value == null ? "" : value);
+        this.widget.setValue(value == null ? "" : value);
         return this;
     }
 
     public String getText() {
-        return this.widget.getText();
+        return this.widget.getValue();
     }
 
-    public TextFieldWidget widget() {
+    public EditBox widget() {
         return this.widget;
     }
 

@@ -12,14 +12,14 @@ import me.m0dii.modules.scripting.ScriptTypes;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.network.ClientPlayerEntity;
-import net.minecraft.client.world.ClientWorld;
-import net.minecraft.item.ItemStack;
-import net.minecraft.registry.Registries;
-import net.minecraft.text.Text;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -37,7 +37,7 @@ public final class AutomationModule {
     private long clientTickCounter = 0L;
     private boolean wasWorldLoaded = false;
     private @Nullable String lastDimensionId = null;
-    private @Nullable Vec3d lastPlayerPos = null;
+    private @Nullable Vec3 lastPlayerPos = null;
     private @Nullable String lastScreenName = null;
     private int lastHotbarSlot = -1;
     private @Nullable String lastHeldItemId = null;
@@ -72,11 +72,11 @@ public final class AutomationModule {
     }
 
     public void openScreen(@Nullable Screen parent) {
-        MinecraftClient client = MinecraftClient.getInstance();
-        client.setScreen(MacroWorkbenchScreen.create(parent, MacroWorkbenchScreen.Tab.AUTOMATION));
+        Minecraft client = Minecraft.getInstance();
+        client.gui.setScreen(MacroWorkbenchScreen.create(parent, MacroWorkbenchScreen.Tab.AUTOMATION));
     }
 
-    public void onChatMessage(@Nullable Text message) {
+    public void onChatMessage(@Nullable Component message) {
         if (message == null) {
             return;
         }
@@ -98,20 +98,20 @@ public final class AutomationModule {
 
     public void fireTickTest() {
         long nowMs = System.currentTimeMillis();
-        Map<String, Object> attributes = buildTickAttributes(MinecraftClient.getInstance());
+        Map<String, Object> attributes = buildTickAttributes(Minecraft.getInstance());
         eventBus.post(new AutomationEvent(AutomationEventType.TICK_INTERVAL, nowMs, ++clientTickCounter, attributes));
     }
 
     public void firePlayerMoveTest() {
-        MinecraftClient client = MinecraftClient.getInstance();
-        Vec3d from = client.player == null ? new Vec3d(0.0, 0.0, 0.0) : currentPosition(client.player);
-        Vec3d to = from.add(1.0, 0.0, 0.0);
+        Minecraft client = Minecraft.getInstance();
+        Vec3 from = client.player == null ? new Vec3(0.0, 0.0, 0.0) : currentPosition(client.player);
+        Vec3 to = from.add(1.0, 0.0, 0.0);
         postPlayerMoveEvent(from, to);
     }
 
     public void fireWorldJoinTest() {
-        MinecraftClient client = MinecraftClient.getInstance();
-        String dimension = currentDimensionId(client.world);
+        Minecraft client = Minecraft.getInstance();
+        String dimension = currentDimensionId(client.level);
         Map<String, Object> attributes = new LinkedHashMap<>();
         attributes.put("dimension", dimension);
         attributes.put("playerName", client.player == null ? "" : client.player.getName().getString());
@@ -119,17 +119,17 @@ public final class AutomationModule {
     }
 
     public void fireDimensionChangeTest(@NotNull String toDimension) {
-        MinecraftClient client = MinecraftClient.getInstance();
+        Minecraft client = Minecraft.getInstance();
         Map<String, Object> attributes = new LinkedHashMap<>();
-        attributes.put("fromDimension", currentDimensionId(client.world));
+        attributes.put("fromDimension", currentDimensionId(client.level));
         attributes.put("toDimension", toDimension);
         eventBus.post(new AutomationEvent(AutomationEventType.DIMENSION_CHANGE, System.currentTimeMillis(), clientTickCounter, attributes));
     }
 
     public void fireWorldLeaveTest() {
-        MinecraftClient client = MinecraftClient.getInstance();
+        Minecraft client = Minecraft.getInstance();
         Map<String, Object> attributes = new LinkedHashMap<>();
-        attributes.put("fromDimension", currentDimensionId(client.world));
+        attributes.put("fromDimension", currentDimensionId(client.level));
         attributes.put("playerName", client.player == null ? "" : client.player.getName().getString());
         attributes.put("fromX", client.player == null ? 0.0D : client.player.getX());
         attributes.put("fromY", client.player == null ? 0.0D : client.player.getY());
@@ -145,7 +145,7 @@ public final class AutomationModule {
     }
 
     public void fireScreenChangeTest(@NotNull String toScreen) {
-        String fromScreen = currentScreenName(MinecraftClient.getInstance().currentScreen);
+        String fromScreen = currentScreenName(Minecraft.getInstance().gui.screen());
         eventBus.post(new AutomationEvent(
                 AutomationEventType.SCREEN_CHANGED,
                 System.currentTimeMillis(),
@@ -159,7 +159,7 @@ public final class AutomationModule {
     }
 
     public void fireHotbarSlotChangeTest(int toSlot) {
-        MinecraftClient client = MinecraftClient.getInstance();
+        Minecraft client = Minecraft.getInstance();
         int fromSlot = client.player == null ? 0 : client.player.getInventory().getSelectedSlot();
         Map<String, Object> attributes = new LinkedHashMap<>();
         attributes.put("fromSlot", fromSlot);
@@ -168,8 +168,8 @@ public final class AutomationModule {
     }
 
     public void fireHeldItemChangeTest(@NotNull String toItemId) {
-        MinecraftClient client = MinecraftClient.getInstance();
-        ItemStack stack = client.player == null ? ItemStack.EMPTY : client.player.getMainHandStack();
+        Minecraft client = Minecraft.getInstance();
+        ItemStack stack = client.player == null ? ItemStack.EMPTY : client.player.getMainHandItem();
         String fromItemId = itemId(stack);
         String fromItemName = itemName(stack);
         Map<String, Object> attributes = new LinkedHashMap<>();
@@ -208,30 +208,30 @@ public final class AutomationModule {
     }
 
     public void firePlayerDeathTest(float health) {
-        MinecraftClient client = MinecraftClient.getInstance();
-        ClientPlayerEntity player = client.player;
+        Minecraft client = Minecraft.getInstance();
+        LocalPlayer player = client.player;
         Map<String, Object> attributes = new LinkedHashMap<>();
         attributes.put("health", health);
-        attributes.put("food", player == null ? 0 : player.getHungerManager().getFoodLevel());
-        attributes.put("dimension", currentDimensionId(client.world));
+        attributes.put("food", player == null ? 0 : player.getFoodData().getFoodLevel());
+        attributes.put("dimension", currentDimensionId(client.level));
         attributes.put("x", player == null ? 0.0D : player.getX());
         attributes.put("y", player == null ? 0.0D : player.getY());
         attributes.put("z", player == null ? 0.0D : player.getZ());
         eventBus.post(new AutomationEvent(AutomationEventType.PLAYER_DEATH, System.currentTimeMillis(), clientTickCounter, attributes));
     }
 
-    private void registerCommands(CommandDispatcher<FabricClientCommandSource> dispatcher, net.minecraft.command.CommandRegistryAccess registryAccess) {
+    private void registerCommands(CommandDispatcher<FabricClientCommandSource> dispatcher, net.minecraft.commands.CommandBuildContext registryAccess) {
         AutomationCommands.register(dispatcher, this);
     }
 
-    private void onClientTick(MinecraftClient client) {
+    private void onClientTick(Minecraft client) {
         clientTickCounter++;
         long nowMs = System.currentTimeMillis();
         eventBus.post(new AutomationEvent(AutomationEventType.TICK_INTERVAL, nowMs, clientTickCounter, buildTickAttributes(client)));
         detectScreenChange(client, nowMs);
 
-        ClientPlayerEntity player = client.player;
-        ClientWorld world = client.world;
+        LocalPlayer player = client.player;
+        ClientLevel world = client.level;
         if (player == null || world == null) {
             if (wasWorldLoaded) {
                 postWorldLeaveEvent();
@@ -253,8 +253,8 @@ public final class AutomationModule {
             eventBus.post(new AutomationEvent(AutomationEventType.DIMENSION_CHANGE, nowMs, clientTickCounter, attributes));
         }
 
-        Vec3d currentPos = currentPosition(player);
-        if (lastPlayerPos != null && currentPos.squaredDistanceTo(lastPlayerPos) > 0.000001D) {
+        Vec3 currentPos = currentPosition(player);
+        if (lastPlayerPos != null && currentPos.distanceToSqr(lastPlayerPos) > 0.000001D) {
             postPlayerMoveEvent(lastPlayerPos, currentPos);
         }
 
@@ -263,7 +263,7 @@ public final class AutomationModule {
             postHotbarSlotChangedEvent(lastHotbarSlot, currentHotbarSlot);
         }
 
-        ItemStack mainHand = player.getMainHandStack();
+        ItemStack mainHand = player.getMainHandItem();
         String currentItemId = itemId(mainHand);
         String currentItemName = itemName(mainHand);
         if (lastHeldItemId != null && (!lastHeldItemId.equals(currentItemId) || !Objects.equals(lastHeldItemName, currentItemName))) {
@@ -275,7 +275,7 @@ public final class AutomationModule {
             postPlayerHealthChangedEvent(lastHealth, currentHealth);
         }
 
-        int currentFood = player.getHungerManager().getFoodLevel();
+        int currentFood = player.getFoodData().getFoodLevel();
         if (lastFood != Integer.MIN_VALUE && currentFood != lastFood) {
             postPlayerFoodChangedEvent(lastFood, currentFood);
         }
@@ -316,7 +316,7 @@ public final class AutomationModule {
         lastAlive = currentlyAlive;
     }
 
-    private void postPlayerMoveEvent(@NotNull Vec3d from, @NotNull Vec3d to) {
+    private void postPlayerMoveEvent(@NotNull Vec3 from, @NotNull Vec3 to) {
         Map<String, Object> attributes = new LinkedHashMap<>();
         attributes.put("fromX", from.x);
         attributes.put("fromY", from.y);
@@ -331,8 +331,8 @@ public final class AutomationModule {
         eventBus.post(new AutomationEvent(AutomationEventType.PLAYER_MOVE, System.currentTimeMillis(), clientTickCounter, attributes));
     }
 
-    private void detectScreenChange(@NotNull MinecraftClient client, long nowMs) {
-        String currentScreen = currentScreenName(client.currentScreen);
+    private void detectScreenChange(@NotNull Minecraft client, long nowMs) {
+        String currentScreen = currentScreenName(client.gui.screen());
         if (lastScreenName == null) {
             lastScreenName = currentScreen;
             return;
@@ -418,10 +418,10 @@ public final class AutomationModule {
         eventBus.post(new AutomationEvent(AutomationEventType.PLAYER_LEVEL_CHANGED, System.currentTimeMillis(), clientTickCounter, attributes));
     }
 
-    private void postPlayerDeathEvent(@NotNull ClientPlayerEntity player, @NotNull ClientWorld world) {
+    private void postPlayerDeathEvent(@NotNull LocalPlayer player, @NotNull ClientLevel world) {
         Map<String, Object> attributes = new LinkedHashMap<>();
         attributes.put("health", player.getHealth());
-        attributes.put("food", player.getHungerManager().getFoodLevel());
+        attributes.put("food", player.getFoodData().getFoodLevel());
         attributes.put("dimension", currentDimensionId(world));
         attributes.put("x", player.getX());
         attributes.put("y", player.getY());
@@ -429,16 +429,16 @@ public final class AutomationModule {
         eventBus.post(new AutomationEvent(AutomationEventType.PLAYER_DEATH, System.currentTimeMillis(), clientTickCounter, attributes));
     }
 
-    private Map<String, Object> buildTickAttributes(MinecraftClient client) {
+    private Map<String, Object> buildTickAttributes(Minecraft client) {
         Map<String, Object> attributes = new LinkedHashMap<>();
         attributes.put("tick", clientTickCounter);
-        attributes.put("worldLoaded", client.world != null);
+        attributes.put("worldLoaded", client.level != null);
         attributes.put("playerLoaded", client.player != null);
-        attributes.put("screen", currentScreenName(client.currentScreen));
-        attributes.put("screenPresent", client.currentScreen != null);
-        if (client.world != null) {
-            attributes.put("dimension", currentDimensionId(client.world));
-            attributes.put("worldTime", client.world.getTime());
+        attributes.put("screen", currentScreenName(client.gui.screen()));
+        attributes.put("screenPresent", client.gui.screen() != null);
+        if (client.level != null) {
+            attributes.put("dimension", currentDimensionId(client.level));
+            attributes.put("worldTime", client.level.getGameTime());
         }
         return attributes;
     }
@@ -469,12 +469,12 @@ public final class AutomationModule {
         return attributes;
     }
 
-    private static String currentDimensionId(@Nullable ClientWorld world) {
-        return world == null ? "" : world.getRegistryKey().getValue().toString();
+    private static String currentDimensionId(@Nullable ClientLevel world) {
+        return world == null ? "" : world.dimension().identifier().toString();
     }
 
-    private static Vec3d currentPosition(@NotNull ClientPlayerEntity player) {
-        return new Vec3d(player.getX(), player.getY(), player.getZ());
+    private static Vec3 currentPosition(@NotNull LocalPlayer player) {
+        return new Vec3(player.getX(), player.getY(), player.getZ());
     }
 
     private static String currentScreenName(@Nullable Screen screen) {
@@ -489,11 +489,11 @@ public final class AutomationModule {
         if (stack == null || stack.isEmpty()) {
             return "";
         }
-        return Registries.ITEM.getId(stack.getItem()).toString();
+        return BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
     }
 
     private static String itemName(@Nullable ItemStack stack) {
-        return stack == null || stack.isEmpty() ? "" : stack.getName().getString();
+        return stack == null || stack.isEmpty() ? "" : stack.getHoverName().getString();
     }
 
     private static String displayNameFromItemId(@Nullable String itemId) {
@@ -527,12 +527,12 @@ public final class AutomationModule {
     private static final class ClientContextSnapshotProvider implements AutomationEngine.ContextSnapshotProvider {
         @Override
         public @NotNull Map<String, Object> snapshot(@NotNull AutomationRule.ConditionSource source, @NotNull AutomationEvent event) {
-            MinecraftClient client = MinecraftClient.getInstance();
+            Minecraft client = Minecraft.getInstance();
             return switch (source) {
                 case EVENT -> eventSnapshot(event);
                 case CLIENT -> clientSnapshot(client);
-                case PLAYER -> playerSnapshot(client.player, client.world);
-                case WORLD -> worldSnapshot(client.world);
+                case PLAYER -> playerSnapshot(client.player, client.level);
+                case WORLD -> worldSnapshot(client.level);
                 case PLACEHOLDER -> Map.of();
             };
         }
@@ -542,7 +542,7 @@ public final class AutomationModule {
                                         @NotNull String field,
                                         @NotNull AutomationEvent event) {
             if (source == AutomationRule.ConditionSource.PLACEHOLDER) {
-                MinecraftClient client = MinecraftClient.getInstance();
+                Minecraft client = Minecraft.getInstance();
                 if (client == null || client.player == null || field.isBlank()) {
                     return null;
                 }
@@ -563,18 +563,18 @@ public final class AutomationModule {
             return values;
         }
 
-        private static Map<String, Object> clientSnapshot(MinecraftClient client) {
+        private static Map<String, Object> clientSnapshot(Minecraft client) {
             Map<String, Object> values = new LinkedHashMap<>();
-            values.put("connected", client.player != null && client.world != null);
-            values.put("screen", currentScreenName(client.currentScreen));
-            values.put("screenPresent", client.currentScreen != null);
+            values.put("connected", client.player != null && client.level != null);
+            values.put("screen", currentScreenName(client.gui.screen()));
+            values.put("screenPresent", client.gui.screen() != null);
             values.put("paused", client.isPaused());
-            values.put("worldLoaded", client.world != null);
+            values.put("worldLoaded", client.level != null);
             values.put("playerLoaded", client.player != null);
             return values;
         }
 
-        private static Map<String, Object> playerSnapshot(@Nullable ClientPlayerEntity player, @Nullable ClientWorld world) {
+        private static Map<String, Object> playerSnapshot(@Nullable LocalPlayer player, @Nullable ClientLevel world) {
             Map<String, Object> values = new LinkedHashMap<>();
             if (player == null) {
                 return values;
@@ -585,26 +585,26 @@ public final class AutomationModule {
             values.put("z", player.getZ());
             values.put("health", player.getHealth());
             values.put("maxHealth", player.getMaxHealth());
-            values.put("food", player.getHungerManager().getFoodLevel());
-            values.put("sneaking", player.isSneaking());
+            values.put("food", player.getFoodData().getFoodLevel());
+            values.put("sneaking", player.isShiftKeyDown());
             values.put("sprinting", player.isSprinting());
             values.put("dimension", currentDimensionId(world));
             values.put("hotbarSlot", player.getInventory().getSelectedSlot());
-            values.put("mainHandItemId", itemId(player.getMainHandStack()));
-            values.put("mainHandItemName", itemName(player.getMainHandStack()));
+            values.put("mainHandItemId", itemId(player.getMainHandItem()));
+            values.put("mainHandItemName", itemName(player.getMainHandItem()));
             values.put("experienceLevel", player.experienceLevel);
             values.put("experienceProgress", player.experienceProgress);
             values.put("alive", player.isAlive());
             return values;
         }
 
-        private static Map<String, Object> worldSnapshot(@Nullable ClientWorld world) {
+        private static Map<String, Object> worldSnapshot(@Nullable ClientLevel world) {
             Map<String, Object> values = new LinkedHashMap<>();
             if (world == null) {
                 return values;
             }
             values.put("dimension", currentDimensionId(world));
-            values.put("time", world.getTime());
+            values.put("time", world.getGameTime());
             values.put("raining", world.isRaining());
             values.put("thundering", world.isThundering());
             return values;
@@ -647,7 +647,7 @@ public final class AutomationModule {
 
         @Override
         public boolean sendClientCommand(@NotNull String command) {
-            MinecraftClient client = MinecraftClient.getInstance();
+            Minecraft client = Minecraft.getInstance();
             if (client.player == null) {
                 return false;
             }
@@ -657,9 +657,9 @@ public final class AutomationModule {
                 return false;
             }
             if (raw.startsWith("/")) {
-                client.player.networkHandler.sendChatCommand(raw.substring(1));
+                client.player.connection.sendCommand(raw.substring(1));
             } else {
-                client.player.networkHandler.sendChatMessage(raw);
+                client.player.connection.sendChat(raw);
             }
             return true;
         }
@@ -679,18 +679,18 @@ public final class AutomationModule {
         }
 
         @Override
-        public @Nullable MinecraftClient client() {
-            return MinecraftClient.getInstance();
+        public @Nullable Minecraft client() {
+            return Minecraft.getInstance();
         }
 
         @Override
-        public @Nullable ClientPlayerEntity player() {
-            return MinecraftClient.getInstance().player;
+        public @Nullable LocalPlayer player() {
+            return Minecraft.getInstance().player;
         }
 
         @Override
-        public @Nullable ClientWorld world() {
-            return MinecraftClient.getInstance().world;
+        public @Nullable ClientLevel world() {
+            return Minecraft.getInstance().level;
         }
 
         private static ScriptManager managerForScript(String scriptFile) {

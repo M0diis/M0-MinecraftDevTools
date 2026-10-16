@@ -1,4 +1,4 @@
-const Text = Java.type('net.minecraft.text.Text');
+const Component = Java.type('net.minecraft.network.chat.Component');
 const StringCls = Java.type('java.lang.String');
 
 if (player == null || world == null) {
@@ -6,15 +6,15 @@ if (player == null || world == null) {
 } else {
     const message = StringCls.format(
         'Player %s is at %.1f, %.1f, %.1f in %s with %.1f health and %d food.',
-        player.name.string,
-        player.x,
-        player.y,
-        player.z,
-        String(world.registryKey.value),
-        player.health,
-        player.hungerManager.foodLevel
+        player.getName().getString(),
+        player.getX(),
+        player.getY(),
+        player.getZ(),
+        String(world.dimension().identifier()),
+        player.getHealth(),
+        player.getFoodData().getFoodLevel()
     );
 
-    player.sendMessage(Text.literal(message), false);
+    player.sendSystemMessage(Component.literal(message));
     message;
 }

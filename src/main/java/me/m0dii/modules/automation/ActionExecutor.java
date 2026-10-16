@@ -1,9 +1,9 @@
 package me.m0dii.modules.automation;
 
 import me.m0dii.modules.macros.MacroPlaceholders;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.network.ClientPlayerEntity;
-import net.minecraft.client.world.ClientWorld;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.client.player.LocalPlayer;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -23,11 +23,11 @@ public class ActionExecutor {
 
         boolean toggleModule(@NotNull String moduleId, @Nullable Boolean enabledState);
 
-        @Nullable MinecraftClient client();
+        @Nullable Minecraft client();
 
-        @Nullable ClientPlayerEntity player();
+        @Nullable LocalPlayer player();
 
-        @Nullable ClientWorld world();
+        @Nullable ClientLevel world();
     }
 
     public record ActionResult(boolean success, String message) {
@@ -121,7 +121,7 @@ public class ActionExecutor {
             return "";
         }
         String contextual = expandAutomationPlaceholders(input, event);
-        MinecraftClient client = bridge.client();
+        Minecraft client = bridge.client();
         if (client == null) {
             return contextual;
         }
@@ -165,14 +165,14 @@ public class ActionExecutor {
     }
 
     private @Nullable Object clientValue(@NotNull String key) {
-        MinecraftClient client = bridge.client();
+        Minecraft client = bridge.client();
         if (client == null) {
             return null;
         }
         return switch (key) {
             case "connected" -> bridge.player() != null && bridge.world() != null;
-            case "screen" -> client.currentScreen == null ? "" : client.currentScreen.getClass().getSimpleName();
-            case "screenPresent" -> client.currentScreen != null;
+            case "screen" -> client.gui.screen() == null ? "" : client.gui.screen().getClass().getSimpleName();
+            case "screenPresent" -> client.gui.screen() != null;
             case "paused" -> client.isPaused();
             case "worldLoaded" -> bridge.world() != null;
             case "playerLoaded" -> bridge.player() != null;
@@ -181,8 +181,8 @@ public class ActionExecutor {
     }
 
     private @Nullable Object playerValue(@NotNull String key) {
-        ClientPlayerEntity player = bridge.player();
-        ClientWorld world = bridge.world();
+        LocalPlayer player = bridge.player();
+        ClientLevel world = bridge.world();
         if (player == null) {
             return null;
         }
@@ -193,25 +193,25 @@ public class ActionExecutor {
             case "z" -> player.getZ();
             case "health" -> player.getHealth();
             case "maxHealth" -> player.getMaxHealth();
-            case "food" -> player.getHungerManager().getFoodLevel();
-            case "sneaking" -> player.isSneaking();
+            case "food" -> player.getFoodData().getFoodLevel();
+            case "sneaking" -> player.isShiftKeyDown();
             case "sprinting" -> player.isSprinting();
-            case "dimension" -> world == null ? "" : world.getRegistryKey().getValue().toString();
+            case "dimension" -> world == null ? "" : world.dimension().identifier().toString();
             case "hotbarSlot" -> player.getInventory().getSelectedSlot();
-            case "mainHandItemId" -> player.getMainHandStack().isEmpty() ? "" : net.minecraft.registry.Registries.ITEM.getId(player.getMainHandStack().getItem()).toString();
-            case "mainHandItemName" -> player.getMainHandStack().isEmpty() ? "" : player.getMainHandStack().getName().getString();
+            case "mainHandItemId" -> player.getMainHandItem().isEmpty() ? "" : net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(player.getMainHandItem().getItem()).toString();
+            case "mainHandItemName" -> player.getMainHandItem().isEmpty() ? "" : player.getMainHandItem().getHoverName().getString();
             default -> null;
         };
     }
 
     private @Nullable Object worldValue(@NotNull String key) {
-        ClientWorld world = bridge.world();
+        ClientLevel world = bridge.world();
         if (world == null) {
             return null;
         }
         return switch (key) {
-            case "dimension" -> world.getRegistryKey().getValue().toString();
-            case "time" -> world.getTime();
+            case "dimension" -> world.dimension().identifier().toString();
+            case "time" -> world.getGameTime();
             case "raining" -> world.isRaining();
             case "thundering" -> world.isThundering();
             default -> null;

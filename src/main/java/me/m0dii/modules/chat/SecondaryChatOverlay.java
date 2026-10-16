@@ -1,18 +1,18 @@
 package me.m0dii.modules.chat;
 
+import com.mojang.blaze3d.platform.cursor.CursorTypes;
 import me.m0dii.M0DevToolsClient;
 import me.m0dii.gui.GuiSystem;
 import me.m0dii.modules.hudcanvas.HudCanvasDataHandler;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.font.TextRenderer;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.cursor.StandardCursors;
-import net.minecraft.client.gui.screen.ChatScreen;
-import net.minecraft.client.render.RenderTickCounter;
-import net.minecraft.text.Style;
-import net.minecraft.util.Identifier;
+import net.minecraft.client.DeltaTracker;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Font;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.screens.ChatScreen;
+import net.minecraft.network.chat.Style;
+import net.minecraft.resources.Identifier;
 
 public final class SecondaryChatOverlay {
     private SecondaryChatOverlay() {
@@ -20,7 +20,7 @@ public final class SecondaryChatOverlay {
 
     public static void register() {
         HudElementRegistry.attachElementBefore(VanillaHudElements.CHAT,
-                Identifier.of(M0DevToolsClient.MOD_ID, "secondary_chat"),
+                Identifier.fromNamespaceAndPath(M0DevToolsClient.MOD_ID, "secondary_chat"),
                 SecondaryChatOverlay::onHudRender
         );
     }
@@ -41,16 +41,16 @@ public final class SecondaryChatOverlay {
     }
 
     public static boolean shouldSuppressVanillaChat() {
-        MinecraftClient client = MinecraftClient.getInstance();
+        Minecraft client = Minecraft.getInstance();
         SecondaryChatSettings.Data settings = SecondaryChatSettings.get();
         if (!settings.enabled || !settings.showOverlay || settings.renderMode != SecondaryChatSettings.RenderMode.REPLACE) {
             return false;
         }
-        return client == null || client.currentScreen == null || settings.showWhileGuiOpen;
+        return client == null || client.gui.screen() == null || settings.showWhileGuiOpen;
     }
 
-    private static void onHudRender(DrawContext ctx, RenderTickCounter tickCounter) {
-        MinecraftClient client = MinecraftClient.getInstance();
+    private static void onHudRender(GuiGraphicsExtractor ctx, DeltaTracker tickCounter) {
+        Minecraft client = Minecraft.getInstance();
         if (client == null || client.player == null) {
             return;
         }
@@ -60,21 +60,21 @@ public final class SecondaryChatOverlay {
             return;
         }
 
-        if (client.currentScreen != null && !settings.showWhileGuiOpen) {
+        if (client.gui.screen() != null && !settings.showWhileGuiOpen) {
             return;
         }
 
-        boolean noTransparency = client.currentScreen instanceof ChatScreen
+        boolean noTransparency = client.gui.screen() instanceof ChatScreen
                 && settings.noTransparencyWhenChatOpen;
 
-        TextRenderer textRenderer = client.textRenderer;
+        Font textRenderer = client.font;
         for (SecondaryChatWindowLayout.Frame frame : SecondaryChatWindowLayout.frames()) {
-            renderWindow(ctx, textRenderer, settings, frame, noTransparency, client.currentScreen != null);
+            renderWindow(ctx, textRenderer, settings, frame, noTransparency, client.gui.screen() != null);
         }
     }
 
-    private static void renderWindow(DrawContext ctx,
-                                     TextRenderer textRenderer,
+    private static void renderWindow(GuiGraphicsExtractor ctx,
+                                     Font textRenderer,
                                      SecondaryChatSettings.Data settings,
                                      SecondaryChatWindowLayout.Frame frame,
                                      boolean noTransparency,
@@ -133,8 +133,8 @@ public final class SecondaryChatOverlay {
         }
     }
 
-    private static void renderTabs(DrawContext ctx,
-                                   TextRenderer textRenderer,
+    private static void renderTabs(GuiGraphicsExtractor ctx,
+                                   Font textRenderer,
                                    SecondaryChatWindowLayout.Frame frame,
                                    int textColor) {
         SecondaryChatSettings.TabConfig selected = SecondaryChatManager.selectedTab(frame.window);
@@ -158,12 +158,12 @@ public final class SecondaryChatOverlay {
             String label = trimToWidth(textRenderer,
                     SecondaryChatWindowLayout.tabLabel(frame.window.id, tab),
                     Math.max(8, tabW - 10));
-            ctx.drawText(textRenderer, label, tabX + 5, tabY + 3, textColor, false);
+            ctx.text(textRenderer, label, tabX + 5, tabY + 3, textColor, false);
             tabX += tabW + 2;
         }
     }
 
-    private static void renderSettingsButton(DrawContext ctx,
+    private static void renderSettingsButton(GuiGraphicsExtractor ctx,
                                              SecondaryChatWindowLayout.Frame frame,
                                              int alpha) {
         int x = SecondaryChatWindowLayout.settingsButtonX(frame);
@@ -180,8 +180,8 @@ public final class SecondaryChatOverlay {
         ctx.fill(x + 3, y + 8, x + size - 3, y + 9, line);
     }
 
-    private static void renderSettingsMenu(DrawContext ctx,
-                                           TextRenderer textRenderer,
+    private static void renderSettingsMenu(GuiGraphicsExtractor ctx,
+                                           Font textRenderer,
                                            SecondaryChatWindowLayout.Frame frame,
                                            int textColor) {
         int x = SecondaryChatWindowLayout.menuX(frame);
@@ -199,12 +199,12 @@ public final class SecondaryChatOverlay {
             boolean enabled = SecondaryChatInteraction.menuItemEnabled(frame, row);
             int color = enabled ? textColor : 0x77888888;
             String label = trimToWidth(textRenderer, SecondaryChatInteraction.menuLabel(row), w - 12);
-            ctx.drawText(textRenderer, label, x + 6, rowY + 4, color, false);
+            ctx.text(textRenderer, label, x + 6, rowY + 4, color, false);
         }
     }
 
-    private static void renderMessages(DrawContext ctx,
-                                       TextRenderer textRenderer,
+    private static void renderMessages(GuiGraphicsExtractor ctx,
+                                       Font textRenderer,
                                        SecondaryChatWindowLayout.Frame frame,
                                        int textColor) {
         SecondaryChatSettings.TabConfig selected = SecondaryChatManager.selectedTab(frame.window);
@@ -214,20 +214,20 @@ public final class SecondaryChatOverlay {
 
         SecondaryChatTextLayout.Layout layout = SecondaryChatTextLayout.layout(frame, textRenderer);
 
-        ctx.getMatrices().pushMatrix();
-        ctx.getMatrices().scale(frame.scale, frame.scale);
+        ctx.pose().pushMatrix();
+        ctx.pose().scale(frame.scale, frame.scale);
         ctx.enableScissor(layout.x(), layout.y(), layout.x() + layout.scaledWidth(), layout.contentBottom());
 
         if (layout.totalLines() == 0) {
             String hint = frame.window.title == null || frame.window.title.isBlank() ? "Waiting for messages..." : frame.window.title;
-            ctx.drawText(textRenderer, hint, layout.x(), layout.y(), 0x88888888, false);
+            ctx.text(textRenderer, hint, layout.x(), layout.y(), 0x88888888, false);
         } else {
             for (SecondaryChatTextLayout.VisibleLine line : layout.visibleLines()) {
                 if (SecondaryChatInteraction.isSelected(frame.window.id, selected.id, line.message())) {
                     int selectionRight = Math.min(layout.x() + layout.scaledWidth(), line.x() + Math.max(1, line.width()));
                     ctx.fill(line.x() - 1, line.y() - 1, selectionRight + 1, line.y() + layout.lineHeight(), 0x553B82F6);
                 }
-                ctx.drawText(textRenderer, line.text(), line.x(), line.y(), textColor, false);
+                ctx.text(textRenderer, line.text(), line.x(), line.y(), textColor, false);
             }
         }
 
@@ -244,11 +244,11 @@ public final class SecondaryChatOverlay {
             ctx.fill(scrollbarX, thumbY, scrollbarX + 2, thumbY + thumbSize, 0xCCFFFFFF);
         }
 
-        ctx.getMatrices().popMatrix();
+        ctx.pose().popMatrix();
     }
 
-    private static void renderMessageHover(DrawContext ctx,
-                                           TextRenderer textRenderer,
+    private static void renderMessageHover(GuiGraphicsExtractor ctx,
+                                           Font textRenderer,
                                            SecondaryChatWindowLayout.Frame frame) {
         SecondaryChatTextLayout.Hit hit = SecondaryChatInteraction.hoveredMessageHit(frame, textRenderer);
         if (hit == null || hit.style() == null) {
@@ -257,20 +257,20 @@ public final class SecondaryChatOverlay {
 
         Style style = hit.style();
         if (style.getClickEvent() != null) {
-            ctx.setCursor(StandardCursors.POINTING_HAND);
+            ctx.requestCursor(CursorTypes.POINTING_HAND);
         }
         if (style.getHoverEvent() != null) {
-            ctx.drawHoverEvent(textRenderer, style, SecondaryChatInteraction.lastMouseX(), SecondaryChatInteraction.lastMouseY());
+            ctx.componentHoverEffect(textRenderer, style, SecondaryChatInteraction.lastMouseX(), SecondaryChatInteraction.lastMouseY());
         }
     }
 
-    private static String trimToWidth(TextRenderer textRenderer, String raw, int maxWidth) {
+    private static String trimToWidth(Font textRenderer, String raw, int maxWidth) {
         String text = raw == null ? "" : raw;
-        if (textRenderer.getWidth(text) <= maxWidth) {
+        if (textRenderer.width(text) <= maxWidth) {
             return text;
         }
         String ellipsis = "...";
-        while (text.length() > 1 && textRenderer.getWidth(text + ellipsis) > maxWidth) {
+        while (text.length() > 1 && textRenderer.width(text + ellipsis) > maxWidth) {
             text = text.substring(0, text.length() - 1);
         }
         return text + ellipsis;

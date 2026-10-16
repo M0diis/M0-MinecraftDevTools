@@ -1,6 +1,9 @@
 package me.m0dii.modules.camera;
 
 import com.google.gson.*;
+import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.VertexConsumer;
+import com.mojang.math.Axis;
 import me.m0dii.M0DevToolsClient;
 import me.m0dii.modules.freecam.CameraEntity;
 import me.m0dii.modules.macros.MacroPlaceholderProvider;
@@ -8,18 +11,15 @@ import me.m0dii.modules.macros.MacroPlaceholders;
 import me.m0dii.utils.CustomRenderLayers;
 import me.m0dii.utils.DrawUtil;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
-import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.font.TextRenderer;
-import net.minecraft.client.render.RenderLayers;
-import net.minecraft.client.render.VertexConsumer;
-import net.minecraft.client.render.VertexConsumerProvider;
-import net.minecraft.client.util.math.MatrixStack;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.util.math.MathHelper;
-import net.minecraft.util.math.RotationAxis;
-import net.minecraft.util.math.Vec3d;
+import me.m0dii.render.OverlayRenderEvents;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Font;
+import me.m0dii.render.OverlayBufferSource;
+import net.minecraft.client.renderer.rendertype.RenderTypes;
+import net.minecraft.util.Mth;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4f;
 
@@ -61,7 +61,7 @@ public final class CameraPathManager {
         }
 
         @Override
-        public String resolvePlaceholder(String token, MinecraftClient client, PlayerEntity player, boolean canvasMode) {
+        public String resolvePlaceholder(String token, Minecraft client, Player player, boolean canvasMode) {
             return switch (token) {
                 case "camera.playing" -> Boolean.toString(isPlaybackActive());
                 case "camera.points" -> Integer.toString(workingPath.points.size());
@@ -92,36 +92,31 @@ public final class CameraPathManager {
         loadFromDisk();
         MacroPlaceholders.registerProvider(PLACEHOLDER_PROVIDER);
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> resetRuntimeState());
-        WorldRenderEvents.AFTER_ENTITIES.register(context -> {
+        OverlayRenderEvents.AFTER_ENTITIES.register(context -> {
             if (!overlayVisible) {
                 return;
             }
 
-            MinecraftClient client = MinecraftClient.getInstance();
-            if (client.player == null || client.world == null || workingPath.points.isEmpty()) {
+            Minecraft client = Minecraft.getInstance();
+            if (client.player == null || client.level == null || workingPath.points.isEmpty()) {
                 return;
             }
             if (!currentDimensionId().equals(workingPath.dimensionId)) {
                 return;
             }
 
-            VertexConsumerProvider consumers = context.consumers();
+            OverlayBufferSource consumers = context.consumers();
             if (consumers == null) {
-                consumers = client.getBufferBuilders().getEntityVertexConsumers();
+                consumers = OverlayBufferSource.current();
             }
 
-            VertexConsumer visible = consumers.getBuffer(RenderLayers.LINES);
+            VertexConsumer visible = consumers.getBuffer(RenderTypes.LINES);
             VertexConsumer through = consumers.getBuffer(CustomRenderLayers.LINES_NO_DEPTH);
-            Vec3d cameraPos = context.gameRenderer().getCamera().getCameraPos();
+            Vec3 cameraPos = context.gameRenderer().mainCamera().position();
 
             renderPathLines(visible, through, cameraPos);
             renderKeyframes(visible, through, cameraPos);
-            renderLabels(context.matrices(), consumers, context.gameRenderer().getCamera(), cameraPos, client.textRenderer);
-
-            if (consumers instanceof VertexConsumerProvider.Immediate immediate) {
-                immediate.draw(RenderLayers.LINES);
-                immediate.draw(CustomRenderLayers.LINES_NO_DEPTH);
-            }
+            renderLabels(context.matrices(), consumers, context.gameRenderer().mainCamera(), cameraPos, client.font);
         });
     }
 
@@ -263,11 +258,11 @@ public final class CameraPathManager {
 
     public static String selectNearest() {
         ensurePathExists();
-        Vec3d current = currentPose().position;
+        Vec3 current = currentPose().position;
         int bestIndex = -1;
         double bestDistanceSq = Double.MAX_VALUE;
         for (int i = 0; i < workingPath.points.size(); i++) {
-            double distanceSq = workingPath.points.get(i).position.squaredDistanceTo(current);
+            double distanceSq = workingPath.points.get(i).position.distanceToSqr(current);
             if (distanceSq < bestDistanceSq) {
                 bestDistanceSq = distanceSq;
                 bestIndex = i;
@@ -381,7 +376,7 @@ public final class CameraPathManager {
         ensurePathExists();
         ensureDimensionMatchesCurrent();
         CameraPose pose = currentPose();
-        Vec3d delta = pose.position.subtract(workingPath.points.getFirst().position);
+        Vec3 delta = pose.position.subtract(workingPath.points.getFirst().position);
         List<Keyframe> updated = new ArrayList<>(workingPath.points.size());
         for (Keyframe point : workingPath.points) {
             updated.add(new Keyframe(point.position.add(delta), point.yaw, point.pitch, point.timeTicks));
@@ -546,14 +541,14 @@ public final class CameraPathManager {
     }
 
     private static void requireClientReady() {
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (client.player == null || client.world == null) {
+        Minecraft client = Minecraft.getInstance();
+        if (client.player == null || client.level == null) {
             throw new IllegalStateException("You must be in a world to edit camera paths.");
         }
     }
 
     private static CameraPose currentPose() {
-        MinecraftClient client = MinecraftClient.getInstance();
+        Minecraft client = Minecraft.getInstance();
         Entity entity = CameraEntity.getCamera();
         if (entity == null) {
             entity = client.getCameraEntity();
@@ -564,20 +559,20 @@ public final class CameraPathManager {
         if (entity == null) {
             throw new IllegalStateException("No active camera entity is available.");
         }
-        return new CameraPose(new Vec3d(entity.getX(), entity.getY(), entity.getZ()), entity.getYaw(), entity.getPitch());
+        return new CameraPose(new Vec3(entity.getX(), entity.getY(), entity.getZ()), entity.getYRot(), entity.getXRot());
     }
 
     private static String currentDimensionId() {
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (client.world == null) {
+        Minecraft client = Minecraft.getInstance();
+        if (client.level == null) {
             throw new IllegalStateException("You must be in a world to use camera paths.");
         }
-        return client.world.getRegistryKey().getValue().toString();
+        return client.level.dimension().identifier().toString();
     }
 
     private static String currentDimensionIdOrEmpty() {
-        MinecraftClient client = MinecraftClient.getInstance();
-        return client.world == null ? "" : client.world.getRegistryKey().getValue().toString();
+        Minecraft client = Minecraft.getInstance();
+        return client.level == null ? "" : client.level.dimension().identifier().toString();
     }
 
     private static CameraPose samplePose(CameraPath path, int timeTicks) {
@@ -586,7 +581,7 @@ public final class CameraPathManager {
 
     private static CameraPose samplePose(CameraPath path, double timeTicks) {
         if (path.points.isEmpty()) {
-            return new CameraPose(Vec3d.ZERO, 0.0f, 0.0f);
+            return new CameraPose(Vec3.ZERO, 0.0f, 0.0f);
         }
         if (path.points.size() == 1) {
             Keyframe only = path.points.getFirst();
@@ -607,26 +602,26 @@ public final class CameraPathManager {
         Keyframe p0 = segment > 0 ? path.points.get(segment - 1) : p1;
         Keyframe p3 = segment + 2 < path.points.size() ? path.points.get(segment + 2) : p2;
 
-        Vec3d position = switch (path.interpolation) {
+        Vec3 position = switch (path.interpolation) {
             case LINEAR -> p1.position.lerp(p2.position, t);
             case CATMULL_ROM -> catmullRom(p0.position, p1.position, p2.position, p3.position, t);
         };
 
         float yaw = switch (path.interpolation) {
-            case LINEAR -> MathHelper.lerpAngleDegrees((float) t, p1.yaw, p2.yaw);
-            case CATMULL_ROM -> MathHelper.wrapDegrees(catmullRomAngle(p0.yaw, p1.yaw, p2.yaw, p3.yaw, t));
+            case LINEAR -> Mth.rotLerp((float) t, p1.yaw, p2.yaw);
+            case CATMULL_ROM -> Mth.wrapDegrees(catmullRomAngle(p0.yaw, p1.yaw, p2.yaw, p3.yaw, t));
         };
         float pitch = switch (path.interpolation) {
-            case LINEAR -> MathHelper.lerpAngleDegrees((float) t, p1.pitch, p2.pitch);
-            case CATMULL_ROM -> MathHelper.clamp(catmullRomAngle(p0.pitch, p1.pitch, p2.pitch, p3.pitch, t), -90.0f, 90.0f);
+            case LINEAR -> Mth.rotLerp((float) t, p1.pitch, p2.pitch);
+            case CATMULL_ROM -> Mth.clamp(catmullRomAngle(p0.pitch, p1.pitch, p2.pitch, p3.pitch, t), -90.0f, 90.0f);
         };
         return new CameraPose(position, yaw, pitch);
     }
 
-    private static Vec3d catmullRom(Vec3d p0, Vec3d p1, Vec3d p2, Vec3d p3, double t) {
+    private static Vec3 catmullRom(Vec3 p0, Vec3 p1, Vec3 p2, Vec3 p3, double t) {
         double t2 = t * t;
         double t3 = t2 * t;
-        return new Vec3d(
+        return new Vec3(
                 0.5 * ((2.0 * p1.x) + (-p0.x + p2.x) * t + (2.0 * p0.x - 5.0 * p1.x + 4.0 * p2.x - p3.x) * t2 + (-p0.x + 3.0 * p1.x - 3.0 * p2.x + p3.x) * t3),
                 0.5 * ((2.0 * p1.y) + (-p0.y + p2.y) * t + (2.0 * p0.y - 5.0 * p1.y + 4.0 * p2.y - p3.y) * t2 + (-p0.y + 3.0 * p1.y - 3.0 * p2.y + p3.y) * t3),
                 0.5 * ((2.0 * p1.z) + (-p0.z + p2.z) * t + (2.0 * p0.z - 5.0 * p1.z + 4.0 * p2.z - p3.z) * t2 + (-p0.z + 3.0 * p1.z - 3.0 * p2.z + p3.z) * t3)
@@ -647,11 +642,11 @@ public final class CameraPathManager {
     }
 
     private static double normalizeAngleAround(double reference, double value) {
-        double delta = MathHelper.wrapDegrees((float) (value - reference));
+        double delta = Mth.wrapDegrees((float) (value - reference));
         return reference + delta;
     }
 
-    private static void renderPathLines(VertexConsumer visible, VertexConsumer through, Vec3d cameraPos) {
+    private static void renderPathLines(VertexConsumer visible, VertexConsumer through, Vec3 cameraPos) {
         float[] visibleColor = color(0x3CE8FF, 0.95f);
         float[] throughColor = color(0x3CE8FF, 0.30f);
         if (workingPath.points.size() == 1) {
@@ -669,7 +664,7 @@ public final class CameraPathManager {
         }
     }
 
-    private static void renderKeyframes(VertexConsumer visible, VertexConsumer through, Vec3d cameraPos) {
+    private static void renderKeyframes(VertexConsumer visible, VertexConsumer through, Vec3 cameraPos) {
         for (int i = 0; i < workingPath.points.size(); i++) {
             Keyframe point = workingPath.points.get(i);
             boolean selected = i == selectedIndex;
@@ -680,18 +675,18 @@ public final class CameraPathManager {
             drawBox(visible, point.position, cameraPos, radius, visibleColor, 1.75f);
             drawBox(through, point.position, cameraPos, radius, throughColor, 1.75f);
 
-            Vec3d lookDirection = Vec3d.fromPolar(point.pitch, point.yaw);
-            Vec3d lookEnd = point.position.add(lookDirection.multiply(selected ? 1.6 : 1.1));
+            Vec3 lookDirection = Vec3.directionFromRotation(point.pitch, point.yaw);
+            Vec3 lookEnd = point.position.add(lookDirection.scale(selected ? 1.6 : 1.1));
             drawSegment(visible, point.position, lookEnd, cameraPos, visibleColor, 1.3f);
             drawSegment(through, point.position, lookEnd, cameraPos, throughColor, 1.3f);
         }
     }
 
-    private static void renderLabels(@Nullable MatrixStack matrices,
-                                     VertexConsumerProvider consumers,
-                                     net.minecraft.client.render.Camera camera,
-                                     Vec3d cameraPos,
-                                     TextRenderer textRenderer) {
+    private static void renderLabels(@Nullable PoseStack matrices,
+                                     OverlayBufferSource consumers,
+                                     net.minecraft.client.Camera camera,
+                                     Vec3 cameraPos,
+                                     Font textRenderer) {
         if (matrices == null) {
             return;
         }
@@ -708,27 +703,27 @@ public final class CameraPathManager {
             }
 
             String label = buildLabel(i, point);
-            matrices.push();
+            matrices.pushPose();
             matrices.translate(point.position.x - cameraPos.x, point.position.y - cameraPos.y + 0.8, point.position.z - cameraPos.z);
-            matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(-camera.getYaw()));
-            matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(camera.getPitch()));
+            matrices.rotate(Axis.YP.rotationDegrees(-camera.yRot()));
+            matrices.rotate(Axis.XP.rotationDegrees(camera.xRot()));
             float scale = (float) Math.clamp(distance * 0.0024, 0.018, 0.045);
             matrices.scale(-scale, -scale, scale);
 
-            Matrix4f matrix = matrices.peek().getPositionMatrix();
+            Matrix4f matrix = matrices.last().pose();
             int color = i == selectedIndex ? 0xFFFFE17A : 0xFFB8FFF2;
-            int width = textRenderer.getWidth(label);
-            textRenderer.draw(label,
+            int width = textRenderer.width(label);
+            OverlayBufferSource.drawText(textRenderer, label,
                     -width / 2f,
                     0,
                     color,
                     false,
                     matrix,
                     consumers,
-                    TextRenderer.TextLayerType.SEE_THROUGH,
+                    Font.DisplayMode.SEE_THROUGH,
                     0,
                     0x00F000F0);
-            matrices.pop();
+            matrices.popPose();
         }
     }
 
@@ -751,7 +746,7 @@ public final class CameraPathManager {
         return label.toString();
     }
 
-    private static void drawBox(VertexConsumer buffer, Vec3d worldPos, Vec3d cameraPos, double radius, float[] color, float width) {
+    private static void drawBox(VertexConsumer buffer, Vec3 worldPos, Vec3 cameraPos, double radius, float[] color, float width) {
         DrawUtil.drawOutlinedBoxSafe(buffer,
                 worldPos.x - radius - cameraPos.x,
                 worldPos.y - radius - cameraPos.y,
@@ -763,9 +758,9 @@ public final class CameraPathManager {
     }
 
     private static void drawSegment(VertexConsumer buffer,
-                                    Vec3d start,
-                                    Vec3d end,
-                                    Vec3d cameraPos,
+                                    Vec3 start,
+                                    Vec3 end,
+                                    Vec3 cameraPos,
                                     float[] color,
                                     float width) {
         DrawUtil.drawLineSafe(buffer,
@@ -806,13 +801,13 @@ public final class CameraPathManager {
     }
 
     private static boolean samePose(Keyframe point, CameraPose pose) {
-        return point.position.squaredDistanceTo(pose.position) <= 1.0e-6
+        return point.position.distanceToSqr(pose.position) <= 1.0e-6
                 && angleDistance(point.yaw, pose.yaw) <= 0.05f
                 && angleDistance(point.pitch, pose.pitch) <= 0.05f;
     }
 
     private static float angleDistance(float first, float second) {
-        return Math.abs(MathHelper.wrapDegrees(first - second));
+        return Math.abs(Mth.wrapDegrees(first - second));
     }
 
     private static void saveToDisk() {
@@ -916,7 +911,7 @@ public final class CameraPathManager {
                     }
                     JsonObject pointJson = element.getAsJsonObject();
                     points.add(new Keyframe(
-                            new Vec3d(pointJson.get("x").getAsDouble(), pointJson.get("y").getAsDouble(), pointJson.get("z").getAsDouble()),
+                            new Vec3(pointJson.get("x").getAsDouble(), pointJson.get("y").getAsDouble(), pointJson.get("z").getAsDouble()),
                             pointJson.get("yaw").getAsFloat(),
                             pointJson.get("pitch").getAsFloat(),
                             pointJson.get("time").getAsInt()
@@ -942,10 +937,10 @@ public final class CameraPathManager {
         }
     }
 
-    private record Keyframe(Vec3d position, float yaw, float pitch, int timeTicks) {
+    private record Keyframe(Vec3 position, float yaw, float pitch, int timeTicks) {
     }
 
-    private record CameraPose(Vec3d position, float yaw, float pitch) {
+    private record CameraPose(Vec3 position, float yaw, float pitch) {
     }
 
     private static final class CameraPath {

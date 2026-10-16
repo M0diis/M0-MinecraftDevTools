@@ -1,14 +1,14 @@
 package me.m0dii.modules.overlays;
 
+import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.VertexConsumer;
 import me.m0dii.modules.Module;
+import me.m0dii.render.OverlayBufferSource;
+import me.m0dii.render.OverlayRenderEvents;
 import me.m0dii.utils.DrawUtil;
-import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
-import net.minecraft.client.render.RenderLayers;
-import net.minecraft.client.render.VertexConsumer;
-import net.minecraft.client.render.VertexConsumerProvider;
-import net.minecraft.client.util.math.MatrixStack;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.client.renderer.rendertype.RenderTypes;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.NotNull;
 import org.joml.Matrix4f;
 
@@ -22,27 +22,27 @@ public class ChunkBorderOverlayModule extends Module {
 
     @Override
     public void register() {
-        WorldRenderEvents.AFTER_ENTITIES.register(getAfterEntities());
+        OverlayRenderEvents.AFTER_ENTITIES.register(getAfterEntities());
     }
 
-    private WorldRenderEvents.@NotNull AfterEntities getAfterEntities() {
+    private OverlayRenderEvents.@NotNull AfterEntities getAfterEntities() {
         return context -> {
             if (!isEnabled() || isClientNull()) {
                 return;
             }
 
-            MatrixStack matrices = context.matrices();
+            PoseStack matrices = context.matrices();
             if (matrices == null) {
                 return;
             }
 
-            VertexConsumerProvider vertexConsumers = context.consumers();
+            OverlayBufferSource vertexConsumers = context.consumers();
             if (vertexConsumers == null) {
                 return;
             }
 
-            Vec3d cameraPos = context.gameRenderer().getCamera().getCameraPos();
-            BlockPos playerPos = getClient().player.getBlockPos();
+            Vec3 cameraPos = context.gameRenderer().mainCamera().position();
+            BlockPos playerPos = getClient().player.blockPosition();
 
             int chunkX = playerPos.getX() >> 4;
             int chunkZ = playerPos.getZ() >> 4;
@@ -59,12 +59,12 @@ public class ChunkBorderOverlayModule extends Module {
         };
     }
 
-    private static void renderChunkBorder(@NotNull MatrixStack matrices,
-                                          @NotNull VertexConsumerProvider vertexConsumers,
-                                          @NotNull Vec3d cameraPos,
+    private static void renderChunkBorder(@NotNull PoseStack matrices,
+                                          @NotNull OverlayBufferSource vertexConsumers,
+                                          @NotNull Vec3 cameraPos,
                                           int chunkX,
                                           int chunkZ) {
-        matrices.push();
+        matrices.pushPose();
 
         // Chunk boundaries
         double minX = (chunkX << 4) - cameraPos.x;
@@ -75,8 +75,8 @@ public class ChunkBorderOverlayModule extends Module {
         double minY = -64 - cameraPos.y;
         double maxY = 320 - cameraPos.y;
 
-        VertexConsumer vertexConsumer = vertexConsumers.getBuffer(RenderLayers.LINES);
-        Matrix4f matrix = matrices.peek().getPositionMatrix();
+        VertexConsumer vertexConsumer = vertexConsumers.getBuffer(RenderTypes.LINES);
+        Matrix4f matrix = matrices.last().pose();
 
         // Draw vertical lines at chunk corners
         DrawUtil.drawLine(vertexConsumer, matrix, (float) minX, (float) minY, (float) minZ, (float) minX, (float) maxY, (float) minZ,
@@ -88,6 +88,6 @@ public class ChunkBorderOverlayModule extends Module {
         DrawUtil.drawLine(vertexConsumer, matrix, (float) maxX, (float) minY, (float) maxZ, (float) maxX, (float) maxY, (float) maxZ,
                 0.0f, 0.5f, 1.0f, 0.8f, 0.0f, 1.0f, 0.0f, 1.0f);
 
-        matrices.pop();
+        matrices.popPose();
     }
 }

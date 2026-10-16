@@ -1,6 +1,6 @@
 package me.m0dii.modules.itemdata;
 
-import net.minecraft.registry.RegistryWrapper;
+import net.minecraft.core.HolderLookup;
 
 import java.util.HashMap;
 import java.util.Locale;
@@ -139,11 +139,11 @@ public final class ItemComponentMetadata {
         return entry(componentId).description();
     }
 
-    public static String starterTemplate(String componentId, RegistryWrapper.WrapperLookup registryLookup) {
+    public static String starterTemplate(String componentId, HolderLookup.Provider registryLookup) {
         return entry(componentId).starterTemplate().apply(registryLookup);
     }
 
-    public static String example(String componentId, RegistryWrapper.WrapperLookup registryLookup) {
+    public static String example(String componentId, HolderLookup.Provider registryLookup) {
         return entry(componentId).example().apply(registryLookup);
     }
 
@@ -462,13 +462,13 @@ public final class ItemComponentMetadata {
                                 String label,
                                 String description,
                                 int priority,
-                                Function<RegistryWrapper.WrapperLookup, String> starterTemplate,
-                                Function<RegistryWrapper.WrapperLookup, String> example) {
+                                Function<HolderLookup.Provider, String> starterTemplate,
+                                Function<HolderLookup.Provider, String> example) {
         String typeHint = entries.containsKey(id) ? entries.get(id).typeHint() : "Unknown";
         entries.put(id, new Entry(id, label, typeHint, description, starterTemplate, example, priority));
     }
 
-    private static Function<RegistryWrapper.WrapperLookup, String> genericStarter(String componentId, String typeHint) {
+    private static Function<HolderLookup.Provider, String> genericStarter(String componentId, String typeHint) {
         if (componentId.endsWith("_variant")) {
             return constant("\"minecraft:default\"");
         }
@@ -536,7 +536,7 @@ public final class ItemComponentMetadata {
         };
     }
 
-    private static Function<RegistryWrapper.WrapperLookup, String> genericExample(String componentId, String typeHint) {
+    private static Function<HolderLookup.Provider, String> genericExample(String componentId, String typeHint) {
         if (componentId.endsWith("_variant")) {
             return constant("\"minecraft:default\"");
         }
@@ -689,11 +689,11 @@ public final class ItemComponentMetadata {
         return "{}";
     }
 
-    private static Function<RegistryWrapper.WrapperLookup, String> constant(String value) {
+    private static Function<HolderLookup.Provider, String> constant(String value) {
         return lookup -> value;
     }
 
-    private static Function<RegistryWrapper.WrapperLookup, String> textLiteral(String value) {
+    private static Function<HolderLookup.Provider, String> textLiteral(String value) {
         return lookup -> ItemDataCodec.encodeTextLiteral(value, lookup);
     }
 
@@ -741,8 +741,8 @@ public final class ItemComponentMetadata {
                         String label,
                         String typeHint,
                         String description,
-                        Function<RegistryWrapper.WrapperLookup, String> starterTemplate,
-                        Function<RegistryWrapper.WrapperLookup, String> example,
+                        Function<HolderLookup.Provider, String> starterTemplate,
+                        Function<HolderLookup.Provider, String> example,
                         int priority) {
     }
 

@@ -2,8 +2,7 @@ package me.m0dii.modules.macros.gui;
 
 import me.m0dii.gui.local.UiRect;
 import me.m0dii.modules.macros.hud.MacroHudDataHandler;
-import net.minecraft.client.gui.Click;
-
+import net.minecraft.client.input.MouseButtonEvent;
 import java.util.List;
 
 public final class MacroWorkbenchCustomWidgetAdvancedClickHandler {
@@ -11,7 +10,7 @@ public final class MacroWorkbenchCustomWidgetAdvancedClickHandler {
     }
 
     public interface Ops {
-        boolean contains(Click click, UiRect rect);
+        boolean contains(MouseButtonEvent click, UiRect rect);
 
         boolean contains(double x, double y, int boxX, int boxY, int boxW, int boxH);
 
@@ -60,7 +59,7 @@ public final class MacroWorkbenchCustomWidgetAdvancedClickHandler {
         void setAdvancedActionSuggestionIndex(int value);
     }
 
-    public static boolean handleSuggestionClick(Click click, UiRect suggestionsArea, List<String> suggestions, Ops ops) {
+    public static boolean handleSuggestionClick(MouseButtonEvent click, UiRect suggestionsArea, List<String> suggestions, Ops ops) {
         if (suggestions.isEmpty()) {
             return false;
         }
@@ -88,7 +87,7 @@ public final class MacroWorkbenchCustomWidgetAdvancedClickHandler {
         return false;
     }
 
-    public static boolean handleGeneralRowClick(Click click,
+    public static boolean handleGeneralRowClick(MouseButtonEvent click,
                                                 List<UiRect> generalRow1,
                                                 List<UiRect> generalRow2,
                                                 boolean forward,
@@ -157,7 +156,7 @@ public final class MacroWorkbenchCustomWidgetAdvancedClickHandler {
         return false;
     }
 
-    public static boolean handleBaseRowClick(Click click,
+    public static boolean handleBaseRowClick(MouseButtonEvent click,
                                              List<UiRect> baseRow,
                                              boolean forward,
                                              MacroHudDataHandler.HudElement selected,

@@ -1,15 +1,15 @@
 package me.m0dii.gui.local;
 
 import lombok.Getter;
-import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.text.Text;
-import org.lwjgl.glfw.GLFW;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.network.chat.Component;
+import com.mojang.blaze3d.platform.InputConstants;
 
 import java.util.function.Function;
 import java.util.function.IntConsumer;
 
 public final class UiKeyCaptureButton {
-    private final ButtonWidget widget;
+    private final Button widget;
     private final String label;
     private IntConsumer saveConsumer = ignored -> {
     };
@@ -26,11 +26,11 @@ public final class UiKeyCaptureButton {
                               int height) {
         this.label = label == null ? "" : label;
         this.value = initialValue;
-        this.widget = ButtonWidget.builder(Text.empty(), button -> {
+        this.widget = Button.builder(Component.empty(), button -> {
                     this.capturing = !this.capturing;
                     syncLabel();
                 })
-                .dimensions(x, y, width, height)
+                .bounds(x, y, width, height)
                 .build();
         syncLabel();
     }
@@ -62,7 +62,7 @@ public final class UiKeyCaptureButton {
         syncLabel();
     }
 
-    public ButtonWidget widget() {
+    public Button widget() {
         return this.widget;
     }
 
@@ -70,7 +70,7 @@ public final class UiKeyCaptureButton {
         if (!this.capturing) {
             return false;
         }
-        if (keyCode == GLFW.GLFW_KEY_ESCAPE || keyCode == GLFW.GLFW_KEY_BACKSPACE || keyCode == GLFW.GLFW_KEY_DELETE) {
+        if (keyCode == InputConstants.KEY_ESCAPE || keyCode == InputConstants.KEY_BACKSPACE || keyCode == InputConstants.KEY_DELETE) {
             this.value = -1;
         } else {
             this.value = keyCode;
@@ -83,6 +83,6 @@ public final class UiKeyCaptureButton {
 
     private void syncLabel() {
         String suffix = this.capturing ? "Press key..." : this.labelFormatter.apply(this.value);
-        this.widget.setMessage(Text.literal(this.label + ": " + suffix));
+        this.widget.setMessage(Component.literal(this.label + ": " + suffix));
     }
 }

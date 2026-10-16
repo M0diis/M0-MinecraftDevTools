@@ -2,7 +2,7 @@ package me.m0dii.modules.macros.gui;
 
 import me.m0dii.gui.local.UiRect;
 import me.m0dii.modules.macros.hud.MacroHudDataHandler;
-import net.minecraft.client.gui.Click;
+import net.minecraft.client.input.MouseButtonEvent;
 
 final class MacroWorkbenchCustomWidgetAdvancedClickOpsBridge implements MacroWorkbenchCustomWidgetAdvancedClickHandler.Ops {
     private final MacroWorkbenchScreen screen;
@@ -12,7 +12,7 @@ final class MacroWorkbenchCustomWidgetAdvancedClickOpsBridge implements MacroWor
     }
 
     @Override
-    public boolean contains(Click click, UiRect rect) {
+    public boolean contains(MouseButtonEvent click, UiRect rect) {
         return screen.cwContains(click, rect);
     }
 

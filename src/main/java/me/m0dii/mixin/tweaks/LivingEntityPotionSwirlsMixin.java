@@ -1,8 +1,8 @@
 package me.m0dii.mixin.tweaks;
 
 import me.m0dii.modules.tweaks.TweaksModule;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.entity.LivingEntity;
+import net.minecraft.client.Minecraft;
+import net.minecraft.world.entity.LivingEntity;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
@@ -13,20 +13,20 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public abstract class LivingEntityPotionSwirlsMixin {
 
     @Shadow
-    protected abstract void clearPotionSwirls();
+    protected abstract void removeEffectParticles();
 
-    @Inject(method = "updatePotionSwirls", at = @At("HEAD"), cancellable = true)
+    @Inject(method = "updateSynchronizedMobEffectParticles", at = @At("HEAD"), cancellable = true)
     private void hideOwnEffectSwirls(CallbackInfo ci) {
         if (!TweaksModule.INSTANCE.hideOwnEffectParticles()) {
             return;
         }
 
-        MinecraftClient client = MinecraftClient.getInstance();
+        Minecraft client = Minecraft.getInstance();
         if ((Object) this != client.player) {
             return;
         }
 
-        clearPotionSwirls();
+        removeEffectParticles();
         ci.cancel();
     }
 }

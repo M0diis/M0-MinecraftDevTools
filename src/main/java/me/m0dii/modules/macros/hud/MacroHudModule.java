@@ -4,9 +4,9 @@ import me.m0dii.M0DevToolsClient;
 import me.m0dii.modules.Module;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.render.RenderTickCounter;
-import net.minecraft.util.Identifier;
+import net.minecraft.client.DeltaTracker;
+import net.minecraft.client.Minecraft;
+import net.minecraft.resources.Identifier;
 
 public class MacroHudModule extends Module {
 
@@ -19,18 +19,18 @@ public class MacroHudModule extends Module {
     @Override
     public void register() {
         HudElementRegistry.attachElementBefore(VanillaHudElements.CHAT,
-                Identifier.of(M0DevToolsClient.MOD_ID, "macro_hud"),
+                Identifier.fromNamespaceAndPath(M0DevToolsClient.MOD_ID, "macro_hud"),
                 this::onHudRender
         );
     }
 
-    private void onHudRender(net.minecraft.client.gui.DrawContext context, RenderTickCounter tickCounter) {
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (!isEnabled() || client.player == null || client.world == null) {
+    private void onHudRender(net.minecraft.client.gui.GuiGraphicsExtractor context, DeltaTracker tickCounter) {
+        Minecraft client = Minecraft.getInstance();
+        if (!isEnabled() || client.player == null || client.level == null) {
             return;
         }
 
-        MacroHudRuntime.render(context, MacroHudRuntime.isInteractiveContext());
+        MacroHudRuntime.extractRenderState(context, MacroHudRuntime.isInteractiveContext());
     }
 }
 

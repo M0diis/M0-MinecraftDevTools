@@ -1,13 +1,11 @@
 package me.m0dii.modules.macros.gui;
 
 import me.m0dii.modules.macros.hud.MacroHudDataHandler;
-import me.m0dii.utils.ReflectionUtils;
 import me.m0dii.utils.StringUtils;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.ingame.InventoryScreen;
-import net.minecraft.entity.LivingEntity;
-
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.screens.inventory.InventoryScreen;
+import net.minecraft.world.entity.LivingEntity;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
@@ -17,8 +15,8 @@ public final class MacroWorkbenchEntityModelRenderer {
     private MacroWorkbenchEntityModelRenderer() {
     }
 
-    public static void draw(DrawContext context,
-                            MinecraftClient client,
+    public static void draw(GuiGraphicsExtractor context,
+                            Minecraft client,
                             MacroHudDataHandler.HudElement element,
                             int x,
                             int y,
@@ -27,7 +25,7 @@ public final class MacroWorkbenchEntityModelRenderer {
         if (client == null || element == null) {
             return;
         }
-        net.minecraft.entity.Entity target = resolveCanvasModelTargetEntity(client, element);
+        net.minecraft.world.entity.Entity target = resolveCanvasModelTargetEntity(client, element);
         if (target == null) {
             return;
         }
@@ -54,18 +52,18 @@ public final class MacroWorkbenchEntityModelRenderer {
                 element.modelYaw, element.modelPitch, element.modelFollowLook);
     }
 
-    private static net.minecraft.entity.Entity resolveCanvasModelTargetEntity(MinecraftClient client,
+    private static net.minecraft.world.entity.Entity resolveCanvasModelTargetEntity(Minecraft client,
                                                                               MacroHudDataHandler.HudElement element) {
         String id = StringUtils.safe(element == null ? null : element.iconId).toLowerCase(Locale.ROOT);
         if (id.isBlank() || "player".equals(id) || "minecraft:player".equals(id)) {
             if (client.player != null) {
                 return client.player;
             }
-            net.minecraft.entity.Entity camera = client.getCameraEntity();
+            net.minecraft.world.entity.Entity camera = client.getCameraEntity();
             return camera instanceof LivingEntity ? camera : null;
         }
-        if (client.world != null && !id.contains(":")) {
-            for (var player : client.world.getPlayers()) {
+        if (client.level != null && !id.contains(":")) {
+            for (var player : client.level.players()) {
                 if (player != null && player.getName().getString().equalsIgnoreCase(id)) {
                     return player;
                 }
@@ -74,12 +72,12 @@ public final class MacroWorkbenchEntityModelRenderer {
         if (client.player != null) {
             return client.player;
         }
-        net.minecraft.entity.Entity camera = client.getCameraEntity();
+        net.minecraft.world.entity.Entity camera = client.getCameraEntity();
         return camera instanceof LivingEntity ? camera : null;
     }
 
-    private static void drawEntityModelReflective(DrawContext context,
-                                                  net.minecraft.entity.Entity entity,
+    private static void drawEntityModelReflective(GuiGraphicsExtractor context,
+                                                  net.minecraft.world.entity.Entity entity,
                                                   int left,
                                                   int top,
                                                   int right,
@@ -100,12 +98,12 @@ public final class MacroWorkbenchEntityModelRenderer {
                 return;
             }
 
-            Class<?> inventoryScreen = Class.forName("net.minecraft.client.gui.screen.ingame.InventoryScreen");
-            Class<?> drawContextClass = Class.forName("net.minecraft.client.gui.DrawContext");
-            Class<?> entityClass = Class.forName("net.minecraft.entity.Entity");
+            Class<?> inventoryScreen = net.minecraft.client.gui.screens.inventory.InventoryScreen.class;
+            Class<?> drawContextClass = GuiGraphicsExtractor.class;
+            Class<?> entityClass = net.minecraft.world.entity.Entity.class;
             Class<?> vectorClass = Class.forName("org.joml.Vector3f");
             Class<?> quaternionClass = Class.forName("org.joml.Quaternionf");
-            Class<?> livingEntityClass = Class.forName("net.minecraft.entity.LivingEntity");
+            Class<?> livingEntityClass = net.minecraft.world.entity.LivingEntity.class;
 
             Object vecZero = vectorClass.getConstructor(float.class, float.class, float.class).newInstance(0.0f, 0.0f, 0.0f);
             Object modelQuat = buildModelQuaternion(quaternionClass, resolvedPitch);
@@ -208,8 +206,8 @@ public final class MacroWorkbenchEntityModelRenderer {
         }
     }
 
-    private static boolean drawEntityModelDirect(DrawContext context,
-                                                 net.minecraft.entity.Entity entity,
+    private static boolean drawEntityModelDirect(GuiGraphicsExtractor context,
+                                                 net.minecraft.world.entity.Entity entity,
                                                  int left,
                                                  int top,
                                                  int right,
@@ -227,7 +225,7 @@ public final class MacroWorkbenchEntityModelRenderer {
             float clampedPitch = Math.clamp(resolvedPitch, -30.0f, 30.0f);
             float mx = cx - 40.0f * (float) Math.tan(clampedYaw / 20.0f);
             float my = cy + 40.0f * (float) Math.tan(clampedPitch / 20.0f);
-            InventoryScreen.drawEntity(context, left, top, right, bottom, size, 0.0625f, mx, my, living);
+            InventoryScreen.extractEntityInInventoryFollowsMouse(context, left, top, right, bottom, size, 0.0625f, mx, my, living);
             return true;
         } catch (Throwable ignored) {
             return false;
@@ -235,8 +233,8 @@ public final class MacroWorkbenchEntityModelRenderer {
     }
 
     private static boolean invokePreferredEntityDrawPreview(Class<?> inventoryScreen,
-                                                            DrawContext context,
-                                                            net.minecraft.entity.Entity entity,
+                                                            GuiGraphicsExtractor context,
+                                                            net.minecraft.world.entity.Entity entity,
                                                             int left,
                                                             int top,
                                                             int right,
@@ -283,7 +281,7 @@ public final class MacroWorkbenchEntityModelRenderer {
                 Object lightQuat = quaternionClass.getConstructor().newInstance();
                 rotX.invoke(lightQuat, pitchRad);
                 Object vec = vectorClass.getConstructor(float.class, float.class, float.class)
-                        .newInstance(0.0f, entity.getHeight() / 2.0f + 0.0625f * entityScale, 0.0f);
+                        .newInstance(0.0f, entity.getBbHeight() / 2.0f + 0.0625f * entityScale, 0.0f);
                 float fcx = (left + right) / 2.0f;
                 float fcy = (top + bottom) / 2.0f;
                 EntityOrientationSnapshot snapshot = captureEntityOrientation(entity);
@@ -418,7 +416,7 @@ public final class MacroWorkbenchEntityModelRenderer {
                 && entityClass.isAssignableFrom(p[6]);
     }
 
-    private static EntityOrientationSnapshot captureEntityOrientation(net.minecraft.entity.Entity entity) {
+    private static EntityOrientationSnapshot captureEntityOrientation(net.minecraft.world.entity.Entity entity) {
         if (entity == null) {
             return new EntityOrientationSnapshot(0.0f, 0.0f, null, null, null);
         }
@@ -426,41 +424,41 @@ public final class MacroWorkbenchEntityModelRenderer {
         Float headYaw = null;
         Float prevHeadYaw = null;
         if (entity instanceof LivingEntity living) {
-            bodyYaw = living.getBodyYaw();
-            headYaw = living.getHeadYaw();
-            prevHeadYaw = ReflectionUtils.getFloatField(living, LivingEntity.class, "prevHeadYaw");
+            bodyYaw = living.getVisualRotationYInDegrees();
+            headYaw = living.getYHeadRot();
+            prevHeadYaw = living.yHeadRotO;
         }
-        return new EntityOrientationSnapshot(entity.getYaw(), entity.getPitch(), bodyYaw, headYaw, prevHeadYaw);
+        return new EntityOrientationSnapshot(entity.getYRot(), entity.getXRot(), bodyYaw, headYaw, prevHeadYaw);
     }
 
-    private static void applyEntityOrientationForScreen(net.minecraft.entity.Entity entity, float displayYaw, float pitch) {
+    private static void applyEntityOrientationForScreen(net.minecraft.world.entity.Entity entity, float displayYaw, float pitch) {
         if (entity == null) {
             return;
         }
-        entity.setYaw(displayYaw);
-        entity.setPitch(pitch);
+        entity.setYRot(displayYaw);
+        entity.setXRot(pitch);
         if (entity instanceof LivingEntity living) {
-            living.setBodyYaw(displayYaw);
-            living.setHeadYaw(displayYaw);
-            ReflectionUtils.setFloatField(living, LivingEntity.class, "prevHeadYaw", displayYaw);
+            living.setYBodyRot(displayYaw);
+            living.setYHeadRot(displayYaw);
+            living.yHeadRotO = displayYaw;
         }
     }
 
-    private static void restoreEntityOrientation(net.minecraft.entity.Entity entity, EntityOrientationSnapshot snapshot) {
+    private static void restoreEntityOrientation(net.minecraft.world.entity.Entity entity, EntityOrientationSnapshot snapshot) {
         if (entity == null || snapshot == null) {
             return;
         }
-        entity.setYaw(snapshot.yaw());
-        entity.setPitch(snapshot.pitch());
+        entity.setYRot(snapshot.yaw());
+        entity.setXRot(snapshot.pitch());
         if (entity instanceof LivingEntity living) {
             if (snapshot.bodyYaw() != null) {
-                living.setBodyYaw(snapshot.bodyYaw());
+                living.setYBodyRot(snapshot.bodyYaw());
             }
             if (snapshot.headYaw() != null) {
-                living.setHeadYaw(snapshot.headYaw());
+                living.setYHeadRot(snapshot.headYaw());
             }
             if (snapshot.prevHeadYaw() != null) {
-                ReflectionUtils.setFloatField(living, LivingEntity.class, "prevHeadYaw", snapshot.prevHeadYaw());
+                living.yHeadRotO = snapshot.prevHeadYaw();
             }
         }
     }
@@ -468,12 +466,12 @@ public final class MacroWorkbenchEntityModelRenderer {
     private record EntityOrientationSnapshot(float yaw, float pitch, Float bodyYaw, Float headYaw, Float prevHeadYaw) {
     }
 
-    private static float[] resolveModelAngles(net.minecraft.entity.Entity entity, float yawOffset, float pitchOffset, boolean followLook) {
+    private static float[] resolveModelAngles(net.minecraft.world.entity.Entity entity, float yawOffset, float pitchOffset, boolean followLook) {
         float baseYaw = 0.0f;
         float basePitch = 0.0f;
         if (followLook && entity != null) {
-            baseYaw = entity instanceof LivingEntity living ? living.getHeadYaw() : entity.getYaw();
-            basePitch = entity.getPitch();
+            baseYaw = entity instanceof LivingEntity living ? living.getYHeadRot() : entity.getYRot();
+            basePitch = entity.getXRot();
         }
         float resolvedYaw = wrapDegrees(baseYaw + yawOffset);
         float resolvedPitch = Math.clamp(basePitch + pitchOffset, -90.0f, 90.0f);

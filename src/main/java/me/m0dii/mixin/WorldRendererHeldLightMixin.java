@@ -1,24 +1,24 @@
 package me.m0dii.mixin;
 
 import me.m0dii.modules.heldlight.HeldLightModule;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.render.WorldRenderer;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.BlockRenderView;
+import net.minecraft.client.Minecraft;
+import net.minecraft.core.BlockPos;
+import net.minecraft.util.LightCoordsUtil;
+import net.minecraft.world.level.BlockAndLightGetter;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-@Mixin(WorldRenderer.BrightnessGetter.class)
+@Mixin(LightCoordsUtil.BrightnessGetter.class)
 public interface WorldRendererHeldLightMixin {
 
-    @Inject(method = "method_68890", at = @At("TAIL"), cancellable = true, require = 0, remap = false)
-    private static void injectHeldLight(BlockRenderView world, BlockPos pos, CallbackInfoReturnable<Integer> cir) {
-        if (world.getBlockState(pos).isSolidBlock(world, pos)) {
+    @Inject(method = "lambda$static$0", at = @At("TAIL"), cancellable = true)
+    private static void injectHeldLight(BlockAndLightGetter world, BlockPos pos, CallbackInfoReturnable<Integer> cir) {
+        if (world.getBlockState(pos).isRedstoneConductor(world, pos)) {
             return;
         }
-        int heldBlockLight = HeldLightModule.getHeldLightLevel(MinecraftClient.getInstance(), pos);
+        int heldBlockLight = HeldLightModule.getHeldLightLevel(Minecraft.getInstance(), pos);
         if (heldBlockLight <= 0) {
             return;
         }

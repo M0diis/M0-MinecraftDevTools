@@ -1,12 +1,12 @@
 package bettercommandblockui.mixin;
 
-import net.minecraft.server.network.ServerPlayNetworkHandler;
-import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.network.ServerGamePacketListenerImpl;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Accessor;
 
-@Mixin(ServerPlayerEntity.class)
+@Mixin(ServerPlayer.class)
 public interface ServerPlayerEntityAccessor {
     @Accessor
-    ServerPlayNetworkHandler getNetworkHandler();
+    ServerGamePacketListenerImpl getConnection();
 }

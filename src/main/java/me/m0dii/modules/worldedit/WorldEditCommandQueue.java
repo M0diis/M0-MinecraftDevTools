@@ -1,9 +1,8 @@
 package me.m0dii.modules.worldedit;
 
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.text.Text;
-
+import net.minecraft.client.Minecraft;
+import net.minecraft.network.chat.Component;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.List;
@@ -32,8 +31,8 @@ public final class WorldEditCommandQueue {
     }
 
     public static boolean submit(String label, List<String> commands) {
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (client.player == null || client.getNetworkHandler() == null || commands == null || commands.isEmpty() || isBusy()) {
+        Minecraft client = Minecraft.getInstance();
+        if (client.player == null || client.getConnection() == null || commands == null || commands.isEmpty() || isBusy()) {
             return false;
         }
 
@@ -42,7 +41,7 @@ public final class WorldEditCommandQueue {
         activeLabel = label;
         totalCommands = commands.size();
         sentCommands = 0;
-        client.player.sendMessage(Text.literal("[WE] Queued " + totalCommands + " command(s) for " + label + "."), false);
+        client.player.sendSystemMessage(Component.literal("[WE] Queued " + totalCommands + " command(s) for " + label + "."));
         return true;
     }
 
@@ -50,14 +49,14 @@ public final class WorldEditCommandQueue {
         pendingCompletion = completion;
     }
 
-    private static void onEndTick(MinecraftClient client) {
-        if (activeLabel == null || client.player == null || client.getNetworkHandler() == null) {
+    private static void onEndTick(Minecraft client) {
+        if (activeLabel == null || client.player == null || client.getConnection() == null) {
             return;
         }
 
         String command = PENDING.pollFirst();
         if (command == null) {
-            client.player.sendMessage(Text.literal("[WE] Finished " + activeLabel + " (" + sentCommands + " command(s))."), false);
+            client.player.sendSystemMessage(Component.literal("[WE] Finished " + activeLabel + " (" + sentCommands + " command(s))."));
             if (pendingCompletion != null) {
                 pendingCompletion.run();
             }
@@ -65,11 +64,11 @@ public final class WorldEditCommandQueue {
             return;
         }
 
-        client.getNetworkHandler().sendChatCommand(command);
+        client.getConnection().sendCommand(command);
         sentCommands++;
 
         if (PENDING.isEmpty()) {
-            client.player.sendMessage(Text.literal("[WE] Finished " + activeLabel + " (" + sentCommands + " command(s))."), false);
+            client.player.sendSystemMessage(Component.literal("[WE] Finished " + activeLabel + " (" + sentCommands + " command(s))."));
             if (pendingCompletion != null) {
                 pendingCompletion.run();
             }

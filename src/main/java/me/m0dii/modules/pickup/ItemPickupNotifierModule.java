@@ -6,14 +6,13 @@ import me.m0dii.modules.hudcanvas.HudCanvasDataHandler;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.font.TextRenderer;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.render.RenderTickCounter;
-import net.minecraft.item.ItemStack;
-import net.minecraft.registry.Registries;
-import net.minecraft.util.Identifier;
-
+import net.minecraft.client.DeltaTracker;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Font;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.item.ItemStack;
 import java.util.*;
 
 public class ItemPickupNotifierModule extends Module {
@@ -33,12 +32,12 @@ public class ItemPickupNotifierModule extends Module {
     public void register() {
         ClientTickEvents.END_CLIENT_TICK.register(this::onEndTick);
         HudElementRegistry.attachElementBefore(VanillaHudElements.CHAT,
-                Identifier.of(M0DevToolsClient.MOD_ID, "pickup_notifier"),
+                Identifier.fromNamespaceAndPath(M0DevToolsClient.MOD_ID, "pickup_notifier"),
                 this::onHudRender
         );
     }
 
-    private void onEndTick(MinecraftClient client) {
+    private void onEndTick(Minecraft client) {
         if (!isEnabled() || client == null || client.player == null) {
             previousInventoryCounts.clear();
             return;
@@ -47,9 +46,9 @@ public class ItemPickupNotifierModule extends Module {
         Map<String, Integer> currentCounts = new HashMap<>();
         Map<String, ItemStack> samples = new HashMap<>();
 
-        int invSize = client.player.getInventory().size();
+        int invSize = client.player.getInventory().getContainerSize();
         for (int i = 0; i < invSize; i++) {
-            ItemStack stack = client.player.getInventory().getStack(i);
+            ItemStack stack = client.player.getInventory().getItem(i);
             if (stack == null || stack.isEmpty()) {
                 continue;
             }
@@ -75,8 +74,8 @@ public class ItemPickupNotifierModule extends Module {
         pruneExpired(now);
     }
 
-    private void onHudRender(DrawContext ctx, RenderTickCounter tickCounter) {
-        MinecraftClient client = MinecraftClient.getInstance();
+    private void onHudRender(GuiGraphicsExtractor ctx, DeltaTracker tickCounter) {
+        Minecraft client = Minecraft.getInstance();
         if (!isEnabled() || client == null || client.player == null || popups.isEmpty()) {
             return;
         }
@@ -95,12 +94,12 @@ public class ItemPickupNotifierModule extends Module {
             return;
         }
 
-        TextRenderer tr = client.textRenderer;
+        Font tr = client.font;
         float scale = Math.clamp(canvas.fontScale, 0.5f, 3.0f);
         int panelW = Math.max(120, canvas.width);
         int panelH = Math.max(40, canvas.height);
-        int screenW = client.getWindow().getScaledWidth();
-        int screenH = client.getWindow().getScaledHeight();
+        int screenW = client.getWindow().getGuiScaledWidth();
+        int screenH = client.getWindow().getGuiScaledHeight();
         int panelX = resolvePanelX(canvas, panelW, screenW);
         int panelY = resolvePanelY(canvas, panelH, screenH);
         int pad = Math.max(0, canvas.padding);
@@ -133,8 +132,8 @@ public class ItemPickupNotifierModule extends Module {
         int offsetY = alignedTextY(canvas, logicalInnerH, textBlockHeight);
         int iconPx = Math.max(8, Math.round(16.0f * settings.iconScale));
 
-        ctx.getMatrices().pushMatrix();
-        ctx.getMatrices().scale(scale, scale);
+        ctx.pose().pushMatrix();
+        ctx.pose().scale(scale, scale);
 
         int baseX = Math.round(panelX / scale) + pad;
         int baseY = Math.round(panelY / scale) + pad + offsetY;
@@ -159,25 +158,25 @@ public class ItemPickupNotifierModule extends Module {
             icon.setCount(Math.clamp(popup.amount, 1, 99));
             int iconDrawY = y + Math.max(0, (lineH - iconPx) / 2);
             if (Math.abs(settings.iconScale - 1.0f) < 0.01f) {
-                ctx.drawItem(icon, baseX + 1, iconDrawY);
+                ctx.item(icon, baseX + 1, iconDrawY);
             } else {
-                ctx.getMatrices().pushMatrix();
-                ctx.getMatrices().scale(settings.iconScale, settings.iconScale);
+                ctx.pose().pushMatrix();
+                ctx.pose().scale(settings.iconScale, settings.iconScale);
                 int iconXScaled = Math.round((baseX + 1) / settings.iconScale);
                 int iconYScaled = Math.round(iconDrawY / settings.iconScale);
-                ctx.drawItem(icon, iconXScaled, iconYScaled);
-                ctx.getMatrices().popMatrix();
+                ctx.item(icon, iconXScaled, iconYScaled);
+                ctx.pose().popMatrix();
             }
 
-            String line = "+" + popup.amount + " " + popup.stack.getName().getString();
+            String line = "+" + popup.amount + " " + popup.stack.getHoverName().getString();
             int textArea = Math.max(1, logicalInnerW - (iconPx + 8));
             String trimmed = trimTextToWidth(tr, line, textArea);
             int textX = baseX + iconPx + 6 + alignedTextX(canvas, tr, trimmed, textArea);
-            ctx.drawText(tr, trimmed, textX, y + 4, textColor, false);
+            ctx.text(tr, trimmed, textX, y + 4, textColor, false);
             y += (settings.direction == PickupFeedSettings.Direction.DOWN ? lineH : -lineH);
         }
 
-        ctx.getMatrices().popMatrix();
+        ctx.pose().popMatrix();
     }
 
     private void addPopup(ItemStack stack, int amount, long now) {
@@ -200,10 +199,10 @@ public class ItemPickupNotifierModule extends Module {
 
     private static String stackKey(ItemStack stack) {
         ItemStack normalized = stack.copy();
-        if (normalized.isDamageable()) {
-            normalized.setDamage(0);
+        if (normalized.isDamageableItem()) {
+            normalized.setDamageValue(0);
         }
-        String id = Registries.ITEM.getId(normalized.getItem()).toString();
+        String id = BuiltInRegistries.ITEM.getKey(normalized.getItem()).toString();
         return id + "|" + normalized.getComponents();
     }
 
@@ -262,8 +261,8 @@ public class ItemPickupNotifierModule extends Module {
         };
     }
 
-    private static int alignedTextX(HudCanvasDataHandler.HudCanvasElement canvas, TextRenderer tr, String line, int logicalInnerW) {
-        int textW = tr.getWidth(line);
+    private static int alignedTextX(HudCanvasDataHandler.HudCanvasElement canvas, Font tr, String line, int logicalInnerW) {
+        int textW = tr.width(line);
         return switch (canvas.horizontalAlign) {
             case CENTER -> Math.max(0, (logicalInnerW - textW) / 2);
             case RIGHT -> Math.max(0, logicalInnerW - textW);
@@ -271,14 +270,14 @@ public class ItemPickupNotifierModule extends Module {
         };
     }
 
-    private static String trimTextToWidth(TextRenderer tr, String raw, int maxWidth) {
+    private static String trimTextToWidth(Font tr, String raw, int maxWidth) {
         String text = raw == null ? "" : raw;
-        if (maxWidth <= 0 || tr.getWidth(text) <= maxWidth) {
+        if (maxWidth <= 0 || tr.width(text) <= maxWidth) {
             return text;
         }
         String ellipsis = "...";
         int keep = text.length();
-        while (keep > 0 && tr.getWidth(text.substring(0, keep) + ellipsis) > maxWidth) {
+        while (keep > 0 && tr.width(text.substring(0, keep) + ellipsis) > maxWidth) {
             keep--;
         }
         return keep <= 0 ? ellipsis : text.substring(0, keep) + ellipsis;

@@ -1,7 +1,7 @@
 package me.m0dii.gui.local;
 
-import net.minecraft.client.font.TextRenderer;
-import net.minecraft.client.gui.DrawContext;
+import net.minecraft.client.gui.Font;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 
 import java.util.List;
 
@@ -22,7 +22,7 @@ public final class ListPanel {
         this(bounds.x(), bounds.y(), bounds.width(), bounds.height());
     }
 
-    public void render(DrawContext context, TextRenderer textRenderer, List<String> rows, int selectedIndex, int startIndex, int rowHeight) {
+    public void extractRenderState(GuiGraphicsExtractor context, Font textRenderer, List<String> rows, int selectedIndex, int startIndex, int rowHeight) {
         UiForms.drawPanel(context, x, y, width, height);
         if (rows == null || rows.isEmpty()) {
             return;
@@ -35,7 +35,7 @@ public final class ListPanel {
             if (selected) {
                 context.fill(x + 2, drawY - 1, x + width - 2, drawY + rowHeight - 2, 0x402B5C85);
             }
-            context.drawTextWithShadow(textRenderer, rows.get(i), x + 6, drawY, selected ? 0xFFDDF1FF : UiTheme.TEXT_MUTED);
+            context.text(textRenderer, rows.get(i), x + 6, drawY, selected ? 0xFFDDF1FF : UiTheme.TEXT_MUTED);
             drawY += rowHeight;
         }
     }

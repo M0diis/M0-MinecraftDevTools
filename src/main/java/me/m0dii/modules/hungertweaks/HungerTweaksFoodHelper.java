@@ -1,15 +1,15 @@
 package me.m0dii.modules.hungertweaks;
 
 import me.m0dii.mixin.hungertweaks.HungerManagerAccessor;
-import net.minecraft.component.DataComponentTypes;
-import net.minecraft.component.type.FoodComponent;
-import net.minecraft.entity.player.HungerManager;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.item.ItemStack;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.food.FoodData;
+import net.minecraft.world.food.FoodProperties;
+import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.Nullable;
 
 public final class HungerTweaksFoodHelper {
-    public static final FoodComponent EMPTY_FOOD_COMPONENT = new FoodComponent.Builder().build();
+    public static final FoodProperties EMPTY_FOOD_COMPONENT = new FoodProperties.Builder().build();
     public static final float REGEN_EXHAUSTION_INCREMENT = 6.0F;
     public static final float MAX_EXHAUSTION = 4.0F;
 
@@ -17,45 +17,45 @@ public final class HungerTweaksFoodHelper {
     }
 
     public static boolean isFood(ItemStack itemStack) {
-        return itemStack.contains(DataComponentTypes.FOOD);
+        return itemStack.has(DataComponents.FOOD);
     }
 
-    public static boolean canConsume(PlayerEntity player, FoodComponent foodComponent) {
-        return player.canConsume(foodComponent.canAlwaysEat());
+    public static boolean canConsume(Player player, FoodProperties foodComponent) {
+        return player.canEat(foodComponent.canAlwaysEat());
     }
 
-    public static FoodComponent getDefaultFoodValues(ItemStack itemStack) {
-        return itemStack.getOrDefault(DataComponentTypes.FOOD, EMPTY_FOOD_COMPONENT);
+    public static FoodProperties getDefaultFoodValues(ItemStack itemStack) {
+        return itemStack.getOrDefault(DataComponents.FOOD, EMPTY_FOOD_COMPONENT);
     }
 
     @Nullable
-    public static QueriedFoodResult query(ItemStack itemStack, PlayerEntity player) {
+    public static QueriedFoodResult query(ItemStack itemStack, Player player) {
         if (!isFood(itemStack)) {
             return null;
         }
 
-        FoodComponent defaultFood = getDefaultFoodValues(itemStack);
+        FoodProperties defaultFood = getDefaultFoodValues(itemStack);
         return new QueriedFoodResult(defaultFood, defaultFood, itemStack);
     }
 
-    public static boolean isRotten(FoodComponent foodComponent) {
+    public static boolean isRotten(FoodProperties foodComponent) {
         return false;
     }
 
-    public static float getExhaustion(HungerManager hungerManager) {
+    public static float getExhaustion(FoodData hungerManager) {
         return ((HungerManagerAccessor) hungerManager).m0dev$getExhaustion();
     }
 
-    public static void setExhaustion(HungerManager hungerManager, float exhaustion) {
+    public static void setExhaustion(FoodData hungerManager, float exhaustion) {
         ((HungerManagerAccessor) hungerManager).m0dev$setExhaustion(exhaustion);
     }
 
-    public static float getEstimatedHealthIncrement(PlayerEntity player, FoodComponent foodComponent) {
-        if (!player.canFoodHeal()) {
+    public static float getEstimatedHealthIncrement(Player player, FoodProperties foodComponent) {
+        if (!player.isHurt()) {
             return 0;
         }
 
-        HungerManager stats = player.getHungerManager();
+        FoodData stats = player.getFoodData();
         int foodLevel = Math.min(stats.getFoodLevel() + foodComponent.nutrition(), 20);
         if (foodLevel < 18) {
             return 0;
@@ -97,8 +97,8 @@ public final class HungerTweaksFoodHelper {
         return health;
     }
 
-    public record QueriedFoodResult(FoodComponent defaultFoodComponent,
-                                    FoodComponent modifiedFoodComponent,
+    public record QueriedFoodResult(FoodProperties defaultFoodComponent,
+                                    FoodProperties modifiedFoodComponent,
                                     ItemStack itemStack) {
     }
 }

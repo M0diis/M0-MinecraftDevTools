@@ -1,24 +1,24 @@
 package me.m0dii.mixin;
 
+import com.mojang.blaze3d.platform.FramerateLimitTracker;
 import me.m0dii.modules.performance.DynamicFpsModule;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.option.InactivityFpsLimiter;
+import net.minecraft.client.Minecraft;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-@Mixin(InactivityFpsLimiter.class)
+@Mixin(FramerateLimitTracker.class)
 public class InactivityFpsLimiterMixin {
 
-    @Inject(method = "update", at = @At("RETURN"), cancellable = true)
+    @Inject(method = "getFramerateLimit", at = @At("RETURN"), cancellable = true)
     private void applyDynamicUnfocusedLimit(CallbackInfoReturnable<Integer> cir) {
         if (!DynamicFpsModule.INSTANCE.isEnabled()) {
             return;
         }
 
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (client == null || client.isWindowFocused()) {
+        Minecraft client = Minecraft.getInstance();
+        if (client == null || client.isWindowActive()) {
             return;
         }
 

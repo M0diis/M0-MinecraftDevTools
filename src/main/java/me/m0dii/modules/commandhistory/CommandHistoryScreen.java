@@ -1,16 +1,20 @@
 package me.m0dii.modules.commandhistory;
 
-import net.minecraft.client.gui.Click;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
+
+
+import me.m0dii.gui.theme.ThemedScreen;
+import com.mojang.blaze3d.platform.InputConstants;
+import net.minecraft.ChatFormatting;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.network.chat.Component;
 
 import java.util.ArrayList;
 import java.util.List;
 
-public class CommandHistoryScreen extends Screen {
+public class CommandHistoryScreen extends Screen implements ThemedScreen {
     private final Screen parent;
     private final List<String> commands;
     private int scrollOffset = 0;
@@ -18,7 +22,7 @@ public class CommandHistoryScreen extends Screen {
     private static final int VISIBLE_LINES = 15;
 
     public CommandHistoryScreen(Screen parent) {
-        super(Text.literal("Command History"));
+        super(Component.literal("Command History"));
         this.parent = parent;
         this.commands = new ArrayList<>(CommandHistoryManager.getHistory());
     }
@@ -31,45 +35,45 @@ public class CommandHistoryScreen extends Screen {
     protected void init() {
         super.init();
 
-        addDrawableChild(ButtonWidget.builder(
-                        Text.literal("Close"),
-                        button -> close())
-                .dimensions(width / 2 - 100, height - 30, 100, 20)
+        addRenderableWidget(Button.builder(
+                        Component.literal("Close"),
+                        button -> onClose())
+                .bounds(width / 2 - 100, height - 30, 100, 20)
                 .build());
 
         if (!commands.isEmpty()) {
-            addDrawableChild(ButtonWidget.builder(
-                            Text.literal("Clear History").formatted(Formatting.RED),
+            addRenderableWidget(Button.builder(
+                            Component.literal("Clear History").withStyle(ChatFormatting.RED),
                             button -> {
                                 CommandHistoryManager.clearHistory();
-                                if (client != null) {
-                                    client.setScreen(new CommandHistoryScreen(parent));
+                                if (minecraft != null) {
+                                    minecraft.gui.setScreen(new CommandHistoryScreen(parent));
                                 }
                             })
-                    .dimensions(width / 2 + 5, height - 30, 100, 20)
+                    .bounds(width / 2 + 5, height - 30, 100, 20)
                     .build());
         }
     }
 
     @Override
-    public void render(DrawContext context, int mouseX, int mouseY, float delta) {
-        super.render(context, mouseX, mouseY, delta);
+    public void extractRenderState(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
+        super.extractRenderState(context, mouseX, mouseY, delta);
         drawContents(context, mouseX, mouseY);
     }
 
     @Override
-    public void renderBackground(DrawContext context, int mouseX, int mouseY, float delta) {
+    public void extractBackground(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
         context.fill(0, 0, width, height, 0xC0101010);
     }
 
-    private void drawContents(DrawContext context, int mouseX, int mouseY) {
-        context.drawCenteredTextWithShadow(textRenderer, title, width / 2, 15, 0xFFFFFFFF);
+    private void drawContents(GuiGraphicsExtractor context, int mouseX, int mouseY) {
+        context.centeredText(font, title, width / 2, 15, 0xFFFFFFFF);
 
         String info = commands.isEmpty()
                 ? "No commands in history yet."
                 : "Click any command to copy it to clipboard";
-        context.drawCenteredTextWithShadow(textRenderer,
-                Text.literal(info).formatted(Formatting.GRAY),
+        context.centeredText(font,
+                Component.literal(info).withStyle(ChatFormatting.GRAY),
                 width / 2, 30, 0xFFAAAAAA);
 
         if (!commands.isEmpty()) {
@@ -101,20 +105,20 @@ public class CommandHistoryScreen extends Screen {
                 int textColor = hovering ? 0xFFFFFF00 : 0xFFFFFFFF;
 
                 int maxWidth = width - 50;
-                if (textRenderer.getWidth(displayText) > maxWidth) {
-                    while (textRenderer.getWidth(displayText + "...") > maxWidth && displayText.length() > 10) {
+                if (font.width(displayText) > maxWidth) {
+                    while (font.width(displayText + "...") > maxWidth && displayText.length() > 10) {
                         displayText = displayText.substring(0, displayText.length() - 1);
                     }
                     displayText += "...";
                 }
 
-                context.drawTextWithShadow(textRenderer, displayText, 25, y, textColor);
+                context.text(font, displayText, 25, y, textColor);
 
                 if (hovering) {
                     String hint = "[Click to copy]";
-                    int hintX = boxX2 - textRenderer.getWidth(hint) - 5;
-                    context.drawTextWithShadow(textRenderer,
-                            Text.literal(hint).formatted(Formatting.YELLOW),
+                    int hintX = boxX2 - font.width(hint) - 5;
+                    context.text(font,
+                            Component.literal(hint).withStyle(ChatFormatting.YELLOW),
                             hintX, y, 0xFFFFFF00);
                 }
             }
@@ -123,20 +127,20 @@ public class CommandHistoryScreen extends Screen {
                 int totalPages = (commands.size() + VISIBLE_LINES - 1) / VISIBLE_LINES;
                 int currentPage = (scrollOffset / VISIBLE_LINES) + 1;
                 String pageText = "Page " + currentPage + "/" + totalPages + " (Scroll to navigate)";
-                context.drawCenteredTextWithShadow(textRenderer,
-                        Text.literal(pageText).formatted(Formatting.DARK_GRAY),
+                context.centeredText(font,
+                        Component.literal(pageText).withStyle(ChatFormatting.DARK_GRAY),
                         width / 2, height - 50, 0xFF888888);
             }
         }
     }
 
     @Override
-    public boolean mouseClicked(Click click, boolean doubled) {
+    public boolean mouseClicked(MouseButtonEvent click, boolean doubled) {
         int button = click.button();
         double mouseY = click.y();
         double mouseX = click.x();
 
-        if (button == 0 && !commands.isEmpty()) { // Left click
+        if (button == InputConstants.MOUSE_BUTTON_LEFT && !commands.isEmpty()) { // Left click
             int yStart = 50;
             int maxVisible = Math.min(VISIBLE_LINES, commands.size() - scrollOffset);
 
@@ -154,16 +158,14 @@ public class CommandHistoryScreen extends Screen {
                 int boxY2 = y + LINE_HEIGHT - 2;
 
                 if (mouseX >= boxX1 && mouseX <= boxX2 && mouseY >= boxY1 && mouseY <= boxY2) {
-                    if (client != null) {
-                        client.keyboard.setClipboard(command);
-                        if (client.player != null) {
-                            client.player.sendMessage(
-                                    Text.literal("✓ Copied: ").formatted(Formatting.GREEN)
-                                            .append(Text.literal(command).formatted(Formatting.WHITE)),
-                                    false
-                            );
+                    if (minecraft != null) {
+                        minecraft.keyboardHandler.setClipboard(command);
+                        if (minecraft.player != null) {
+                            minecraft.player.sendSystemMessage(
+                                    Component.literal("✓ Copied: ").withStyle(ChatFormatting.GREEN)
+                                            .append(Component.literal(command).withStyle(ChatFormatting.WHITE)));
                         }
-                        close();
+                        onClose();
                     }
                     return true;
                 }
@@ -187,14 +189,14 @@ public class CommandHistoryScreen extends Screen {
     }
 
     @Override
-    public void close() {
-        if (client != null) {
-            client.setScreen(parent);
+    public void onClose() {
+        if (minecraft != null) {
+            minecraft.gui.setScreen(parent);
         }
     }
 
     @Override
-    public boolean shouldPause() {
+    public boolean isPauseScreen() {
         return false;
     }
 }

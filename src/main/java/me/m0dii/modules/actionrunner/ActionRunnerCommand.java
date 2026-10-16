@@ -3,15 +3,15 @@ package me.m0dii.modules.actionrunner;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
-import net.minecraft.server.command.ServerCommandSource;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.text.Text;
+import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerPlayer;
 
-import static net.minecraft.server.command.CommandManager.argument;
-import static net.minecraft.server.command.CommandManager.literal;
+import static net.minecraft.commands.Commands.argument;
+import static net.minecraft.commands.Commands.literal;
 
 public class ActionRunnerCommand {
-    public static void register(CommandDispatcher<ServerCommandSource> dispatcher) {
+    public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(literal("actionrunner")
                 .then(literal("add")
                         .then(argument("delay", IntegerArgumentType.integer(0))
@@ -28,22 +28,22 @@ public class ActionRunnerCommand {
                                             String param = StringArgumentType.getString(ctx, "param");
                                             ActionRunnerModule.Action.Type type = ActionRunnerModule.Action.Type.valueOf(actionType);
                                             String command = type == ActionRunnerModule.Action.Type.COMMAND ? param : null;
-                                            ServerPlayerEntity player = ctx.getSource().getPlayer();
+                                            ServerPlayer player = ctx.getSource().getPlayer();
                                             ActionRunnerModule.getInstance().addAction(
                                                     new ActionRunnerModule.Action(delay, type, command)
                                             );
-                                            player.sendMessage(Text.literal("[ActionRunner] Added " + actionType + " with delay " + delay + (command != null ? ": /" + command : "")));
+                                            player.sendSystemMessage(Component.literal("[ActionRunner] Added " + actionType + " with delay " + delay + (command != null ? ": /" + command : "")));
                                             return 1;
                                         }))
                                         .executes(ctx -> {
                                             int delay = IntegerArgumentType.getInteger(ctx, "delay");
                                             String actionType = StringArgumentType.getString(ctx, "action").toUpperCase();
                                             ActionRunnerModule.Action.Type type = ActionRunnerModule.Action.Type.valueOf(actionType);
-                                            ServerPlayerEntity player = ctx.getSource().getPlayer();
+                                            ServerPlayer player = ctx.getSource().getPlayer();
                                             ActionRunnerModule.getInstance().addAction(
                                                     new ActionRunnerModule.Action(delay, type, null)
                                             );
-                                            player.sendMessage(Text.literal("[ActionRunner] Added " + actionType + " with delay " + delay));
+                                            player.sendSystemMessage(Component.literal("[ActionRunner] Added " + actionType + " with delay " + delay));
                                             return 1;
                                         })
                                 )
@@ -51,26 +51,26 @@ public class ActionRunnerCommand {
                 )
                 .then(literal("run")
                         .executes(ctx -> {
-                            ServerPlayerEntity player = ctx.getSource().getPlayer();
+                            ServerPlayer player = ctx.getSource().getPlayer();
                             ActionRunnerModule.getInstance().run(player);
                             return 1;
                         })
                 )
                 .then(literal("clear")
                         .executes(ctx -> {
-                            ServerPlayerEntity player = ctx.getSource().getPlayer();
+                            ServerPlayer player = ctx.getSource().getPlayer();
                             ActionRunnerModule.getInstance().clear();
-                            player.sendMessage(Text.literal("[ActionRunner] Cleared all actions"));
+                            player.sendSystemMessage(Component.literal("[ActionRunner] Cleared all actions"));
                             return 1;
                         })
                 )
                 .then(literal("list")
                         .executes(ctx -> {
-                            ServerPlayerEntity player = ctx.getSource().getPlayer();
-                            player.sendMessage(Text.literal("[ActionRunner] Listing actions:"));
+                            ServerPlayer player = ctx.getSource().getPlayer();
+                            player.sendSystemMessage(Component.literal("[ActionRunner] Listing actions:"));
                             int index = 1;
                             for (ActionRunnerModule.Action action : ActionRunnerModule.getInstance().getActions()) {
-                                player.sendMessage(Text.literal(index + ". " + action.getActionInfo()));
+                                player.sendSystemMessage(Component.literal(index + ". " + action.getActionInfo()));
                                 index++;
                             }
                             return 1;

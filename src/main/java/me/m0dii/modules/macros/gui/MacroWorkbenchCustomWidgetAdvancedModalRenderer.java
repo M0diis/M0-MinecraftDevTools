@@ -5,9 +5,8 @@ import me.m0dii.gui.local.GuiTextEditingUtils;
 import me.m0dii.gui.local.UiRect;
 import me.m0dii.modules.macros.gui.MacroWorkbenchAdvancedLayouts.CustomWidgetAdvancedLayout;
 import me.m0dii.modules.macros.hud.MacroHudDataHandler;
-import net.minecraft.client.font.TextRenderer;
-import net.minecraft.client.gui.DrawContext;
-
+import net.minecraft.client.gui.Font;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import java.util.List;
 import java.util.Locale;
 
@@ -15,8 +14,8 @@ public final class MacroWorkbenchCustomWidgetAdvancedModalRenderer {
     private MacroWorkbenchCustomWidgetAdvancedModalRenderer() {
     }
 
-    public static void render(DrawContext context,
-                              TextRenderer textRenderer,
+    public static void extractRenderState(GuiGraphicsExtractor context,
+                              Font textRenderer,
                               MacroHudDataHandler.HudElement selected,
                               CustomWidgetAdvancedLayout layout,
                               int mouseX,
@@ -64,8 +63,8 @@ public final class MacroWorkbenchCustomWidgetAdvancedModalRenderer {
         renderGeneralButtons(context, textRenderer, selected, layout, mouseX, mouseY, generalRow1, generalRow2);
 
         UiRect typeHint = layout.typeHintText();
-        context.drawTextWithShadow(textRenderer, "Type options", typeHint.x(), typeHint.y(), 0xFFB8B8B8);
-        MacroWorkbenchCustomWidgetTypeRenderer.render(
+        context.text(textRenderer, "Type options", typeHint.x(), typeHint.y(), 0xFFB8B8B8);
+        MacroWorkbenchCustomWidgetTypeRenderer.extractRenderState(
                 context,
                 textRenderer,
                 selected,
@@ -93,8 +92,8 @@ public final class MacroWorkbenchCustomWidgetAdvancedModalRenderer {
         drawModalButton(context, textRenderer, layout.cancel(), "Cancel", mouseX, mouseY);
     }
 
-    private static void renderHeader(DrawContext context,
-                                     TextRenderer textRenderer,
+    private static void renderHeader(GuiGraphicsExtractor context,
+                                     Font textRenderer,
                                      MacroHudDataHandler.HudElement selected,
                                      int boxX,
                                      int boxY,
@@ -108,8 +107,8 @@ public final class MacroWorkbenchCustomWidgetAdvancedModalRenderer {
                                      boolean advancedActionFocused,
                                      int advancedActionSelectionAnchor,
                                      int advancedActionCursor) {
-        context.drawTextWithShadow(textRenderer, selected.type + " Widget", boxX + 12, boxY + 12, 0xFFFFFFFF);
-        context.drawTextWithShadow(textRenderer,
+        context.text(textRenderer, selected.type + " Widget", boxX + 12, boxY + 12, 0xFFFFFFFF);
+        context.text(textRenderer,
                 selected.type == MacroHudDataHandler.ElementType.ICON
                         ? "Label + icon id + type-specific controls"
                         : selected.type == MacroHudDataHandler.ElementType.INVENTORY
@@ -117,13 +116,13 @@ public final class MacroWorkbenchCustomWidgetAdvancedModalRenderer {
                         : "Label + source token + type-specific controls",
                 boxX + 12, boxY + 24, 0xFFB0B0B0);
 
-        context.drawTextWithShadow(textRenderer, "Label", labelInput.x(), labelInput.y() - 10, 0xFFB8B8B8);
+        context.text(textRenderer, "Label", labelInput.x(), labelInput.y() - 10, 0xFFB8B8B8);
         context.fill(labelInput.x(), labelInput.y(), labelInput.right(), labelInput.bottom(), advancedTextFocused ? 0xFF0F0F0F : 0xFF161616);
         context.fill(labelInput.x(), labelInput.y(), labelInput.right(), labelInput.y() + 1, 0x60FFFFFF);
         GuiTextEditingUtils.drawSingleLineSelection(context, textRenderer, labelInput.x() + 4, labelInput.y() + 5, advancedText, advancedSelectionAnchor, advancedCursor);
-        context.drawTextWithShadow(textRenderer, advancedText, labelInput.x() + 4, labelInput.y() + 5, 0xFFEAEAEA);
+        context.text(textRenderer, advancedText, labelInput.x() + 4, labelInput.y() + 5, 0xFFEAEAEA);
 
-        context.drawTextWithShadow(textRenderer,
+        context.text(textRenderer,
                 selected.type == MacroHudDataHandler.ElementType.ICON
                         ? "Icon id"
                         : selected.type == MacroHudDataHandler.ElementType.INVENTORY
@@ -133,11 +132,11 @@ public final class MacroWorkbenchCustomWidgetAdvancedModalRenderer {
         context.fill(sourceInput.x(), sourceInput.y(), sourceInput.right(), sourceInput.bottom(), advancedActionFocused ? 0xFF0F0F0F : 0xFF161616);
         context.fill(sourceInput.x(), sourceInput.y(), sourceInput.right(), sourceInput.y() + 1, 0x60FFFFFF);
         GuiTextEditingUtils.drawSingleLineSelection(context, textRenderer, sourceInput.x() + 4, sourceInput.y() + 5, advancedAction, advancedActionSelectionAnchor, advancedActionCursor);
-        context.drawTextWithShadow(textRenderer, advancedAction, sourceInput.x() + 4, sourceInput.y() + 5, 0xFFEAEAEA);
+        context.text(textRenderer, advancedAction, sourceInput.x() + 4, sourceInput.y() + 5, 0xFFEAEAEA);
     }
 
-    private static void renderSuggestionDropdown(DrawContext context,
-                                                 TextRenderer textRenderer,
+    private static void renderSuggestionDropdown(GuiGraphicsExtractor context,
+                                                 Font textRenderer,
                                                  UiRect suggestionsArea,
                                                  List<String> suggestions,
                                                  int suggestionScroll,
@@ -162,17 +161,17 @@ public final class MacroWorkbenchCustomWidgetAdvancedModalRenderer {
                 context.fill(dropX, yy, dropX + dropW, yy + rowH, 0x503777AA);
             }
             int color = MacroWorkbenchActionSuggestions.isHeader(token) ? 0xFFB8D8FF : 0xFF8FC8FF;
-            context.drawTextWithShadow(textRenderer, token, dropX + 3, yy + 1, color);
+            context.text(textRenderer, token, dropX + 3, yy + 1, color);
         }
         if (suggestions.size() > maxVisible) {
-            context.drawTextWithShadow(textRenderer,
+            context.text(textRenderer,
                     "scroll " + (scroll + 1) + "/" + (maxScroll + 1),
                     dropX + 3, dropY + maxVisible * rowH + 2, 0xFF909090);
         }
     }
 
-    private static void renderMainInputCarets(DrawContext context,
-                                              TextRenderer textRenderer,
+    private static void renderMainInputCarets(GuiGraphicsExtractor context,
+                                              Font textRenderer,
                                               UiRect labelInput,
                                               UiRect sourceInput,
                                               String advancedText,
@@ -182,17 +181,17 @@ public final class MacroWorkbenchCustomWidgetAdvancedModalRenderer {
                                               boolean advancedActionFocused,
                                               int advancedActionCursor) {
         if (advancedTextFocused && (System.currentTimeMillis() / 500L) % 2L == 0L) {
-            int cx = labelInput.x() + 4 + textRenderer.getWidth(advancedText.substring(0, Math.clamp(advancedCursor, 0, advancedText.length())));
+            int cx = labelInput.x() + 4 + textRenderer.width(advancedText.substring(0, Math.clamp(advancedCursor, 0, advancedText.length())));
             context.fill(cx, labelInput.y() + 4, cx + 1, labelInput.y() + 13, 0xFFFFFFFF);
         }
         if (advancedActionFocused && (System.currentTimeMillis() / 500L) % 2L == 0L) {
-            int cx = sourceInput.x() + 4 + textRenderer.getWidth(advancedAction.substring(0, Math.clamp(advancedActionCursor, 0, advancedAction.length())));
+            int cx = sourceInput.x() + 4 + textRenderer.width(advancedAction.substring(0, Math.clamp(advancedActionCursor, 0, advancedAction.length())));
             context.fill(cx, sourceInput.y() + 4, cx + 1, sourceInput.y() + 13, 0xFFFFFFFF);
         }
     }
 
-    private static void renderGeneralButtons(DrawContext context,
-                                             TextRenderer textRenderer,
+    private static void renderGeneralButtons(GuiGraphicsExtractor context,
+                                             Font textRenderer,
                                              MacroHudDataHandler.HudElement selected,
                                              CustomWidgetAdvancedLayout layout,
                                              int mouseX,
@@ -209,12 +208,12 @@ public final class MacroWorkbenchCustomWidgetAdvancedModalRenderer {
         drawModalButton(context, textRenderer, slot(generalRow2, 3), "Z+", mouseX, mouseY);
         drawModalButton(context, textRenderer, slot(generalRow2, 4), "Pick Src", mouseX, mouseY);
         int bgPct = Math.round((Math.clamp(selected.backgroundAlpha, 0, 255) / 255.0f) * 100.0f);
-        context.drawTextWithShadow(textRenderer,
+        context.text(textRenderer,
                 "Scale: " + String.format(Locale.ROOT, "%.2f", selected.fontScale) + "  BG Alpha: " + bgPct + "%  Z: " + selected.zIndex,
                 layout.metricsText().x(), layout.metricsText().y(), 0xFFEAEAEA);
     }
 
-    private static void drawModalButton(DrawContext context, TextRenderer textRenderer, UiRect rect, String label, int mouseX, int mouseY) {
+    private static void drawModalButton(GuiGraphicsExtractor context, Font textRenderer, UiRect rect, String label, int mouseX, int mouseY) {
         GuiSystem.drawButton(context, textRenderer, rect.x(), rect.y(), rect.width(), rect.height(), label, rect.contains(mouseX, mouseY), true);
     }
 

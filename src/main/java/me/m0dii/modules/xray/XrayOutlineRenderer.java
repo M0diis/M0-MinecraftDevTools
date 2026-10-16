@@ -1,20 +1,20 @@
 package me.m0dii.modules.xray;
 
+import com.mojang.blaze3d.vertex.VertexConsumer;
+import me.m0dii.render.OverlayBufferSource;
+import me.m0dii.render.OverlayRenderEvents;
 import me.m0dii.utils.CustomRenderLayers;
 import me.m0dii.utils.DrawUtil;
-import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
-import net.minecraft.block.Block;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.render.RenderLayers;
-import net.minecraft.client.render.VertexConsumer;
-import net.minecraft.client.render.VertexConsumerProvider;
-import net.minecraft.client.world.ClientWorld;
-import net.minecraft.registry.Registries;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.ChunkPos;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.chunk.ChunkStatus;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.client.renderer.rendertype.RenderTypes;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.chunk.status.ChunkStatus;
+import net.minecraft.world.phys.Vec3;
 
 import java.util.*;
 
@@ -29,7 +29,7 @@ public final class XrayOutlineRenderer {
     private static final Set<Long> desiredChunkKeys = new HashSet<>();
     private static final Map<Block, XrayManager.XrayBlockConfig> activeConfigsByBlock = new HashMap<>();
 
-    private static ClientWorld cachedWorld;
+    private static ClientLevel cachedWorld;
     private static int cachedRange = Integer.MIN_VALUE;
     private static int cachedScanMinY = Integer.MIN_VALUE;
     private static int cachedScanMaxY = Integer.MIN_VALUE;
@@ -43,13 +43,13 @@ public final class XrayOutlineRenderer {
         }
         registered = true;
 
-        WorldRenderEvents.AFTER_ENTITIES.register(context -> {
+        OverlayRenderEvents.AFTER_ENTITIES.register(context -> {
             if (!XrayModule.INSTANCE.isEnabled()) {
                 return;
             }
 
-            MinecraftClient client = MinecraftClient.getInstance();
-            if (client.player == null || client.world == null) {
+            Minecraft client = Minecraft.getInstance();
+            if (client.player == null || client.level == null) {
                 clearCache();
                 return;
             }
@@ -66,19 +66,19 @@ public final class XrayOutlineRenderer {
                 return;
             }
 
-            BlockPos center = client.player.getBlockPos();
-            int minY = Math.max(client.world.getBottomY(), center.getY() - searchRadius);
-            int maxY = Math.min(client.world.getTopYInclusive(), center.getY() + searchRadius);
-            int scanMinY = Math.max(client.world.getBottomY(), Math.floorDiv(minY, 16) * 16);
-            int scanMaxY = Math.min(client.world.getTopYInclusive(), Math.floorDiv(maxY, 16) * 16 + 15);
+            BlockPos center = client.player.blockPosition();
+            int minY = Math.max(client.level.getMinY(), center.getY() - searchRadius);
+            int maxY = Math.min(client.level.getMaxY(), center.getY() + searchRadius);
+            int scanMinY = Math.max(client.level.getMinY(), Math.floorDiv(minY, 16) * 16);
+            int scanMaxY = Math.min(client.level.getMaxY(), Math.floorDiv(maxY, 16) * 16 + 15);
 
-            if (client.world != cachedWorld
+            if (client.level != cachedWorld
                     || searchRadius != cachedRange
                     || scanMinY != cachedScanMinY
                     || scanMaxY != cachedScanMaxY
                     || trackedBlocksChanged) {
                 clearCache();
-                cachedWorld = client.world;
+                cachedWorld = client.level;
                 cachedRange = searchRadius;
                 cachedScanMinY = scanMinY;
                 cachedScanMaxY = scanMaxY;
@@ -88,24 +88,19 @@ public final class XrayOutlineRenderer {
             int centerChunkZ = center.getZ() >> 4;
             int chunkRadius = Math.max(1, (int) Math.ceil(searchRadius / 16.0));
 
-            syncDesiredChunks(client.world, centerChunkX, centerChunkZ, chunkRadius);
-            processPendingChunkScans(client.world, scanMinY, scanMaxY);
+            syncDesiredChunks(client.level, centerChunkX, centerChunkZ, chunkRadius);
+            processPendingChunkScans(client.level, scanMinY, scanMaxY);
 
-            VertexConsumerProvider consumers = context.consumers();
+            OverlayBufferSource consumers = context.consumers();
             if (consumers == null) {
-                consumers = client.getBufferBuilders().getEntityVertexConsumers();
+                consumers = OverlayBufferSource.current();
             }
 
-            VertexConsumer lines = consumers.getBuffer(RenderLayers.LINES);
+            VertexConsumer lines = consumers.getBuffer(RenderTypes.LINES);
             VertexConsumer linesNoDepth = consumers.getBuffer(CustomRenderLayers.LINES_NO_DEPTH);
-            Vec3d cameraPos = context.gameRenderer().getCamera().getCameraPos();
+            Vec3 cameraPos = context.gameRenderer().mainCamera().position();
 
             renderCachedHits(lines, linesNoDepth, cameraPos, center, searchRadius);
-
-            if (consumers instanceof VertexConsumerProvider.Immediate immediate) {
-                immediate.draw(RenderLayers.LINES);
-                immediate.draw(CustomRenderLayers.LINES_NO_DEPTH);
-            }
         });
     }
 
@@ -131,28 +126,28 @@ public final class XrayOutlineRenderer {
             }
 
             Identifier id = Identifier.tryParse(entry.getKey());
-            if (id == null || !Registries.BLOCK.containsId(id)) {
+            if (id == null || !BuiltInRegistries.BLOCK.containsKey(id)) {
                 continue;
             }
 
-            activeConfigsByBlock.put(Registries.BLOCK.get(id), config);
+            activeConfigsByBlock.put(BuiltInRegistries.BLOCK.getValue(id), config);
         }
 
         return !previousBlocks.equals(activeConfigsByBlock.keySet());
     }
 
-    private static void syncDesiredChunks(ClientWorld world, int centerChunkX, int centerChunkZ, int chunkRadius) {
+    private static void syncDesiredChunks(ClientLevel world, int centerChunkX, int centerChunkZ, int chunkRadius) {
         desiredChunkKeys.clear();
         List<ChunkPos> missingChunks = new ArrayList<>();
 
         for (int chunkX = centerChunkX - chunkRadius; chunkX <= centerChunkX + chunkRadius; chunkX++) {
             for (int chunkZ = centerChunkZ - chunkRadius; chunkZ <= centerChunkZ + chunkRadius; chunkZ++) {
-                if (world.getChunkManager().getChunk(chunkX, chunkZ, ChunkStatus.FULL, false) == null) {
+                if (world.getChunkSource().getChunk(chunkX, chunkZ, ChunkStatus.FULL, false) == null) {
                     continue;
                 }
 
                 ChunkPos chunkPos = new ChunkPos(chunkX, chunkZ);
-                long key = chunkPos.toLong();
+                long key = chunkPos.pack();
                 desiredChunkKeys.add(key);
 
                 if (!cachedHitsByChunk.containsKey(key) && !pendingChunkKeys.contains(key)) {
@@ -166,16 +161,16 @@ public final class XrayOutlineRenderer {
         ArrayDeque<ChunkPos> retainedQueue = new ArrayDeque<>();
         Set<Long> retainedKeys = new HashSet<>();
         for (ChunkPos chunkPos : pendingChunkScans) {
-            long key = chunkPos.toLong();
+            long key = chunkPos.pack();
             if (!desiredChunkKeys.contains(key) || cachedHitsByChunk.containsKey(key) || !retainedKeys.add(key)) {
                 continue;
             }
             retainedQueue.addLast(chunkPos);
         }
 
-        missingChunks.sort(Comparator.comparingLong(pos -> distanceSq(centerChunkX, centerChunkZ, pos.x, pos.z)));
+        missingChunks.sort(Comparator.comparingLong(pos -> distanceSq(centerChunkX, centerChunkZ, pos.x(), pos.z())));
         for (ChunkPos chunkPos : missingChunks) {
-            long key = chunkPos.toLong();
+            long key = chunkPos.pack();
             if (!retainedKeys.add(key)) {
                 continue;
             }
@@ -188,11 +183,11 @@ public final class XrayOutlineRenderer {
         pendingChunkKeys.addAll(retainedKeys);
     }
 
-    private static void processPendingChunkScans(ClientWorld world, int scanMinY, int scanMaxY) {
+    private static void processPendingChunkScans(ClientLevel world, int scanMinY, int scanMaxY) {
         int processed = 0;
         while (processed < SCAN_CHUNK_BUDGET_PER_FRAME && !pendingChunkScans.isEmpty()) {
             ChunkPos chunkPos = pendingChunkScans.pollFirst();
-            long key = chunkPos.toLong();
+            long key = chunkPos.pack();
             pendingChunkKeys.remove(key);
 
             if (!desiredChunkKeys.contains(key) || cachedHitsByChunk.containsKey(key)) {
@@ -204,17 +199,17 @@ public final class XrayOutlineRenderer {
         }
     }
 
-    private static List<XrayHit> scanChunk(ClientWorld world, ChunkPos chunkPos, int scanMinY, int scanMaxY) {
-        if (world.getChunkManager().getChunk(chunkPos.x, chunkPos.z, ChunkStatus.FULL, false) == null) {
+    private static List<XrayHit> scanChunk(ClientLevel world, ChunkPos chunkPos, int scanMinY, int scanMaxY) {
+        if (world.getChunkSource().getChunk(chunkPos.x(), chunkPos.z(), ChunkStatus.FULL, false) == null) {
             return List.of();
         }
 
         List<XrayHit> hits = new ArrayList<>();
-        BlockPos.Mutable mutablePos = new BlockPos.Mutable();
-        int startX = chunkPos.getStartX();
-        int endX = chunkPos.getEndX();
-        int startZ = chunkPos.getStartZ();
-        int endZ = chunkPos.getEndZ();
+        BlockPos.MutableBlockPos mutablePos = new BlockPos.MutableBlockPos();
+        int startX = chunkPos.getMinBlockX();
+        int endX = chunkPos.getMaxBlockX();
+        int startZ = chunkPos.getMinBlockZ();
+        int endZ = chunkPos.getMaxBlockZ();
 
         for (int x = startX; x <= endX; x++) {
             for (int y = scanMinY; y <= scanMaxY; y++) {
@@ -225,7 +220,7 @@ public final class XrayOutlineRenderer {
                         continue;
                     }
 
-                    hits.add(new XrayHit(mutablePos.toImmutable(), block));
+                    hits.add(new XrayHit(mutablePos.immutable(), block));
                 }
             }
         }
@@ -235,7 +230,7 @@ public final class XrayOutlineRenderer {
 
     private static void renderCachedHits(VertexConsumer lines,
                                          VertexConsumer linesNoDepth,
-                                         Vec3d cameraPos,
+                                         Vec3 cameraPos,
                                          BlockPos center,
                                          int searchRadius) {
         int centerX = center.getX();

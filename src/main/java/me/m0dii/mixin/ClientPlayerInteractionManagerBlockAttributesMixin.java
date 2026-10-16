@@ -1,18 +1,56 @@
 package me.m0dii.mixin;
 
 import me.m0dii.utils.ModConfig;
-import net.minecraft.block.*;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.network.ClientPlayerEntity;
-import net.minecraft.client.network.ClientPlayerInteractionManager;
-import net.minecraft.item.BlockItem;
-import net.minecraft.item.ItemStack;
-import net.minecraft.network.packet.c2s.play.PlayerActionC2SPacket;
-import net.minecraft.util.ActionResult;
-import net.minecraft.util.Hand;
-import net.minecraft.util.hit.BlockHitResult;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Direction;
+import net.minecraft.world.level.block.*;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.MultiPlayerGameMode;
+import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.network.protocol.game.ServerboundPlayerActionPacket;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.item.BlockItem;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.AnvilBlock;
+import net.minecraft.world.level.block.BarrelBlock;
+import net.minecraft.world.level.block.BeaconBlock;
+import net.minecraft.world.level.block.BedBlock;
+import net.minecraft.world.level.block.BellBlock;
+import net.minecraft.world.level.block.BlastFurnaceBlock;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.BrewingStandBlock;
+import net.minecraft.world.level.block.ButtonBlock;
+import net.minecraft.world.level.block.CartographyTableBlock;
+import net.minecraft.world.level.block.ChestBlock;
+import net.minecraft.world.level.block.ComparatorBlock;
+import net.minecraft.world.level.block.ComposterBlock;
+import net.minecraft.world.level.block.CraftingTableBlock;
+import net.minecraft.world.level.block.DispenserBlock;
+import net.minecraft.world.level.block.DoorBlock;
+import net.minecraft.world.level.block.DropperBlock;
+import net.minecraft.world.level.block.EnchantingTableBlock;
+import net.minecraft.world.level.block.EnderChestBlock;
+import net.minecraft.world.level.block.FenceGateBlock;
+import net.minecraft.world.level.block.FurnaceBlock;
+import net.minecraft.world.level.block.GrindstoneBlock;
+import net.minecraft.world.level.block.HopperBlock;
+import net.minecraft.world.level.block.JukeboxBlock;
+import net.minecraft.world.level.block.LecternBlock;
+import net.minecraft.world.level.block.LeverBlock;
+import net.minecraft.world.level.block.LoomBlock;
+import net.minecraft.world.level.block.NoteBlock;
+import net.minecraft.world.level.block.RepeaterBlock;
+import net.minecraft.world.level.block.RespawnAnchorBlock;
+import net.minecraft.world.level.block.ShulkerBoxBlock;
+import net.minecraft.world.level.block.SmithingTableBlock;
+import net.minecraft.world.level.block.SmokerBlock;
+import net.minecraft.world.level.block.StandingSignBlock;
+import net.minecraft.world.level.block.StonecutterBlock;
+import net.minecraft.world.level.block.TrapDoorBlock;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.BlockHitResult;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
@@ -20,55 +58,55 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyVariable;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-@Mixin(ClientPlayerInteractionManager.class)
+@Mixin(MultiPlayerGameMode.class)
 public class ClientPlayerInteractionManagerBlockAttributesMixin {
 
-    @ModifyVariable(method = "interactBlock", at = @At("HEAD"), argsOnly = true)
+    @ModifyVariable(method = "useItemOn", at = @At("HEAD"), argsOnly = true)
     private BlockHitResult adjustPlacementAgainstFluids(BlockHitResult hitResult) {
         if (!ModConfig.blockAttributesSolidFluidHitboxes || hitResult == null) {
             return hitResult;
         }
 
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (client.world == null || client.player == null) {
+        Minecraft client = Minecraft.getInstance();
+        if (client.level == null || client.player == null) {
             return hitResult;
         }
 
-        if (client.world.getFluidState(hitResult.getBlockPos()).isEmpty()) {
+        if (client.level.getFluidState(hitResult.getBlockPos()).isEmpty()) {
             return hitResult;
         }
 
-        ItemStack held = client.player.getMainHandStack();
+        ItemStack held = client.player.getMainHandItem();
         if (!(held.getItem() instanceof BlockItem)) {
             return hitResult;
         }
 
-        BlockPos placePos = hitResult.getBlockPos().offset(hitResult.getSide());
-        return new BlockHitResult(hitResult.getPos(), hitResult.getSide(), placePos, false);
+        BlockPos placePos = hitResult.getBlockPos().relative(hitResult.getDirection());
+        return new BlockHitResult(hitResult.getLocation(), hitResult.getDirection(), placePos, false);
     }
 
-    @Inject(method = "interactBlock", at = @At("HEAD"), cancellable = true)
-    private void preventContainerInteractionWithBlockItem(ClientPlayerEntity player,
-                                                          Hand hand,
+    @Inject(method = "useItemOn", at = @At("HEAD"), cancellable = true)
+    private void preventContainerInteractionWithBlockItem(LocalPlayer player,
+                                                          InteractionHand hand,
                                                           BlockHitResult hitResult,
-                                                          CallbackInfoReturnable<ActionResult> cir) {
+                                                          CallbackInfoReturnable<InteractionResult> cir) {
         if (!ModConfig.blockAttributesPreventInteractions || player == null) {
             return;
         }
 
-        var world = MinecraftClient.getInstance().world;
+        var world = Minecraft.getInstance().level;
         if (world == null) {
             return;
         }
 
-        ItemStack heldStack = player.getStackInHand(hand);
-        if (!(heldStack.getItem() instanceof BlockItem) || player.isSneaking()) {
+        ItemStack heldStack = player.getItemInHand(hand);
+        if (!(heldStack.getItem() instanceof BlockItem) || player.isShiftKeyDown()) {
             return;
         }
 
         BlockState targetState = world.getBlockState(hitResult.getBlockPos());
         if (isUsuallyInteractable(targetState) || world.getBlockEntity(hitResult.getBlockPos()) != null) {
-            cir.setReturnValue(ActionResult.PASS);
+            cir.setReturnValue(InteractionResult.PASS);
         }
     }
 
@@ -80,7 +118,7 @@ public class ClientPlayerInteractionManagerBlockAttributesMixin {
                 || block instanceof RepeaterBlock
                 || block instanceof ComparatorBlock
                 || block instanceof DoorBlock
-                || block instanceof TrapdoorBlock
+                || block instanceof TrapDoorBlock
                 || block instanceof FenceGateBlock
                 || block instanceof NoteBlock
                 || block instanceof BedBlock
@@ -98,7 +136,7 @@ public class ClientPlayerInteractionManagerBlockAttributesMixin {
                 || block instanceof ComposterBlock
                 || block instanceof RespawnAnchorBlock
                 || block instanceof JukeboxBlock
-                || block instanceof SignBlock
+                || block instanceof StandingSignBlock
                 || block instanceof BarrelBlock
                 || block instanceof ChestBlock
                 || block instanceof EnderChestBlock
@@ -112,30 +150,30 @@ public class ClientPlayerInteractionManagerBlockAttributesMixin {
                 || block instanceof BrewingStandBlock;
     }
 
-    @Inject(method = "attackBlock", at = @At("HEAD"), cancellable = true, require = 0)
+    @Inject(method = "startDestroyBlock", at = @At("HEAD"), cancellable = true, require = 0)
     private void breakFluidLikeSolid(BlockPos pos, Direction direction, CallbackInfoReturnable<Boolean> cir) {
         if (!ModConfig.blockAttributesSolidFluidHitboxes) {
             return;
         }
 
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (client.player == null || client.world == null) {
+        Minecraft client = Minecraft.getInstance();
+        if (client.player == null || client.level == null) {
             return;
         }
 
-        if (client.world.getFluidState(pos).isEmpty()) {
+        if (client.level.getFluidState(pos).isEmpty()) {
             return;
         }
 
         // Mature behavior: only perform client-assisted fluid removal in creative to avoid survival desync.
-        if (!client.player.getAbilities().creativeMode) {
+        if (!client.player.getAbilities().instabuild) {
             cir.setReturnValue(false);
             return;
         }
 
-        client.player.networkHandler.sendPacket(new PlayerActionC2SPacket(PlayerActionC2SPacket.Action.START_DESTROY_BLOCK, pos, direction));
-        client.player.networkHandler.sendPacket(new PlayerActionC2SPacket(PlayerActionC2SPacket.Action.STOP_DESTROY_BLOCK, pos, direction));
-        client.world.setBlockState(pos, Blocks.AIR.getDefaultState());
+        client.player.connection.send(new ServerboundPlayerActionPacket(ServerboundPlayerActionPacket.Action.START_DESTROY_BLOCK, pos, direction));
+        client.player.connection.send(new ServerboundPlayerActionPacket(ServerboundPlayerActionPacket.Action.STOP_DESTROY_BLOCK, pos, direction));
+        client.level.setBlockAndUpdate(pos, Blocks.AIR.defaultBlockState());
         cir.setReturnValue(true);
     }
 }

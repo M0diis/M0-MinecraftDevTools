@@ -1,22 +1,25 @@
 package me.m0dii.modules.chat;
 
+
+import com.mojang.blaze3d.platform.InputConstants;
 import me.m0dii.gui.local.UiForms;
 import me.m0dii.gui.local.UiSelectionList;
 import me.m0dii.gui.local.UiTheme;
+import me.m0dii.gui.theme.ThemedScreen;
 import me.m0dii.modules.hudcanvas.HudCanvasDataHandler;
-import net.minecraft.client.gui.Click;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.client.gui.widget.TextFieldWidget;
-import net.minecraft.text.Text;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
-public class SecondaryChatConfigScreen extends Screen {
+public class SecondaryChatConfigScreen extends Screen implements ThemedScreen {
     private static final int MARGIN = 12;
     private static final int TOP = 32;
     private static final int BOTTOM = 34;
@@ -34,45 +37,45 @@ public class SecondaryChatConfigScreen extends Screen {
     private int selectedRegexIndex = -1;
     private boolean loadingFields = false;
 
-    private TextFieldWidget windowTitleField;
-    private TextFieldWidget windowXField;
-    private TextFieldWidget windowYField;
-    private TextFieldWidget windowWidthField;
-    private TextFieldWidget windowHeightField;
-    private TextFieldWidget windowScaleField;
-    private TextFieldWidget windowLineHeightField;
-    private TextFieldWidget windowPaddingField;
-    private TextFieldWidget windowBackgroundField;
-    private TextFieldWidget windowTextColorField;
-    private TextFieldWidget tabNameField;
-    private TextFieldWidget regexField;
+    private EditBox windowTitleField;
+    private EditBox windowXField;
+    private EditBox windowYField;
+    private EditBox windowWidthField;
+    private EditBox windowHeightField;
+    private EditBox windowScaleField;
+    private EditBox windowLineHeightField;
+    private EditBox windowPaddingField;
+    private EditBox windowBackgroundField;
+    private EditBox windowTextColorField;
+    private EditBox tabNameField;
+    private EditBox regexField;
 
-    private ButtonWidget enabledButton;
-    private ButtonWidget addWindowButton;
-    private ButtonWidget removeWindowButton;
-    private ButtonWidget applyWindowButton;
-    private ButtonWidget visibleWindowButton;
-    private ButtonWidget drawBackgroundButton;
-    private ButtonWidget drawBorderButton;
-    private ButtonWidget showTabsButton;
-    private ButtonWidget timestampsButton;
-    private ButtonWidget compactButton;
-    private ButtonWidget addTabButton;
-    private ButtonWidget removeTabButton;
-    private ButtonWidget applyTabButton;
-    private ButtonWidget selectTabButton;
-    private ButtonWidget catchAllButton;
-    private ButtonWidget alwaysAddButton;
-    private ButtonWidget skipOthersButton;
-    private ButtonWidget notificationsButton;
-    private ButtonWidget priorityDownButton;
-    private ButtonWidget priorityUpButton;
-    private ButtonWidget addRegexButton;
-    private ButtonWidget removeRegexButton;
-    private ButtonWidget clearRegexButton;
+    private Button enabledButton;
+    private Button addWindowButton;
+    private Button removeWindowButton;
+    private Button applyWindowButton;
+    private Button visibleWindowButton;
+    private Button drawBackgroundButton;
+    private Button drawBorderButton;
+    private Button showTabsButton;
+    private Button timestampsButton;
+    private Button compactButton;
+    private Button addTabButton;
+    private Button removeTabButton;
+    private Button applyTabButton;
+    private Button selectTabButton;
+    private Button catchAllButton;
+    private Button alwaysAddButton;
+    private Button skipOthersButton;
+    private Button notificationsButton;
+    private Button priorityDownButton;
+    private Button priorityUpButton;
+    private Button addRegexButton;
+    private Button removeRegexButton;
+    private Button clearRegexButton;
 
     public SecondaryChatConfigScreen(Screen parent) {
-        super(Text.literal("Secondary Chat"));
+        super(Component.literal("Secondary Chat"));
         this.parent = parent;
     }
 
@@ -181,8 +184,8 @@ public class SecondaryChatConfigScreen extends Screen {
         this.removeRegexButton = addButton(regexX + third + 4, regexButtonsY, third, "Remove", b -> removeRegex());
         this.clearRegexButton = addButton(regexX + (third + 4) * 2, regexButtonsY, Math.max(52, regexW - (third + 4) * 2), "Clear", b -> clearRegexes());
 
-        addDrawableChild(ButtonWidget.builder(Text.literal("Done"), b -> close())
-                .dimensions(this.width - 112, this.height - 26, 100, BUTTON_H)
+        addRenderableWidget(Button.builder(Component.literal("Done"), b -> onClose())
+                .bounds(this.width - 112, this.height - 26, 100, BUTTON_H)
                 .build());
 
         refreshLists();
@@ -191,27 +194,27 @@ public class SecondaryChatConfigScreen extends Screen {
     }
 
     @Override
-    public void render(@NotNull DrawContext context, int mouseX, int mouseY, float delta) {
-        this.renderBackground(context, mouseX, mouseY, delta);
+    public void extractRenderState(@NotNull GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
+        this.extractBackground(context, mouseX, mouseY, delta);
         drawStatic(context);
-        this.windowList.render(context, this.textRenderer, mouseX, mouseY);
-        this.tabList.render(context, this.textRenderer, mouseX, mouseY);
-        this.regexList.render(context, this.textRenderer, mouseX, mouseY);
+        this.windowList.extractRenderState(context, this.font, mouseX, mouseY);
+        this.tabList.extractRenderState(context, this.font, mouseX, mouseY);
+        this.regexList.extractRenderState(context, this.font, mouseX, mouseY);
         syncButtons();
-        super.render(context, mouseX, mouseY, delta);
+        super.extractRenderState(context, mouseX, mouseY, delta);
     }
 
     @Override
-    public void renderBackground(@NotNull DrawContext context, int mouseX, int mouseY, float delta) {
+    public void extractBackground(@NotNull GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
         context.fill(0, 0, this.width, this.height, UiTheme.BG);
     }
 
     @Override
-    public boolean mouseClicked(Click click, boolean doubled) {
+    public boolean mouseClicked(MouseButtonEvent click, boolean doubled) {
         if (super.mouseClicked(click, doubled)) {
             return true;
         }
-        if (click.button() == 0) {
+        if (click.button() == InputConstants.MOUSE_BUTTON_LEFT) {
             if (this.windowList.handleMouseClick(click.x(), click.y())) {
                 this.selectedWindowIndex = this.windowList.selectedIndex();
                 this.selectedTabIndex = 0;
@@ -231,8 +234,8 @@ public class SecondaryChatConfigScreen extends Screen {
                 this.selectedRegexIndex = this.regexList.selectedIndex();
                 SecondaryChatSettings.TabConfig tab = selectedTab();
                 if (tab != null && this.selectedRegexIndex >= 0 && this.selectedRegexIndex < tab.regexList.size()) {
-                    this.regexField.setText(tab.regexList.get(this.selectedRegexIndex));
-                    this.regexField.setCursorToEnd(false);
+                    this.regexField.setValue(tab.regexList.get(this.selectedRegexIndex));
+                    this.regexField.moveCursorToEnd(false);
                 }
                 return true;
             }
@@ -257,21 +260,21 @@ public class SecondaryChatConfigScreen extends Screen {
     }
 
     @Override
-    public void close() {
+    public void onClose() {
         applyFocusedFields();
-        if (this.client != null) {
-            this.client.setScreen(this.parent);
+        if (this.minecraft != null) {
+            this.minecraft.gui.setScreen(this.parent);
         }
     }
 
     @Override
-    public boolean shouldPause() {
+    public boolean isPauseScreen() {
         return false;
     }
 
-    private void drawStatic(DrawContext context) {
+    private void drawStatic(GuiGraphicsExtractor context) {
         context.fill(0, 0, this.width, 28, 0x90202020);
-        context.drawCenteredTextWithShadow(this.textRenderer, this.title, this.width / 2, 11, UiTheme.TEXT);
+        context.centeredText(this.font, this.title, this.width / 2, 11, UiTheme.TEXT);
 
         SecondaryChatSettings.WindowConfig window = selectedWindow();
         SecondaryChatSettings.TabConfig tab = selectedTab();
@@ -300,8 +303,8 @@ public class SecondaryChatConfigScreen extends Screen {
         UiForms.drawPanel(context, editorX, windowPanelY, editorW, windowPanelH);
         UiForms.drawPanel(context, editorX, tabPanelY, editorW, tabPanelH + 5);
 
-        context.drawTextWithShadow(this.textRenderer, "Windows", listX, bodyTop + 8, UiTheme.TEXT_ACCENT);
-        context.drawTextWithShadow(this.textRenderer, "Tabs", listX, tabTitleY, UiTheme.TEXT_ACCENT);
+        context.text(this.font, "Windows", listX, bodyTop + 8, UiTheme.TEXT_ACCENT);
+        context.text(this.font, "Tabs", listX, tabTitleY, UiTheme.TEXT_ACCENT);
 
         int fieldX = editorX + 10;
         int fieldW = editorW - 20;
@@ -313,9 +316,9 @@ public class SecondaryChatConfigScreen extends Screen {
         int styleY = metricsY + 32;
         int colorY = styleY + 32;
 
-        context.drawTextWithShadow(this.textRenderer, "Window", fieldX, windowPanelY + 8, UiTheme.TEXT_ACCENT);
+        context.text(this.font, "Window", fieldX, windowPanelY + 8, UiTheme.TEXT_ACCENT);
         if (window != null && window.useHudCanvas) {
-            context.drawTextWithShadow(this.textRenderer, "HUD canvas", fieldX + 62, windowPanelY + 8, 0xFF8FB9D8);
+            context.text(this.font, "HUD canvas", fieldX + 62, windowPanelY + 8, 0xFF8FB9D8);
         }
         drawLabel(context, "Title", fieldX, titleY - 11);
         drawLabel(context, "X", fieldX, metricsY - 11);
@@ -337,31 +340,31 @@ public class SecondaryChatConfigScreen extends Screen {
         int regexButtonsY = bodyBottom - BUTTON_H;
         int regexFieldY = regexButtonsY - GAP - FIELD_H;
 
-        context.drawTextWithShadow(this.textRenderer, "Tab", tabFieldX, tabPanelY + 8, UiTheme.TEXT_ACCENT);
+        context.text(this.font, "Tab", tabFieldX, tabPanelY + 8, UiTheme.TEXT_ACCENT);
         if (tab != null) {
-            context.drawTextWithShadow(this.textRenderer, "Priority: " + tab.priority,
+            context.text(this.font, "Priority: " + tab.priority,
                     tabFieldX, tabButtonsBaseY + 98, UiTheme.TEXT_MUTED);
         }
         drawLabel(context, "Name", tabFieldX, tabNameY - 11);
-        context.drawTextWithShadow(this.textRenderer, "Regex filters", regexX, tabPanelY + 8, UiTheme.TEXT_ACCENT);
+        context.text(this.font, "Regex filters", regexX, tabPanelY + 8, UiTheme.TEXT_ACCENT);
         drawLabel(context, "Pattern", regexX, regexFieldY - 11);
     }
 
-    private void drawLabel(DrawContext context, String label, int x, int y) {
-        context.drawTextWithShadow(this.textRenderer, label, x, y, UiTheme.TEXT_MUTED);
+    private void drawLabel(GuiGraphicsExtractor context, String label, int x, int y) {
+        context.text(this.font, label, x, y, UiTheme.TEXT_MUTED);
     }
 
-    private ButtonWidget addButton(int x, int y, int w, String label, ButtonWidget.PressAction action) {
-        return addDrawableChild(ButtonWidget.builder(Text.literal(label), action)
-                .dimensions(x, y, w, BUTTON_H)
+    private Button addButton(int x, int y, int w, String label, Button.OnPress action) {
+        return addRenderableWidget(Button.builder(Component.literal(label), action)
+                .bounds(x, y, w, BUTTON_H)
                 .build());
     }
 
-    private TextFieldWidget addField(int x, int y, int w, String placeholder, int maxLength) {
-        TextFieldWidget field = new TextFieldWidget(this.textRenderer, x, y, w, FIELD_H, Text.literal(placeholder));
-        field.setPlaceholder(Text.literal(placeholder));
+    private EditBox addField(int x, int y, int w, String placeholder, int maxLength) {
+        EditBox field = new EditBox(this.font, x, y, w, FIELD_H, Component.literal(placeholder));
+        field.setHint(Component.literal(placeholder));
         field.setMaxLength(maxLength);
-        addDrawableChild(field);
+        addRenderableWidget(field);
         return field;
     }
 
@@ -408,21 +411,21 @@ public class SecondaryChatConfigScreen extends Screen {
             SecondaryChatSettings.WindowConfig window = selectedWindow();
             if (window != null) {
                 SecondaryChatWindowLayout.Frame frame = SecondaryChatWindowLayout.frame(window);
-                this.windowTitleField.setText(window.title == null ? "" : window.title);
-                this.windowXField.setText(String.valueOf(frame.x));
-                this.windowYField.setText(String.valueOf(frame.y));
-                this.windowWidthField.setText(String.valueOf(frame.width));
-                this.windowHeightField.setText(String.valueOf(frame.height));
-                this.windowScaleField.setText(formatFloat(frame.scale));
-                this.windowLineHeightField.setText(String.valueOf(frame.lineHeight));
-                this.windowPaddingField.setText(String.valueOf(frame.padding));
-                this.windowBackgroundField.setText(formatColor(frame.backgroundColor));
-                this.windowTextColorField.setText(formatColor(frame.textColor));
+                this.windowTitleField.setValue(window.title == null ? "" : window.title);
+                this.windowXField.setValue(String.valueOf(frame.x));
+                this.windowYField.setValue(String.valueOf(frame.y));
+                this.windowWidthField.setValue(String.valueOf(frame.width));
+                this.windowHeightField.setValue(String.valueOf(frame.height));
+                this.windowScaleField.setValue(formatFloat(frame.scale));
+                this.windowLineHeightField.setValue(String.valueOf(frame.lineHeight));
+                this.windowPaddingField.setValue(String.valueOf(frame.padding));
+                this.windowBackgroundField.setValue(formatColor(frame.backgroundColor));
+                this.windowTextColorField.setValue(formatColor(frame.textColor));
             }
 
             SecondaryChatSettings.TabConfig tab = selectedTab();
-            this.tabNameField.setText(tab == null ? "" : tab.name);
-            this.regexField.setText("");
+            this.tabNameField.setValue(tab == null ? "" : tab.name);
+            this.regexField.setValue("");
         } finally {
             this.loadingFields = false;
         }
@@ -432,27 +435,27 @@ public class SecondaryChatConfigScreen extends Screen {
         SecondaryChatSettings.WindowConfig window = selectedWindow();
         SecondaryChatSettings.TabConfig tab = selectedTab();
 
-        this.enabledButton.setMessage(Text.literal("Secondary Chat: " + onOff(SecondaryChatSettings.get().enabled)));
+        this.enabledButton.setMessage(Component.literal("Secondary Chat: " + onOff(SecondaryChatSettings.get().enabled)));
         this.removeWindowButton.active = window != null && !"main".equals(window.id);
         this.applyWindowButton.active = window != null;
         this.visibleWindowButton.active = window != null;
-        this.visibleWindowButton.setMessage(Text.literal("Visible: " + onOff(window != null && window.visible)));
-        this.drawBackgroundButton.setMessage(Text.literal("Background: " + onOff(window != null && window.drawBackground)));
-        this.drawBorderButton.setMessage(Text.literal("Border: " + onOff(window != null && window.drawBorder)));
-        this.showTabsButton.setMessage(Text.literal("Tabs: " + onOff(window != null && window.showTabs)));
-        this.timestampsButton.setMessage(Text.literal("Timestamps: " + onOff(window != null && window.showTimestamps)));
-        this.compactButton.setMessage(Text.literal("Compact: " + onOff(window != null && window.compactRepeats)));
+        this.visibleWindowButton.setMessage(Component.literal("Visible: " + onOff(window != null && window.visible)));
+        this.drawBackgroundButton.setMessage(Component.literal("Background: " + onOff(window != null && window.drawBackground)));
+        this.drawBorderButton.setMessage(Component.literal("Border: " + onOff(window != null && window.drawBorder)));
+        this.showTabsButton.setMessage(Component.literal("Tabs: " + onOff(window != null && window.showTabs)));
+        this.timestampsButton.setMessage(Component.literal("Timestamps: " + onOff(window != null && window.showTimestamps)));
+        this.compactButton.setMessage(Component.literal("Compact: " + onOff(window != null && window.compactRepeats)));
 
         this.removeTabButton.active = window != null && window.tabs.size() > 1;
         this.applyTabButton.active = tab != null;
         this.selectTabButton.active = window != null && tab != null;
-        this.selectTabButton.setMessage(Text.literal("Selected: " + onOff(window != null && tab != null && tab.id.equals(window.selectedTabId))));
-        this.catchAllButton.setMessage(Text.literal("Catch All: " + onOff(tab != null && tab.catchAll)));
-        this.alwaysAddButton.setMessage(Text.literal("Always Add: " + onOff(tab != null && tab.alwaysAdd)));
-        this.skipOthersButton.setMessage(Text.literal("Skip Others: " + onOff(tab != null && tab.skipOthers)));
-        this.notificationsButton.setMessage(Text.literal("Notify: " + onOff(tab != null && tab.showNotifications)));
-        this.priorityDownButton.setMessage(Text.literal("Priority -"));
-        this.priorityUpButton.setMessage(Text.literal("Priority +"));
+        this.selectTabButton.setMessage(Component.literal("Selected: " + onOff(window != null && tab != null && tab.id.equals(window.selectedTabId))));
+        this.catchAllButton.setMessage(Component.literal("Catch All: " + onOff(tab != null && tab.catchAll)));
+        this.alwaysAddButton.setMessage(Component.literal("Always Add: " + onOff(tab != null && tab.alwaysAdd)));
+        this.skipOthersButton.setMessage(Component.literal("Skip Others: " + onOff(tab != null && tab.skipOthers)));
+        this.notificationsButton.setMessage(Component.literal("Notify: " + onOff(tab != null && tab.showNotifications)));
+        this.priorityDownButton.setMessage(Component.literal("Priority -"));
+        this.priorityUpButton.setMessage(Component.literal("Priority +"));
         this.removeRegexButton.active = tab != null && this.selectedRegexIndex >= 0 && this.selectedRegexIndex < tab.regexList.size();
         this.clearRegexButton.active = tab != null && !tab.regexList.isEmpty();
     }
@@ -517,16 +520,16 @@ public class SecondaryChatConfigScreen extends Screen {
             return;
         }
 
-        int x = parseInt(this.windowXField.getText(), window.x, -10000, 10000);
-        int y = parseInt(this.windowYField.getText(), window.y, -10000, 10000);
-        int w = parseInt(this.windowWidthField.getText(), window.width, 120, 3000);
-        int h = parseInt(this.windowHeightField.getText(), window.height, 60, 3000);
-        float scale = parseFloat(this.windowScaleField.getText(), window.fontScale, 0.25f, 5.0f);
-        int lineHeight = parseInt(this.windowLineHeightField.getText(), window.lineHeight, 6, 40);
-        int padding = parseInt(this.windowPaddingField.getText(), window.padding, 0, 60);
-        int bg = parseColor(this.windowBackgroundField.getText(), window.backgroundColor);
-        int tx = parseColor(this.windowTextColorField.getText(), window.textColor);
-        String title = this.windowTitleField.getText().trim();
+        int x = parseInt(this.windowXField.getValue(), window.x, -10000, 10000);
+        int y = parseInt(this.windowYField.getValue(), window.y, -10000, 10000);
+        int w = parseInt(this.windowWidthField.getValue(), window.width, 120, 3000);
+        int h = parseInt(this.windowHeightField.getValue(), window.height, 60, 3000);
+        float scale = parseFloat(this.windowScaleField.getValue(), window.fontScale, 0.25f, 5.0f);
+        int lineHeight = parseInt(this.windowLineHeightField.getValue(), window.lineHeight, 6, 40);
+        int padding = parseInt(this.windowPaddingField.getValue(), window.padding, 0, 60);
+        int bg = parseColor(this.windowBackgroundField.getValue(), window.backgroundColor);
+        int tx = parseColor(this.windowTextColorField.getValue(), window.textColor);
+        String title = this.windowTitleField.getValue().trim();
 
         SecondaryChatSettings.updateAndSave(() -> {
             window.title = title.isEmpty() ? window.id : title;
@@ -658,7 +661,7 @@ public class SecondaryChatConfigScreen extends Screen {
         if (tab == null) {
             return;
         }
-        String name = this.tabNameField.getText().trim();
+        String name = this.tabNameField.getValue().trim();
         SecondaryChatSettings.updateAndSave(() -> tab.name = name.isEmpty() ? tab.id : name);
         refreshLists();
         loadFieldsFromSelection();
@@ -714,13 +717,13 @@ public class SecondaryChatConfigScreen extends Screen {
         if (tab == null) {
             return;
         }
-        String regex = this.regexField.getText().trim();
+        String regex = this.regexField.getValue().trim();
         if (regex.isEmpty()) {
             return;
         }
         SecondaryChatSettings.updateAndSave(() -> tab.regexList.add(regex));
         this.selectedRegexIndex = tab.regexList.size() - 1;
-        this.regexField.setText("");
+        this.regexField.setValue("");
         refreshLists();
     }
 

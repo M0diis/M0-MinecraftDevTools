@@ -9,33 +9,37 @@ import me.m0dii.mixin.MobEntityAccessor;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
-import net.minecraft.command.CommandSource;
-import net.minecraft.command.argument.BlockPosArgumentType;
-import net.minecraft.command.argument.EntityArgumentType;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.ai.brain.*;
-import net.minecraft.entity.ai.brain.task.Task;
-import net.minecraft.entity.ai.goal.Goal;
-import net.minecraft.entity.ai.goal.GoalSelector;
-import net.minecraft.entity.ai.goal.PrioritizedGoal;
-import net.minecraft.entity.ai.pathing.Path;
-import net.minecraft.entity.ai.pathing.PathNode;
-import net.minecraft.entity.mob.MobEntity;
-import net.minecraft.registry.Registries;
-import net.minecraft.server.command.ServerCommandSource;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.GlobalPos;
+import net.minecraft.ChatFormatting;
+import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.commands.SharedSuggestionProvider;
+import net.minecraft.commands.arguments.EntityArgument;
+import net.minecraft.commands.arguments.coordinates.BlockPosArgument;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.GlobalPos;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.ai.Brain;
+import net.minecraft.world.entity.ai.behavior.BehaviorControl;
+import net.minecraft.world.entity.ai.behavior.PositionTracker;
+import net.minecraft.world.entity.ai.goal.Goal;
+import net.minecraft.world.entity.ai.goal.GoalSelector;
+import net.minecraft.world.entity.ai.goal.WrappedGoal;
+import net.minecraft.world.entity.ai.memory.MemoryModuleType;
+import net.minecraft.world.entity.ai.memory.WalkTarget;
+import net.minecraft.world.entity.schedule.Activity;
+import net.minecraft.world.level.pathfinder.Node;
+import net.minecraft.world.level.pathfinder.Path;
 
 import java.util.*;
 import java.util.stream.Collectors;
 
-import static net.minecraft.server.command.CommandManager.argument;
-import static net.minecraft.server.command.CommandManager.literal;
+import static net.minecraft.commands.Commands.argument;
+import static net.minecraft.commands.Commands.literal;
 
 public final class MobAiDebugCommands {
     private static final int COLOR_HEADER = 0xFFF4F4F4;
@@ -74,20 +78,20 @@ public final class MobAiDebugCommands {
 
     private static final Map<UUID, TrackerConfigState> TRACKER_STATES = new HashMap<>();
 
-    private static final SimpleCommandExceptionType NOT_MOB = new SimpleCommandExceptionType(Text.literal("Target must be a mob"));
-    private static final SimpleCommandExceptionType WRONG_WORLD = new SimpleCommandExceptionType(Text.literal("Target mob must be in your world"));
-    private static final SimpleCommandExceptionType UNKNOWN_TRACKER_DISPLAY = new SimpleCommandExceptionType(Text.literal("Unknown tracker display"));
-    private static final SimpleCommandExceptionType UNKNOWN_HOSTILE = new SimpleCommandExceptionType(Text.literal("Unknown hostile type"));
+    private static final SimpleCommandExceptionType NOT_MOB = new SimpleCommandExceptionType(Component.literal("Target must be a mob"));
+    private static final SimpleCommandExceptionType WRONG_WORLD = new SimpleCommandExceptionType(Component.literal("Target mob must be in your world"));
+    private static final SimpleCommandExceptionType UNKNOWN_TRACKER_DISPLAY = new SimpleCommandExceptionType(Component.literal("Unknown tracker display"));
+    private static final SimpleCommandExceptionType UNKNOWN_HOSTILE = new SimpleCommandExceptionType(Component.literal("Unknown hostile type"));
 
     private MobAiDebugCommands() {
     }
 
     public static void register() {
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> register(dispatcher));
-        ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> TRACKER_STATES.remove(handler.player.getUuid()));
+        ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> TRACKER_STATES.remove(handler.player.getUUID()));
     }
 
-    private static void register(CommandDispatcher<ServerCommandSource> dispatcher) {
+    private static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(literal("mobai")
                 .executes(context -> showHelp(context.getSource()))
                 .then(literal("clear")
@@ -96,13 +100,13 @@ public final class MobAiDebugCommands {
                         .executes(context -> showTrackerStatus(context.getSource())))
                 .then(literal("toggle")
                         .then(argument("display", StringArgumentType.word())
-                                .suggests((context, builder) -> CommandSource.suggestMatching(TRACKER_DISPLAYS, builder))
+                                .suggests((context, builder) -> SharedSuggestionProvider.suggest(TRACKER_DISPLAYS, builder))
                                 .executes(context -> toggleTrackerDisplay(
                                         StringArgumentType.getString(context, "display"),
                                         null,
                                         context.getSource()))
                                 .then(argument("hostile", StringArgumentType.word())
-                                        .suggests((context, builder) -> CommandSource.suggestMatching(HOSTILE_RANGES.keySet(), builder))
+                                        .suggests((context, builder) -> SharedSuggestionProvider.suggest(HOSTILE_RANGES.keySet(), builder))
                                         .executes(context -> toggleTrackerDisplay(
                                                 StringArgumentType.getString(context, "display"),
                                                 StringArgumentType.getString(context, "hostile"),
@@ -116,100 +120,100 @@ public final class MobAiDebugCommands {
                         .then(argument("alpha", IntegerArgumentType.integer(0, 255))
                                 .executes(context -> setTrackerTransparency(IntegerArgumentType.getInteger(context, "alpha"), context.getSource()))))
                 .then(literal("inspect")
-                        .then(argument("entity", EntityArgumentType.entity())
-                                .executes(context -> inspect(EntityArgumentType.getEntity(context, "entity"), context.getSource()))))
+                        .then(argument("entity", EntityArgument.entity())
+                                .executes(context -> inspect(EntityArgument.getEntity(context, "entity"), context.getSource()))))
                 .then(literal("brain")
                         .then(literal("inspect")
-                                .then(argument("entity", EntityArgumentType.entity())
-                                        .executes(context -> inspect(EntityArgumentType.getEntity(context, "entity"), context.getSource())))))
+                                .then(argument("entity", EntityArgument.entity())
+                                        .executes(context -> inspect(EntityArgument.getEntity(context, "entity"), context.getSource())))))
                 .then(literal("goals")
                         .then(literal("inspect")
-                                .then(argument("entity", EntityArgumentType.entity())
-                                        .executes(context -> inspectGoals(EntityArgumentType.getEntity(context, "entity"), context.getSource())))))
+                                .then(argument("entity", EntityArgument.entity())
+                                        .executes(context -> inspectGoals(EntityArgument.getEntity(context, "entity"), context.getSource())))))
                 .then(literal("path")
                         .then(literal("clear")
                                 .executes(context -> clear(context.getSource(), false, true)))
                         .then(literal("simulate")
-                                .then(argument("entity", EntityArgumentType.entity())
-                                        .then(argument("target", BlockPosArgumentType.blockPos())
+                                .then(argument("entity", EntityArgument.entity())
+                                        .then(argument("target", BlockPosArgument.blockPos())
                                                 .executes(context -> simulatePath(
-                                                        EntityArgumentType.getEntity(context, "entity"),
-                                                        BlockPosArgumentType.getLoadedBlockPos(context, "target"),
+                                                        EntityArgument.getEntity(context, "entity"),
+                                                        BlockPosArgument.getLoadedBlockPos(context, "target"),
                                                         context.getSource())))))));
     }
 
-    private static int showHelp(ServerCommandSource source) throws CommandSyntaxException {
-        ServerPlayerEntity player = requirePlayer(source);
-        player.sendMessage(Text.literal("[MobAI] Commands:").formatted(Formatting.GOLD), false);
-        player.sendMessage(Text.literal("/mobai toggle <display> [hostile]").formatted(Formatting.GRAY), false);
-        player.sendMessage(Text.literal("/mobai boxes | /mobai radius <blocks> | /mobai transparency <0-255> | /mobai status").formatted(Formatting.GRAY), false);
-        player.sendMessage(Text.literal("/mobai inspect <entity> | /mobai goals inspect <entity>").formatted(Formatting.GRAY), false);
-        player.sendMessage(Text.literal("/mobai path simulate <entity> <x> <y> <z> | /mobai path clear | /mobai clear").formatted(Formatting.GRAY), false);
-        player.sendMessage(Text.literal("Displays: " + String.join(", ", TRACKER_DISPLAYS)).formatted(Formatting.DARK_GRAY), false);
+    private static int showHelp(CommandSourceStack source) throws CommandSyntaxException {
+        ServerPlayer player = requirePlayer(source);
+        player.sendSystemMessage(Component.literal("[MobAI] Commands:").withStyle(ChatFormatting.GOLD));
+        player.sendSystemMessage(Component.literal("/mobai toggle <display> [hostile]").withStyle(ChatFormatting.GRAY));
+        player.sendSystemMessage(Component.literal("/mobai boxes | /mobai radius <blocks> | /mobai transparency <0-255> | /mobai status").withStyle(ChatFormatting.GRAY));
+        player.sendSystemMessage(Component.literal("/mobai inspect <entity> | /mobai goals inspect <entity>").withStyle(ChatFormatting.GRAY));
+        player.sendSystemMessage(Component.literal("/mobai path simulate <entity> <x> <y> <z> | /mobai path clear | /mobai clear").withStyle(ChatFormatting.GRAY));
+        player.sendSystemMessage(Component.literal("Displays: " + String.join(", ", TRACKER_DISPLAYS)).withStyle(ChatFormatting.DARK_GRAY));
         return 1;
     }
 
-    private static int clearAll(ServerCommandSource source) throws CommandSyntaxException {
-        ServerPlayerEntity player = requirePlayer(source);
+    private static int clearAll(CommandSourceStack source) throws CommandSyntaxException {
+        ServerPlayer player = requirePlayer(source);
         clear(source, true, true);
-        TRACKER_STATES.remove(player.getUuid());
+        TRACKER_STATES.remove(player.getUUID());
         syncTrackerConfig(player, new TrackerConfigState());
-        player.sendMessage(Text.literal("[MobAI] Cleared tracker displays, inspect overlay, and path preview")
-                .formatted(Formatting.GREEN), false);
+        player.sendSystemMessage(Component.literal("[MobAI] Cleared tracker displays, inspect overlay, and path preview")
+                .withStyle(ChatFormatting.GREEN));
         return 1;
     }
 
-    private static int clear(ServerCommandSource source, boolean clearInspect, boolean clearPath) throws CommandSyntaxException {
-        ServerPlayerEntity player = requirePlayer(source);
+    private static int clear(CommandSourceStack source, boolean clearInspect, boolean clearPath) throws CommandSyntaxException {
+        ServerPlayer player = requirePlayer(source);
         ServerPlayNetworking.send(player, new MobAiDebugPayloads.ClearPayload(clearInspect, clearPath));
-        player.sendMessage(Text.literal("[MobAI] Cleared " +
+        player.sendSystemMessage(Component.literal("[MobAI] Cleared " +
                 (clearInspect && clearPath ? "inspect and path preview" : clearPath ? "path preview" : "inspect overlay"))
-                .formatted(Formatting.GREEN), false);
+                .withStyle(ChatFormatting.GREEN));
         return 1;
     }
 
-    private static int showTrackerStatus(ServerCommandSource source) throws CommandSyntaxException {
-        ServerPlayerEntity player = requirePlayer(source);
+    private static int showTrackerStatus(CommandSourceStack source) throws CommandSyntaxException {
+        ServerPlayer player = requirePlayer(source);
         TrackerConfigState state = trackerState(player);
-        player.sendMessage(Text.literal("[MobAI] Tracker").formatted(Formatting.GOLD), false);
-        player.sendMessage(Text.literal(" - Displays: " + (state.enabledDisplays.isEmpty() ? "none" : String.join(", ", state.enabledDisplays))), false);
-        player.sendMessage(Text.literal(" - Boxes: " + (state.showBoxes ? "on" : "off")
+        player.sendSystemMessage(Component.literal("[MobAI] Tracker").withStyle(ChatFormatting.GOLD));
+        player.sendSystemMessage(Component.literal(" - Displays: " + (state.enabledDisplays.isEmpty() ? "none" : String.join(", ", state.enabledDisplays))));
+        player.sendSystemMessage(Component.literal(" - Boxes: " + (state.showBoxes ? "on" : "off")
                 + " | Radius: " + state.radius
                 + " | Alpha: " + state.alpha
-                + " | Hostile focus: " + state.hostileFocus), false);
+                + " | Hostile focus: " + state.hostileFocus));
         return 1;
     }
 
-    private static int toggleTrackerBoxes(ServerCommandSource source) throws CommandSyntaxException {
-        ServerPlayerEntity player = requirePlayer(source);
+    private static int toggleTrackerBoxes(CommandSourceStack source) throws CommandSyntaxException {
+        ServerPlayer player = requirePlayer(source);
         TrackerConfigState state = trackerState(player);
         state.showBoxes = !state.showBoxes;
         syncTrackerConfig(player, state);
-        player.sendMessage(Text.literal("[MobAI] Tracker boxes " + (state.showBoxes ? "enabled" : "disabled"))
-                .formatted(Formatting.GREEN), false);
+        player.sendSystemMessage(Component.literal("[MobAI] Tracker boxes " + (state.showBoxes ? "enabled" : "disabled"))
+                .withStyle(ChatFormatting.GREEN));
         return 1;
     }
 
-    private static int setTrackerRadius(int radius, ServerCommandSource source) throws CommandSyntaxException {
-        ServerPlayerEntity player = requirePlayer(source);
+    private static int setTrackerRadius(int radius, CommandSourceStack source) throws CommandSyntaxException {
+        ServerPlayer player = requirePlayer(source);
         TrackerConfigState state = trackerState(player);
         state.radius = Math.clamp(radius, 8, 256);
         syncTrackerConfig(player, state);
-        player.sendMessage(Text.literal("[MobAI] Tracker radius set to " + state.radius).formatted(Formatting.GREEN), false);
+        player.sendSystemMessage(Component.literal("[MobAI] Tracker radius set to " + state.radius).withStyle(ChatFormatting.GREEN));
         return 1;
     }
 
-    private static int setTrackerTransparency(int alpha, ServerCommandSource source) throws CommandSyntaxException {
-        ServerPlayerEntity player = requirePlayer(source);
+    private static int setTrackerTransparency(int alpha, CommandSourceStack source) throws CommandSyntaxException {
+        ServerPlayer player = requirePlayer(source);
         TrackerConfigState state = trackerState(player);
         state.alpha = Math.clamp(alpha, 0, 255);
         syncTrackerConfig(player, state);
-        player.sendMessage(Text.literal("[MobAI] Tracker transparency set to " + state.alpha).formatted(Formatting.GREEN), false);
+        player.sendSystemMessage(Component.literal("[MobAI] Tracker transparency set to " + state.alpha).withStyle(ChatFormatting.GREEN));
         return 1;
     }
 
-    private static int toggleTrackerDisplay(String display, String hostile, ServerCommandSource source) throws CommandSyntaxException {
-        ServerPlayerEntity player = requirePlayer(source);
+    private static int toggleTrackerDisplay(String display, String hostile, CommandSourceStack source) throws CommandSyntaxException {
+        ServerPlayer player = requirePlayer(source);
         String normalizedDisplay = normalizeDisplay(display);
         if (!TRACKER_DISPLAYS.contains(normalizedDisplay)) {
             throw UNKNOWN_TRACKER_DISPLAY.create();
@@ -226,10 +230,10 @@ public final class MobAiDebugCommands {
                 state.hostileFocus = normalizedHostile;
             }
             syncTrackerConfig(player, state);
-            player.sendMessage(Text.literal("[MobAI] " + normalizedDisplay + " "
+            player.sendSystemMessage(Component.literal("[MobAI] " + normalizedDisplay + " "
                     + (disable ? "disabled" : "enabled")
                     + (disable ? "" : " (" + normalizedHostile + ")"))
-                    .formatted(disable ? Formatting.YELLOW : Formatting.GREEN), false);
+                    .withStyle(disable ? ChatFormatting.YELLOW : ChatFormatting.GREEN));
             return 1;
         }
 
@@ -244,16 +248,16 @@ public final class MobAiDebugCommands {
             state.enabledDisplays.remove(normalizedDisplay);
         }
         syncTrackerConfig(player, state);
-        player.sendMessage(Text.literal("[MobAI] " + normalizedDisplay + " " + (enable ? "enabled" : "disabled"))
-                .formatted(enable ? Formatting.GREEN : Formatting.YELLOW), false);
+        player.sendSystemMessage(Component.literal("[MobAI] " + normalizedDisplay + " " + (enable ? "enabled" : "disabled"))
+                .withStyle(enable ? ChatFormatting.GREEN : ChatFormatting.YELLOW));
         return 1;
     }
 
-    private static TrackerConfigState trackerState(ServerPlayerEntity player) {
-        return TRACKER_STATES.computeIfAbsent(player.getUuid(), uuid -> new TrackerConfigState());
+    private static TrackerConfigState trackerState(ServerPlayer player) {
+        return TRACKER_STATES.computeIfAbsent(player.getUUID(), uuid -> new TrackerConfigState());
     }
 
-    private static void syncTrackerConfig(ServerPlayerEntity player, TrackerConfigState state) {
+    private static void syncTrackerConfig(ServerPlayer player, TrackerConfigState state) {
         ServerPlayNetworking.send(player, new MobAiDebugPayloads.TrackerConfigPayload(
                 List.copyOf(state.enabledDisplays),
                 state.showBoxes,
@@ -275,9 +279,9 @@ public final class MobAiDebugCommands {
         return normalized;
     }
 
-    private static int inspect(Entity entity, ServerCommandSource source) throws CommandSyntaxException {
-        ServerPlayerEntity player = requirePlayer(source);
-        MobEntity mob = requireMobInPlayerWorld(entity, player);
+    private static int inspect(Entity entity, CommandSourceStack source) throws CommandSyntaxException {
+        ServerPlayer player = requirePlayer(source);
+        Mob mob = requireMobInPlayerWorld(entity, player);
         List<MobAiDebugPayloads.DebugLine> lines = buildInspectLines(mob);
 
         ServerPlayNetworking.send(player, new MobAiDebugPayloads.InspectPayload(mob.getId(), lines));
@@ -285,9 +289,9 @@ public final class MobAiDebugCommands {
         return 1;
     }
 
-    private static int inspectGoals(Entity entity, ServerCommandSource source) throws CommandSyntaxException {
-        ServerPlayerEntity player = requirePlayer(source);
-        MobEntity mob = requireMobInPlayerWorld(entity, player);
+    private static int inspectGoals(Entity entity, CommandSourceStack source) throws CommandSyntaxException {
+        ServerPlayer player = requirePlayer(source);
+        Mob mob = requireMobInPlayerWorld(entity, player);
         List<MobAiDebugPayloads.DebugLine> lines = buildGoalInspectLines(mob);
 
         ServerPlayNetworking.send(player, new MobAiDebugPayloads.InspectPayload(mob.getId(), lines));
@@ -295,11 +299,11 @@ public final class MobAiDebugCommands {
         return 1;
     }
 
-    private static int simulatePath(Entity entity, BlockPos target, ServerCommandSource source) throws CommandSyntaxException {
-        ServerPlayerEntity player = requirePlayer(source);
-        MobEntity mob = requireMobInPlayerWorld(entity, player);
+    private static int simulatePath(Entity entity, BlockPos target, CommandSourceStack source) throws CommandSyntaxException {
+        ServerPlayer player = requirePlayer(source);
+        Mob mob = requireMobInPlayerWorld(entity, player);
 
-        Path path = mob.getNavigation().findPathTo(target, 0);
+        Path path = mob.getNavigation().createPath(target, 0);
         List<MobAiDebugPayloads.DebugLine> lines = buildPathSimulationLines(mob, target, path);
         MobAiDebugPayloads.PathPreviewPayload payload = buildPathPreviewPayload(mob, target, path, lines);
 
@@ -309,31 +313,31 @@ public final class MobAiDebugCommands {
         return 1;
     }
 
-    private static MobEntity requireMobInPlayerWorld(Entity entity, ServerPlayerEntity player) throws CommandSyntaxException {
-        if (!(entity instanceof MobEntity mob)) {
+    private static Mob requireMobInPlayerWorld(Entity entity, ServerPlayer player) throws CommandSyntaxException {
+        if (!(entity instanceof Mob mob)) {
             throw NOT_MOB.create();
         }
-        if (mob.getEntityWorld() != player.getEntityWorld()) {
+        if (mob.level() != player.level()) {
             throw WRONG_WORLD.create();
         }
         return mob;
     }
 
-    private static ServerPlayerEntity requirePlayer(ServerCommandSource source) throws CommandSyntaxException {
-        return source.getPlayerOrThrow();
+    private static ServerPlayer requirePlayer(CommandSourceStack source) throws CommandSyntaxException {
+        return source.getPlayerOrException();
     }
 
-    private static List<MobAiDebugPayloads.DebugLine> buildInspectLines(MobEntity mob) {
+    private static List<MobAiDebugPayloads.DebugLine> buildInspectLines(Mob mob) {
         List<MobAiDebugPayloads.DebugLine> lines = new ArrayList<>();
         Brain<?> brain = mob.getBrain();
-        Path currentPath = mob.getNavigation().getCurrentPath();
+        Path currentPath = mob.getNavigation().getPath();
 
-        lines.add(line("Type: " + compactId(Registries.ENTITY_TYPE.getId(mob.getType())), COLOR_HEADER));
-        lines.add(line("Pos: " + formatPos(mob.getBlockPos()), COLOR_INFO));
+        lines.add(line("Type: " + compactId(BuiltInRegistries.ENTITY_TYPE.getKey(mob.getType())), COLOR_HEADER));
+        lines.add(line("Pos: " + formatPos(mob.blockPosition()), COLOR_INFO));
         lines.add(line(formatPathState(currentPath), COLOR_PATH));
 
-        List<String> activities = brain.getPossibleActivities().stream()
-                .map(Activity::getId)
+        List<String> activities = brain.getActiveActivities().stream()
+                .map(Activity::getName)
                 .sorted()
                 .map(MobAiDebugCommands::compactToken)
                 .limit(3)
@@ -343,8 +347,8 @@ public final class MobAiDebugCommands {
         }
 
         List<String> tasks = new ArrayList<>();
-        for (Task<?> task : brain.getRunningTasks()) {
-            tasks.add(compactToken(task.getName()));
+        for (BehaviorControl<?> task : brain.getRunningBehaviors()) {
+            tasks.add(compactToken(task.debugString()));
             if (tasks.size() >= 3) {
                 break;
             }
@@ -359,8 +363,8 @@ public final class MobAiDebugCommands {
         addMemoryLine(lines, brain, MemoryModuleType.JOB_SITE, "Mem job");
         addMemoryLine(lines, brain, MemoryModuleType.DISTURBANCE_LOCATION, "Mem disturb");
 
-        int mainGoalCount = ((MobEntityAccessor) mob).m0dev$getGoalSelector().getGoals().size();
-        int targetGoalCount = ((MobEntityAccessor) mob).m0dev$getTargetSelector().getGoals().size();
+        int mainGoalCount = ((MobEntityAccessor) mob).m0dev$getGoalSelector().getAvailableGoals().size();
+        int targetGoalCount = ((MobEntityAccessor) mob).m0dev$getTargetSelector().getAvailableGoals().size();
         lines.add(line("Goals: main " + mainGoalCount + " | target " + targetGoalCount, COLOR_GOAL));
 
         if (mob instanceof LivingEntity living) {
@@ -371,18 +375,18 @@ public final class MobAiDebugCommands {
         return clampLines(lines, 14);
     }
 
-    private static List<MobAiDebugPayloads.DebugLine> buildGoalInspectLines(MobEntity mob) {
+    private static List<MobAiDebugPayloads.DebugLine> buildGoalInspectLines(Mob mob) {
         List<MobAiDebugPayloads.DebugLine> lines = new ArrayList<>();
-        lines.add(line("Type: " + compactId(Registries.ENTITY_TYPE.getId(mob.getType())), COLOR_HEADER));
-        lines.add(line("Pos: " + formatPos(mob.getBlockPos()), COLOR_INFO));
+        lines.add(line("Type: " + compactId(BuiltInRegistries.ENTITY_TYPE.getKey(mob.getType())), COLOR_HEADER));
+        lines.add(line("Pos: " + formatPos(mob.blockPosition()), COLOR_INFO));
         addGoalLines(lines, "Main", ((MobEntityAccessor) mob).m0dev$getGoalSelector());
         addGoalLines(lines, "Target", ((MobEntityAccessor) mob).m0dev$getTargetSelector());
         return clampLines(lines, 16);
     }
 
     private static void addGoalLines(List<MobAiDebugPayloads.DebugLine> lines, String label, GoalSelector selector) {
-        List<PrioritizedGoal> goals = selector.getGoals().stream()
-                .sorted(Comparator.comparingInt(PrioritizedGoal::getPriority)
+        List<WrappedGoal> goals = selector.getAvailableGoals().stream()
+                .sorted(Comparator.comparingInt(WrappedGoal::getPriority)
                         .thenComparing(goal -> !goal.isRunning()))
                 .toList();
 
@@ -392,7 +396,7 @@ public final class MobAiDebugCommands {
         }
 
         lines.add(line(label + ": " + goals.size(), COLOR_GOAL));
-        for (PrioritizedGoal prioritizedGoal : goals) {
+        for (WrappedGoal prioritizedGoal : goals) {
             Goal goal = prioritizedGoal.getGoal();
             StringBuilder builder = new StringBuilder()
                     .append(label.charAt(0))
@@ -402,7 +406,7 @@ public final class MobAiDebugCommands {
                     .append(prioritizedGoal.isRunning() ? "run " : "idle ")
                     .append(compactToken(goal.getClass().getSimpleName()));
 
-            String controls = prioritizedGoal.getControls().stream()
+            String controls = prioritizedGoal.getFlags().stream()
                     .map(Enum::name)
                     .map(MobAiDebugCommands::compactToken)
                     .collect(Collectors.joining(","));
@@ -411,9 +415,9 @@ public final class MobAiDebugCommands {
             }
 
             if (prioritizedGoal.isRunning()) {
-                builder.append(" keep=").append(prioritizedGoal.shouldContinue() ? "yes" : "no");
+                builder.append(" keep=").append(prioritizedGoal.canContinueToUse() ? "yes" : "no");
             } else {
-                builder.append(" start=").append(prioritizedGoal.canStart() ? "yes" : "no");
+                builder.append(" start=").append(prioritizedGoal.canUse() ? "yes" : "no");
             }
 
             lines.add(line(builder.toString(), prioritizedGoal.isRunning() ? COLOR_GOAL : COLOR_INFO));
@@ -423,7 +427,7 @@ public final class MobAiDebugCommands {
         }
     }
 
-    private static List<MobAiDebugPayloads.DebugLine> buildPathSimulationLines(MobEntity mob, BlockPos target, Path path) {
+    private static List<MobAiDebugPayloads.DebugLine> buildPathSimulationLines(Mob mob, BlockPos target, Path path) {
         List<MobAiDebugPayloads.DebugLine> lines = new ArrayList<>();
         lines.add(line("Sim target: " + formatPos(target), COLOR_HEADER));
 
@@ -433,20 +437,20 @@ public final class MobAiDebugCommands {
             return lines;
         }
 
-        String state = path.reachesTarget() ? "complete" : "partial";
-        lines.add(line("Sim: " + state + " " + path.getCurrentNodeIndex() + "/" + path.getLength(), path.reachesTarget() ? COLOR_PATH : COLOR_WARN));
-        lines.add(line("Reach: " + (path.reachesTarget() ? "yes" : "no") + " | manhattan " + path.getManhattanDistanceFromTarget(),
-                path.reachesTarget() ? COLOR_INFO : COLOR_WARN));
+        String state = path.canReach() ? "complete" : "partial";
+        lines.add(line("Sim: " + state + " " + path.getNextNodeIndex() + "/" + path.getNodeCount(), path.canReach() ? COLOR_PATH : COLOR_WARN));
+        lines.add(line("Reach: " + (path.canReach() ? "yes" : "no") + " | manhattan " + path.getDistToTarget(),
+                path.canReach() ? COLOR_INFO : COLOR_WARN));
 
-        Path.DebugNodeInfo debugNodeInfo = path.getDebugNodeInfos();
+        Path.DebugData debugNodeInfo = path.debugData();
         if (debugNodeInfo != null) {
-            lines.add(line("Open: " + debugNodeInfo.openSet().length + " | Closed: " + debugNodeInfo.closedSet().length, COLOR_INFO));
+            lines.add(line("Open: " + debugNodeInfo.openSet().size() + " | Closed: " + debugNodeInfo.closedSet().size(), COLOR_INFO));
         }
 
         return clampLines(lines, 8);
     }
 
-    private static MobAiDebugPayloads.PathPreviewPayload buildPathPreviewPayload(MobEntity mob,
+    private static MobAiDebugPayloads.PathPreviewPayload buildPathPreviewPayload(Mob mob,
                                                                                  BlockPos target,
                                                                                  Path path,
                                                                                  List<MobAiDebugPayloads.DebugLine> lines) {
@@ -465,20 +469,20 @@ public final class MobAiDebugCommands {
             );
         }
 
-        List<BlockPos> nodes = new ArrayList<>(path.getLength());
-        for (int i = 0; i < path.getLength(); i++) {
+        List<BlockPos> nodes = new ArrayList<>(path.getNodeCount());
+        for (int i = 0; i < path.getNodeCount(); i++) {
             nodes.add(path.getNodePos(i));
         }
 
         List<BlockPos> openNodes = new ArrayList<>();
         List<BlockPos> closedNodes = new ArrayList<>();
-        Path.DebugNodeInfo debugNodeInfo = path.getDebugNodeInfos();
+        Path.DebugData debugNodeInfo = path.debugData();
         if (debugNodeInfo != null) {
-            for (PathNode openNode : debugNodeInfo.openSet()) {
-                openNodes.add(openNode.getBlockPos());
+            for (Node openNode : debugNodeInfo.openSet()) {
+                openNodes.add(openNode.asBlockPos());
             }
-            for (PathNode closedNode : debugNodeInfo.closedSet()) {
-                closedNodes.add(closedNode.getBlockPos());
+            for (Node closedNode : debugNodeInfo.closedSet()) {
+                closedNodes.add(closedNode.asBlockPos());
             }
         }
 
@@ -486,9 +490,9 @@ public final class MobAiDebugCommands {
                 mob.getId(),
                 target,
                 true,
-                path.reachesTarget(),
-                path.getCurrentNodeIndex(),
-                Math.round(path.getManhattanDistanceFromTarget()),
+                path.canReach(),
+                path.getNextNodeIndex(),
+                Math.round(path.getDistToTarget()),
                 nodes,
                 openNodes,
                 closedNodes,
@@ -497,12 +501,12 @@ public final class MobAiDebugCommands {
     }
 
     private static <T> void addMemoryLine(List<MobAiDebugPayloads.DebugLine> lines, Brain<?> brain, MemoryModuleType<T> type, String label) {
-        Optional<T> memory = brain.getOptionalMemory(type);
+        Optional<T> memory = brain.getMemoryInternal(type);
         if (memory == null || memory.isEmpty()) {
             return;
         }
 
-        long expiry = brain.getMemoryExpiry(type);
+        long expiry = brain.getTimeUntilExpiry(type);
         String expirySuffix = expiry == Long.MAX_VALUE ? "" : " (" + expiry + "t)";
         lines.add(line(label + ": " + formatMemoryValue(memory.get()) + expirySuffix, COLOR_MEMORY));
     }
@@ -511,25 +515,25 @@ public final class MobAiDebugCommands {
         if (path == null) {
             return "Nav: idle";
         }
-        return "Nav: " + path.getCurrentNodeIndex() + "/" + path.getLength() +
-                (path.isFinished() ? " done" : " -> " + formatPos(path.getTarget()));
+        return "Nav: " + path.getNextNodeIndex() + "/" + path.getNodeCount() +
+                (path.isDone() ? " done" : " -> " + formatPos(path.getTarget()));
     }
 
     private static String formatMemoryValue(Object value) {
         return switch (value) {
-            case WalkTarget walkTarget -> "walk " + formatPos(walkTarget.getLookTarget().getBlockPos());
-            case LookTarget lookTarget -> "look " + formatPos(lookTarget.getBlockPos());
-            case GlobalPos globalPos -> compactId(globalPos.dimension().getValue()) + " " + formatPos(globalPos.pos());
-            case LivingEntity livingEntity -> compactId(Registries.ENTITY_TYPE.getId(livingEntity.getType())) + "#" + livingEntity.getId();
+            case WalkTarget walkTarget -> "walk " + formatPos(walkTarget.getTarget().currentBlockPosition());
+            case PositionTracker lookTarget -> "look " + formatPos(lookTarget.currentBlockPosition());
+            case GlobalPos globalPos -> compactId(globalPos.dimension().identifier()) + " " + formatPos(globalPos.pos());
+            case LivingEntity livingEntity -> compactId(BuiltInRegistries.ENTITY_TYPE.getKey(livingEntity.getType())) + "#" + livingEntity.getId();
             case BlockPos blockPos -> formatPos(blockPos);
             default -> truncate(String.valueOf(value), 44);
         };
     }
 
-    private static void sendLinesToChat(ServerPlayerEntity player, String label, List<MobAiDebugPayloads.DebugLine> lines) {
-        player.sendMessage(Text.literal("[MobAI] " + label).formatted(Formatting.GOLD), false);
+    private static void sendLinesToChat(ServerPlayer player, String label, List<MobAiDebugPayloads.DebugLine> lines) {
+        player.sendSystemMessage(Component.literal("[MobAI] " + label).withStyle(ChatFormatting.GOLD));
         for (MobAiDebugPayloads.DebugLine line : lines) {
-            player.sendMessage(Text.literal(" - " + line.text()), false);
+            player.sendSystemMessage(Component.literal(" - " + line.text()));
         }
     }
 

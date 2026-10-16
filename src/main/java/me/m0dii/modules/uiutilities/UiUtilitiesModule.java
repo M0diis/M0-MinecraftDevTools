@@ -1,20 +1,20 @@
 package me.m0dii.modules.uiutilities;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import lombok.Getter;
 import lombok.Setter;
 import me.m0dii.M0DevTools;
 import me.m0dii.modules.Module;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.font.TextRenderer;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.client.gui.widget.TextFieldWidget;
-import net.minecraft.client.input.KeyInput;
-import net.minecraft.network.packet.Packet;
-import net.minecraft.network.packet.c2s.play.CloseHandledScreenC2SPacket;
-import net.minecraft.screen.ScreenHandler;
-import net.minecraft.text.Text;
-import org.lwjgl.glfw.GLFW;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Font;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.KeyEvent;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.protocol.Packet;
+import net.minecraft.network.protocol.game.ServerboundContainerClosePacket;
+import net.minecraft.world.inventory.AbstractContainerMenu;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -39,7 +39,7 @@ public class UiUtilitiesModule extends Module {
     @Getter
     public Screen storedScreen = null;
     @Getter
-    public ScreenHandler storedScreenHandler = null;
+    public AbstractContainerMenu storedScreenHandler = null;
 
     @Getter
     @Setter
@@ -59,7 +59,7 @@ public class UiUtilitiesModule extends Module {
     }
 
     @SuppressWarnings("java:S2696")
-    public void createUtilityButtons(MinecraftClient mc, Screen screen) {
+    public void createUtilityButtons(Minecraft mc, Screen screen) {
         if (!isEnabled()) {
             return;
         }
@@ -67,126 +67,126 @@ public class UiUtilitiesModule extends Module {
         yPosition = 5;
 
         if (!expanded) {
-            screen.addDrawableChild(ButtonWidget.builder(Text.of("Expand ▼"), button -> {
+            screen.addRenderableWidget(Button.builder(Component.nullToEmpty("Expand ▼"), button -> {
                 expanded = true;
-                mc.setScreen(screen);
-            }).width(115).position(5, yPosition).build());
+                mc.gui.setScreen(screen);
+            }).width(115).pos(5, yPosition).build());
         } else {
-            screen.addDrawableChild(ButtonWidget.builder(Text.of("Collapse ▲"), button -> {
+            screen.addRenderableWidget(Button.builder(Component.nullToEmpty("Collapse ▲"), button -> {
                 expanded = false;
-                mc.setScreen(screen);
-            }).width(115).position(5, yPosition).build());
+                mc.gui.setScreen(screen);
+            }).width(115).pos(5, yPosition).build());
             yPosition += spacing;
 
-            screen.addDrawableChild(ButtonWidget.builder(Text.of("Close without packet"), button -> {
-                mc.setScreen(null);
-            }).width(115).position(5, yPosition).build());
+            screen.addRenderableWidget(Button.builder(Component.nullToEmpty("Close without packet"), button -> {
+                mc.gui.setScreen(null);
+            }).width(115).pos(5, yPosition).build());
             yPosition += spacing;
 
-            screen.addDrawableChild(ButtonWidget.builder(Text.of("De-sync"), button -> {
+            screen.addRenderableWidget(Button.builder(Component.nullToEmpty("De-sync"), button -> {
                 // Keeps the current gui open client-side and closed server-side
-                if (mc.getNetworkHandler() != null && mc.player != null) {
-                    mc.getNetworkHandler().sendPacket(new CloseHandledScreenC2SPacket(mc.player.currentScreenHandler.syncId));
+                if (mc.getConnection() != null && mc.player != null) {
+                    mc.getConnection().send(new ServerboundContainerClosePacket(mc.player.containerMenu.containerId));
                 } else {
                     M0DevTools.LOGGER.warn("Minecraft network handler or player was null while using 'De-sync'.");
                 }
-            }).width(115).position(5, yPosition).build());
+            }).width(115).pos(5, yPosition).build());
             yPosition += spacing;
 
-            screen.addDrawableChild(ButtonWidget.builder(Text.of("Send packets: " + boolToString(sendUiPackets)), button -> {
+            screen.addRenderableWidget(Button.builder(Component.nullToEmpty("Send packets: " + boolToString(sendUiPackets)), button -> {
                 sendUiPackets = !sendUiPackets;
-                button.setMessage(Text.of("Send packets: " + boolToString(sendUiPackets)));
-            }).width(115).position(5, yPosition).build());
+                button.setMessage(Component.nullToEmpty("Send packets: " + boolToString(sendUiPackets)));
+            }).width(115).pos(5, yPosition).build());
             yPosition += spacing;
 
-            screen.addDrawableChild(ButtonWidget.builder(Text.of("Delay packets: " + boolToString(delayUiPackets)), button -> {
+            screen.addRenderableWidget(Button.builder(Component.nullToEmpty("Delay packets: " + boolToString(delayUiPackets)), button -> {
                 delayUiPackets = !delayUiPackets;
-                button.setMessage(Text.of("Delay packets: " + "Delay packets: " + boolToString(delayUiPackets)));
-                if (!delayUiPackets && !delayedUiPackets.isEmpty() && mc.getNetworkHandler() != null) {
+                button.setMessage(Component.nullToEmpty("Delay packets: " + "Delay packets: " + boolToString(delayUiPackets)));
+                if (!delayUiPackets && !delayedUiPackets.isEmpty() && mc.getConnection() != null) {
                     for (Packet<?> packet : delayedUiPackets) {
-                        mc.getNetworkHandler().sendPacket(packet);
+                        mc.getConnection().send(packet);
                     }
                     if (mc.player != null) {
-                        mc.player.sendMessage(Text.of("Sent " + delayedUiPackets.size() + " packets."), false);
+                        mc.player.sendSystemMessage(Component.nullToEmpty("Sent " + delayedUiPackets.size() + " packets."));
                     }
                     delayedUiPackets.clear();
                 }
-            }).width(115).position(5, yPosition).build());
+            }).width(115).pos(5, yPosition).build());
             yPosition += spacing;
 
-            screen.addDrawableChild(ButtonWidget.builder(Text.of("Save GUI"), button -> {
+            screen.addRenderableWidget(Button.builder(Component.nullToEmpty("Save GUI"), button -> {
                 if (mc.player != null) {
-                    storedScreen = mc.currentScreen;
-                    storedScreenHandler = mc.player.currentScreenHandler;
+                    storedScreen = mc.gui.screen();
+                    storedScreenHandler = mc.player.containerMenu;
                 }
-            }).width(115).position(5, yPosition).build());
+            }).width(115).pos(5, yPosition).build());
             yPosition += spacing;
 
-            screen.addDrawableChild(ButtonWidget.builder(Text.of("Restore GUI"), button -> {
+            screen.addRenderableWidget(Button.builder(Component.nullToEmpty("Restore GUI"), button -> {
                 if (mc.player != null) {
                     if (storedScreen != null && storedScreenHandler != null) {
-                        mc.setScreen(storedScreen);
-                        mc.player.currentScreenHandler = storedScreenHandler;
+                        mc.gui.setScreen(storedScreen);
+                        mc.player.containerMenu = storedScreenHandler;
                     } else {
-                        mc.player.sendMessage(Text.of("No stored GUI to restore."), false);
+                        mc.player.sendSystemMessage(Component.nullToEmpty("No stored GUI to restore."));
                     }
                 }
-            }).width(115).position(5, yPosition).build());
+            }).width(115).pos(5, yPosition).build());
             yPosition += spacing;
 
-            screen.addDrawableChild(ButtonWidget.builder(Text.of("Disconnect & Send"), button -> {
+            screen.addRenderableWidget(Button.builder(Component.nullToEmpty("Disconnect & Send"), button -> {
                 delayUiPackets = false;
-                if (mc.getNetworkHandler() != null) {
+                if (mc.getConnection() != null) {
                     for (Packet<?> packet : delayedUiPackets) {
-                        mc.getNetworkHandler().sendPacket(packet);
+                        mc.getConnection().send(packet);
                     }
-                    mc.getNetworkHandler().getConnection().disconnect(Text.of("Disconnecting (M0-Dev-Tools)"));
+                    mc.getConnection().getConnection().disconnect(Component.nullToEmpty("Disconnecting (M0-Dev-Tools)"));
                 } else {
                     M0DevTools.LOGGER.warn("Minecraft network handler is null while client is disconnecting.");
                 }
                 delayedUiPackets.clear();
-            }).width(115).position(5, yPosition).build());
+            }).width(115).pos(5, yPosition).build());
             yPosition += spacing;
 
-            screen.addDrawableChild(ButtonWidget.builder(Text.of("Copy GUI Title JSON"), button -> {
+            screen.addRenderableWidget(Button.builder(Component.nullToEmpty("Copy GUI Title JSON"), button -> {
                 try {
-                    if (mc.currentScreen != null) {
-                        mc.keyboard.setClipboard(mc.currentScreen.getTitle().getString());
+                    if (mc.gui.screen() != null) {
+                        mc.keyboardHandler.setClipboard(mc.gui.screen().getTitle().getString());
                     } else {
                         M0DevTools.LOGGER.warn("Current screen was null while copying title JSON to clipboard.");
                     }
                 } catch (IllegalStateException e) {
                     M0DevTools.LOGGER.error("Error while copying title JSON to clipboard", e);
                 }
-            }).width(115).position(5, yPosition).build());
+            }).width(115).pos(5, yPosition).build());
         }
 
         yPosition += spacing;
     }
 
-    public static TextFieldWidget createInputField(TextRenderer textRenderer, MinecraftClient mc) {
-        TextFieldWidget inputField = new TextFieldWidget(textRenderer, 5, yPosition, 115, 20, Text.of("")) {
+    public static EditBox createInputField(Font textRenderer, Minecraft mc) {
+        EditBox inputField = new EditBox(textRenderer, 5, yPosition, 115, 20, Component.nullToEmpty("")) {
             @Override
-            public boolean keyPressed(KeyInput input) {
-                int keyCode = input.getKeycode();
-                if (keyCode == GLFW.GLFW_KEY_ENTER) {
-                    if (mc.getNetworkHandler() != null) {
-                        if (this.getText().startsWith("/")) {
-                            mc.getNetworkHandler().sendChatCommand(this.getText().replaceFirst(Pattern.quote("/"), ""));
+            public boolean keyPressed(KeyEvent input) {
+                int keyCode = input.input();
+                if (keyCode == InputConstants.KEY_RETURN) {
+                    if (mc.getConnection() != null) {
+                        if (this.getValue().startsWith("/")) {
+                            mc.getConnection().sendCommand(this.getValue().replaceFirst(Pattern.quote("/"), ""));
                         } else {
-                            mc.getNetworkHandler().sendChatMessage(this.getText());
+                            mc.getConnection().sendChat(this.getValue());
                         }
                     } else {
                         M0DevTools.LOGGER.warn("Minecraft network handler was null while trying to send chat message.");
                     }
 
-                    this.setText("");
+                    this.setValue("");
                 }
                 return super.keyPressed(input);
             }
         };
 
-        inputField.setPlaceholder(Text.of("Command or message"));
+        inputField.setHint(Component.nullToEmpty("Command or message"));
 
         if (!UiUtilitiesModule.INSTANCE.isExpanded()) {
             inputField.setVisible(false);

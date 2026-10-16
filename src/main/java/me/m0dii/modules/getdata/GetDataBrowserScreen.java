@@ -1,26 +1,28 @@
 package me.m0dii.modules.getdata;
 
+
+import me.m0dii.gui.theme.ThemedScreen;
+import com.mojang.blaze3d.platform.InputConstants;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import me.m0dii.gui.local.FormPanel;
 import me.m0dii.gui.local.ListPanel;
 import me.m0dii.gui.local.UiRect;
 import me.m0dii.gui.local.UiTheme;
 import me.m0dii.utils.NbtEditorUtils;
-import net.minecraft.client.gui.Click;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.client.input.KeyInput;
-import net.minecraft.nbt.NbtCompound;
-import net.minecraft.nbt.NbtElement;
-import net.minecraft.text.Text;
-import org.lwjgl.glfw.GLFW;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.KeyEvent;
+import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.Tag;
+import net.minecraft.network.chat.Component;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.IntConsumer;
 
-public final class GetDataBrowserScreen extends Screen implements GetDataTargetView {
+public final class GetDataBrowserScreen extends Screen implements GetDataTargetView, ThemedScreen {
     private static final int LIST_ROW_HEIGHT = 12;
     private static final int DETAIL_ROW_HEIGHT = 10;
     private static final int DETAIL_WRAP = 62;
@@ -30,7 +32,7 @@ public final class GetDataBrowserScreen extends Screen implements GetDataTargetV
     private final String targetToken;
     private final List<String> pathSegments = new ArrayList<>();
 
-    private NbtCompound rootData;
+    private CompoundTag rootData;
     private String selectedSegment;
     private int listScroll;
     private int detailScroll;
@@ -43,15 +45,15 @@ public final class GetDataBrowserScreen extends Screen implements GetDataTargetV
     private UiRect detailPanelRect;
     private UiRect detailListRect;
 
-    private ButtonWidget upButton;
-    private ButtonWidget openButton;
-    private ButtonWidget editButton;
-    private ButtonWidget removeButton;
-    private ButtonWidget copyButton;
-    private ButtonWidget copyFullButton;
+    private Button upButton;
+    private Button openButton;
+    private Button editButton;
+    private Button removeButton;
+    private Button copyButton;
+    private Button copyFullButton;
 
     private GetDataBrowserScreen(Screen parent, String targetName, String targetToken, String payload) {
-        super(Text.literal("GetData Browser"));
+        super(Component.literal("GetData Browser"));
         this.parent = parent;
         this.targetName = targetName;
         this.targetToken = targetToken;
@@ -75,32 +77,32 @@ public final class GetDataBrowserScreen extends Screen implements GetDataTargetV
         this.fieldListRect = this.fieldPanelRect.inset(8, 20, 8, 8);
         this.detailListRect = this.detailPanelRect.inset(8, 44, 8, 8);
 
-        this.upButton = this.addDrawableChild(ButtonWidget.builder(Text.literal("Up"), b -> goUp())
-                .dimensions(12, bottomButtonsY, 48, 20)
+        this.upButton = this.addRenderableWidget(Button.builder(Component.literal("Up"), b -> goUp())
+                .bounds(12, bottomButtonsY, 48, 20)
                 .build());
-        this.openButton = this.addDrawableChild(ButtonWidget.builder(Text.literal("Open"), b -> openSelectedEntry())
-                .dimensions(64, bottomButtonsY, 56, 20)
+        this.openButton = this.addRenderableWidget(Button.builder(Component.literal("Open"), b -> openSelectedEntry())
+                .bounds(64, bottomButtonsY, 56, 20)
                 .build());
-        this.editButton = this.addDrawableChild(ButtonWidget.builder(Text.literal("Edit"), b -> editSelectedEntry())
-                .dimensions(124, bottomButtonsY, 56, 20)
+        this.editButton = this.addRenderableWidget(Button.builder(Component.literal("Edit"), b -> editSelectedEntry())
+                .bounds(124, bottomButtonsY, 56, 20)
                 .build());
-        this.removeButton = this.addDrawableChild(ButtonWidget.builder(Text.literal("Remove"), b -> removeSelectedEntry())
-                .dimensions(184, bottomButtonsY, 68, 20)
+        this.removeButton = this.addRenderableWidget(Button.builder(Component.literal("Remove"), b -> removeSelectedEntry())
+                .bounds(184, bottomButtonsY, 68, 20)
                 .build());
-        this.copyButton = this.addDrawableChild(ButtonWidget.builder(Text.literal("Copy"), b -> copySelectedValue())
-                .dimensions(256, bottomButtonsY, 56, 20)
+        this.copyButton = this.addRenderableWidget(Button.builder(Component.literal("Copy"), b -> copySelectedValue())
+                .bounds(256, bottomButtonsY, 56, 20)
                 .build());
-        this.copyFullButton = this.addDrawableChild(ButtonWidget.builder(Text.literal("Copy Full"), b -> copyFullPayload())
-                .dimensions(316, bottomButtonsY, 72, 20)
+        this.copyFullButton = this.addRenderableWidget(Button.builder(Component.literal("Copy Full"), b -> copyFullPayload())
+                .bounds(316, bottomButtonsY, 72, 20)
                 .build());
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("Raw Mode"), b -> openRawMode())
-                .dimensions(this.width - 248, bottomButtonsY, 82, 20)
+        this.addRenderableWidget(Button.builder(Component.literal("Raw Mode"), b -> openRawMode())
+                .bounds(this.width - 248, bottomButtonsY, 82, 20)
                 .build());
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("Save"), b -> saveToTarget())
-                .dimensions(this.width - 160, bottomButtonsY, 60, 20)
+        this.addRenderableWidget(Button.builder(Component.literal("Save"), b -> saveToTarget())
+                .bounds(this.width - 160, bottomButtonsY, 60, 20)
                 .build());
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("Done"), b -> close())
-                .dimensions(this.width - 94, bottomButtonsY, 60, 20)
+        this.addRenderableWidget(Button.builder(Component.literal("Done"), b -> onClose())
+                .bounds(this.width - 94, bottomButtonsY, 60, 20)
                 .build());
 
         refreshSelection();
@@ -108,33 +110,33 @@ public final class GetDataBrowserScreen extends Screen implements GetDataTargetV
     }
 
     @Override
-    public boolean shouldPause() {
+    public boolean isPauseScreen() {
         return false;
     }
 
     @Override
-    public void close() {
-        if (this.client != null) {
-            this.client.setScreen(this.parent);
+    public void onClose() {
+        if (this.minecraft != null) {
+            this.minecraft.gui.setScreen(this.parent);
         }
     }
 
     @Override
-    public void render(DrawContext context, int mouseX, int mouseY, float delta) {
+    public void extractRenderState(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
         context.fill(0, 0, this.width, this.height, UiTheme.BG);
         renderSummaryPanel(context);
         renderFieldPanel(context);
         renderDetailPanel(context);
-        context.drawTextWithShadow(this.textRenderer, this.statusMessage, 12, this.height - 44, this.statusColor);
-        super.render(context, mouseX, mouseY, delta);
+        context.text(this.font, this.statusMessage, 12, this.height - 44, this.statusColor);
+        super.extractRenderState(context, mouseX, mouseY, delta);
     }
 
     @Override
-    public boolean mouseClicked(Click click, boolean doubled) {
+    public boolean mouseClicked(MouseButtonEvent click, boolean doubled) {
         if (super.mouseClicked(click, doubled)) {
             return true;
         }
-        if (click.button() != 0 || !this.fieldListRect.contains(click.x(), click.y())) {
+        if (click.button() != InputConstants.MOUSE_BUTTON_LEFT || !this.fieldListRect.contains(click.x(), click.y())) {
             return false;
         }
 
@@ -170,8 +172,8 @@ public final class GetDataBrowserScreen extends Screen implements GetDataTargetV
     }
 
     @Override
-    public boolean keyPressed(KeyInput input) {
-        if (input.getKeycode() == GLFW.GLFW_KEY_ESCAPE && !this.pathSegments.isEmpty()) {
+    public boolean keyPressed(KeyEvent input) {
+        if (input.input() == InputConstants.KEY_ESCAPE && !this.pathSegments.isEmpty()) {
             goUp();
             return true;
         }
@@ -192,27 +194,27 @@ public final class GetDataBrowserScreen extends Screen implements GetDataTargetV
         setStatus("Updated the local draft from the synced target payload.", 0xFF70D070);
     }
 
-    private void renderSummaryPanel(DrawContext context) {
+    private void renderSummaryPanel(GuiGraphicsExtractor context) {
         FormPanel panel = new FormPanel(this.summaryRect);
-        panel.render(context);
-        context.drawTextWithShadow(this.textRenderer, this.targetName, this.summaryRect.x() + 10, this.summaryRect.y() + 10, UiTheme.TEXT);
-        context.drawTextWithShadow(this.textRenderer, "Path: " + NbtEditorUtils.formatPath(this.pathSegments), this.summaryRect.x() + 10, this.summaryRect.y() + 24, UiTheme.TEXT_ACCENT);
-        context.drawTextWithShadow(this.textRenderer, "Node: " + NbtEditorUtils.summary(currentNode()), this.summaryRect.x() + 10, this.summaryRect.y() + 38, UiTheme.TEXT_MUTED);
-        context.drawTextWithShadow(this.textRenderer, "Mode: Structured", this.summaryRect.right() - 98, this.summaryRect.y() + 10, UiTheme.TEXT_ACCENT);
-        context.drawTextWithShadow(this.textRenderer,
+        panel.extractRenderState(context);
+        context.text(this.font, this.targetName, this.summaryRect.x() + 10, this.summaryRect.y() + 10, UiTheme.TEXT);
+        context.text(this.font, "Path: " + NbtEditorUtils.formatPath(this.pathSegments), this.summaryRect.x() + 10, this.summaryRect.y() + 24, UiTheme.TEXT_ACCENT);
+        context.text(this.font, "Node: " + NbtEditorUtils.summary(currentNode()), this.summaryRect.x() + 10, this.summaryRect.y() + 38, UiTheme.TEXT_MUTED);
+        context.text(this.font, "Mode: Structured", this.summaryRect.right() - 98, this.summaryRect.y() + 10, UiTheme.TEXT_ACCENT);
+        context.text(this.font,
                 "Double-click compounds and lists to descend. Raw Mode keeps full-payload copy/paste editing available.",
                 this.summaryRect.x() + 10,
                 this.summaryRect.y() + 56,
                 UiTheme.TEXT_MUTED);
     }
 
-    private void renderFieldPanel(DrawContext context) {
+    private void renderFieldPanel(GuiGraphicsExtractor context) {
         FormPanel panel = new FormPanel(this.fieldPanelRect);
-        panel.render(context);
-        panel.drawLabel(context, this.textRenderer, "Fields (" + childEntries().size() + ")", 8, 8);
-        new ListPanel(this.fieldListRect).render(
+        panel.extractRenderState(context);
+        panel.drawLabel(context, this.font, "Fields (" + childEntries().size() + ")", 8, 8);
+        new ListPanel(this.fieldListRect).extractRenderState(
                 context,
-                this.textRenderer,
+                this.font,
                 fieldRows(),
                 selectedIndex(),
                 this.listScroll,
@@ -220,13 +222,13 @@ public final class GetDataBrowserScreen extends Screen implements GetDataTargetV
         );
     }
 
-    private void renderDetailPanel(DrawContext context) {
+    private void renderDetailPanel(GuiGraphicsExtractor context) {
         FormPanel panel = new FormPanel(this.detailPanelRect);
-        panel.render(context);
-        panel.drawLabel(context, this.textRenderer, "Details", 8, 8);
-        new ListPanel(this.detailListRect).render(
+        panel.extractRenderState(context);
+        panel.drawLabel(context, this.font, "Details", 8, 8);
+        new ListPanel(this.detailListRect).extractRenderState(
                 context,
-                this.textRenderer,
+                this.font,
                 buildDetailLines(),
                 -1,
                 this.detailScroll,
@@ -259,7 +261,7 @@ public final class GetDataBrowserScreen extends Screen implements GetDataTargetV
     }
 
     private void editSelectedEntry() {
-        if (this.client == null) {
+        if (this.minecraft == null) {
             return;
         }
         NbtEditorUtils.ChildEntry entry = selectedEntry();
@@ -270,9 +272,9 @@ public final class GetDataBrowserScreen extends Screen implements GetDataTargetV
 
         String segment = entry.segment();
         String entryPath = displayPathFor(entry);
-        this.client.setScreen(GetDataScreen.createStandalone(
+        this.minecraft.gui.setScreen(GetDataScreen.createStandalone(
                 this,
-                Text.literal("Edit NBT Field"),
+                Component.literal("Edit NBT Field"),
                 entryPath,
                 entry.value().toString(),
                 "Edit the selected field value. Save updates only this local draft. Use Save on the previous screen to apply the full target payload.",
@@ -302,7 +304,7 @@ public final class GetDataBrowserScreen extends Screen implements GetDataTargetV
     }
 
     private void copySelectedValue() {
-        if (this.client == null) {
+        if (this.minecraft == null) {
             return;
         }
         NbtEditorUtils.ChildEntry entry = selectedEntry();
@@ -310,25 +312,25 @@ public final class GetDataBrowserScreen extends Screen implements GetDataTargetV
             setStatus("Select a field to copy.", 0xFFFF9090);
             return;
         }
-        this.client.keyboard.setClipboard(entry.value().toString());
+        this.minecraft.keyboardHandler.setClipboard(entry.value().toString());
         setStatus("Copied " + displayPathFor(entry) + " to the clipboard.", 0xFF70D070);
     }
 
     private void copyFullPayload() {
-        if (this.client == null) {
+        if (this.minecraft == null) {
             return;
         }
-        this.client.keyboard.setClipboard(this.rootData.toString());
+        this.minecraft.keyboardHandler.setClipboard(this.rootData.toString());
         setStatus("Copied the full payload to the clipboard.", 0xFF70D070);
     }
 
     private void openRawMode() {
-        if (this.client == null) {
+        if (this.minecraft == null) {
             return;
         }
-        this.client.setScreen(GetDataScreen.createStandalone(
+        this.minecraft.gui.setScreen(GetDataScreen.createStandalone(
                 this,
-                Text.literal("GetData Raw Mode"),
+                Component.literal("GetData Raw Mode"),
                 this.targetName,
                 this.rootData.toString(),
                 "Edit the full SNBT payload directly. Save updates only the local draft; use Save on the previous screen to apply it to the target.",
@@ -345,11 +347,11 @@ public final class GetDataBrowserScreen extends Screen implements GetDataTargetV
     }
 
     private void saveToTarget() {
-        if (this.client == null || this.client.player == null) {
+        if (this.minecraft == null || this.minecraft.player == null) {
             return;
         }
         try {
-            GetDataTargetActions.saveTargetPayload(this.client, this.targetToken, this.rootData.toString());
+            GetDataTargetActions.saveTargetPayload(this.minecraft, this.targetToken, this.rootData.toString());
             setStatus("Sent the updated target payload.", 0xFF70D070);
         } catch (CommandSyntaxException exception) {
             setStatus(exception.getRawMessage().getString(), 0xFFFF9090);
@@ -423,8 +425,8 @@ public final class GetDataBrowserScreen extends Screen implements GetDataTargetV
         return -1;
     }
 
-    private NbtElement currentNode() {
-        NbtElement current = NbtEditorUtils.resolvePath(this.rootData, this.pathSegments);
+    private Tag currentNode() {
+        Tag current = NbtEditorUtils.resolvePath(this.rootData, this.pathSegments);
         return current == null ? this.rootData : current;
     }
 
@@ -522,9 +524,9 @@ public final class GetDataBrowserScreen extends Screen implements GetDataTargetV
         this.statusColor = color;
     }
 
-    private NbtCompound parsePayload(String payload) {
-        NbtCompound parsed = NbtEditorUtils.parseCompoundOrNull(payload);
-        return parsed == null ? new NbtCompound() : parsed;
+    private CompoundTag parsePayload(String payload) {
+        CompoundTag parsed = NbtEditorUtils.parseCompoundOrNull(payload);
+        return parsed == null ? new CompoundTag() : parsed;
     }
 
     private void appendPretty(List<String> lines, String raw) {

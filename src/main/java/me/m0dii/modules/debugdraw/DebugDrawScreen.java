@@ -1,20 +1,21 @@
 package me.m0dii.modules.debugdraw;
 
+
+import me.m0dii.gui.theme.ThemedScreen;
 import me.m0dii.gui.local.UiForms;
 import me.m0dii.gui.local.UiTheme;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.client.gui.widget.TextFieldWidget;
-import net.minecraft.text.Text;
-import net.minecraft.util.hit.BlockHitResult;
-import net.minecraft.util.math.BlockPos;
-
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.phys.BlockHitResult;
 import java.util.ArrayList;
 import java.util.List;
 
-public final class DebugDrawScreen extends Screen {
+public final class DebugDrawScreen extends Screen implements ThemedScreen {
     private static String sType = "line";
     private static String sPos1X = "~";
     private static String sPos1Y = "~";
@@ -30,25 +31,25 @@ public final class DebugDrawScreen extends Screen {
 
     private final Screen parent;
 
-    private TextFieldWidget typeField;
-    private TextFieldWidget pos1XField;
-    private TextFieldWidget pos1YField;
-    private TextFieldWidget pos1ZField;
-    private TextFieldWidget pos2XField;
-    private TextFieldWidget pos2YField;
-    private TextFieldWidget pos2ZField;
-    private TextFieldWidget colorField;
-    private TextFieldWidget secondsField;
-    private TextFieldWidget radiusField;
-    private TextFieldWidget heightField;
-    private TextFieldWidget segmentsField;
+    private EditBox typeField;
+    private EditBox pos1XField;
+    private EditBox pos1YField;
+    private EditBox pos1ZField;
+    private EditBox pos2XField;
+    private EditBox pos2YField;
+    private EditBox pos2ZField;
+    private EditBox colorField;
+    private EditBox secondsField;
+    private EditBox radiusField;
+    private EditBox heightField;
+    private EditBox segmentsField;
 
     private final List<DebugDrawManager.ShapeDescriptor> shapes = new ArrayList<>();
     private int selectedShapeIdx = -1;
     private String status = "";
 
     private DebugDrawScreen(Screen parent) {
-        super(Text.literal("Debug Draw"));
+        super(Component.literal("Debug Draw"));
         this.parent = parent;
     }
 
@@ -81,44 +82,44 @@ public final class DebugDrawScreen extends Screen {
         this.heightField = addField(margin + 138, top + 110, 48, sHeight);
         this.segmentsField = addField(margin + 190, top + 110, 78, sSegments);
 
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("Type +"), b -> stepType(1)).dimensions(margin + 200, top + 10, 68, 20).build());
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("Pos1 Here"), b -> setPosFromPlayer(true)).dimensions(margin + 272, top + 36, 76, 20).build());
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("Pos2 Here"), b -> setPosFromPlayer(false)).dimensions(margin + 272, top + 60, 76, 20).build());
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("Pos2 Look"), b -> setPos2FromLook()).dimensions(margin + 352, top + 60, 76, 20).build());
+        this.addRenderableWidget(Button.builder(Component.literal("Type +"), b -> stepType(1)).bounds(margin + 200, top + 10, 68, 20).build());
+        this.addRenderableWidget(Button.builder(Component.literal("Pos1 Here"), b -> setPosFromPlayer(true)).bounds(margin + 272, top + 36, 76, 20).build());
+        this.addRenderableWidget(Button.builder(Component.literal("Pos2 Here"), b -> setPosFromPlayer(false)).bounds(margin + 272, top + 60, 76, 20).build());
+        this.addRenderableWidget(Button.builder(Component.literal("Pos2 Look"), b -> setPos2FromLook()).bounds(margin + 352, top + 60, 76, 20).build());
 
         int actionY = top + 138;
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("Add/Draw"), b -> addShapeFromFields()).dimensions(margin, actionY, 88, 20).build());
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("Update"), b -> updateSelectedShape()).dimensions(margin + 92, actionY, 70, 20).build());
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("Remove"), b -> removeSelectedShape()).dimensions(margin + 166, actionY, 70, 20).build());
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("Save"), b -> saveShapes()).dimensions(margin + 240, actionY, 58, 20).build());
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("Load"), b -> loadShapes()).dimensions(margin + 302, actionY, 58, 20).build());
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("Clear"), b -> clearShapes()).dimensions(margin + 364, actionY, 58, 20).build());
+        this.addRenderableWidget(Button.builder(Component.literal("Add/Draw"), b -> addShapeFromFields()).bounds(margin, actionY, 88, 20).build());
+        this.addRenderableWidget(Button.builder(Component.literal("Update"), b -> updateSelectedShape()).bounds(margin + 92, actionY, 70, 20).build());
+        this.addRenderableWidget(Button.builder(Component.literal("Remove"), b -> removeSelectedShape()).bounds(margin + 166, actionY, 70, 20).build());
+        this.addRenderableWidget(Button.builder(Component.literal("Save"), b -> saveShapes()).bounds(margin + 240, actionY, 58, 20).build());
+        this.addRenderableWidget(Button.builder(Component.literal("Load"), b -> loadShapes()).bounds(margin + 302, actionY, 58, 20).build());
+        this.addRenderableWidget(Button.builder(Component.literal("Clear"), b -> clearShapes()).bounds(margin + 364, actionY, 58, 20).build());
 
         int selectY = actionY + 24;
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("Sel On/Off"), b -> toggleSelectionEnabled()).dimensions(margin, selectY, 84, 20).build());
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("Sel Pos1"), b -> setSelectionPosFromLook(false)).dimensions(margin + 88, selectY, 68, 20).build());
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("Sel Pos2"), b -> setSelectionPosFromLook(true)).dimensions(margin + 160, selectY, 68, 20).build());
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("Sel->Form"), b -> loadFormFromSelection()).dimensions(margin + 232, selectY, 70, 20).build());
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("Sel Add"), b -> addShapeFromSelection()).dimensions(margin + 306, selectY, 60, 20).build());
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("Sel Clear"), b -> clearSelection()).dimensions(margin + 370, selectY, 60, 20).build());
+        this.addRenderableWidget(Button.builder(Component.literal("Sel On/Off"), b -> toggleSelectionEnabled()).bounds(margin, selectY, 84, 20).build());
+        this.addRenderableWidget(Button.builder(Component.literal("Sel Pos1"), b -> setSelectionPosFromLook(false)).bounds(margin + 88, selectY, 68, 20).build());
+        this.addRenderableWidget(Button.builder(Component.literal("Sel Pos2"), b -> setSelectionPosFromLook(true)).bounds(margin + 160, selectY, 68, 20).build());
+        this.addRenderableWidget(Button.builder(Component.literal("Sel->Form"), b -> loadFormFromSelection()).bounds(margin + 232, selectY, 70, 20).build());
+        this.addRenderableWidget(Button.builder(Component.literal("Sel Add"), b -> addShapeFromSelection()).bounds(margin + 306, selectY, 60, 20).build());
+        this.addRenderableWidget(Button.builder(Component.literal("Sel Clear"), b -> clearSelection()).bounds(margin + 370, selectY, 60, 20).build());
 
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("Prev"), b -> moveSelection(-1)).dimensions(rightX + 8, top + 10, 56, 20).build());
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("Next"), b -> moveSelection(1)).dimensions(rightX + 68, top + 10, 56, 20).build());
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("Use Sel"), b -> loadSelectionIntoFields()).dimensions(rightX + 128, top + 10, 64, 20).build());
+        this.addRenderableWidget(Button.builder(Component.literal("Prev"), b -> moveSelection(-1)).bounds(rightX + 8, top + 10, 56, 20).build());
+        this.addRenderableWidget(Button.builder(Component.literal("Next"), b -> moveSelection(1)).bounds(rightX + 68, top + 10, 56, 20).build());
+        this.addRenderableWidget(Button.builder(Component.literal("Use Sel"), b -> loadSelectionIntoFields()).bounds(rightX + 128, top + 10, 64, 20).build());
 
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("Done"), b -> close())
-                .dimensions(this.width - 76, this.height - 24, 64, 20)
+        this.addRenderableWidget(Button.builder(Component.literal("Done"), b -> onClose())
+                .bounds(this.width - 76, this.height - 24, 64, 20)
                 .build());
 
         refreshShapeList(false);
         this.selectedShapeIdx = Math.clamp(this.selectedShapeIdx, -1, this.shapes.size() - 1);
     }
 
-    private TextFieldWidget addField(int x, int y, int width, String value) {
-        TextFieldWidget field = new TextFieldWidget(this.textRenderer, x, y, width, 20, Text.empty());
+    private EditBox addField(int x, int y, int width, String value) {
+        EditBox field = new EditBox(this.font, x, y, width, 20, Component.empty());
         field.setMaxLength(96);
-        field.setText(value == null ? "" : value);
-        this.addDrawableChild(field);
+        field.setValue(value == null ? "" : value);
+        this.addRenderableWidget(field);
         return field;
     }
 
@@ -147,18 +148,18 @@ public final class DebugDrawScreen extends Screen {
             return;
         }
         DebugDrawManager.ShapeDescriptor d = this.shapes.get(this.selectedShapeIdx);
-        this.typeField.setText(d.type());
-        this.pos1XField.setText(fmt(d.x1()));
-        this.pos1YField.setText(fmt(d.y1()));
-        this.pos1ZField.setText(fmt(d.z1()));
-        this.pos2XField.setText(fmt(d.x2()));
-        this.pos2YField.setText(fmt(d.y2()));
-        this.pos2ZField.setText(fmt(d.z2()));
-        this.colorField.setText(DebugDrawManager.formatColor(d.rgb()));
-        this.secondsField.setText(fmt(d.secondsRemaining()));
-        this.radiusField.setText(fmt(d.radius()));
-        this.heightField.setText(fmt(d.height()));
-        this.segmentsField.setText(Integer.toString(Math.max(8, d.segments())));
+        this.typeField.setValue(d.type());
+        this.pos1XField.setValue(fmt(d.x1()));
+        this.pos1YField.setValue(fmt(d.y1()));
+        this.pos1ZField.setValue(fmt(d.z1()));
+        this.pos2XField.setValue(fmt(d.x2()));
+        this.pos2YField.setValue(fmt(d.y2()));
+        this.pos2ZField.setValue(fmt(d.z2()));
+        this.colorField.setValue(DebugDrawManager.formatColor(d.rgb()));
+        this.secondsField.setValue(fmt(d.secondsRemaining()));
+        this.radiusField.setValue(fmt(d.radius()));
+        this.heightField.setValue(fmt(d.height()));
+        this.segmentsField.setValue(Integer.toString(Math.max(8, d.segments())));
         this.status = "Loaded shape #" + d.id() + " into form.";
         persistForm();
     }
@@ -253,30 +254,30 @@ public final class DebugDrawScreen extends Screen {
     }
 
     private void setPosFromPlayer(boolean first) {
-        MinecraftClient client = MinecraftClient.getInstance();
+        Minecraft client = Minecraft.getInstance();
         if (client.player == null) {
             return;
         }
         if (first) {
-            this.pos1XField.setText(Integer.toString(client.player.getBlockX()));
-            this.pos1YField.setText(Integer.toString(client.player.getBlockY()));
-            this.pos1ZField.setText(Integer.toString(client.player.getBlockZ()));
+            this.pos1XField.setValue(Integer.toString(client.player.getBlockX()));
+            this.pos1YField.setValue(Integer.toString(client.player.getBlockY()));
+            this.pos1ZField.setValue(Integer.toString(client.player.getBlockZ()));
         } else {
-            this.pos2XField.setText(Integer.toString(client.player.getBlockX()));
-            this.pos2YField.setText(Integer.toString(client.player.getBlockY()));
-            this.pos2ZField.setText(Integer.toString(client.player.getBlockZ()));
+            this.pos2XField.setValue(Integer.toString(client.player.getBlockX()));
+            this.pos2YField.setValue(Integer.toString(client.player.getBlockY()));
+            this.pos2ZField.setValue(Integer.toString(client.player.getBlockZ()));
         }
     }
 
     private void setPos2FromLook() {
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (!(client.crosshairTarget instanceof BlockHitResult hit)) {
+        Minecraft client = Minecraft.getInstance();
+        if (!(client.hitResult instanceof BlockHitResult hit)) {
             this.status = "No block under crosshair.";
             return;
         }
-        this.pos2XField.setText(Integer.toString(hit.getBlockPos().getX()));
-        this.pos2YField.setText(Integer.toString(hit.getBlockPos().getY()));
-        this.pos2ZField.setText(Integer.toString(hit.getBlockPos().getZ()));
+        this.pos2XField.setValue(Integer.toString(hit.getBlockPos().getX()));
+        this.pos2YField.setValue(Integer.toString(hit.getBlockPos().getY()));
+        this.pos2ZField.setValue(Integer.toString(hit.getBlockPos().getZ()));
     }
 
     private void toggleSelectionEnabled() {
@@ -297,15 +298,15 @@ public final class DebugDrawScreen extends Screen {
             this.status = "Selection pos1 not set.";
             return;
         }
-        this.pos1XField.setText(Integer.toString(pos1.getX()));
-        this.pos1YField.setText(Integer.toString(pos1.getY()));
-        this.pos1ZField.setText(Integer.toString(pos1.getZ()));
+        this.pos1XField.setValue(Integer.toString(pos1.getX()));
+        this.pos1YField.setValue(Integer.toString(pos1.getY()));
+        this.pos1ZField.setValue(Integer.toString(pos1.getZ()));
         if (pos2 != null) {
-            this.pos2XField.setText(Integer.toString(pos2.getX()));
-            this.pos2YField.setText(Integer.toString(pos2.getY()));
-            this.pos2ZField.setText(Integer.toString(pos2.getZ()));
+            this.pos2XField.setValue(Integer.toString(pos2.getX()));
+            this.pos2YField.setValue(Integer.toString(pos2.getY()));
+            this.pos2ZField.setValue(Integer.toString(pos2.getZ()));
         }
-        this.typeField.setText(DebugDrawManager.getSelectionShape().name().toLowerCase());
+        this.typeField.setValue(DebugDrawManager.getSelectionShape().name().toLowerCase());
         persistForm();
         this.status = pos2 == null ? "Loaded pos1 from selection." : "Loaded selection into form.";
     }
@@ -313,8 +314,8 @@ public final class DebugDrawScreen extends Screen {
     private void addShapeFromSelection() {
         persistForm();
         try {
-            int rgb = DrawClientCommand.parseColorToken(this.colorField.getText());
-            double seconds = Math.max(0.2, parseDouble(this.secondsField.getText(), 20.0));
+            int rgb = DrawClientCommand.parseColorToken(this.colorField.getValue());
+            double seconds = Math.max(0.2, parseDouble(this.secondsField.getValue(), 20.0));
             int id = DebugDrawManager.addSelectionShape(rgb, seconds);
             if (id < 0) {
                 this.status = "Set selection pos1 and pos2 first.";
@@ -335,7 +336,7 @@ public final class DebugDrawScreen extends Screen {
 
     private void stepType(int delta) {
         String[] types = {"line", "box", "circle", "cylinder", "sphere", "diamond", "pyramid", "cone"};
-        String current = this.typeField.getText().trim().toLowerCase();
+        String current = this.typeField.getValue().trim().toLowerCase();
         int idx = 0;
         for (int i = 0; i < types.length; i++) {
             if (types[i].equals(current)) {
@@ -344,43 +345,43 @@ public final class DebugDrawScreen extends Screen {
             }
         }
         int next = Math.floorMod(idx + delta, types.length);
-        this.typeField.setText(types[next]);
+        this.typeField.setValue(types[next]);
     }
 
     private void persistForm() {
-        sType = this.typeField.getText();
-        sPos1X = this.pos1XField.getText();
-        sPos1Y = this.pos1YField.getText();
-        sPos1Z = this.pos1ZField.getText();
-        sPos2X = this.pos2XField.getText();
-        sPos2Y = this.pos2YField.getText();
-        sPos2Z = this.pos2ZField.getText();
-        sColor = this.colorField.getText();
-        sSeconds = this.secondsField.getText();
-        sRadius = this.radiusField.getText();
-        sHeight = this.heightField.getText();
-        sSegments = this.segmentsField.getText();
+        sType = this.typeField.getValue();
+        sPos1X = this.pos1XField.getValue();
+        sPos1Y = this.pos1YField.getValue();
+        sPos1Z = this.pos1ZField.getValue();
+        sPos2X = this.pos2XField.getValue();
+        sPos2Y = this.pos2YField.getValue();
+        sPos2Z = this.pos2ZField.getValue();
+        sColor = this.colorField.getValue();
+        sSeconds = this.secondsField.getValue();
+        sRadius = this.radiusField.getValue();
+        sHeight = this.heightField.getValue();
+        sSegments = this.segmentsField.getValue();
     }
 
     private ShapeData parseForm() {
-        MinecraftClient client = MinecraftClient.getInstance();
+        Minecraft client = Minecraft.getInstance();
         if (client.player == null) {
             this.status = "No player context.";
             return null;
         }
         try {
-            String type = this.typeField.getText().trim().toLowerCase();
-            double x1 = parseCoord(this.pos1XField.getText(), client.player.getX());
-            double y1 = parseCoord(this.pos1YField.getText(), client.player.getY());
-            double z1 = parseCoord(this.pos1ZField.getText(), client.player.getZ());
-            double x2 = parseCoord(this.pos2XField.getText(), client.player.getX());
-            double y2 = parseCoord(this.pos2YField.getText(), client.player.getY());
-            double z2 = parseCoord(this.pos2ZField.getText(), client.player.getZ());
-            int rgb = DrawClientCommand.parseColorToken(this.colorField.getText());
-            double seconds = Math.max(0.2, parseDouble(this.secondsField.getText(), 20.0));
-            double radius = Math.max(0.05, parseDouble(this.radiusField.getText(), 2.0));
-            double height = Math.max(0.05, parseDouble(this.heightField.getText(), 4.0));
-            int segments = Math.max(8, (int) parseDouble(this.segmentsField.getText(), 36));
+            String type = this.typeField.getValue().trim().toLowerCase();
+            double x1 = parseCoord(this.pos1XField.getValue(), client.player.getX());
+            double y1 = parseCoord(this.pos1YField.getValue(), client.player.getY());
+            double z1 = parseCoord(this.pos1ZField.getValue(), client.player.getZ());
+            double x2 = parseCoord(this.pos2XField.getValue(), client.player.getX());
+            double y2 = parseCoord(this.pos2YField.getValue(), client.player.getY());
+            double z2 = parseCoord(this.pos2ZField.getValue(), client.player.getZ());
+            int rgb = DrawClientCommand.parseColorToken(this.colorField.getValue());
+            double seconds = Math.max(0.2, parseDouble(this.secondsField.getValue(), 20.0));
+            double radius = Math.max(0.05, parseDouble(this.radiusField.getValue(), 2.0));
+            double height = Math.max(0.05, parseDouble(this.heightField.getValue(), 4.0));
+            int segments = Math.max(8, (int) parseDouble(this.segmentsField.getValue(), 36));
             return new ShapeData(type, x1, y1, z1, x2, y2, z2, rgb, seconds, radius, height, segments);
         } catch (Exception e) {
             this.status = "Invalid input: " + e.getMessage();
@@ -412,15 +413,15 @@ public final class DebugDrawScreen extends Screen {
     }
 
     @Override
-    public void close() {
+    public void onClose() {
         persistForm();
-        if (this.client != null) {
-            this.client.setScreen(this.parent);
+        if (this.minecraft != null) {
+            this.minecraft.gui.setScreen(this.parent);
         }
     }
 
     @Override
-    public void render(DrawContext context, int mouseX, int mouseY, float delta) {
+    public void extractRenderState(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
         context.fill(0, 0, this.width, this.height, UiTheme.BG);
 
         int margin = 10;
@@ -433,38 +434,38 @@ public final class DebugDrawScreen extends Screen {
         UiForms.drawPanel(context, margin, top, leftW, bottom - top);
         UiForms.drawPanel(context, rightX, top, rightW, bottom - top);
 
-        context.drawTextWithShadow(this.textRenderer, "Debug Draw Editor", margin, 10, UiTheme.TEXT);
+        context.text(this.font, "Debug Draw Editor", margin, 10, UiTheme.TEXT);
 
-        context.drawTextWithShadow(this.textRenderer, "Type", margin + 8, top + 16, UiTheme.TEXT_MUTED);
-        context.drawTextWithShadow(this.textRenderer, "Pos1", margin + 8, top + 42, UiTheme.TEXT_MUTED);
-        context.drawTextWithShadow(this.textRenderer, "Pos2", margin + 8, top + 66, UiTheme.TEXT_MUTED);
-        context.drawTextWithShadow(this.textRenderer, "Color", margin + 8, top + 92, UiTheme.TEXT_MUTED);
-        context.drawTextWithShadow(this.textRenderer, "TTL", margin + 176, top + 92, UiTheme.TEXT_MUTED);
-        context.drawTextWithShadow(this.textRenderer, "R", margin + 8, top + 116, UiTheme.TEXT_MUTED);
-        context.drawTextWithShadow(this.textRenderer, "H", margin + 138, top + 116, UiTheme.TEXT_MUTED);
-        context.drawTextWithShadow(this.textRenderer, "Seg", margin + 190, top + 116, UiTheme.TEXT_MUTED);
+        context.text(this.font, "Type", margin + 8, top + 16, UiTheme.TEXT_MUTED);
+        context.text(this.font, "Pos1", margin + 8, top + 42, UiTheme.TEXT_MUTED);
+        context.text(this.font, "Pos2", margin + 8, top + 66, UiTheme.TEXT_MUTED);
+        context.text(this.font, "Color", margin + 8, top + 92, UiTheme.TEXT_MUTED);
+        context.text(this.font, "TTL", margin + 176, top + 92, UiTheme.TEXT_MUTED);
+        context.text(this.font, "R", margin + 8, top + 116, UiTheme.TEXT_MUTED);
+        context.text(this.font, "H", margin + 138, top + 116, UiTheme.TEXT_MUTED);
+        context.text(this.font, "Seg", margin + 190, top + 116, UiTheme.TEXT_MUTED);
 
-        context.drawTextWithShadow(this.textRenderer, "Shapes", rightX + 8, top + 38, UiTheme.TEXT);
+        context.text(this.font, "Shapes", rightX + 8, top + 38, UiTheme.TEXT);
         int y = top + 52;
         int max = Math.min(this.shapes.size(), 16);
         for (int i = 0; i < max; i++) {
             DebugDrawManager.ShapeDescriptor d = this.shapes.get(i);
             int color = (i == this.selectedShapeIdx) ? 0xFFB7E3FF : UiTheme.TEXT_MUTED;
-            context.drawTextWithShadow(this.textRenderer,
+            context.text(this.font,
                     String.format("#%d %s %s", d.id(), d.type(), DebugDrawManager.formatColor(d.rgb())),
                     rightX + 8, y, color);
             y += 10;
         }
 
-        context.drawTextWithShadow(this.textRenderer,
+        context.text(this.font,
                 "Use 'Use Sel' then edit fields, click Update.",
                 margin, this.height - 44, UiTheme.TEXT_MUTED);
-        context.drawTextWithShadow(this.textRenderer,
+        context.text(this.font,
                 "Selection: " + DebugDrawManager.selectionStatus(),
                 margin, this.height - 56, UiTheme.TEXT_MUTED);
-        context.drawTextWithShadow(this.textRenderer, this.status, margin, this.height - 30, UiTheme.TEXT_ACCENT);
+        context.text(this.font, this.status, margin, this.height - 30, UiTheme.TEXT_ACCENT);
 
-        super.render(context, mouseX, mouseY, delta);
+        super.extractRenderState(context, mouseX, mouseY, delta);
     }
 
     private record ShapeData(String type,

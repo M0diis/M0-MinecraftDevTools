@@ -1,8 +1,7 @@
 package me.m0dii.modules.macros.gui;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import me.m0dii.modules.macros.hud.MacroHudDataHandler;
-import net.minecraft.client.util.InputUtil;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -114,41 +113,68 @@ public final class MacroWorkbenchCanvasUtils {
         };
     }
 
+    /**
+     * Keyboard-grid cells for mouse buttons use {@code MOUSE_CELL + button} so they never collide with keyboard
+     * scancodes (since 26.x mouse buttons are 1..8, and scancode 4 is the A key).
+     */
+    public static final int MOUSE_CELL = 0x10000;
+
+    public static int mouseCell(int button) {
+        return MOUSE_CELL + button;
+    }
+
+    public static boolean isMouseCell(int code) {
+        return code >= MOUSE_CELL;
+    }
+
     public static String keyLabel(int keyCode) {
+        if (isMouseCell(keyCode)) {
+            return switch (keyCode - MOUSE_CELL) {
+                case InputConstants.MOUSE_BUTTON_LEFT -> "LMB";
+                case InputConstants.MOUSE_BUTTON_RIGHT -> "RMB";
+                case InputConstants.MOUSE_BUTTON_MIDDLE -> "MMB";
+                default -> "M" + (keyCode - MOUSE_CELL);
+            };
+        }
         return switch (keyCode) {
-            case GLFW.GLFW_KEY_ESCAPE -> "Esc";
-            case GLFW.GLFW_KEY_LEFT_CONTROL -> "L.C";
-            case GLFW.GLFW_KEY_RIGHT_CONTROL -> "R.C";
-            case GLFW.GLFW_KEY_LEFT_ALT -> "L.A";
-            case GLFW.GLFW_KEY_RIGHT_ALT -> "R.A";
-            case GLFW.GLFW_KEY_LEFT_SHIFT -> "L.S";
-            case GLFW.GLFW_KEY_RIGHT_SHIFT -> "R.S";
-            case GLFW.GLFW_KEY_UP -> "Up";
-            case GLFW.GLFW_KEY_DOWN -> "Dn";
-            case GLFW.GLFW_KEY_LEFT -> "Lt";
-            case GLFW.GLFW_KEY_RIGHT -> "Rt";
-            case GLFW.GLFW_KEY_BACKSPACE -> "Bksp";
-            case GLFW.GLFW_KEY_CAPS_LOCK -> "Caps";
-            case GLFW.GLFW_KEY_KP_ADD -> "Num+";
-            case GLFW.GLFW_KEY_KP_SUBTRACT -> "Num-";
-            case GLFW.GLFW_KEY_KP_MULTIPLY -> "Num*";
-            case GLFW.GLFW_KEY_KP_DIVIDE -> "Num/";
-            case GLFW.GLFW_KEY_KP_ENTER -> "NumE";
-            case GLFW.GLFW_KEY_KP_DECIMAL -> "Num.";
-            case GLFW.GLFW_KEY_HOME -> "Home";
-            case GLFW.GLFW_KEY_END -> "End";
-            case GLFW.GLFW_KEY_PAGE_UP -> "PgUp";
-            case GLFW.GLFW_KEY_PAGE_DOWN -> "PgDn";
-            case GLFW.GLFW_KEY_INSERT -> "Ins";
-            case GLFW.GLFW_KEY_DELETE -> "Del";
-            case GLFW.GLFW_MOUSE_BUTTON_LEFT -> "M1";
-            case GLFW.GLFW_MOUSE_BUTTON_RIGHT -> "M2";
-            case GLFW.GLFW_MOUSE_BUTTON_MIDDLE -> "M3";
-            case GLFW.GLFW_MOUSE_BUTTON_4 -> "M4";
-            case GLFW.GLFW_MOUSE_BUTTON_5 -> "M5";
+            case InputConstants.KEY_ESCAPE -> "Esc";
+            case InputConstants.KEY_LCONTROL -> "L.C";
+            case InputConstants.KEY_RCONTROL -> "R.C";
+            case InputConstants.KEY_LALT -> "L.A";
+            case InputConstants.KEY_RALT -> "R.A";
+            case InputConstants.KEY_LSHIFT -> "L.S";
+            case InputConstants.KEY_RSHIFT -> "R.S";
+            case InputConstants.KEY_UP -> "Up";
+            case InputConstants.KEY_DOWN -> "Dn";
+            case InputConstants.KEY_LEFT -> "Lt";
+            case InputConstants.KEY_RIGHT -> "Rt";
+            case InputConstants.KEY_BACKSPACE -> "Bksp";
+            case InputConstants.KEY_CAPSLOCK -> "Caps";
+            case InputConstants.KEY_ADD -> "Num+";
+            case org.lwjgl.sdl.SDLScancode.SDL_SCANCODE_KP_MINUS -> "Num-";
+            case InputConstants.KEY_MULTIPLY -> "Num*";
+            case org.lwjgl.sdl.SDLScancode.SDL_SCANCODE_KP_DIVIDE -> "Num/";
+            case InputConstants.KEY_NUMPADENTER -> "NumE";
+            case org.lwjgl.sdl.SDLScancode.SDL_SCANCODE_KP_PERIOD -> "Num.";
+            case InputConstants.KEY_HOME -> "Home";
+            case InputConstants.KEY_END -> "End";
+            case InputConstants.KEY_PAGEUP -> "PgUp";
+            case InputConstants.KEY_PAGEDOWN -> "PgDn";
+            case InputConstants.KEY_INSERT -> "Ins";
+            case InputConstants.KEY_DELETE -> "Del";
+            case InputConstants.KEY_NUMPAD0 -> "0";
+            case InputConstants.KEY_NUMPAD1 -> "1";
+            case InputConstants.KEY_NUMPAD2 -> "2";
+            case InputConstants.KEY_NUMPAD3 -> "3";
+            case InputConstants.KEY_NUMPAD4 -> "4";
+            case InputConstants.KEY_NUMPAD5 -> "5";
+            case InputConstants.KEY_NUMPAD6 -> "6";
+            case InputConstants.KEY_NUMPAD7 -> "7";
+            case InputConstants.KEY_NUMPAD8 -> "8";
+            case InputConstants.KEY_NUMPAD9 -> "9";
             default -> {
                 try {
-                    String s = InputUtil.Type.KEYSYM.createFromCode(keyCode).getLocalizedText().getString();
+                    String s = InputConstants.Type.KEYBOARD.getOrCreate(keyCode).getDisplayName().getString();
                     yield s.length() > 7 ? s.substring(0, 7) : s;
                 } catch (Exception ignored) {
                     yield "?";
@@ -162,11 +188,11 @@ public final class MacroWorkbenchCanvasUtils {
             return "None";
         }
         try {
-            InputUtil.Key key = InputUtil.fromTranslationKey(translationKey.toLowerCase(Locale.ROOT));
+            InputConstants.Key key = InputConstants.getKey(translationKey.toLowerCase(Locale.ROOT));
             if (key == null) {
                 return translationKey;
             }
-            String text = key.getLocalizedText().getString();
+            String text = key.getDisplayName().getString();
             return text == null || text.isBlank() ? translationKey : text;
         } catch (Exception ignored) {
             return translationKey;

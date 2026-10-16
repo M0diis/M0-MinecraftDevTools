@@ -1,14 +1,14 @@
 package me.m0dii.modules.freecam;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import me.m0dii.modules.Module;
 import me.m0dii.modules.macros.MacroPlaceholderProvider;
 import me.m0dii.modules.macros.MacroPlaceholders;
 import me.m0dii.modules.optin.RestrictedModuleOptInNetworking;
 import me.m0dii.utils.KeybindCatalog;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.util.InputUtil;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.util.Identifier;
+import net.minecraft.client.Minecraft;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.entity.player.Player;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -37,7 +37,7 @@ public class FreecamModule extends Module {
         }
 
         @Override
-        public String resolvePlaceholder(String token, MinecraftClient client, PlayerEntity player, boolean canvasMode) {
+        public String resolvePlaceholder(String token, Minecraft client, Player player, boolean canvasMode) {
             if ("freecam.enabled".equals(token)) {
                 return Boolean.toString(INSTANCE.isEnabled());
             }
@@ -55,14 +55,14 @@ public class FreecamModule extends Module {
     public void register() {
         MacroPlaceholders.registerProvider(PLACEHOLDER_PROVIDER);
         registerPressedKeybind(KeybindCatalog.FREECAM_TOGGLE.translationKey(),
-                InputUtil.Type.KEYSYM,
+                InputConstants.Type.KEYBOARD,
                 KeybindCatalog.FREECAM_TOGGLE.defaultKey(),
                 client -> toggleEnabled());
     }
 
     @Override
     public void onEnable() {
-        if (getClient().world == null || getClient().player == null) {
+        if (getClient().level == null || getClient().player == null) {
             this.enabled = false;
             return;
         }

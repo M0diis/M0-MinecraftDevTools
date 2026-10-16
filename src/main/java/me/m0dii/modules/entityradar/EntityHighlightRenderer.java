@@ -1,19 +1,19 @@
 package me.m0dii.modules.entityradar;
 
+import com.mojang.blaze3d.vertex.VertexConsumer;
 import lombok.Getter;
 import lombok.Setter;
 import me.m0dii.modules.Toggleable;
+import me.m0dii.render.OverlayBufferSource;
+import me.m0dii.render.OverlayRenderEvents;
 import me.m0dii.utils.CustomRenderLayers;
 import me.m0dii.utils.DrawUtil;
-import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.render.RenderLayers;
-import net.minecraft.client.render.VertexConsumer;
-import net.minecraft.client.render.VertexConsumerProvider;
-import net.minecraft.entity.Entity;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Box;
-import net.minecraft.world.chunk.Chunk;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.rendertype.RenderTypes;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.level.chunk.ChunkAccess;
+import net.minecraft.world.phys.AABB;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -29,30 +29,30 @@ public class EntityHighlightRenderer implements Toggleable {
     private boolean tracersEnabled = true;
 
     public void register() {
-        WorldRenderEvents.AFTER_ENTITIES.register(context -> {
+        OverlayRenderEvents.AFTER_ENTITIES.register(context -> {
             if (!enabled) {
                 return;
             }
 
-            MinecraftClient client = MinecraftClient.getInstance();
-            if (client.player == null || client.world == null) {
+            Minecraft client = Minecraft.getInstance();
+            if (client.player == null || client.level == null) {
                 return;
             }
 
             List<Entity> entities = EntityRadarModule.INSTANCE.getEntities();
 
-            VertexConsumerProvider vertexConsumers = context.consumers();
+            OverlayBufferSource vertexConsumers = context.consumers();
             if (vertexConsumers == null) {
-                vertexConsumers = client.getBufferBuilders().getEntityVertexConsumers();
+                vertexConsumers = OverlayBufferSource.current();
             }
 
-            VertexConsumer lineBuffer = vertexConsumers.getBuffer(RenderLayers.LINES);
+            VertexConsumer lineBuffer = vertexConsumers.getBuffer(RenderTypes.LINES);
             VertexConsumer occludedLineBuffer = vertexConsumers.getBuffer(CustomRenderLayers.LINES_NO_DEPTH);
 
-            double cameraX = context.gameRenderer().getCamera().getCameraPos().x;
-            double cameraY = context.gameRenderer().getCamera().getCameraPos().y;
-            double cameraZ = context.gameRenderer().getCamera().getCameraPos().z;
-            var viewDir = context.gameRenderer().getCamera().getHorizontalPlane();
+            double cameraX = context.gameRenderer().mainCamera().position().x;
+            double cameraY = context.gameRenderer().mainCamera().position().y;
+            double cameraZ = context.gameRenderer().mainCamera().position().z;
+            var viewDir = context.gameRenderer().mainCamera().forwardVector();
             double traceStartX = viewDir.x() * 0.35;
             double traceStartY = 0.0;
             double traceStartZ = viewDir.z() * 0.35;
@@ -62,7 +62,7 @@ public class EntityHighlightRenderer implements Toggleable {
                     continue;
                 }
 
-                Box box = entity.getBoundingBox().expand(0.03);
+                AABB box = entity.getBoundingBox().inflate(0.03);
                 DrawUtil.drawOutlinedBoxSafe(
                         lineBuffer,
                         box.minX - cameraX,
@@ -93,27 +93,23 @@ public class EntityHighlightRenderer implements Toggleable {
                 }
             }
 
-            List<Chunk> nearbyChunks = new ArrayList<>();
-            int playerChunkX = client.player.getChunkPos().x;
-            int playerChunkZ = client.player.getChunkPos().z;
+            List<ChunkAccess> nearbyChunks = new ArrayList<>();
+            int playerChunkX = client.player.chunkPosition().x();
+            int playerChunkZ = client.player.chunkPosition().z();
             for (int dx = -2; dx <= 2; dx++) {
                 for (int dz = -2; dz <= 2; dz++) {
-                    Chunk chunk = client.world.getChunk(playerChunkX + dx, playerChunkZ + dz);
+                    ChunkAccess chunk = client.level.getChunk(playerChunkX + dx, playerChunkZ + dz);
                     nearbyChunks.add(chunk);
                 }
             }
 
             nearbyChunks.forEach(chunk ->
-                    chunk.getBlockEntityPositions().forEach(pos -> {
+                    chunk.getBlockEntitiesPos().forEach(pos -> {
                         drawBlockEntityBoxSafe(lineBuffer, pos, cameraX, cameraY, cameraZ);
                         drawBlockEntityBoxSafe(occludedLineBuffer, pos, cameraX, cameraY, cameraZ);
                     }));
 
             // Explicitly flush our line buffers so vertices are sent to the GPU in this pass.
-            if (vertexConsumers instanceof VertexConsumerProvider.Immediate immediate) {
-                immediate.draw(RenderLayers.LINES);
-                immediate.draw(CustomRenderLayers.LINES_NO_DEPTH);
-            }
         });
     }
 

@@ -77,7 +77,7 @@ public final class ScriptStorage {
             Files.writeString(heartbeat, """
                     // Example automation script. Available bindings: event, client, player, world
                     val eventType = event.type().name()
-                    player?.sendMessage(net.minecraft.text.Text.literal("[automation] " + eventType), false)
+                    player?.sendSystemMessage(net.minecraft.network.chat.Component.literal("[automation] " + eventType))
                     "ok"
                     """);
         }

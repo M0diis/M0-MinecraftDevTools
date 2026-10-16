@@ -2,11 +2,11 @@ package me.m0dii.mixin;
 
 import me.m0dii.modules.hungertweaks.HungerTweaksTooltipOverlayHandler;
 import me.m0dii.modules.nbttooltip.NBTTooltipModule;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.tooltip.TooltipType;
-import net.minecraft.text.Text;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.TooltipFlag;
 import org.jetbrains.annotations.Nullable;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -20,10 +20,10 @@ import java.util.List;
 @SuppressWarnings({"rawtypes", "unchecked"})
 public abstract class ItemstackMixin {
 
-    @Inject(method = "getTooltip", at = @At("RETURN"), cancellable = true)
+    @Inject(method = "getTooltipLines", at = @At("RETURN"), cancellable = true)
     protected void injectEditTooltipMethod(Item.TooltipContext context,
-                                           @Nullable PlayerEntity player,
-                                           TooltipType type,
+                                           @Nullable Player player,
+                                           TooltipFlag type,
                                            CallbackInfoReturnable<List> info) {
         ItemStack itemStack = (ItemStack) (Object) this;
         List tooltip = info.getReturnValue();
@@ -33,7 +33,7 @@ public abstract class ItemstackMixin {
         }
 
         if (NBTTooltipModule.INSTANCE.isEnabled()) {
-            tooltip = new ArrayList<>(NBTTooltipModule.getNbtTooltipText(itemStack, (List<Text>) tooltip));
+            tooltip = new ArrayList<>(NBTTooltipModule.getNbtTooltipText(itemStack, (List<Component>) tooltip));
         }
 
         if (HungerTweaksTooltipOverlayHandler.INSTANCE != null) {

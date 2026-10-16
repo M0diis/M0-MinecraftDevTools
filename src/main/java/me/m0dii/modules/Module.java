@@ -1,15 +1,15 @@
 package me.m0dii.modules;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import lombok.Getter;
 import me.m0dii.utils.KeybindManager;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.network.ClientPlayerEntity;
-import net.minecraft.client.option.KeyBinding;
-import net.minecraft.client.util.InputUtil;
-import net.minecraft.client.world.ClientWorld;
-import net.minecraft.text.Text;
-import net.minecraft.util.Identifier;
+import net.minecraft.client.KeyMapping;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -25,14 +25,14 @@ public abstract class Module {
     private static final String SERVER_SIDE_OPT_IN_DEBUG_BYPASS_PROPERTY = "m0dev.debug.bypassServerSideOptIn";
 
     @Getter
-    private final MinecraftClient client = MinecraftClient.getInstance();
+    private final Minecraft client = Minecraft.getInstance();
 
-    public ClientWorld getWorld() {
-        return client.world;
+    public ClientLevel getWorld() {
+        return client.level;
     }
 
     @Getter
-    protected final ClientPlayerEntity player = client.player;
+    protected final LocalPlayer player = client.player;
 
     @Getter
     protected final String id;
@@ -42,7 +42,7 @@ public abstract class Module {
     protected boolean enabled;
 
     @Getter
-    protected KeyBinding keyBinding;
+    protected KeyMapping keyBinding;
 
     protected Module(@NotNull String id, @NotNull String displayName, boolean defaultEnabled) {
         this.id = Objects.requireNonNull(id);
@@ -51,7 +51,7 @@ public abstract class Module {
     }
 
     protected boolean isClientNull() {
-        return getClient() == null || getClient().player == null || getClient().world == null;
+        return getClient() == null || getClient().player == null || getClient().level == null;
     }
 
     public boolean requiresServerSideOptIn() {
@@ -71,13 +71,13 @@ public abstract class Module {
             return true;
         }
 
-        MinecraftClient mc = getClient();
+        Minecraft mc = getClient();
         if (mc == null) {
             return false;
         }
 
         // Singleplayer worlds are local, so no server handshake is required.
-        if (mc.isInSingleplayer()) {
+        if (mc.isLocalServer()) {
             return true;
         }
 
@@ -98,10 +98,8 @@ public abstract class Module {
 
     protected void notifyMissingServerSideOptIn() {
         if (getClient().player != null) {
-            getClient().player.sendMessage(
-                    Text.literal(displayName + " requires server-side opt-in and is disabled on this server."),
-                    true
-            );
+            getClient().player.sendOverlayMessage(
+                    Component.literal(displayName + " requires server-side opt-in and is disabled on this server."));
         }
     }
 
@@ -129,7 +127,7 @@ public abstract class Module {
         setEnabled(!wasEnabled);
 
         if (getClient().player != null && wasEnabled != isEnabled()) {
-            getClient().player.sendMessage(Text.literal(displayName + " " + (isEnabled() ? "enabled" : "disabled")), true);
+            getClient().player.sendOverlayMessage(Component.literal(displayName + " " + (isEnabled() ? "enabled" : "disabled")));
         }
     }
 
@@ -154,11 +152,11 @@ public abstract class Module {
     /**
      * Register a keybind that will call the provided action (Consumer<MinecraftClient>) when pressed.
      */
-    protected KeyBinding registerPressedKeybind(@NotNull String translationKey,
-                                                @NotNull InputUtil.Type type,
+    protected KeyMapping registerPressedKeybind(@NotNull String translationKey,
+                                                @NotNull InputConstants.Type type,
                                                 int defaultKey,
-                                                @NotNull Consumer<@NotNull MinecraftClient> action) {
-        KeyBinding kb = KeybindManager.registerPressedKeybind(translationKey, type, defaultKey, action);
+                                                @NotNull Consumer<@NotNull Minecraft> action) {
+        KeyMapping kb = KeybindManager.registerPressedKeybind(translationKey, type, defaultKey, action);
         this.keyBinding = kb;
         return kb;
     }
@@ -166,12 +164,12 @@ public abstract class Module {
     /**
      * Register a held keybind that will call the provided heldAction when pressed and releasedAction when released.
      */
-    protected KeyBinding registerHeldKeybind(@NotNull String translationKey,
-                                             @NotNull InputUtil.Type type,
+    protected KeyMapping registerHeldKeybind(@NotNull String translationKey,
+                                             @NotNull InputConstants.Type type,
                                              int defaultKey,
-                                             @NotNull Consumer<@NotNull MinecraftClient> heldAction,
-                                             @NotNull Consumer<@NotNull MinecraftClient> releasedAction) {
-        KeyBinding kb = KeybindManager.registerHeldKeybind(translationKey, type, defaultKey, heldAction, releasedAction);
+                                             @NotNull Consumer<@NotNull Minecraft> heldAction,
+                                             @NotNull Consumer<@NotNull Minecraft> releasedAction) {
+        KeyMapping kb = KeybindManager.registerHeldKeybind(translationKey, type, defaultKey, heldAction, releasedAction);
         this.keyBinding = kb;
         return kb;
     }
@@ -191,7 +189,7 @@ public abstract class Module {
      */
     public List<String> getSettingsDisplay() {
         List<String> settings = new ArrayList<>();
-        settings.add("Key: " + (keyBinding != null ? keyBinding.getBoundKeyTranslationKey() : "None"));
+        settings.add("Key: " + (keyBinding != null ? keyBinding.saveString() : "None"));
         settings.add("Toggle: " + (isEnabled() ? "ON" : "OFF"));
         if (requiresServerSideOptIn()) {
             settings.add("Server Opt-In: " + getServerSideOptInStatus());

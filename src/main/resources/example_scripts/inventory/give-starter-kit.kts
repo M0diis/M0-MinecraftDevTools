@@ -1,12 +1,12 @@
-import net.minecraft.item.ItemStack
-import net.minecraft.item.Items
+import net.minecraft.world.item.ItemStack
+import net.minecraft.world.item.Items
 
 if (player == null) {
     "This example requires a player."
 } else {
-    player.giveItemStack(ItemStack(Items.DIAMOND_SWORD))
-    player.giveItemStack(ItemStack(Items.BREAD, 16))
-    player.giveItemStack(ItemStack(Items.TORCH, 32))
-    player.giveItemStack(ItemStack(Items.COOKED_BEEF, 16))
+    player.addItem(ItemStack(Items.DIAMOND_SWORD))
+    player.addItem(ItemStack(Items.BREAD, 16))
+    player.addItem(ItemStack(Items.TORCH, 32))
+    player.addItem(ItemStack(Items.COOKED_BEEF, 16))
     "Gave the player a small starter kit."
 }

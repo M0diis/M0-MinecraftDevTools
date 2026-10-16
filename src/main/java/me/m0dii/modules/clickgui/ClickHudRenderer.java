@@ -1,17 +1,16 @@
 package me.m0dii.modules.clickgui;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import lombok.Getter;
 import lombok.Setter;
 import me.m0dii.modules.Module;
 import me.m0dii.modules.Toggleable;
 import me.m0dii.utils.ModConfig;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.font.TextRenderer;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.render.RenderTickCounter;
-import net.minecraft.client.util.InputUtil;
-import org.lwjgl.glfw.GLFW;
+import net.minecraft.client.DeltaTracker;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Font;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 
 import java.util.List;
 import java.util.Objects;
@@ -59,24 +58,24 @@ public class ClickHudRenderer implements Toggleable {
         ClientTickEvents.END_CLIENT_TICK.register(this::onClientTick);
     }
 
-    private void onClientTick(MinecraftClient client) {
+    private void onClientTick(Minecraft client) {
         if (!enabled || client.player == null) {
             return;
         }
 
         var window = client.getWindow();
 
-        boolean upNow = InputUtil.isKeyPressed(window, GLFW.GLFW_KEY_UP);
-        boolean downNow = InputUtil.isKeyPressed(window, GLFW.GLFW_KEY_DOWN);
-        boolean leftNow = InputUtil.isKeyPressed(window, GLFW.GLFW_KEY_LEFT);
-        boolean rightNow = InputUtil.isKeyPressed(window, GLFW.GLFW_KEY_RIGHT);
-        boolean enterNow = InputUtil.isKeyPressed(window, GLFW.GLFW_KEY_ENTER);
+        boolean upNow = InputConstants.isKeyDown(InputConstants.KEY_UP);
+        boolean downNow = InputConstants.isKeyDown(InputConstants.KEY_DOWN);
+        boolean leftNow = InputConstants.isKeyDown(InputConstants.KEY_LEFT);
+        boolean rightNow = InputConstants.isKeyDown(InputConstants.KEY_RIGHT);
+        boolean enterNow = InputConstants.isKeyDown(InputConstants.KEY_RETURN);
 
         if (wasdNavigation) {
-            upNow = upNow || InputUtil.isKeyPressed(window, GLFW.GLFW_KEY_W);
-            downNow = downNow || InputUtil.isKeyPressed(window, GLFW.GLFW_KEY_S);
-            leftNow = leftNow || InputUtil.isKeyPressed(window, GLFW.GLFW_KEY_A);
-            rightNow = rightNow || InputUtil.isKeyPressed(window, GLFW.GLFW_KEY_D);
+            upNow = upNow || InputConstants.isKeyDown(InputConstants.KEY_W);
+            downNow = downNow || InputConstants.isKeyDown(InputConstants.KEY_S);
+            leftNow = leftNow || InputConstants.isKeyDown(InputConstants.KEY_A);
+            rightNow = rightNow || InputConstants.isKeyDown(InputConstants.KEY_D);
         }
 
         if (categories.length == 0) {
@@ -188,18 +187,18 @@ public class ClickHudRenderer implements Toggleable {
         }
     }
 
-    public void onHudRender(DrawContext context, RenderTickCounter tickCounter) {
+    public void onHudRender(GuiGraphicsExtractor context, DeltaTracker tickCounter) {
         if (!enabled) {
             return;
         }
 
-        MinecraftClient client = MinecraftClient.getInstance();
+        Minecraft client = Minecraft.getInstance();
         if (client == null || client.player == null) {
             return;
         }
 
-        int screenWidth = client.getWindow().getScaledWidth();
-        int screenHeight = client.getWindow().getScaledHeight();
+        int screenWidth = client.getWindow().getGuiScaledWidth();
+        int screenHeight = client.getWindow().getGuiScaledHeight();
 
         // Apply text scaling
         float scale = (float) ModConfig.clickGuiTextScale;
@@ -208,8 +207,8 @@ public class ClickHudRenderer implements Toggleable {
         }
         scale = Math.clamp(scale, 0.5f, 3.0f);
 
-        context.getMatrices().pushMatrix();
-        context.getMatrices().scale(scale, scale);
+        context.pose().pushMatrix();
+        context.pose().scale(scale, scale);
 
         // Convert screen coordinates to scaled coordinates
         int scaledStartX = Math.round(START_X / scale);
@@ -262,11 +261,11 @@ public class ClickHudRenderer implements Toggleable {
 
         renderInstructions(context, scaledStartX, scaledScreenHeight, scaledScreenWidth);
 
-        context.getMatrices().popMatrix();
+        context.pose().popMatrix();
     }
 
-    private void renderCategories(DrawContext context, int x, int y, int width) {
-        MinecraftClient client = MinecraftClient.getInstance();
+    private void renderCategories(GuiGraphicsExtractor context, int x, int y, int width) {
+        Minecraft client = Minecraft.getInstance();
         int currentY = y;
 
         for (int i = 0; i < categories.length; i++) {
@@ -280,24 +279,24 @@ public class ClickHudRenderer implements Toggleable {
             context.fill(x, currentY + ITEM_HEIGHT, x + width, currentY + ITEM_HEIGHT + 1, COLOR_BORDER);
 
             String count = "(" + category.getModules().size() + ")";
-            int countWidth = client.textRenderer.getWidth(count);
+            int countWidth = client.font.width(count);
             int countX = x + width - countWidth - 4;
 
             int textX = x + PADDING + 2;
             int textY = currentY + (ITEM_HEIGHT - 8) / 2;
             int availableWidth = countX - textX - 4;
 
-            String text = fitText(client.textRenderer, category.getName(), availableWidth);
+            String text = fitText(client.font, category.getName(), availableWidth);
 
-            context.drawText(client.textRenderer, text, textX, textY, COLOR_TEXT, false);
-            context.drawText(client.textRenderer, count, countX, textY, COLOR_TEXT, false);
+            context.text(client.font, text, textX, textY, COLOR_TEXT, false);
+            context.text(client.font, count, countX, textY, COLOR_TEXT, false);
 
             currentY += ITEM_HEIGHT;
         }
     }
 
-    private void renderModules(DrawContext context, int x, int y, int width, ModuleCategory category) {
-        MinecraftClient client = MinecraftClient.getInstance();
+    private void renderModules(GuiGraphicsExtractor context, int x, int y, int width, ModuleCategory category) {
+        Minecraft client = Minecraft.getInstance();
         List<Module> modules = category.getModules()
                 .stream()
                 .filter(Objects::nonNull)
@@ -322,35 +321,35 @@ public class ClickHudRenderer implements Toggleable {
             String status = enabled ? "ON" : "OFF";
             String settingsIndicator = hasSettings ? " >" : "";
             String rightText = status + settingsIndicator;
-            int rightTextWidth = client.textRenderer.getWidth(rightText);
+            int rightTextWidth = client.font.width(rightText);
             int statusX = x + width - rightTextWidth - 4;
 
             int textX = x + 10;
             int textY = currentY + (ITEM_HEIGHT - 8) / 2;
             int availableWidth = statusX - textX - 4;
 
-            String text = fitText(client.textRenderer, module.getDisplayName(), availableWidth);
+            String text = fitText(client.font, module.getDisplayName(), availableWidth);
 
-            context.drawText(client.textRenderer, text, textX, textY, COLOR_TEXT, false);
+            context.text(client.font, text, textX, textY, COLOR_TEXT, false);
 
-            context.drawText(client.textRenderer, status, statusX, textY,
+            context.text(client.font, status, statusX, textY,
                     enabled ? COLOR_ENABLED : COLOR_DISABLED, false);
 
             if (hasSettings) {
-                int arrowX = statusX + client.textRenderer.getWidth(status);
-                context.drawText(client.textRenderer, settingsIndicator, arrowX, textY, 0xFF888888, false);
+                int arrowX = statusX + client.font.width(status);
+                context.text(client.font, settingsIndicator, arrowX, textY, 0xFF888888, false);
             }
 
             currentY += ITEM_HEIGHT;
         }
     }
 
-    private void renderSettings(DrawContext context, int x, int y, int width) {
+    private void renderSettings(GuiGraphicsExtractor context, int x, int y, int width) {
         if (currentSettingsModule == null) {
             return;
         }
 
-        MinecraftClient client = MinecraftClient.getInstance();
+        Minecraft client = Minecraft.getInstance();
         List<String> settings = currentSettingsModule.getSettingsDisplay();
         int currentY = y;
 
@@ -358,11 +357,11 @@ public class ClickHudRenderer implements Toggleable {
         context.fill(x, currentY, x + width, currentY + 1, COLOR_BORDER);
         context.fill(x, currentY + ITEM_HEIGHT, x + width, currentY + ITEM_HEIGHT + 1, COLOR_BORDER);
 
-        String title = fitText(client.textRenderer, currentSettingsModule.getDisplayName() + " Settings", width - 8);
-        int titleWidth = client.textRenderer.getWidth(title);
+        String title = fitText(client.font, currentSettingsModule.getDisplayName() + " Settings", width - 8);
+        int titleWidth = client.font.width(title);
         int titleX = x + (width - titleWidth) / 2;
         int titleY = currentY + (ITEM_HEIGHT - 8) / 2;
-        context.drawText(client.textRenderer, title, titleX, titleY, COLOR_TEXT, false);
+        context.text(client.font, title, titleX, titleY, COLOR_TEXT, false);
 
         currentY += ITEM_HEIGHT;
 
@@ -379,9 +378,9 @@ public class ClickHudRenderer implements Toggleable {
             int textY = currentY + (ITEM_HEIGHT - 8) / 2;
             int availableWidth = width - (PADDING + 6);
 
-            String displayText = fitText(client.textRenderer, setting, availableWidth);
+            String displayText = fitText(client.font, setting, availableWidth);
 
-            context.drawText(client.textRenderer, displayText, textX, textY, COLOR_TEXT, false);
+            context.text(client.font, displayText, textX, textY, COLOR_TEXT, false);
 
             currentY += ITEM_HEIGHT;
         }
@@ -391,16 +390,16 @@ public class ClickHudRenderer implements Toggleable {
             context.fill(x, currentY, x + width, currentY + 1, COLOR_BORDER);
             context.fill(x, currentY + ITEM_HEIGHT, x + width, currentY + ITEM_HEIGHT + 1, COLOR_BORDER);
 
-            String noSettings = fitText(client.textRenderer, "No settings available", width - 8);
-            int noSettingsWidth = client.textRenderer.getWidth(noSettings);
+            String noSettings = fitText(client.font, "No settings available", width - 8);
+            int noSettingsWidth = client.font.width(noSettings);
             int noSettingsX = x + (width - noSettingsWidth) / 2;
             int noSettingsY = currentY + (ITEM_HEIGHT - 8) / 2;
-            context.drawText(client.textRenderer, noSettings, noSettingsX, noSettingsY, 0xFF888888, false);
+            context.text(client.font, noSettings, noSettingsX, noSettingsY, 0xFF888888, false);
         }
     }
 
-    private void renderInstructions(DrawContext context, int x, int screenHeight, int screenWidth) {
-        MinecraftClient client = MinecraftClient.getInstance();
+    private void renderInstructions(GuiGraphicsExtractor context, int x, int screenHeight, int screenWidth) {
+        Minecraft client = Minecraft.getInstance();
         String[] instructions = {
                 "Up/Down: Navigate | Right: Enter Modules | Left: Back to Categories",
                 "Enter: Toggle Module | Right ALT: Close"
@@ -410,30 +409,30 @@ public class ClickHudRenderer implements Toggleable {
         int maxWidth = Math.max(100, screenWidth - x - 8);
 
         for (String instruction : instructions) {
-            context.drawText(client.textRenderer, fitText(client.textRenderer, instruction, maxWidth), x, y, 0xFF808080, false);
+            context.text(client.font, fitText(client.font, instruction, maxWidth), x, y, 0xFF808080, false);
             y += 10;
         }
     }
 
-    private static String fitText(TextRenderer textRenderer, String text, int maxWidth) {
+    private static String fitText(Font textRenderer, String text, int maxWidth) {
         if (text == null || text.isEmpty()) {
             return "";
         }
         if (maxWidth <= 0) {
             return "";
         }
-        if (textRenderer.getWidth(text) <= maxWidth) {
+        if (textRenderer.width(text) <= maxWidth) {
             return text;
         }
 
         final String ellipsis = "...";
-        int ellipsisWidth = textRenderer.getWidth(ellipsis);
+        int ellipsisWidth = textRenderer.width(ellipsis);
         if (ellipsisWidth >= maxWidth) {
             return "";
         }
 
         String result = text;
-        while (!result.isEmpty() && textRenderer.getWidth(result) + ellipsisWidth > maxWidth) {
+        while (!result.isEmpty() && textRenderer.width(result) + ellipsisWidth > maxWidth) {
             result = result.substring(0, result.length() - 1);
         }
         return result.isEmpty() ? "" : result + ellipsis;

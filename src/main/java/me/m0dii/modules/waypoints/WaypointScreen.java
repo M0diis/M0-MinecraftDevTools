@@ -1,17 +1,21 @@
 package me.m0dii.modules.waypoints;
 
-import net.minecraft.client.gui.Click;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.client.gui.widget.TextFieldWidget;
-import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
-import net.minecraft.util.math.Vec3d;
+
+
+import me.m0dii.gui.theme.ThemedScreen;
+import com.mojang.blaze3d.platform.InputConstants;
+import net.minecraft.ChatFormatting;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.phys.Vec3;
 
 import java.util.List;
 
-public class WaypointScreen extends Screen {
+public class WaypointScreen extends Screen implements ThemedScreen {
     private static final int ENTRY_HEIGHT = 60;
     private static final int HEADER_HEIGHT = 60;
     private static final int BUTTON_WIDTH = 60;
@@ -23,13 +27,13 @@ public class WaypointScreen extends Screen {
 
     // Edit mode variables
     private WaypointHandler.Waypoint editingWaypoint = null;
-    private TextFieldWidget nameField;
-    private TextFieldWidget xField;
-    private TextFieldWidget yField;
-    private TextFieldWidget zField;
+    private EditBox nameField;
+    private EditBox xField;
+    private EditBox yField;
+    private EditBox zField;
 
     public WaypointScreen(Screen parent) {
-        super(Text.literal("Waypoint Manager"));
+        super(Component.literal("Waypoint Manager"));
         this.parent = parent;
     }
 
@@ -43,22 +47,22 @@ public class WaypointScreen extends Screen {
         refreshWaypoints();
 
         // Close button
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("Close"), button -> close())
-                .dimensions(this.width / 2 - 155, this.height - 30, 100, 20)
+        this.addRenderableWidget(Button.builder(Component.literal("Close"), button -> onClose())
+                .bounds(this.width / 2 - 155, this.height - 30, 100, 20)
                 .build());
 
         // Add waypoint button
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("+ Add Waypoint"), button -> {
+        this.addRenderableWidget(Button.builder(Component.literal("+ Add Waypoint"), button -> {
             WaypointHandler.addWaypoint();
             refreshWaypoints();
-        }).dimensions(this.width / 2 - 50, this.height - 30, 100, 20).build());
+        }).bounds(this.width / 2 - 50, this.height - 30, 100, 20).build());
 
         // Refresh button
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("⟳ Refresh"), button -> {
+        this.addRenderableWidget(Button.builder(Component.literal("⟳ Refresh"), button -> {
             refreshWaypoints();
             editingWaypoint = null;
             clearEditFields();
-        }).dimensions(this.width / 2 + 55, this.height - 30, 100, 20).build());
+        }).bounds(this.width / 2 + 55, this.height - 30, 100, 20).build());
 
         initEditFields();
     }
@@ -69,58 +73,58 @@ public class WaypointScreen extends Screen {
             int editPanelY = 80;
 
             // Name field
-            nameField = new TextFieldWidget(this.textRenderer, editPanelX + 10, editPanelY + 25, 190, 18, Text.literal("Name"));
+            nameField = new EditBox(this.font, editPanelX + 10, editPanelY + 25, 190, 18, Component.literal("Name"));
             nameField.setMaxLength(50);
-            nameField.setText(editingWaypoint.name);
-            this.addDrawableChild(nameField);
+            nameField.setValue(editingWaypoint.name);
+            this.addRenderableWidget(nameField);
 
             // X coordinate field
-            xField = new TextFieldWidget(this.textRenderer, editPanelX + 10, editPanelY + 60, 190, 18, Text.literal("X"));
+            xField = new EditBox(this.font, editPanelX + 10, editPanelY + 60, 190, 18, Component.literal("X"));
             xField.setMaxLength(20);
-            xField.setText(String.format("%.2f", editingWaypoint.position.x));
-            this.addDrawableChild(xField);
+            xField.setValue(String.format("%.2f", editingWaypoint.position.x));
+            this.addRenderableWidget(xField);
 
             // Y coordinate field
-            yField = new TextFieldWidget(this.textRenderer, editPanelX + 10, editPanelY + 85, 190, 18, Text.literal("Y"));
+            yField = new EditBox(this.font, editPanelX + 10, editPanelY + 85, 190, 18, Component.literal("Y"));
             yField.setMaxLength(20);
-            yField.setText(String.format("%.2f", editingWaypoint.position.y));
-            this.addDrawableChild(yField);
+            yField.setValue(String.format("%.2f", editingWaypoint.position.y));
+            this.addRenderableWidget(yField);
 
             // Z coordinate field
-            zField = new TextFieldWidget(this.textRenderer, editPanelX + 10, editPanelY + 110, 190, 18, Text.literal("Z"));
+            zField = new EditBox(this.font, editPanelX + 10, editPanelY + 110, 190, 18, Component.literal("Z"));
             zField.setMaxLength(20);
-            zField.setText(String.format("%.2f", editingWaypoint.position.z));
-            this.addDrawableChild(zField);
+            zField.setValue(String.format("%.2f", editingWaypoint.position.z));
+            this.addRenderableWidget(zField);
 
             // Save button
-            this.addDrawableChild(ButtonWidget.builder(Text.literal("Save"), button -> {
+            this.addRenderableWidget(Button.builder(Component.literal("Save"), button -> {
                 saveEditedWaypoint();
-            }).dimensions(editPanelX + 10, editPanelY + 140, 90, 20).build());
+            }).bounds(editPanelX + 10, editPanelY + 140, 90, 20).build());
 
             // Cancel button
-            this.addDrawableChild(ButtonWidget.builder(Text.literal("Cancel"), button -> {
+            this.addRenderableWidget(Button.builder(Component.literal("Cancel"), button -> {
                 editingWaypoint = null;
                 clearEditFields();
                 init();
-            }).dimensions(editPanelX + 110, editPanelY + 140, 90, 20).build());
+            }).bounds(editPanelX + 110, editPanelY + 140, 90, 20).build());
         }
     }
 
     private void clearEditFields() {
         if (nameField != null) {
-            this.remove(nameField);
+            this.removeWidget(nameField);
             nameField = null;
         }
         if (xField != null) {
-            this.remove(xField);
+            this.removeWidget(xField);
             xField = null;
         }
         if (yField != null) {
-            this.remove(yField);
+            this.removeWidget(yField);
             yField = null;
         }
         if (zField != null) {
-            this.remove(zField);
+            this.removeWidget(zField);
             zField = null;
         }
     }
@@ -131,24 +135,22 @@ public class WaypointScreen extends Screen {
         }
 
         try {
-            String newName = nameField.getText().trim();
-            double newX = Double.parseDouble(xField.getText());
-            double newY = Double.parseDouble(yField.getText());
-            double newZ = Double.parseDouble(zField.getText());
+            String newName = nameField.getValue().trim();
+            double newX = Double.parseDouble(xField.getValue());
+            double newY = Double.parseDouble(yField.getValue());
+            double newZ = Double.parseDouble(zField.getValue());
 
             if (!newName.isEmpty()) {
                 editingWaypoint.name = newName;
             }
-            editingWaypoint.position = new Vec3d(newX, newY, newZ);
+            editingWaypoint.position = new Vec3(newX, newY, newZ);
 
             WaypointHandler.saveWaypoints();
 
-            if (client != null && client.player != null) {
-                client.player.sendMessage(
-                        Text.literal("✓ Saved waypoint ").formatted(Formatting.GREEN)
-                                .append(Text.literal(editingWaypoint.name).formatted(Formatting.AQUA)),
-                        false
-                );
+            if (minecraft != null && minecraft.player != null) {
+                minecraft.player.sendSystemMessage(
+                        Component.literal("✓ Saved waypoint ").withStyle(ChatFormatting.GREEN)
+                                .append(Component.literal(editingWaypoint.name).withStyle(ChatFormatting.AQUA)));
             }
 
             editingWaypoint = null;
@@ -156,11 +158,9 @@ public class WaypointScreen extends Screen {
             refreshWaypoints();
             init();
         } catch (NumberFormatException e) {
-            if (client != null && client.player != null) {
-                client.player.sendMessage(
-                        Text.literal("❌ Invalid coordinates! Please enter valid numbers.").formatted(Formatting.RED),
-                        false
-                );
+            if (minecraft != null && minecraft.player != null) {
+                minecraft.player.sendSystemMessage(
+                        Component.literal("❌ Invalid coordinates! Please enter valid numbers.").withStyle(ChatFormatting.RED));
             }
         }
     }
@@ -170,34 +170,34 @@ public class WaypointScreen extends Screen {
     }
 
     @Override
-    public void render(DrawContext context, int mouseX, int mouseY, float delta) {
-        this.renderBackground(context, mouseX, mouseY, delta);
+    public void extractRenderState(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
+        this.extractBackground(context, mouseX, mouseY, delta);
         drawContents(context, mouseX, mouseY);
-        super.render(context, mouseX, mouseY, delta);
+        super.extractRenderState(context, mouseX, mouseY, delta);
     }
 
     @Override
-    public void renderBackground(DrawContext context, int mouseX, int mouseY, float delta) {
+    public void extractBackground(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
         context.fill(0, 0, this.width, this.height, 0xC0101010);
     }
 
-    private void drawContents(DrawContext context, int mouseX, int mouseY) {
-        context.drawCenteredTextWithShadow(this.textRenderer, this.title, this.width / 2, 10, 0xFFFFFF);
+    private void drawContents(GuiGraphicsExtractor context, int mouseX, int mouseY) {
+        context.centeredText(this.font, this.title, this.width / 2, 10, 0xFFFFFF);
 
         String countText = String.format("Total Waypoints: %d", waypoints.size());
-        context.drawCenteredTextWithShadow(this.textRenderer,
-                Text.literal(countText).formatted(Formatting.GRAY),
+        context.centeredText(this.font,
+                Component.literal(countText).withStyle(ChatFormatting.GRAY),
                 this.width / 2, 25, 0xAAAAAA);
 
         if (waypoints.isEmpty()) {
-            context.drawCenteredTextWithShadow(this.textRenderer,
-                    Text.literal("No waypoints yet. Click '+ Add Waypoint' to create one!").formatted(Formatting.YELLOW),
+            context.centeredText(this.font,
+                    Component.literal("No waypoints yet. Click '+ Add Waypoint' to create one!").withStyle(ChatFormatting.YELLOW),
                     this.width / 2, this.height / 2, 0xFFFF55);
             return;
         }
 
-        context.drawCenteredTextWithShadow(this.textRenderer,
-                Text.literal("Click a waypoint to teleport • Use buttons to manage").formatted(Formatting.DARK_GRAY),
+        context.centeredText(this.font,
+                Component.literal("Click a waypoint to teleport • Use buttons to manage").withStyle(ChatFormatting.DARK_GRAY),
                 this.width / 2, 40, 0x888888);
 
         int listWidth = editingWaypoint != null ? this.width - 240 : this.width - 40;
@@ -224,13 +224,13 @@ public class WaypointScreen extends Screen {
             int totalPages = (waypoints.size() * ENTRY_HEIGHT + (this.height - HEADER_HEIGHT - 40) - 1) / (this.height - HEADER_HEIGHT - 40);
             int currentPage = (scrollOffset / (this.height - HEADER_HEIGHT - 40)) + 1;
             String scrollText = "Scroll for more (Page " + currentPage + "/" + totalPages + ")";
-            context.drawCenteredTextWithShadow(this.textRenderer,
-                    Text.literal(scrollText).formatted(Formatting.DARK_GRAY),
+            context.centeredText(this.font,
+                    Component.literal(scrollText).withStyle(ChatFormatting.DARK_GRAY),
                     this.width / 2, this.height - 50, 0x666666);
         }
     }
 
-    private void drawWaypointEntry(DrawContext context, WaypointHandler.Waypoint wp, int x, int y, int width, int mouseX, int mouseY) {
+    private void drawWaypointEntry(GuiGraphicsExtractor context, WaypointHandler.Waypoint wp, int x, int y, int width, int mouseX, int mouseY) {
         int buttonAreaWidth = 150;
         int contentWidth = width - buttonAreaWidth;
 
@@ -249,33 +249,33 @@ public class WaypointScreen extends Screen {
 
         String displayName = wp.name;
         int maxNameWidth = contentWidth - 120;
-        if (this.textRenderer.getWidth(displayName) > maxNameWidth) {
-            while (this.textRenderer.getWidth(displayName + "...") > maxNameWidth && displayName.length() > 3) {
+        if (this.font.width(displayName) > maxNameWidth) {
+            while (this.font.width(displayName + "...") > maxNameWidth && displayName.length() > 3) {
                 displayName = displayName.substring(0, displayName.length() - 1);
             }
             displayName += "...";
         }
 
-        context.drawTextWithShadow(this.textRenderer,
-                Text.literal(displayName).formatted(Formatting.BOLD, Formatting.AQUA),
+        context.text(this.font,
+                Component.literal(displayName).withStyle(ChatFormatting.BOLD, ChatFormatting.AQUA),
                 x + 5, y + 5, 0xFFFFFF);
 
         String dimName = wp.dimension.substring(wp.dimension.lastIndexOf(":") + 1);
-        context.drawTextWithShadow(this.textRenderer,
-                Text.literal("[" + dimName + "]").formatted(Formatting.DARK_GRAY),
-                x + 5 + this.textRenderer.getWidth(displayName) + 5, y + 5, 0x666666);
+        context.text(this.font,
+                Component.literal("[" + dimName + "]").withStyle(ChatFormatting.DARK_GRAY),
+                x + 5 + this.font.width(displayName) + 5, y + 5, 0x666666);
 
         String coords = String.format("X: %.0f  Y: %.0f  Z: %.0f", wp.position.x, wp.position.y, wp.position.z);
-        context.drawTextWithShadow(this.textRenderer,
-                Text.literal(coords).formatted(Formatting.WHITE),
+        context.text(this.font,
+                Component.literal(coords).withStyle(ChatFormatting.WHITE),
                 x + 5, y + 20, 0xFFFFFF);
 
-        if (client != null && client.player != null) {
-            double distance = client.player.getEntityPos().distanceTo(wp.position);
+        if (minecraft != null && minecraft.player != null) {
+            double distance = minecraft.player.position().distanceTo(wp.position);
             String distText = String.format("Distance: %.0fm", distance);
             int distColor = distance < 100 ? 0x55FF55 : (distance < 1000 ? 0xFFFF55 : 0xFF5555);
-            context.drawTextWithShadow(this.textRenderer,
-                    Text.literal(distText),
+            context.text(this.font,
+                    Component.literal(distText),
                     x + 5, y + 35, distColor);
         }
 
@@ -286,24 +286,24 @@ public class WaypointScreen extends Screen {
                 && mouseY >= buttonY && mouseY <= buttonY + BUTTON_HEIGHT;
         context.fill(buttonX, buttonY, buttonX + BUTTON_WIDTH, buttonY + BUTTON_HEIGHT,
                 editHovered ? 0xFF666600 : 0xFF333300);
-        context.drawCenteredTextWithShadow(this.textRenderer, "Edit", buttonX + BUTTON_WIDTH / 2, buttonY + 5, 0xFFFF00);
+        context.centeredText(this.font, "Edit", buttonX + BUTTON_WIDTH / 2, buttonY + 5, 0xFFFF00);
 
         buttonY += BUTTON_HEIGHT + 3;
         boolean delHovered = mouseX >= buttonX && mouseX <= buttonX + BUTTON_WIDTH
                 && mouseY >= buttonY && mouseY <= buttonY + BUTTON_HEIGHT;
         context.fill(buttonX, buttonY, buttonX + BUTTON_WIDTH, buttonY + BUTTON_HEIGHT,
                 delHovered ? 0xFF660000 : 0xFF330000);
-        context.drawCenteredTextWithShadow(this.textRenderer, "Delete", buttonX + BUTTON_WIDTH / 2, buttonY + 5, 0xFF5555);
+        context.centeredText(this.font, "Delete", buttonX + BUTTON_WIDTH / 2, buttonY + 5, 0xFF5555);
 
         if (isHovered && !editHovered && !delHovered) {
             int hintY = y + ENTRY_HEIGHT - 15;
-            context.drawTextWithShadow(this.textRenderer,
-                    Text.literal("Click to teleport!").formatted(Formatting.YELLOW),
+            context.text(this.font,
+                    Component.literal("Click to teleport!").withStyle(ChatFormatting.YELLOW),
                     x + 5, hintY, 0xFFFF00);
         }
     }
 
-    private void drawEditPanel(DrawContext context) {
+    private void drawEditPanel(GuiGraphicsExtractor context) {
         int panelX = this.width - 220;
         int panelY = 80;
         int panelWidth = 210;
@@ -315,23 +315,23 @@ public class WaypointScreen extends Screen {
         context.fill(panelX, panelY, panelX + 1, panelY + panelHeight, 0xFFFFAA00);
         context.fill(panelX + panelWidth - 1, panelY, panelX + panelWidth, panelY + panelHeight, 0xFFFFAA00);
 
-        context.drawCenteredTextWithShadow(this.textRenderer,
-                Text.literal("Edit Waypoint").formatted(Formatting.GOLD, Formatting.BOLD),
+        context.centeredText(this.font,
+                Component.literal("Edit Waypoint").withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD),
                 panelX + panelWidth / 2, panelY + 8, 0xFFAA00);
 
-        context.drawTextWithShadow(this.textRenderer, "Name:", panelX + 10, panelY + 15, 0xFFFFFF);
-        context.drawTextWithShadow(this.textRenderer, "X:", panelX + 10, panelY + 50, 0xFFFFFF);
-        context.drawTextWithShadow(this.textRenderer, "Y:", panelX + 10, panelY + 75, 0xFFFFFF);
-        context.drawTextWithShadow(this.textRenderer, "Z:", panelX + 10, panelY + 100, 0xFFFFFF);
+        context.text(this.font, "Name:", panelX + 10, panelY + 15, 0xFFFFFF);
+        context.text(this.font, "X:", panelX + 10, panelY + 50, 0xFFFFFF);
+        context.text(this.font, "Y:", panelX + 10, panelY + 75, 0xFFFFFF);
+        context.text(this.font, "Z:", panelX + 10, panelY + 100, 0xFFFFFF);
     }
 
     @Override
-    public boolean mouseClicked(Click click, boolean doubled) {
-        int button = click.getKeycode();
+    public boolean mouseClicked(MouseButtonEvent click, boolean doubled) {
+        int button = click.input();
         double mouseX = click.x();
         double mouseY = click.y();
 
-        if (button == 0) { // Left click
+        if (button == InputConstants.MOUSE_BUTTON_LEFT) { // Left click
             int listWidth = editingWaypoint != null ? this.width - 240 : this.width - 40;
             int startX = 20;
             int startIndex = scrollOffset / ENTRY_HEIGHT;
@@ -391,14 +391,14 @@ public class WaypointScreen extends Screen {
     }
 
     @Override
-    public void close() {
-        if (this.client != null) {
-            this.client.setScreen(parent);
+    public void onClose() {
+        if (this.minecraft != null) {
+            this.minecraft.gui.setScreen(parent);
         }
     }
 
     @Override
-    public boolean shouldPause() {
+    public boolean isPauseScreen() {
         return false;
     }
 }

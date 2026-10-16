@@ -1,5 +1,6 @@
 package me.m0dii.modules.macros.gui;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import me.m0dii.M0DevToolsClient;
 import me.m0dii.modules.Module;
 import me.m0dii.modules.hudcanvas.HudCanvasDataHandler;
@@ -7,12 +8,11 @@ import me.m0dii.modules.macros.MacroDataHandler;
 import me.m0dii.utils.ModConfig;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.font.TextRenderer;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.render.RenderTickCounter;
-import net.minecraft.client.util.InputUtil;
-import net.minecraft.util.Identifier;
+import net.minecraft.client.DeltaTracker;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Font;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.resources.Identifier;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -29,13 +29,13 @@ public class MacroKeybindHudModule extends Module {
     @Override
     public void register() {
         HudElementRegistry.attachElementBefore(VanillaHudElements.CHAT,
-                Identifier.of(M0DevToolsClient.MOD_ID, "macro_keybind_hud"),
+                Identifier.fromNamespaceAndPath(M0DevToolsClient.MOD_ID, "macro_keybind_hud"),
                 this::onHudRender
         );
     }
 
-    private void onHudRender(DrawContext ctx, RenderTickCounter tickCounter) {
-        MinecraftClient client = MinecraftClient.getInstance();
+    private void onHudRender(GuiGraphicsExtractor ctx, DeltaTracker tickCounter) {
+        Minecraft client = Minecraft.getInstance();
         if (!isEnabled() || !ModConfig.showMacroKeybindOverlay || isClientNull()) {
             return;
         }
@@ -54,7 +54,7 @@ public class MacroKeybindHudModule extends Module {
             return;
         }
 
-        TextRenderer tr = client.textRenderer;
+        Font tr = client.font;
 
         float scale = layout.fontScale;
         if (Float.isNaN(scale) || scale <= 0f) {
@@ -68,8 +68,8 @@ public class MacroKeybindHudModule extends Module {
         final int panelW = Math.max(40, layout.width);
         final int panelH = Math.max(20, layout.height);
 
-        int screenW = client.getWindow().getScaledWidth();
-        int screenH = client.getWindow().getScaledHeight();
+        int screenW = client.getWindow().getGuiScaledWidth();
+        int screenH = client.getWindow().getGuiScaledHeight();
 
         int panelX = resolvePanelX(layout, panelW, screenW);
         int panelY = resolvePanelY(layout, panelH, screenH);
@@ -99,8 +99,8 @@ public class MacroKeybindHudModule extends Module {
             drawLines.add(trimTextToWidth(tr, s, logicalInnerW));
         }
 
-        ctx.getMatrices().pushMatrix();
-        ctx.getMatrices().scale(scale, scale);
+        ctx.pose().pushMatrix();
+        ctx.pose().scale(scale, scale);
 
         int textBlockHeight = drawLines.size() * lineH;
         int textX = alignedTextX(layout, tr, drawLines, logicalInnerW);
@@ -110,21 +110,21 @@ public class MacroKeybindHudModule extends Module {
         int y = Math.round(panelY / scale) + pad + textY;
 
         for (String s : drawLines) {
-            ctx.drawText(tr, s, baseX, y, layout.textColor, false);
+            ctx.text(tr, s, baseX, y, layout.textColor, false);
             y += lineH;
         }
 
-        ctx.getMatrices().popMatrix();
+        ctx.pose().popMatrix();
     }
 
-    private static String trimTextToWidth(TextRenderer tr, String raw, int maxWidth) {
+    private static String trimTextToWidth(Font tr, String raw, int maxWidth) {
         String text = raw == null ? "" : raw;
-        if (maxWidth <= 0 || tr.getWidth(text) <= maxWidth) {
+        if (maxWidth <= 0 || tr.width(text) <= maxWidth) {
             return text;
         }
         final String ellipsis = "...";
         int keep = text.length();
-        while (keep > 0 && tr.getWidth(text.substring(0, keep) + ellipsis) > maxWidth) {
+        while (keep > 0 && tr.width(text.substring(0, keep) + ellipsis) > maxWidth) {
             keep--;
         }
         return keep <= 0 ? ellipsis : text.substring(0, keep) + ellipsis;
@@ -171,13 +171,13 @@ public class MacroKeybindHudModule extends Module {
         };
     }
 
-    private static int alignedTextX(HudCanvasDataHandler.HudCanvasElement canvas, TextRenderer tr, List<String> lines, int logicalInnerW) {
+    private static int alignedTextX(HudCanvasDataHandler.HudCanvasElement canvas, Font tr, List<String> lines, int logicalInnerW) {
         if (canvas.horizontalAlign == HudCanvasDataHandler.HudCanvasElement.HorizontalAlign.LEFT) {
             return 0;
         }
         int maxLineWidth = 0;
         for (String line : lines) {
-            maxLineWidth = Math.max(maxLineWidth, tr.getWidth(line));
+            maxLineWidth = Math.max(maxLineWidth, tr.width(line));
         }
         return switch (canvas.horizontalAlign) {
             case CENTER -> Math.max(0, (logicalInnerW - maxLineWidth) / 2);
@@ -197,8 +197,8 @@ public class MacroKeybindHudModule extends Module {
     private static List<String> getInfoLines() {
         List<String> lines = new ArrayList<>();
 
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (client == null || client.player == null || client.world == null) {
+        Minecraft client = Minecraft.getInstance();
+        if (client == null || client.player == null || client.level == null) {
             return List.of();
         }
 
@@ -227,7 +227,7 @@ public class MacroKeybindHudModule extends Module {
 
     private static String getKeyName(int keyCode) {
         try {
-            return InputUtil.Type.KEYSYM.createFromCode(keyCode).getLocalizedText().getString();
+            return InputConstants.Type.KEYBOARD.getOrCreate(keyCode).getDisplayName().getString();
         } catch (Exception e) {
             return "Unknown";
         }

@@ -1,24 +1,23 @@
 package me.m0dii.modules.debugdraw;
 
 import com.google.gson.*;
+import com.mojang.blaze3d.vertex.VertexConsumer;
 import me.m0dii.M0DevToolsClient;
 import me.m0dii.utils.CustomRenderLayers;
 import me.m0dii.utils.DrawUtil;
-import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.render.RenderLayers;
-import net.minecraft.client.render.VertexConsumer;
-import net.minecraft.client.render.VertexConsumerProvider;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemStack;
-import net.minecraft.registry.Registries;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.hit.BlockHitResult;
-import net.minecraft.util.hit.HitResult;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Direction;
-import net.minecraft.util.math.Vec3d;
-
+import me.m0dii.render.OverlayRenderEvents;
+import net.minecraft.client.Minecraft;
+import me.m0dii.render.OverlayBufferSource;
+import net.minecraft.client.renderer.rendertype.RenderTypes;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
+import net.minecraft.world.phys.Vec3;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -125,26 +124,26 @@ public final class DebugDrawManager {
         loadFromDisk();
         loadSelection();
 
-        WorldRenderEvents.AFTER_ENTITIES.register(context -> {
-            MinecraftClient client = MinecraftClient.getInstance();
-            if (client.player == null || client.world == null) {
+        OverlayRenderEvents.AFTER_ENTITIES.register(context -> {
+            Minecraft client = Minecraft.getInstance();
+            if (client.player == null || client.level == null) {
                 return;
             }
 
             long now = System.currentTimeMillis();
             List<DrawShape> active = snapshotActive(now);
 
-            VertexConsumerProvider consumers = context.consumers();
+            OverlayBufferSource consumers = context.consumers();
             if (consumers == null) {
-                consumers = client.getBufferBuilders().getEntityVertexConsumers();
+                consumers = OverlayBufferSource.current();
             }
 
-            VertexConsumer visible = consumers.getBuffer(RenderLayers.LINES);
+            VertexConsumer visible = consumers.getBuffer(RenderTypes.LINES);
             VertexConsumer through = consumers.getBuffer(CustomRenderLayers.LINES_NO_DEPTH);
 
-            double cameraX = context.gameRenderer().getCamera().getCameraPos().x;
-            double cameraY = context.gameRenderer().getCamera().getCameraPos().y;
-            double cameraZ = context.gameRenderer().getCamera().getCameraPos().z;
+            double cameraX = context.gameRenderer().mainCamera().position().x;
+            double cameraY = context.gameRenderer().mainCamera().position().y;
+            double cameraZ = context.gameRenderer().mainCamera().position().z;
 
             if (!active.isEmpty()) {
                 for (DrawShape shape : active) {
@@ -177,11 +176,6 @@ public final class DebugDrawManager {
             }
 
             renderSelectionPreview(visible, through, cameraX, cameraY, cameraZ);
-
-            if (consumers instanceof VertexConsumerProvider.Immediate immediate) {
-                immediate.draw(RenderLayers.LINES);
-                immediate.draw(CustomRenderLayers.LINES_NO_DEPTH);
-            }
         });
     }
 
@@ -220,11 +214,11 @@ public final class DebugDrawManager {
             value = "minecraft:" + value;
         }
         Identifier id = Identifier.tryParse(value);
-        if (id == null || !Registries.ITEM.containsId(id)) {
+        if (id == null || !BuiltInRegistries.ITEM.containsKey(id)) {
             return false;
         }
         selectionWandItemId = id.toString();
-        selectionWandItem = Registries.ITEM.get(id);
+        selectionWandItem = BuiltInRegistries.ITEM.getValue(id);
         return true;
     }
 
@@ -308,34 +302,34 @@ public final class DebugDrawManager {
     }
 
     public static synchronized boolean shouldCaptureSelectionClick() {
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (!selectionEnabled || client == null || client.player == null || client.world == null || client.currentScreen != null) {
+        Minecraft client = Minecraft.getInstance();
+        if (!selectionEnabled || client == null || client.player == null || client.level == null || client.gui.screen() != null) {
             return false;
         }
         if (selectionUseAnyClick) {
             return true;
         }
-        return isWandHeld(client.player.getMainHandStack()) || isWandHeld(client.player.getOffHandStack());
+        return isWandHeld(client.player.getMainHandItem()) || isWandHeld(client.player.getOffhandItem());
     }
 
     public static synchronized boolean isSelectionWandEquipped() {
-        MinecraftClient client = MinecraftClient.getInstance();
+        Minecraft client = Minecraft.getInstance();
         if (client == null || client.player == null) {
             return false;
         }
-        return isWandHeld(client.player.getMainHandStack()) || isWandHeld(client.player.getOffHandStack());
+        return isWandHeld(client.player.getMainHandItem()) || isWandHeld(client.player.getOffhandItem());
     }
 
     public static synchronized boolean pickSelectionPos(boolean rightClick) {
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (client == null || client.world == null || client.player == null) {
+        Minecraft client = Minecraft.getInstance();
+        if (client == null || client.level == null || client.player == null) {
             return false;
         }
         BlockHitResult hit = null;
-        if (client.crosshairTarget instanceof BlockHitResult blockHit) {
+        if (client.hitResult instanceof BlockHitResult blockHit) {
             hit = blockHit;
         } else {
-            HitResult trace = client.player.raycast(20.0, 1.0f, false);
+            HitResult trace = client.player.pick(20.0, 1.0f, false);
             if (trace instanceof BlockHitResult blockHit) {
                 hit = blockHit;
             }
@@ -1101,8 +1095,8 @@ public final class DebugDrawManager {
             double a0 = (Math.PI * 2.0 * i) / segments;
             double a1 = (Math.PI * 2.0 * (i + 1)) / segments;
 
-            Vec3d p0 = orientedCirclePoint(centerX, centerY, centerZ, radius, normalAxis, a0);
-            Vec3d p1 = orientedCirclePoint(centerX, centerY, centerZ, radius, normalAxis, a1);
+            Vec3 p0 = orientedCirclePoint(centerX, centerY, centerZ, radius, normalAxis, a0);
+            Vec3 p1 = orientedCirclePoint(centerX, centerY, centerZ, radius, normalAxis, a1);
             DrawUtil.drawLineSafe(buffer,
                     p0.x - cameraX, p0.y - cameraY, p0.z - cameraZ,
                     p1.x - cameraX, p1.y - cameraY, p1.z - cameraZ,
@@ -1110,7 +1104,7 @@ public final class DebugDrawManager {
         }
     }
 
-    private static Vec3d orientedCirclePoint(double centerX,
+    private static Vec3 orientedCirclePoint(double centerX,
                                              double centerY,
                                              double centerZ,
                                              double radius,
@@ -1119,9 +1113,9 @@ public final class DebugDrawManager {
         double cos = Math.cos(angle) * radius;
         double sin = Math.sin(angle) * radius;
         return switch (normalAxis) {
-            case X -> new Vec3d(centerX, centerY + cos, centerZ + sin);
-            case Y -> new Vec3d(centerX + cos, centerY, centerZ + sin);
-            case Z -> new Vec3d(centerX + cos, centerY + sin, centerZ);
+            case X -> new Vec3(centerX, centerY + cos, centerZ + sin);
+            case Y -> new Vec3(centerX + cos, centerY, centerZ + sin);
+            case Z -> new Vec3(centerX + cos, centerY + sin, centerZ);
         };
     }
 
@@ -1163,16 +1157,16 @@ public final class DebugDrawManager {
         Item wand = selectionWandItem;
         if (wand == null) {
             Identifier id = Identifier.tryParse(selectionWandItemId);
-            if (id == null || !Registries.ITEM.containsId(id)) {
+            if (id == null || !BuiltInRegistries.ITEM.containsKey(id)) {
                 id = Identifier.tryParse(DEFAULT_WAND_ITEM_ID);
             }
-            if (id == null || !Registries.ITEM.containsId(id)) {
+            if (id == null || !BuiltInRegistries.ITEM.containsKey(id)) {
                 return false;
             }
-            wand = Registries.ITEM.get(id);
+            wand = BuiltInRegistries.ITEM.getValue(id);
             selectionWandItem = wand;
         }
-        return stack.isOf(wand);
+        return stack.is(wand);
     }
 
     private static float[] toColor(int rgb, float alphaMul) {
@@ -1290,12 +1284,12 @@ public final class DebugDrawManager {
         double cz = diamond.centerZ - cameraZ;
         double r = diamond.radius;
 
-        Vec3d top = new Vec3d(cx, cy + r, cz);
-        Vec3d bottom = new Vec3d(cx, cy - r, cz);
-        Vec3d east = new Vec3d(cx + r, cy, cz);
-        Vec3d west = new Vec3d(cx - r, cy, cz);
-        Vec3d south = new Vec3d(cx, cy, cz + r);
-        Vec3d north = new Vec3d(cx, cy, cz - r);
+        Vec3 top = new Vec3(cx, cy + r, cz);
+        Vec3 bottom = new Vec3(cx, cy - r, cz);
+        Vec3 east = new Vec3(cx + r, cy, cz);
+        Vec3 west = new Vec3(cx - r, cy, cz);
+        Vec3 south = new Vec3(cx, cy, cz + r);
+        Vec3 north = new Vec3(cx, cy, cz - r);
 
         drawShapeLine(buffer, top, east, color);
         drawShapeLine(buffer, top, west, color);
@@ -1323,11 +1317,11 @@ public final class DebugDrawManager {
         double cz = pyramid.centerZ - cameraZ;
         double r = pyramid.radius;
 
-        Vec3d c1 = new Vec3d(cx - r, baseY, cz - r);
-        Vec3d c2 = new Vec3d(cx + r, baseY, cz - r);
-        Vec3d c3 = new Vec3d(cx + r, baseY, cz + r);
-        Vec3d c4 = new Vec3d(cx - r, baseY, cz + r);
-        Vec3d apex = new Vec3d(cx, baseY + pyramid.height, cz);
+        Vec3 c1 = new Vec3(cx - r, baseY, cz - r);
+        Vec3 c2 = new Vec3(cx + r, baseY, cz - r);
+        Vec3 c3 = new Vec3(cx + r, baseY, cz + r);
+        Vec3 c4 = new Vec3(cx - r, baseY, cz + r);
+        Vec3 apex = new Vec3(cx, baseY + pyramid.height, cz);
 
         drawShapeLine(buffer, c1, c2, color);
         drawShapeLine(buffer, c2, c3, color);
@@ -1349,11 +1343,11 @@ public final class DebugDrawManager {
         CircleShape base = new CircleShape(-1, Long.MAX_VALUE, cone.rgb, cone.centerX, cone.baseY, cone.centerZ, cone.radius, cone.segments);
         drawCircle(buffer, base, cameraX, cameraY, cameraZ, alphaMul);
 
-        Vec3d apex = new Vec3d(cone.centerX - cameraX, cone.baseY + cone.height - cameraY, cone.centerZ - cameraZ);
+        Vec3 apex = new Vec3(cone.centerX - cameraX, cone.baseY + cone.height - cameraY, cone.centerZ - cameraZ);
         int sideStep = Math.max(1, cone.segments / 8);
         for (int i = 0; i < cone.segments; i += sideStep) {
             double angle = (Math.PI * 2.0 * i) / cone.segments;
-            Vec3d edge = new Vec3d(
+            Vec3 edge = new Vec3(
                     cone.centerX + Math.cos(angle) * cone.radius - cameraX,
                     cone.baseY - cameraY,
                     cone.centerZ + Math.sin(angle) * cone.radius - cameraZ
@@ -1362,7 +1356,7 @@ public final class DebugDrawManager {
         }
     }
 
-    private static void drawShapeLine(VertexConsumer buffer, Vec3d from, Vec3d to, float[] color) {
+    private static void drawShapeLine(VertexConsumer buffer, Vec3 from, Vec3 to, float[] color) {
         DrawUtil.drawLineSafe(buffer, from.x, from.y, from.z, to.x, to.y, to.z, color[0], color[1], color[2], color[3], 1.25f);
     }
 

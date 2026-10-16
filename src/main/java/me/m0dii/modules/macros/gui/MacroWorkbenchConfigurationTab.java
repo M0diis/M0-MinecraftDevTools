@@ -1,5 +1,10 @@
 package me.m0dii.modules.macros.gui;
 
+
+import com.mojang.blaze3d.platform.InputConstants;
+import me.m0dii.gui.theme.SidebarNavButton;
+import me.m0dii.gui.theme.Theme;
+import me.m0dii.gui.theme.ThemeDraw;
 import me.m0dii.modules.bridging.BridgingTweaksModule;
 import me.m0dii.modules.chat.SecondaryChatConfigScreen;
 import me.m0dii.modules.chat.SecondaryChatModule;
@@ -28,12 +33,13 @@ import me.m0dii.modules.reach.ReachModule;
 import me.m0dii.modules.tweaks.TweaksModule;
 import me.m0dii.modules.waypoints.WaypointModule;
 import me.m0dii.utils.ModConfig;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.client.gui.widget.ClickableWidget;
-import net.minecraft.client.gui.widget.TextFieldWidget;
-import net.minecraft.text.Text;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Font;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.AbstractWidget;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.network.chat.Component;
 
 import java.util.ArrayList;
 import java.util.EnumMap;
@@ -43,10 +49,11 @@ import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 
 final class MacroWorkbenchConfigurationTab {
-    private static final int TOP_BAR_H = 54;
-    private static final int ROW_H = 20;
-    private static final int ROW_GAP = 24;
-    private static final int CONTENT_START_Y = TOP_BAR_H + 34;
+    private static final int ROW_H = Theme.ROW_H;
+    private static final int ROW_GAP = ROW_H + Theme.GAP_S;
+    /** Space at the top of the settings card for the category title and description. */
+    private static final int CARD_HEADER_H = 32;
+    private static final int CARD_PADDING = Theme.GAP_M;
 
     enum Category {
         HUD("HUD", "HUD toggles and overlays rendered in screen space."),
@@ -71,10 +78,10 @@ final class MacroWorkbenchConfigurationTab {
     }
 
     private final MacroWorkbenchScreen owner;
-    private final List<ClickableWidget> configWidgets;
+    private final List<AbstractWidget> configWidgets;
     private final BooleanSupplier shiftDown;
-    private final EnumMap<Category, ButtonWidget> categoryButtons = new EnumMap<>(Category.class);
-    private final EnumMap<Category, List<ClickableWidget>> categoryWidgets = new EnumMap<>(Category.class);
+    private final EnumMap<Category, AbstractWidget> categoryButtons = new EnumMap<>(Category.class);
+    private final EnumMap<Category, List<AbstractWidget>> categoryWidgets = new EnumMap<>(Category.class);
 
     private Category category = Category.HUD;
     private final HudControls hudControls = new HudControls();
@@ -93,7 +100,7 @@ final class MacroWorkbenchConfigurationTab {
     private int regexScroll = 0;
 
     MacroWorkbenchConfigurationTab(MacroWorkbenchScreen owner,
-                                   List<ClickableWidget> configWidgets,
+                                   List<AbstractWidget> configWidgets,
                                    BooleanSupplier shiftDown) {
         this.owner = owner;
         this.configWidgets = configWidgets;
@@ -101,11 +108,11 @@ final class MacroWorkbenchConfigurationTab {
     }
 
     void initWidgets() {
-        int listX = 12;
-        int listY = TOP_BAR_H + 18;
-        int categoryW = Math.max(130, (this.owner.width / 2) - 28);
-        int rightX = (this.owner.width / 2) + 12;
-        int settingW = Math.max(180, this.owner.width - rightX - 12);
+        int listX = this.owner.contentLeft();
+        int listY = this.owner.contentTop();
+        int categoryW = categoryListWidth();
+        int rightX = sectionViewportLeft();
+        int settingW = sectionViewportWidth();
 
         initCategoryButtons(listX, listY, categoryW);
         this.hudControls.init(rightX, settingW);
@@ -120,9 +127,9 @@ final class MacroWorkbenchConfigurationTab {
         this.bridgingTweaksControls.init(rightX, settingW);
         this.hudTweaksControls.init(rightX, settingW);
         initCategoryWidgetGroups();
-        register(this.categoryButtons.values().toArray(new ClickableWidget[0]));
-        for (List<ClickableWidget> widgets : this.categoryWidgets.values()) {
-            register(widgets.toArray(new ClickableWidget[0]));
+        register(this.categoryButtons.values().toArray(new AbstractWidget[0]));
+        for (List<AbstractWidget> widgets : this.categoryWidgets.values()) {
+            register(widgets.toArray(new AbstractWidget[0]));
         }
 
         syncControls();
@@ -148,13 +155,20 @@ final class MacroWorkbenchConfigurationTab {
         syncCategoryVisibility();
     }
 
-    void render(DrawContext context) {
+    void extractRenderState(GuiGraphicsExtractor context) {
         syncControls();
-        int splitX = this.owner.width / 2;
-        context.fill(splitX - 1, TOP_BAR_H + 4, splitX, this.owner.height - 8, 0x50FFFFFF);
-        context.drawTextWithShadow(this.owner.workbenchTextRenderer(), "Categories", 12, TOP_BAR_H + 6, 0xFFFFFFFF);
-        context.drawTextWithShadow(this.owner.workbenchTextRenderer(), "Configuration", splitX + 12, TOP_BAR_H + 6, 0xFFFFFFFF);
-        context.drawTextWithShadow(this.owner.workbenchTextRenderer(), this.category.description, splitX + 12, TOP_BAR_H + 18, 0xFFA8CFCF);
+        Font font = this.owner.workbenchTextRenderer();
+        int cardX = cardLeft();
+        int cardY = this.owner.contentTop();
+        int cardW = this.owner.contentRight() - cardX;
+        int cardH = this.owner.contentBottom() - cardY;
+        ThemeDraw.card(context, cardX, cardY, cardW, cardH);
+        int textW = cardW - CARD_PADDING * 2;
+        context.text(font, ThemeDraw.fit(font, this.category.label, textW), cardX + CARD_PADDING, cardY + CARD_PADDING, Theme.TEXT, false);
+        if (!this.category.description.isEmpty()) {
+            context.text(font, ThemeDraw.fit(font, this.category.description, textW), cardX + CARD_PADDING, cardY + CARD_PADDING + 11, Theme.TEXT_MUTED, false);
+        }
+        ThemeDraw.hDivider(context, cardX + 1, cardY + CARD_HEADER_H - 4, cardW - 2);
 
         if (this.category == Category.SECONDARY_CHAT) {
             renderSecondaryRegexList(context);
@@ -185,7 +199,7 @@ final class MacroWorkbenchConfigurationTab {
         return section != null && section.handleMouseScroll(mouseX, mouseY, verticalAmount);
     }
 
-    private void renderSecondaryRegexList(DrawContext context) {
+    private void renderSecondaryRegexList(GuiGraphicsExtractor context) {
         int[] rect = regexListRect();
         int x = rect[0];
         int y = rect[1];
@@ -212,17 +226,17 @@ final class MacroWorkbenchConfigurationTab {
             }
             String line = regexes.get(idx);
             String text = (idx + 1) + ". " + line;
-            if (this.owner.workbenchTextRenderer().getWidth(text) > w - 6) {
-                while (text.length() > 8 && this.owner.workbenchTextRenderer().getWidth(text + "...") > w - 6) {
+            if (this.owner.workbenchTextRenderer().width(text) > w - 6) {
+                while (text.length() > 8 && this.owner.workbenchTextRenderer().width(text + "...") > w - 6) {
                     text = text.substring(0, text.length() - 1);
                 }
                 text += "...";
             }
-            context.drawTextWithShadow(this.owner.workbenchTextRenderer(), text, x + 3, yy + 2, 0xFFE0E0E0);
+            context.text(this.owner.workbenchTextRenderer(), text, x + 3, yy + 2, 0xFFE0E0E0);
         }
 
         if (regexes.isEmpty()) {
-            context.drawTextWithShadow(this.owner.workbenchTextRenderer(), "(none)", x + 3, y + 3, 0xFF909090);
+            context.text(this.owner.workbenchTextRenderer(), "(none)", x + 3, y + 3, 0xFF909090);
         }
     }
 
@@ -243,9 +257,11 @@ final class MacroWorkbenchConfigurationTab {
 
     private void initCategoryButtons(int listX, int listY, int categoryW) {
         this.categoryButtons.clear();
+        int itemH = categoryItemHeight();
         int index = 0;
         for (Category category : Category.values()) {
-            ButtonWidget widget = button(category.label, b -> setCategory(category), listX, listY + (ROW_GAP * index), categoryW, ROW_H);
+            AbstractWidget widget = new SidebarNavButton(listX, listY + (itemH + 1) * index, categoryW, itemH,
+                    "", category.label, () -> this.category == category, () -> setCategory(category));
             this.categoryButtons.put(category, widget);
             index++;
         }
@@ -266,25 +282,20 @@ final class MacroWorkbenchConfigurationTab {
         addCategoryWidgets(Category.HUD_TWEAKS, this.hudTweaksControls.widgets());
     }
 
-    private void addCategoryWidgets(Category category, ClickableWidget... widgets) {
-        List<ClickableWidget> list = this.categoryWidgets.computeIfAbsent(category, ignored -> new ArrayList<>());
-        for (ClickableWidget widget : widgets) {
+    private void addCategoryWidgets(Category category, AbstractWidget... widgets) {
+        List<AbstractWidget> list = this.categoryWidgets.computeIfAbsent(category, ignored -> new ArrayList<>());
+        for (AbstractWidget widget : widgets) {
             list.add(widget);
         }
     }
 
-    private void addCategoryWidgets(Category category, List<? extends ClickableWidget> widgets) {
-        List<ClickableWidget> list = this.categoryWidgets.computeIfAbsent(category, ignored -> new ArrayList<>());
+    private void addCategoryWidgets(Category category, List<? extends AbstractWidget> widgets) {
+        List<AbstractWidget> list = this.categoryWidgets.computeIfAbsent(category, ignored -> new ArrayList<>());
         list.addAll(widgets);
     }
 
     private void syncCategoryButtons() {
-        for (Category category : Category.values()) {
-            ButtonWidget widget = this.categoryButtons.get(category);
-            if (widget != null) {
-                widget.setMessage(Text.literal((this.category == category ? "> " : "") + category.label));
-            }
-        }
+        // Selection is drawn by SidebarNavButton itself.
     }
 
     private void syncCategoryVisibility() {
@@ -295,21 +306,21 @@ final class MacroWorkbenchConfigurationTab {
                 continue;
             }
             boolean visible = this.category == category;
-            List<ClickableWidget> widgets = this.categoryWidgets.get(category);
+            List<AbstractWidget> widgets = this.categoryWidgets.get(category);
             if (widgets == null) {
                 continue;
             }
-            for (ClickableWidget widget : widgets) {
+            for (AbstractWidget widget : widgets) {
                 setVisible(widget, visible);
             }
         }
     }
 
     private final class BoundButton {
-        private final ButtonWidget widget;
-        private final Supplier<Text> messageSupplier;
+        private final Button widget;
+        private final Supplier<Component> messageSupplier;
 
-        private BoundButton(ButtonWidget widget, Supplier<Text> messageSupplier) {
+        private BoundButton(Button widget, Supplier<Component> messageSupplier) {
             this.widget = widget;
             this.messageSupplier = messageSupplier;
         }
@@ -321,11 +332,11 @@ final class MacroWorkbenchConfigurationTab {
 
     private abstract class ControlSection {
         private final class PositionedWidget {
-            private final ClickableWidget widget;
+            private final AbstractWidget widget;
             private final int baseX;
             private final int baseY;
 
-            private PositionedWidget(ClickableWidget widget, int baseX, int baseY) {
+            private PositionedWidget(AbstractWidget widget, int baseX, int baseY) {
                 this.widget = widget;
                 this.baseX = baseX;
                 this.baseY = baseY;
@@ -338,30 +349,30 @@ final class MacroWorkbenchConfigurationTab {
 
         protected abstract void init(int rightX, int settingW);
 
-        final List<ClickableWidget> widgets() {
-            List<ClickableWidget> widgets = new ArrayList<>(this.positionedWidgets.size());
+        final List<AbstractWidget> widgets() {
+            List<AbstractWidget> widgets = new ArrayList<>(this.positionedWidgets.size());
             for (PositionedWidget positionedWidget : this.positionedWidgets) {
                 widgets.add(positionedWidget.widget);
             }
             return widgets;
         }
 
-        protected final ButtonWidget addButton(Supplier<Text> messageSupplier,
+        protected final Button addButton(Supplier<Component> messageSupplier,
                                                Runnable action,
                                                int x,
                                                int y,
                                                int width,
                                                int height) {
-            ButtonWidget widget = ButtonWidget.builder(messageSupplier.get(), b -> {
+            Button widget = Button.builder(messageSupplier.get(), b -> {
                 action.run();
                 syncControls();
-            }).dimensions(x, y, width, height).build();
+            }).bounds(x, y, width, height).build();
             this.boundButtons.add(new BoundButton(widget, messageSupplier));
             this.positionedWidgets.add(new PositionedWidget(widget, x, y));
             return widget;
         }
 
-        protected final ButtonWidget addButton(Supplier<Text> messageSupplier,
+        protected final Button addButton(Supplier<Component> messageSupplier,
                                                Runnable action,
                                                int rightX,
                                                int settingW,
@@ -369,8 +380,8 @@ final class MacroWorkbenchConfigurationTab {
             return addButton(messageSupplier, action, rightX, rowY(rowIndex), settingW, ROW_H);
         }
 
-        protected final TextFieldWidget addTextField(int x, int y, int width, int height, String placeholder) {
-            TextFieldWidget field = new TextFieldWidget(owner.workbenchTextRenderer(), x, y, width, height, Text.literal(placeholder));
+        protected final EditBox addTextField(int x, int y, int width, int height, String placeholder) {
+            EditBox field = new EditBox(owner.workbenchTextRenderer(), x, y, width, height, Component.literal(placeholder));
             this.positionedWidgets.add(new PositionedWidget(field, x, y));
             return field;
         }
@@ -402,7 +413,7 @@ final class MacroWorkbenchConfigurationTab {
             int maxScroll = maxScrollPixels();
             this.scrollPixels = Math.clamp(this.scrollPixels, 0, maxScroll);
             for (PositionedWidget positionedWidget : this.positionedWidgets) {
-                ClickableWidget widget = positionedWidget.widget;
+                AbstractWidget widget = positionedWidget.widget;
                 widget.setX(positionedWidget.baseX);
                 widget.setY(positionedWidget.baseY - this.scrollPixels);
                 boolean inView = widget.getY() + widget.getHeight() > top && widget.getY() < bottom;
@@ -427,18 +438,18 @@ final class MacroWorkbenchConfigurationTab {
     }
 
     private final class HudControls extends ControlSection {
-        private ButtonWidget macroOverlayToggleButton;
-        private ButtonWidget nbtHudToggleButton;
+        private Button macroOverlayToggleButton;
+        private Button nbtHudToggleButton;
 
         @Override
         protected void init(int rightX, int settingW) {
             this.macroOverlayToggleButton = addButton(
-                    () -> Text.literal("Macro Keybind HUD: " + (ModConfig.showMacroKeybindOverlay ? "ON" : "OFF")),
+                    () -> Component.literal("Macro Keybind HUD: " + (ModConfig.showMacroKeybindOverlay ? "ON" : "OFF")),
                     () -> ModConfig.updateAndSave(() -> ModConfig.showMacroKeybindOverlay = !ModConfig.showMacroKeybindOverlay),
                     rightX, settingW, 0
             );
             this.nbtHudToggleButton = addButton(
-                    () -> Text.literal("NBT Inspector HUD: " + (NBTInfoHudModule.INSTANCE.isEnabled() ? "ON" : "OFF")),
+                    () -> Component.literal("NBT Inspector HUD: " + (NBTInfoHudModule.INSTANCE.isEnabled() ? "ON" : "OFF")),
                     () -> NBTInfoHudModule.INSTANCE.setEnabled(!NBTInfoHudModule.INSTANCE.isEnabled()),
                     rightX, settingW, 1
             );
@@ -446,20 +457,20 @@ final class MacroWorkbenchConfigurationTab {
     }
 
     private final class SecondaryChatControls extends ControlSection {
-        private ButtonWidget secondaryEnabledToggleButton;
-        private ButtonWidget secondaryEditorButton;
-        private ButtonWidget secondaryRegexAddButton;
-        private ButtonWidget secondaryRegexApplyButton;
-        private ButtonWidget secondaryRegexRemoveButton;
-        private ButtonWidget secondaryRegexClearButton;
-        private ButtonWidget secondaryOutgoingApplyButton;
-        private TextFieldWidget secondaryRegexInputField;
-        private TextFieldWidget secondaryOutgoingRegexField;
+        private Button secondaryEnabledToggleButton;
+        private Button secondaryEditorButton;
+        private Button secondaryRegexAddButton;
+        private Button secondaryRegexApplyButton;
+        private Button secondaryRegexRemoveButton;
+        private Button secondaryRegexClearButton;
+        private Button secondaryOutgoingApplyButton;
+        private EditBox secondaryRegexInputField;
+        private EditBox secondaryOutgoingRegexField;
 
         @Override
         protected void init(int rightX, int settingW) {
             this.secondaryEnabledToggleButton = addButton(
-                    () -> Text.literal("Secondary Chat: " + (SecondaryChatModule.INSTANCE.isEnabled() ? "ON" : "OFF")),
+                    () -> Component.literal("Secondary Chat: " + (SecondaryChatModule.INSTANCE.isEnabled() ? "ON" : "OFF")),
                     () -> {
                         boolean enabled = !SecondaryChatModule.INSTANCE.isEnabled();
                         SecondaryChatModule.INSTANCE.setEnabled(enabled);
@@ -474,19 +485,19 @@ final class MacroWorkbenchConfigurationTab {
                     rightX, settingW, 0
             );
             this.secondaryEditorButton = addButton(
-                    () -> Text.literal("Open Secondary Chat Editor"),
-                    () -> MinecraftClient.getInstance().setScreen(new SecondaryChatConfigScreen(owner)),
+                    () -> Component.literal("Open Secondary Chat Editor"),
+                    () -> Minecraft.getInstance().gui.setScreen(new SecondaryChatConfigScreen(owner)),
                     rightX, settingW, 1
             );
             this.secondaryRegexInputField = addTextField(rightX, rowY(2), settingW - 114, ROW_H, "Regex");
             this.secondaryRegexInputField.setMaxLength(180);
             this.secondaryRegexAddButton = addButton(
-                    () -> Text.literal("Add"),
+                    () -> Component.literal("Add"),
                     () -> {
                         String regex = safeField(this.secondaryRegexInputField);
                         if (!regex.isEmpty()) {
                             SecondaryChatSettings.updateAndSave(() -> SecondaryChatSettings.get().regexList.add(regex));
-                            this.secondaryRegexInputField.setText("");
+                            this.secondaryRegexInputField.setValue("");
                             selectedRegexIndex = SecondaryChatSettings.get().regexList.size() - 1;
                             ensureRegexSelectionInBounds();
                         }
@@ -494,7 +505,7 @@ final class MacroWorkbenchConfigurationTab {
                     rightX + settingW - 110, rowY(2), 110, ROW_H
             );
             this.secondaryRegexApplyButton = addButton(
-                    () -> Text.literal("Apply Selected"),
+                    () -> Component.literal("Apply Selected"),
                     () -> {
                         String regex = safeField(this.secondaryRegexInputField);
                         if (regex.isEmpty()) {
@@ -510,7 +521,7 @@ final class MacroWorkbenchConfigurationTab {
                     rightX, rowY(8), 140, ROW_H
             );
             this.secondaryRegexRemoveButton = addButton(
-                    () -> Text.literal("Remove Selected"),
+                    () -> Component.literal("Remove Selected"),
                     () -> {
                         SecondaryChatSettings.updateAndSave(() -> {
                             List<String> list = SecondaryChatSettings.get().regexList;
@@ -526,7 +537,7 @@ final class MacroWorkbenchConfigurationTab {
                     rightX + 144, rowY(8), 140, ROW_H
             );
             this.secondaryRegexClearButton = addButton(
-                    () -> Text.literal("Clear All"),
+                    () -> Component.literal("Clear All"),
                     () -> {
                         SecondaryChatSettings.updateAndSave(() -> SecondaryChatSettings.get().regexList = new ArrayList<>());
                         selectedRegexIndex = -1;
@@ -537,7 +548,7 @@ final class MacroWorkbenchConfigurationTab {
             this.secondaryOutgoingRegexField = addTextField(rightX, rowY(9), settingW - 110, ROW_H, "Outgoing regex");
             this.secondaryOutgoingRegexField.setMaxLength(180);
             this.secondaryOutgoingApplyButton = addButton(
-                    () -> Text.literal("Apply"),
+                    () -> Component.literal("Apply"),
                     () -> {
                         String outgoing = safeField(this.secondaryOutgoingRegexField);
                         SecondaryChatSettings.updateAndSave(() -> SecondaryChatSettings.get().outgoingRegex = outgoing);
@@ -551,13 +562,13 @@ final class MacroWorkbenchConfigurationTab {
             ensureRegexSelectionInBounds();
             SecondaryChatSettings.Data secondary = SecondaryChatSettings.get();
             if (!this.secondaryOutgoingRegexField.isFocused()) {
-                this.secondaryOutgoingRegexField.setText(secondary.outgoingRegex == null ? "" : secondary.outgoingRegex);
+                this.secondaryOutgoingRegexField.setValue(secondary.outgoingRegex == null ? "" : secondary.outgoingRegex);
             }
         }
 
         @Override
         protected boolean handleMouseClick(double mouseX, double mouseY, int button) {
-            if (button != 0) {
+            if (button != InputConstants.MOUSE_BUTTON_LEFT) {
                 return false;
             }
             int[] rect = regexListRect();
@@ -571,8 +582,8 @@ final class MacroWorkbenchConfigurationTab {
             int index = regexScroll + clicked;
             if (index >= 0 && index < regexes.size()) {
                 selectedRegexIndex = index;
-                this.secondaryRegexInputField.setText(regexes.get(index));
-                this.secondaryRegexInputField.setCursorToEnd(false);
+                this.secondaryRegexInputField.setValue(regexes.get(index));
+                this.secondaryRegexInputField.moveCursorToEnd(false);
                 return true;
             }
             return false;
@@ -594,60 +605,60 @@ final class MacroWorkbenchConfigurationTab {
     private final class HudTweaksControls extends ControlSection {
         private HudTweaksSettings.ElementType selectedElement = HudTweaksSettings.ElementType.CROSSHAIR;
 
-        private ButtonWidget moduleToggleButton;
-        private ButtonWidget elementButton;
-        private ButtonWidget displayButton;
-        private ButtonWidget scaleButton;
-        private ButtonWidget opacityButton;
-        private ButtonWidget offsetXButton;
-        private ButtonWidget offsetYButton;
-        private ButtonWidget resetElementButton;
-        private ButtonWidget resetAllButton;
+        private Button moduleToggleButton;
+        private Button elementButton;
+        private Button displayButton;
+        private Button scaleButton;
+        private Button opacityButton;
+        private Button offsetXButton;
+        private Button offsetYButton;
+        private Button resetElementButton;
+        private Button resetAllButton;
 
         @Override
         protected void init(int rightX, int settingW) {
             this.moduleToggleButton = addButton(
-                    () -> Text.literal("HUD Tweaks Module: " + (HudTweaksModule.INSTANCE.isEnabled() ? "ON" : "OFF")),
+                    () -> Component.literal("HUD Tweaks Module: " + (HudTweaksModule.INSTANCE.isEnabled() ? "ON" : "OFF")),
                     () -> HudTweaksModule.INSTANCE.setEnabled(!HudTweaksModule.INSTANCE.isEnabled()),
                     rightX, settingW, 0
             );
             this.elementButton = addButton(
-                    () -> Text.literal("Element: " + label(this.selectedElement)),
+                    () -> Component.literal("Element: " + label(this.selectedElement)),
                     () -> cycleSelectedElement(1),
                     rightX, settingW, 1
             );
             this.displayButton = addButton(
-                    () -> Text.literal("Display: " + (selectedConfig().display ? "ON" : "OFF")),
+                    () -> Component.literal("Display: " + (selectedConfig().display ? "ON" : "OFF")),
                     this::toggleDisplay,
                     rightX, settingW, 2
             );
             this.scaleButton = addButton(
-                    () -> Text.literal("Scale: " + String.format(Locale.ROOT, "%.2f", selectedConfig().scale)),
+                    () -> Component.literal("Scale: " + String.format(Locale.ROOT, "%.2f", selectedConfig().scale)),
                     () -> adjustScale(1),
                     rightX, settingW, 3
             );
             this.opacityButton = addButton(
-                    () -> Text.literal("Opacity: " + String.format(Locale.ROOT, "%.2f", selectedConfig().opacity)),
+                    () -> Component.literal("Opacity: " + String.format(Locale.ROOT, "%.2f", selectedConfig().opacity)),
                     () -> adjustOpacity(1),
                     rightX, settingW, 4
             );
             this.offsetXButton = addButton(
-                    () -> Text.literal("Offset X: " + selectedConfig().offsetX),
+                    () -> Component.literal("Offset X: " + selectedConfig().offsetX),
                     () -> adjustOffsetX(1),
                     rightX, settingW, 5
             );
             this.offsetYButton = addButton(
-                    () -> Text.literal("Offset Y: " + selectedConfig().offsetY),
+                    () -> Component.literal("Offset Y: " + selectedConfig().offsetY),
                     () -> adjustOffsetY(1),
                     rightX, settingW, 6
             );
             this.resetElementButton = addButton(
-                    () -> Text.literal("Reset Selected Element"),
+                    () -> Component.literal("Reset Selected Element"),
                     () -> HudTweaksSettings.resetElement(this.selectedElement),
                     rightX, settingW, 7
             );
             this.resetAllButton = addButton(
-                    () -> Text.literal("Reset All HUD Tweaks"),
+                    () -> Component.literal("Reset All HUD Tweaks"),
                     HudTweaksSettings::resetAll,
                     rightX, settingW, 8
             );
@@ -655,10 +666,10 @@ final class MacroWorkbenchConfigurationTab {
 
         @Override
         protected boolean handleMouseClick(double mouseX, double mouseY, int button) {
-            if (button != 0 && button != 1) {
+            if (button != InputConstants.MOUSE_BUTTON_LEFT && button != InputConstants.MOUSE_BUTTON_RIGHT) {
                 return false;
             }
-            int direction = button == 0 ? 1 : -1;
+            int direction = button == InputConstants.MOUSE_BUTTON_LEFT ? 1 : -1;
             if (contains(mouseX, mouseY, this.moduleToggleButton)) {
                 HudTweaksModule.INSTANCE.setEnabled(!HudTweaksModule.INSTANCE.isEnabled());
                 return true;
@@ -763,36 +774,36 @@ final class MacroWorkbenchConfigurationTab {
     }
 
     private final class PickupFeedControls extends ControlSection {
-        private ButtonWidget pickupEnabledButton;
-        private ButtonWidget pickupDurationButton;
-        private ButtonWidget pickupLinesButton;
-        private ButtonWidget pickupIconScaleButton;
-        private ButtonWidget pickupDirectionButton;
+        private Button pickupEnabledButton;
+        private Button pickupDurationButton;
+        private Button pickupLinesButton;
+        private Button pickupIconScaleButton;
+        private Button pickupDirectionButton;
 
         @Override
         protected void init(int rightX, int settingW) {
             this.pickupEnabledButton = addButton(
-                    () -> Text.literal("Pickup Notifier: " + (ItemPickupNotifierModule.INSTANCE.isEnabled() ? "ON" : "OFF")),
+                    () -> Component.literal("Pickup Notifier: " + (ItemPickupNotifierModule.INSTANCE.isEnabled() ? "ON" : "OFF")),
                     () -> ItemPickupNotifierModule.INSTANCE.setEnabled(!ItemPickupNotifierModule.INSTANCE.isEnabled()),
                     rightX, settingW, 0
             );
             this.pickupDurationButton = addButton(
-                    () -> Text.literal("Pickup Duration: " + PickupFeedSettings.get().durationMs + "ms"),
+                    () -> Component.literal("Pickup Duration: " + PickupFeedSettings.get().durationMs + "ms"),
                     () -> adjustDuration(1),
                     rightX, settingW, 1
             );
             this.pickupLinesButton = addButton(
-                    () -> Text.literal("Pickup Max Lines: " + PickupFeedSettings.get().maxLines),
+                    () -> Component.literal("Pickup Max Lines: " + PickupFeedSettings.get().maxLines),
                     () -> adjustLines(1),
                     rightX, settingW, 2
             );
             this.pickupIconScaleButton = addButton(
-                    () -> Text.literal("Pickup Icon Scale: " + String.format(Locale.ROOT, "%.2f", PickupFeedSettings.get().iconScale)),
+                    () -> Component.literal("Pickup Icon Scale: " + String.format(Locale.ROOT, "%.2f", PickupFeedSettings.get().iconScale)),
                     () -> adjustIconScale(1),
                     rightX, settingW, 3
             );
             this.pickupDirectionButton = addButton(
-                    () -> Text.literal("Pickup Direction: " + PickupFeedSettings.get().direction.name()),
+                    () -> Component.literal("Pickup Direction: " + PickupFeedSettings.get().direction.name()),
                     () -> cycleDirection(true),
                     rightX, settingW, 4
             );
@@ -800,8 +811,8 @@ final class MacroWorkbenchConfigurationTab {
 
         @Override
         protected boolean handleMouseClick(double mouseX, double mouseY, int button) {
-            if (button == 0 || button == 1) {
-                int direction = button == 0 ? 1 : -1;
+            if (button == InputConstants.MOUSE_BUTTON_LEFT || button == InputConstants.MOUSE_BUTTON_RIGHT) {
+                int direction = button == InputConstants.MOUSE_BUTTON_LEFT ? 1 : -1;
                 if (contains(mouseX, mouseY, this.pickupDurationButton)) {
                     adjustDuration(direction);
                     return true;
@@ -860,161 +871,161 @@ final class MacroWorkbenchConfigurationTab {
     }
 
     private final class ModulesControls extends ControlSection {
-        private ButtonWidget freecamToggleButton;
-        private ButtonWidget fullbrightToggleButton;
-        private ButtonWidget heldLightToggleButton;
-        private ButtonWidget inventoryMoveToggleButton;
-        private ButtonWidget instantBreakToggleButton;
-        private ButtonWidget fastBlockPlacementToggleButton;
-        private ButtonWidget betterCommandBlockUiToggleButton;
-        private ButtonWidget waypointsToggleButton;
-        private ButtonWidget nbtTooltipToggleButton;
-        private ButtonWidget shulkerTooltipToggleButton;
+        private Button freecamToggleButton;
+        private Button fullbrightToggleButton;
+        private Button heldLightToggleButton;
+        private Button inventoryMoveToggleButton;
+        private Button instantBreakToggleButton;
+        private Button fastBlockPlacementToggleButton;
+        private Button betterCommandBlockUiToggleButton;
+        private Button waypointsToggleButton;
+        private Button nbtTooltipToggleButton;
+        private Button shulkerTooltipToggleButton;
 
         @Override
         protected void init(int rightX, int settingW) {
-            this.freecamToggleButton = addButton(() -> Text.literal("Freecam: " + (FreecamModule.INSTANCE.isEnabled() ? "ON" : "OFF")),
+            this.freecamToggleButton = addButton(() -> Component.literal("Freecam: " + (FreecamModule.INSTANCE.isEnabled() ? "ON" : "OFF")),
                     () -> FreecamModule.INSTANCE.setEnabled(!FreecamModule.INSTANCE.isEnabled()), rightX, settingW, 0);
-            this.fullbrightToggleButton = addButton(() -> Text.literal("Fullbright: " + (FullbrightModule.INSTANCE.isEnabled() ? "ON" : "OFF")),
+            this.fullbrightToggleButton = addButton(() -> Component.literal("Fullbright: " + (FullbrightModule.INSTANCE.isEnabled() ? "ON" : "OFF")),
                     () -> FullbrightModule.INSTANCE.setEnabled(!FullbrightModule.INSTANCE.isEnabled()), rightX, settingW, 1);
-            this.heldLightToggleButton = addButton(() -> Text.literal("Held Light: " + (HeldLightModule.INSTANCE.isEnabled() ? "ON" : "OFF")),
+            this.heldLightToggleButton = addButton(() -> Component.literal("Held Light: " + (HeldLightModule.INSTANCE.isEnabled() ? "ON" : "OFF")),
                     () -> HeldLightModule.INSTANCE.setEnabled(!HeldLightModule.INSTANCE.isEnabled()), rightX, settingW, 2);
-            this.inventoryMoveToggleButton = addButton(() -> Text.literal("Inventory Move: " + (InventoryMoveModule.INSTANCE.isEnabled() ? "ON" : "OFF")),
+            this.inventoryMoveToggleButton = addButton(() -> Component.literal("Inventory Move: " + (InventoryMoveModule.INSTANCE.isEnabled() ? "ON" : "OFF")),
                     () -> InventoryMoveModule.INSTANCE.setEnabled(!InventoryMoveModule.INSTANCE.isEnabled()), rightX, settingW, 3);
-            this.instantBreakToggleButton = addButton(() -> Text.literal("Instant Break: " + (InstantBreakModule.INSTANCE.isEnabled() ? "ON" : "OFF")),
+            this.instantBreakToggleButton = addButton(() -> Component.literal("Instant Break: " + (InstantBreakModule.INSTANCE.isEnabled() ? "ON" : "OFF")),
                     () -> InstantBreakModule.INSTANCE.setEnabled(!InstantBreakModule.INSTANCE.isEnabled()), rightX, settingW, 4);
-            this.fastBlockPlacementToggleButton = addButton(() -> Text.literal("Fast Place: " + (FastBlockPlacementModule.INSTANCE.isEnabled() ? "ON" : "OFF")),
+            this.fastBlockPlacementToggleButton = addButton(() -> Component.literal("Fast Place: " + (FastBlockPlacementModule.INSTANCE.isEnabled() ? "ON" : "OFF")),
                     () -> FastBlockPlacementModule.INSTANCE.setEnabled(!FastBlockPlacementModule.INSTANCE.isEnabled()), rightX, settingW, 5);
-            this.betterCommandBlockUiToggleButton = addButton(() -> Text.literal("Better Command Block UI: " + (BetterCommandBlockUiModule.INSTANCE.isEnabled() ? "ON" : "OFF")),
+            this.betterCommandBlockUiToggleButton = addButton(() -> Component.literal("Better Command Block UI: " + (BetterCommandBlockUiModule.INSTANCE.isEnabled() ? "ON" : "OFF")),
                     () -> BetterCommandBlockUiModule.INSTANCE.setEnabled(!BetterCommandBlockUiModule.INSTANCE.isEnabled()), rightX, settingW, 6);
-            this.waypointsToggleButton = addButton(() -> Text.literal("Waypoints: " + (WaypointModule.INSTANCE.isEnabled() ? "ON" : "OFF")),
+            this.waypointsToggleButton = addButton(() -> Component.literal("Waypoints: " + (WaypointModule.INSTANCE.isEnabled() ? "ON" : "OFF")),
                     () -> WaypointModule.INSTANCE.setEnabled(!WaypointModule.INSTANCE.isEnabled()), rightX, settingW, 7);
-            this.nbtTooltipToggleButton = addButton(() -> Text.literal("NBT Tooltip: " + (NBTTooltipModule.INSTANCE.isEnabled() ? "ON" : "OFF")),
+            this.nbtTooltipToggleButton = addButton(() -> Component.literal("NBT Tooltip: " + (NBTTooltipModule.INSTANCE.isEnabled() ? "ON" : "OFF")),
                     () -> NBTTooltipModule.INSTANCE.setEnabled(!NBTTooltipModule.INSTANCE.isEnabled()), rightX, settingW, 8);
-            this.shulkerTooltipToggleButton = addButton(() -> Text.literal("Shulker Preview Tooltip: " + (ShulkerTooltipModule.INSTANCE.isEnabled() ? "ON" : "OFF")),
+            this.shulkerTooltipToggleButton = addButton(() -> Component.literal("Shulker Preview Tooltip: " + (ShulkerTooltipModule.INSTANCE.isEnabled() ? "ON" : "OFF")),
                     () -> ShulkerTooltipModule.INSTANCE.setEnabled(!ShulkerTooltipModule.INSTANCE.isEnabled()), rightX, settingW, 9);
         }
     }
 
     private final class OverlaysControls extends ControlSection {
-        private ButtonWidget biomeBorderToggleButton;
-        private ButtonWidget chunkBorderToggleButton;
-        private ButtonWidget slimeChunksToggleButton;
-        private ButtonWidget structureBoundsToggleButton;
-        private ButtonWidget commandBlockOverlayToggleButton;
-        private ButtonWidget lightOverlayToggleButton;
+        private Button biomeBorderToggleButton;
+        private Button chunkBorderToggleButton;
+        private Button slimeChunksToggleButton;
+        private Button structureBoundsToggleButton;
+        private Button commandBlockOverlayToggleButton;
+        private Button lightOverlayToggleButton;
 
         @Override
         protected void init(int rightX, int settingW) {
-            this.biomeBorderToggleButton = addButton(() -> Text.literal("Biome Border Overlay: " + (BiomeBorderOverlayModule.INSTANCE.isEnabled() ? "ON" : "OFF")),
+            this.biomeBorderToggleButton = addButton(() -> Component.literal("Biome Border Overlay: " + (BiomeBorderOverlayModule.INSTANCE.isEnabled() ? "ON" : "OFF")),
                     () -> BiomeBorderOverlayModule.INSTANCE.setEnabled(!BiomeBorderOverlayModule.INSTANCE.isEnabled()), rightX, settingW, 0);
-            this.chunkBorderToggleButton = addButton(() -> Text.literal("Chunk Border Overlay: " + (ChunkBorderOverlayModule.INSTANCE.isEnabled() ? "ON" : "OFF")),
+            this.chunkBorderToggleButton = addButton(() -> Component.literal("Chunk Border Overlay: " + (ChunkBorderOverlayModule.INSTANCE.isEnabled() ? "ON" : "OFF")),
                     () -> ChunkBorderOverlayModule.INSTANCE.setEnabled(!ChunkBorderOverlayModule.INSTANCE.isEnabled()), rightX, settingW, 1);
-            this.slimeChunksToggleButton = addButton(() -> Text.literal("Slime Chunk Overlay: " + (SlimeChunkOverlayModule.INSTANCE.isEnabled() ? "ON" : "OFF")),
+            this.slimeChunksToggleButton = addButton(() -> Component.literal("Slime Chunk Overlay: " + (SlimeChunkOverlayModule.INSTANCE.isEnabled() ? "ON" : "OFF")),
                     () -> SlimeChunkOverlayModule.INSTANCE.setEnabled(!SlimeChunkOverlayModule.INSTANCE.isEnabled()), rightX, settingW, 2);
-            this.structureBoundsToggleButton = addButton(() -> Text.literal("Structure Bounding Boxes: " + (StructureBoundingBoxOverlay.INSTANCE.isEnabled() ? "ON" : "OFF")),
+            this.structureBoundsToggleButton = addButton(() -> Component.literal("Structure Bounding Boxes: " + (StructureBoundingBoxOverlay.INSTANCE.isEnabled() ? "ON" : "OFF")),
                     () -> StructureBoundingBoxOverlay.INSTANCE.setEnabled(!StructureBoundingBoxOverlay.INSTANCE.isEnabled()), rightX, settingW, 3);
-            this.commandBlockOverlayToggleButton = addButton(() -> Text.literal("Command Block Overlay: " + (CommandBlockOverlayModule.INSTANCE.isEnabled() ? "ON" : "OFF")),
+            this.commandBlockOverlayToggleButton = addButton(() -> Component.literal("Command Block Overlay: " + (CommandBlockOverlayModule.INSTANCE.isEnabled() ? "ON" : "OFF")),
                     () -> CommandBlockOverlayModule.INSTANCE.setEnabled(!CommandBlockOverlayModule.INSTANCE.isEnabled()), rightX, settingW, 4);
-            this.lightOverlayToggleButton = addButton(() -> Text.literal("Light Level Overlay: " + (LightLevelOverlayModule.INSTANCE.isEnabled() ? "ON" : "OFF")),
+            this.lightOverlayToggleButton = addButton(() -> Component.literal("Light Level Overlay: " + (LightLevelOverlayModule.INSTANCE.isEnabled() ? "ON" : "OFF")),
                     () -> LightLevelOverlayModule.INSTANCE.setEnabled(!LightLevelOverlayModule.INSTANCE.isEnabled()), rightX, settingW, 5);
         }
     }
 
     private final class BlockAttributesControls extends ControlSection {
-        private ButtonWidget collisionMeshToggleButton;
-        private ButtonWidget lightBlocksToggleButton;
-        private ButtonWidget preventInteractionsToggleButton;
-        private ButtonWidget solidFluidHitboxesToggleButton;
-        private ButtonWidget barrierBlocksToggleButton;
+        private Button collisionMeshToggleButton;
+        private Button lightBlocksToggleButton;
+        private Button preventInteractionsToggleButton;
+        private Button solidFluidHitboxesToggleButton;
+        private Button barrierBlocksToggleButton;
 
         @Override
         protected void init(int rightX, int settingW) {
-            this.collisionMeshToggleButton = addButton(() -> Text.literal("Show Collision Mesh: " + (ModConfig.blockAttributesShowCollisionMesh ? "ON" : "OFF")),
+            this.collisionMeshToggleButton = addButton(() -> Component.literal("Show Collision Mesh: " + (ModConfig.blockAttributesShowCollisionMesh ? "ON" : "OFF")),
                     () -> ModConfig.updateAndSave(() -> ModConfig.blockAttributesShowCollisionMesh = !ModConfig.blockAttributesShowCollisionMesh), rightX, settingW, 0);
-            this.lightBlocksToggleButton = addButton(() -> Text.literal("Show Light Blocks: " + (ModConfig.blockAttributesShowLightBlocks ? "ON" : "OFF")),
+            this.lightBlocksToggleButton = addButton(() -> Component.literal("Show Light Blocks: " + (ModConfig.blockAttributesShowLightBlocks ? "ON" : "OFF")),
                     () -> ModConfig.updateAndSave(() -> ModConfig.blockAttributesShowLightBlocks = !ModConfig.blockAttributesShowLightBlocks), rightX, settingW, 1);
-            this.preventInteractionsToggleButton = addButton(() -> Text.literal("Prevent Interactions: " + (ModConfig.blockAttributesPreventInteractions ? "ON" : "OFF")),
+            this.preventInteractionsToggleButton = addButton(() -> Component.literal("Prevent Interactions: " + (ModConfig.blockAttributesPreventInteractions ? "ON" : "OFF")),
                     () -> ModConfig.updateAndSave(() -> ModConfig.blockAttributesPreventInteractions = !ModConfig.blockAttributesPreventInteractions), rightX, settingW, 2);
-            this.solidFluidHitboxesToggleButton = addButton(() -> Text.literal("Solid Fluid Hitboxes: " + (ModConfig.blockAttributesSolidFluidHitboxes ? "ON" : "OFF")),
+            this.solidFluidHitboxesToggleButton = addButton(() -> Component.literal("Solid Fluid Hitboxes: " + (ModConfig.blockAttributesSolidFluidHitboxes ? "ON" : "OFF")),
                     () -> ModConfig.updateAndSave(() -> ModConfig.blockAttributesSolidFluidHitboxes = !ModConfig.blockAttributesSolidFluidHitboxes), rightX, settingW, 3);
-            this.barrierBlocksToggleButton = addButton(() -> Text.literal("Show Barrier Blocks: " + (ModConfig.blockAttributesShowBarrierBlocks ? "ON" : "OFF")),
+            this.barrierBlocksToggleButton = addButton(() -> Component.literal("Show Barrier Blocks: " + (ModConfig.blockAttributesShowBarrierBlocks ? "ON" : "OFF")),
                     () -> ModConfig.updateAndSave(() -> ModConfig.blockAttributesShowBarrierBlocks = !ModConfig.blockAttributesShowBarrierBlocks), rightX, settingW, 4);
         }
     }
 
     private final class TweaksControls extends ControlSection {
-        private ButtonWidget tweaksModuleToggleButton;
-        private ButtonWidget hideOwnEffectsToggleButton;
-        private ButtonWidget hideOffhandItemToggleButton;
-        private ButtonWidget disableBlockBreakParticlesToggleButton;
-        private ButtonWidget disableEntityRenderingToggleButton;
-        private ButtonWidget disableNetherFogToggleButton;
-        private ButtonWidget disableRenderDistanceFogToggleButton;
-        private ButtonWidget disableRainEffectsToggleButton;
-        private ButtonWidget disableSoundsToggleButton;
-        private ButtonWidget disableWallUnsprintToggleButton;
-        private ButtonWidget angelBlockToggleButton;
-        private ButtonWidget permanentSneakToggleButton;
-        private ButtonWidget permanentSprintToggleButton;
-        private ButtonWidget disableHurtCameraToggleButton;
-        private ButtonWidget disableViewBobbingToggleButton;
-        private ButtonWidget reachToggleButton;
-        private ButtonWidget reachSafeClampToggleButton;
-        private ButtonWidget reachBlockDistanceButton;
-        private ButtonWidget reachEntityDistanceButton;
-        private ButtonWidget reachMpBlockExtraButton;
-        private ButtonWidget reachMpEntityExtraButton;
+        private Button tweaksModuleToggleButton;
+        private Button hideOwnEffectsToggleButton;
+        private Button hideOffhandItemToggleButton;
+        private Button disableBlockBreakParticlesToggleButton;
+        private Button disableEntityRenderingToggleButton;
+        private Button disableNetherFogToggleButton;
+        private Button disableRenderDistanceFogToggleButton;
+        private Button disableRainEffectsToggleButton;
+        private Button disableSoundsToggleButton;
+        private Button disableWallUnsprintToggleButton;
+        private Button angelBlockToggleButton;
+        private Button permanentSneakToggleButton;
+        private Button permanentSprintToggleButton;
+        private Button disableHurtCameraToggleButton;
+        private Button disableViewBobbingToggleButton;
+        private Button reachToggleButton;
+        private Button reachSafeClampToggleButton;
+        private Button reachBlockDistanceButton;
+        private Button reachEntityDistanceButton;
+        private Button reachMpBlockExtraButton;
+        private Button reachMpEntityExtraButton;
 
         @Override
         protected void init(int rightX, int settingW) {
-            this.tweaksModuleToggleButton = addButton(() -> Text.literal("Tweaks Module: " + (TweaksModule.INSTANCE.isEnabled() ? "ON" : "OFF")),
+            this.tweaksModuleToggleButton = addButton(() -> Component.literal("Tweaks Module: " + (TweaksModule.INSTANCE.isEnabled() ? "ON" : "OFF")),
                     () -> TweaksModule.INSTANCE.setEnabled(!TweaksModule.INSTANCE.isEnabled()), rightX, settingW, 0);
-            this.hideOwnEffectsToggleButton = addButton(() -> Text.literal("Hide Own Effect Particles: " + (ModConfig.tweaksHideOwnEffectParticles ? "ON" : "OFF")),
+            this.hideOwnEffectsToggleButton = addButton(() -> Component.literal("Hide Own Effect Particles: " + (ModConfig.tweaksHideOwnEffectParticles ? "ON" : "OFF")),
                     () -> ModConfig.updateAndSave(() -> ModConfig.tweaksHideOwnEffectParticles = !ModConfig.tweaksHideOwnEffectParticles), rightX, settingW, 1);
-            this.hideOffhandItemToggleButton = addButton(() -> Text.literal("Hide Offhand Item: " + (ModConfig.tweaksHideOffhandItem ? "ON" : "OFF")),
+            this.hideOffhandItemToggleButton = addButton(() -> Component.literal("Hide Offhand Item: " + (ModConfig.tweaksHideOffhandItem ? "ON" : "OFF")),
                     () -> ModConfig.updateAndSave(() -> ModConfig.tweaksHideOffhandItem = !ModConfig.tweaksHideOffhandItem), rightX, settingW, 2);
-            this.disableBlockBreakParticlesToggleButton = addButton(() -> Text.literal("Disable Block Breaking Particles: " + (ModConfig.tweaksDisableBlockBreakingParticles ? "ON" : "OFF")),
+            this.disableBlockBreakParticlesToggleButton = addButton(() -> Component.literal("Disable Block Breaking Particles: " + (ModConfig.tweaksDisableBlockBreakingParticles ? "ON" : "OFF")),
                     () -> ModConfig.updateAndSave(() -> ModConfig.tweaksDisableBlockBreakingParticles = !ModConfig.tweaksDisableBlockBreakingParticles), rightX, settingW, 3);
-            this.disableEntityRenderingToggleButton = addButton(() -> Text.literal("Disable Entity Rendering: " + (ModConfig.tweaksDisableEntityRendering ? "ON" : "OFF")),
+            this.disableEntityRenderingToggleButton = addButton(() -> Component.literal("Disable Entity Rendering: " + (ModConfig.tweaksDisableEntityRendering ? "ON" : "OFF")),
                     () -> ModConfig.updateAndSave(() -> ModConfig.tweaksDisableEntityRendering = !ModConfig.tweaksDisableEntityRendering), rightX, settingW, 4);
-            this.disableNetherFogToggleButton = addButton(() -> Text.literal("Disable Nether Fog: " + (ModConfig.tweaksDisableNetherFog ? "ON" : "OFF")),
+            this.disableNetherFogToggleButton = addButton(() -> Component.literal("Disable Nether Fog: " + (ModConfig.tweaksDisableNetherFog ? "ON" : "OFF")),
                     () -> ModConfig.updateAndSave(() -> ModConfig.tweaksDisableNetherFog = !ModConfig.tweaksDisableNetherFog), rightX, settingW, 5);
-            this.disableRenderDistanceFogToggleButton = addButton(() -> Text.literal("Disable Render-Distance Fog: " + (ModConfig.tweaksDisableRenderDistanceFog ? "ON" : "OFF")),
+            this.disableRenderDistanceFogToggleButton = addButton(() -> Component.literal("Disable Render-Distance Fog: " + (ModConfig.tweaksDisableRenderDistanceFog ? "ON" : "OFF")),
                     () -> ModConfig.updateAndSave(() -> ModConfig.tweaksDisableRenderDistanceFog = !ModConfig.tweaksDisableRenderDistanceFog), rightX, settingW, 6);
-            this.disableRainEffectsToggleButton = addButton(() -> Text.literal("Disable Rain Effects: " + (ModConfig.tweaksDisableRainEffects ? "ON" : "OFF")),
+            this.disableRainEffectsToggleButton = addButton(() -> Component.literal("Disable Rain Effects: " + (ModConfig.tweaksDisableRainEffects ? "ON" : "OFF")),
                     () -> ModConfig.updateAndSave(() -> ModConfig.tweaksDisableRainEffects = !ModConfig.tweaksDisableRainEffects), rightX, settingW, 7);
-            this.disableSoundsToggleButton = addButton(() -> Text.literal("Disable Sounds: " + (ModConfig.tweaksDisableSounds ? "ON" : "OFF")),
+            this.disableSoundsToggleButton = addButton(() -> Component.literal("Disable Sounds: " + (ModConfig.tweaksDisableSounds ? "ON" : "OFF")),
                     () -> ModConfig.updateAndSave(() -> ModConfig.tweaksDisableSounds = !ModConfig.tweaksDisableSounds), rightX, settingW, 8);
-            this.disableWallUnsprintToggleButton = addButton(() -> Text.literal("Disable Wall Unsprint: " + (ModConfig.tweaksDisableWallUnsprint ? "ON" : "OFF")),
+            this.disableWallUnsprintToggleButton = addButton(() -> Component.literal("Disable Wall Unsprint: " + (ModConfig.tweaksDisableWallUnsprint ? "ON" : "OFF")),
                     () -> ModConfig.updateAndSave(() -> ModConfig.tweaksDisableWallUnsprint = !ModConfig.tweaksDisableWallUnsprint), rightX, settingW, 9);
-            this.angelBlockToggleButton = addButton(() -> Text.literal("Angel Block: " + (ModConfig.tweaksAngelBlock ? "ON" : "OFF")),
+            this.angelBlockToggleButton = addButton(() -> Component.literal("Angel Block: " + (ModConfig.tweaksAngelBlock ? "ON" : "OFF")),
                     () -> ModConfig.updateAndSave(() -> ModConfig.tweaksAngelBlock = !ModConfig.tweaksAngelBlock), rightX, settingW, 10);
-            this.permanentSneakToggleButton = addButton(() -> Text.literal("Permanent Sneak: " + (ModConfig.tweaksPermanentSneak ? "ON" : "OFF")),
+            this.permanentSneakToggleButton = addButton(() -> Component.literal("Permanent Sneak: " + (ModConfig.tweaksPermanentSneak ? "ON" : "OFF")),
                     () -> ModConfig.updateAndSave(() -> ModConfig.tweaksPermanentSneak = !ModConfig.tweaksPermanentSneak), rightX, settingW, 11);
-            this.permanentSprintToggleButton = addButton(() -> Text.literal("Permanent Sprint: " + (ModConfig.tweaksPermanentSprint ? "ON" : "OFF")),
+            this.permanentSprintToggleButton = addButton(() -> Component.literal("Permanent Sprint: " + (ModConfig.tweaksPermanentSprint ? "ON" : "OFF")),
                     () -> ModConfig.updateAndSave(() -> ModConfig.tweaksPermanentSprint = !ModConfig.tweaksPermanentSprint), rightX, settingW, 12);
-            this.disableHurtCameraToggleButton = addButton(() -> Text.literal("Disable Hurt Camera: " + (ModConfig.tweaksDisableHurtCamera ? "ON" : "OFF")),
+            this.disableHurtCameraToggleButton = addButton(() -> Component.literal("Disable Hurt Camera: " + (ModConfig.tweaksDisableHurtCamera ? "ON" : "OFF")),
                     () -> ModConfig.updateAndSave(() -> ModConfig.tweaksDisableHurtCamera = !ModConfig.tweaksDisableHurtCamera), rightX, settingW, 13);
-            this.disableViewBobbingToggleButton = addButton(() -> Text.literal("Disable View Bobbing: " + (ModConfig.tweaksDisableViewBobbing ? "ON" : "OFF")),
+            this.disableViewBobbingToggleButton = addButton(() -> Component.literal("Disable View Bobbing: " + (ModConfig.tweaksDisableViewBobbing ? "ON" : "OFF")),
                     () -> ModConfig.updateAndSave(() -> ModConfig.tweaksDisableViewBobbing = !ModConfig.tweaksDisableViewBobbing), rightX, settingW, 14);
-            this.reachToggleButton = addButton(() -> Text.literal("Reach: " + (ReachModule.INSTANCE.isEnabled() ? "ON" : "OFF")),
+            this.reachToggleButton = addButton(() -> Component.literal("Reach: " + (ReachModule.INSTANCE.isEnabled() ? "ON" : "OFF")),
                     () -> ReachModule.INSTANCE.setEnabled(!ReachModule.INSTANCE.isEnabled()), rightX, settingW, 15);
-            this.reachSafeClampToggleButton = addButton(() -> Text.literal("Reach Safe Multiplayer Clamp: " + (ModConfig.reachSafeMultiplayerClamp ? "ON" : "OFF")),
+            this.reachSafeClampToggleButton = addButton(() -> Component.literal("Reach Safe Multiplayer Clamp: " + (ModConfig.reachSafeMultiplayerClamp ? "ON" : "OFF")),
                     () -> ModConfig.updateAndSave(() -> ModConfig.reachSafeMultiplayerClamp = !ModConfig.reachSafeMultiplayerClamp), rightX, settingW, 16);
-            this.reachBlockDistanceButton = addButton(() -> Text.literal("Reach Block Distance: " + String.format(Locale.ROOT, "%.2f", ModConfig.reachBlockDistance)),
+            this.reachBlockDistanceButton = addButton(() -> Component.literal("Reach Block Distance: " + String.format(Locale.ROOT, "%.2f", ModConfig.reachBlockDistance)),
                     () -> adjustReachBlockDistance(1), rightX, settingW, 17);
-            this.reachEntityDistanceButton = addButton(() -> Text.literal("Reach Entity Distance: " + String.format(Locale.ROOT, "%.2f", ModConfig.reachEntityDistance)),
+            this.reachEntityDistanceButton = addButton(() -> Component.literal("Reach Entity Distance: " + String.format(Locale.ROOT, "%.2f", ModConfig.reachEntityDistance)),
                     () -> adjustReachEntityDistance(1), rightX, settingW, 18);
-            this.reachMpBlockExtraButton = addButton(() -> Text.literal("Reach MP Block Extra: " + String.format(Locale.ROOT, "%.2f", ModConfig.reachMultiplayerBlockExtra)),
+            this.reachMpBlockExtraButton = addButton(() -> Component.literal("Reach MP Block Extra: " + String.format(Locale.ROOT, "%.2f", ModConfig.reachMultiplayerBlockExtra)),
                     () -> adjustReachMpBlockExtra(1), rightX, settingW, 19);
-            this.reachMpEntityExtraButton = addButton(() -> Text.literal("Reach MP Entity Extra: " + String.format(Locale.ROOT, "%.2f", ModConfig.reachMultiplayerEntityExtra)),
+            this.reachMpEntityExtraButton = addButton(() -> Component.literal("Reach MP Entity Extra: " + String.format(Locale.ROOT, "%.2f", ModConfig.reachMultiplayerEntityExtra)),
                     () -> adjustReachMpEntityExtra(1), rightX, settingW, 20);
         }
 
         @Override
         protected boolean handleMouseClick(double mouseX, double mouseY, int button) {
-            if (button != 1) {
+            if (button != InputConstants.MOUSE_BUTTON_RIGHT) {
                 return false;
             }
             if (contains(mouseX, mouseY, this.reachBlockDistanceButton)) {
@@ -1066,82 +1077,82 @@ final class MacroWorkbenchConfigurationTab {
     }
 
     private final class MouseTweaksControls extends ControlSection {
-        private ButtonWidget mouseTweaksModuleToggleButton;
-        private ButtonWidget mouseTweaksRmbToggleButton;
-        private ButtonWidget mouseTweaksLmbWithItemToggleButton;
-        private ButtonWidget mouseTweaksLmbWithoutItemToggleButton;
-        private ButtonWidget mouseTweaksWheelToggleButton;
-        private ButtonWidget mouseTweaksWheelSearchOrderButton;
-        private ButtonWidget mouseTweaksWheelScrollDirectionButton;
-        private ButtonWidget mouseTweaksScrollScalingButton;
+        private Button mouseTweaksModuleToggleButton;
+        private Button mouseTweaksRmbToggleButton;
+        private Button mouseTweaksLmbWithItemToggleButton;
+        private Button mouseTweaksLmbWithoutItemToggleButton;
+        private Button mouseTweaksWheelToggleButton;
+        private Button mouseTweaksWheelSearchOrderButton;
+        private Button mouseTweaksWheelScrollDirectionButton;
+        private Button mouseTweaksScrollScalingButton;
 
         @Override
         protected void init(int rightX, int settingW) {
-            this.mouseTweaksModuleToggleButton = addButton(() -> Text.literal("Mouse Tweaks Module: " + (MouseTweaksModule.INSTANCE.isEnabled() ? "ON" : "OFF")),
+            this.mouseTweaksModuleToggleButton = addButton(() -> Component.literal("Mouse Tweaks Module: " + (MouseTweaksModule.INSTANCE.isEnabled() ? "ON" : "OFF")),
                     () -> MouseTweaksModule.INSTANCE.setEnabled(!MouseTweaksModule.INSTANCE.isEnabled()), rightX, settingW, 0);
-            this.mouseTweaksRmbToggleButton = addButton(() -> Text.literal("RMB Tweak: " + (ModConfig.mouseTweaksRmbTweak ? "ON" : "OFF")),
+            this.mouseTweaksRmbToggleButton = addButton(() -> Component.literal("RMB Tweak: " + (ModConfig.mouseTweaksRmbTweak ? "ON" : "OFF")),
                     () -> ModConfig.updateAndSave(() -> ModConfig.mouseTweaksRmbTweak = !ModConfig.mouseTweaksRmbTweak), rightX, settingW, 1);
-            this.mouseTweaksLmbWithItemToggleButton = addButton(() -> Text.literal("LMB Tweak With Item: " + (ModConfig.mouseTweaksLmbTweakWithItem ? "ON" : "OFF")),
+            this.mouseTweaksLmbWithItemToggleButton = addButton(() -> Component.literal("LMB Tweak With Item: " + (ModConfig.mouseTweaksLmbTweakWithItem ? "ON" : "OFF")),
                     () -> ModConfig.updateAndSave(() -> ModConfig.mouseTweaksLmbTweakWithItem = !ModConfig.mouseTweaksLmbTweakWithItem), rightX, settingW, 2);
-            this.mouseTweaksLmbWithoutItemToggleButton = addButton(() -> Text.literal("LMB Tweak Without Item: " + (ModConfig.mouseTweaksLmbTweakWithoutItem ? "ON" : "OFF")),
+            this.mouseTweaksLmbWithoutItemToggleButton = addButton(() -> Component.literal("LMB Tweak Without Item: " + (ModConfig.mouseTweaksLmbTweakWithoutItem ? "ON" : "OFF")),
                     () -> ModConfig.updateAndSave(() -> ModConfig.mouseTweaksLmbTweakWithoutItem = !ModConfig.mouseTweaksLmbTweakWithoutItem), rightX, settingW, 3);
-            this.mouseTweaksWheelToggleButton = addButton(() -> Text.literal("Wheel Tweak: " + (ModConfig.mouseTweaksWheelTweak ? "ON" : "OFF")),
+            this.mouseTweaksWheelToggleButton = addButton(() -> Component.literal("Wheel Tweak: " + (ModConfig.mouseTweaksWheelTweak ? "ON" : "OFF")),
                     () -> ModConfig.updateAndSave(() -> ModConfig.mouseTweaksWheelTweak = !ModConfig.mouseTweaksWheelTweak), rightX, settingW, 4);
-            this.mouseTweaksWheelSearchOrderButton = addButton(() -> Text.literal("Wheel Search Order: " + ModConfig.mouseTweaksWheelSearchOrder),
+            this.mouseTweaksWheelSearchOrderButton = addButton(() -> Component.literal("Wheel Search Order: " + ModConfig.mouseTweaksWheelSearchOrder),
                     () -> ModConfig.updateAndSave(() -> ModConfig.mouseTweaksWheelSearchOrder = nextWheelSearchOrder(ModConfig.mouseTweaksWheelSearchOrder)), rightX, settingW, 5);
-            this.mouseTweaksWheelScrollDirectionButton = addButton(() -> Text.literal("Wheel Scroll Direction: " + ModConfig.mouseTweaksWheelScrollDirection),
+            this.mouseTweaksWheelScrollDirectionButton = addButton(() -> Component.literal("Wheel Scroll Direction: " + ModConfig.mouseTweaksWheelScrollDirection),
                     () -> ModConfig.updateAndSave(() -> ModConfig.mouseTweaksWheelScrollDirection = nextWheelScrollDirection(ModConfig.mouseTweaksWheelScrollDirection)), rightX, settingW, 6);
-            this.mouseTweaksScrollScalingButton = addButton(() -> Text.literal("Scroll Item Scaling: " + ModConfig.mouseTweaksScrollItemScaling),
+            this.mouseTweaksScrollScalingButton = addButton(() -> Component.literal("Scroll Item Scaling: " + ModConfig.mouseTweaksScrollItemScaling),
                     () -> ModConfig.updateAndSave(() -> ModConfig.mouseTweaksScrollItemScaling = nextScrollScaling(ModConfig.mouseTweaksScrollItemScaling)), rightX, settingW, 7);
         }
     }
 
     private final class HungerTweaksControls extends ControlSection {
-        private ButtonWidget hungerTweaksModuleToggleButton;
-        private ButtonWidget hungerTooltipToggleButton;
-        private ButtonWidget hungerTooltipAlwaysToggleButton;
-        private ButtonWidget hungerSaturationOverlayToggleButton;
-        private ButtonWidget hungerFoodValuesOverlayToggleButton;
-        private ButtonWidget hungerOffhandOverlayToggleButton;
-        private ButtonWidget hungerExhaustionUnderlayToggleButton;
-        private ButtonWidget hungerHealthOverlayToggleButton;
-        private ButtonWidget hungerDebugInfoToggleButton;
-        private ButtonWidget hungerVanillaAnimationToggleButton;
-        private ButtonWidget hungerMaxFlashAlphaButton;
+        private Button hungerTweaksModuleToggleButton;
+        private Button hungerTooltipToggleButton;
+        private Button hungerTooltipAlwaysToggleButton;
+        private Button hungerSaturationOverlayToggleButton;
+        private Button hungerFoodValuesOverlayToggleButton;
+        private Button hungerOffhandOverlayToggleButton;
+        private Button hungerExhaustionUnderlayToggleButton;
+        private Button hungerHealthOverlayToggleButton;
+        private Button hungerDebugInfoToggleButton;
+        private Button hungerVanillaAnimationToggleButton;
+        private Button hungerMaxFlashAlphaButton;
 
         @Override
         protected void init(int rightX, int settingW) {
-            this.hungerTweaksModuleToggleButton = addButton(() -> Text.literal("Hunger Tweaks Module: " + (HungerTweaksModule.INSTANCE.isEnabled() ? "ON" : "OFF")),
+            this.hungerTweaksModuleToggleButton = addButton(() -> Component.literal("Hunger Tweaks Module: " + (HungerTweaksModule.INSTANCE.isEnabled() ? "ON" : "OFF")),
                     () -> HungerTweaksModule.INSTANCE.setEnabled(!HungerTweaksModule.INSTANCE.isEnabled()), rightX, settingW, 0);
-            this.hungerTooltipToggleButton = addButton(() -> Text.literal("Tooltip Food Values: " + (ModConfig.hungerTweaksShowFoodValuesInTooltip ? "ON" : "OFF")),
+            this.hungerTooltipToggleButton = addButton(() -> Component.literal("Tooltip Food Values: " + (ModConfig.hungerTweaksShowFoodValuesInTooltip ? "ON" : "OFF")),
                     () -> ModConfig.updateAndSave(() -> ModConfig.hungerTweaksShowFoodValuesInTooltip = !ModConfig.hungerTweaksShowFoodValuesInTooltip), rightX, settingW, 1);
-            this.hungerTooltipAlwaysToggleButton = addButton(() -> Text.literal("Tooltip Always Visible: " + (ModConfig.hungerTweaksShowFoodValuesInTooltipAlways ? "ON" : "OFF")),
+            this.hungerTooltipAlwaysToggleButton = addButton(() -> Component.literal("Tooltip Always Visible: " + (ModConfig.hungerTweaksShowFoodValuesInTooltipAlways ? "ON" : "OFF")),
                     () -> ModConfig.updateAndSave(() -> ModConfig.hungerTweaksShowFoodValuesInTooltipAlways = !ModConfig.hungerTweaksShowFoodValuesInTooltipAlways), rightX, settingW, 2);
-            this.hungerSaturationOverlayToggleButton = addButton(() -> Text.literal("Saturation Overlay: " + (ModConfig.hungerTweaksShowSaturationHudOverlay ? "ON" : "OFF")),
+            this.hungerSaturationOverlayToggleButton = addButton(() -> Component.literal("Saturation Overlay: " + (ModConfig.hungerTweaksShowSaturationHudOverlay ? "ON" : "OFF")),
                     () -> ModConfig.updateAndSave(() -> ModConfig.hungerTweaksShowSaturationHudOverlay = !ModConfig.hungerTweaksShowSaturationHudOverlay), rightX, settingW, 3);
-            this.hungerFoodValuesOverlayToggleButton = addButton(() -> Text.literal("Held Food Overlay: " + (ModConfig.hungerTweaksShowFoodValuesHudOverlay ? "ON" : "OFF")),
+            this.hungerFoodValuesOverlayToggleButton = addButton(() -> Component.literal("Held Food Overlay: " + (ModConfig.hungerTweaksShowFoodValuesHudOverlay ? "ON" : "OFF")),
                     () -> ModConfig.updateAndSave(() -> ModConfig.hungerTweaksShowFoodValuesHudOverlay = !ModConfig.hungerTweaksShowFoodValuesHudOverlay), rightX, settingW, 4);
-            this.hungerOffhandOverlayToggleButton = addButton(() -> Text.literal("Offhand Overlay: " + (ModConfig.hungerTweaksShowFoodValuesHudOverlayWhenOffhand ? "ON" : "OFF")),
+            this.hungerOffhandOverlayToggleButton = addButton(() -> Component.literal("Offhand Overlay: " + (ModConfig.hungerTweaksShowFoodValuesHudOverlayWhenOffhand ? "ON" : "OFF")),
                     () -> ModConfig.updateAndSave(() -> ModConfig.hungerTweaksShowFoodValuesHudOverlayWhenOffhand = !ModConfig.hungerTweaksShowFoodValuesHudOverlayWhenOffhand), rightX, settingW, 5);
-            this.hungerExhaustionUnderlayToggleButton = addButton(() -> Text.literal("Exhaustion Underlay: " + (ModConfig.hungerTweaksShowFoodExhaustionHudUnderlay ? "ON" : "OFF")),
+            this.hungerExhaustionUnderlayToggleButton = addButton(() -> Component.literal("Exhaustion Underlay: " + (ModConfig.hungerTweaksShowFoodExhaustionHudUnderlay ? "ON" : "OFF")),
                     () -> ModConfig.updateAndSave(() -> ModConfig.hungerTweaksShowFoodExhaustionHudUnderlay = !ModConfig.hungerTweaksShowFoodExhaustionHudUnderlay), rightX, settingW, 6);
-            this.hungerHealthOverlayToggleButton = addButton(() -> Text.literal("Estimated Health Overlay: " + (ModConfig.hungerTweaksShowFoodHealthHudOverlay ? "ON" : "OFF")),
+            this.hungerHealthOverlayToggleButton = addButton(() -> Component.literal("Estimated Health Overlay: " + (ModConfig.hungerTweaksShowFoodHealthHudOverlay ? "ON" : "OFF")),
                     () -> ModConfig.updateAndSave(() -> ModConfig.hungerTweaksShowFoodHealthHudOverlay = !ModConfig.hungerTweaksShowFoodHealthHudOverlay), rightX, settingW, 7);
-            this.hungerDebugInfoToggleButton = addButton(() -> Text.literal("Debug HUD Food Info: " + (ModConfig.hungerTweaksShowFoodDebugInfo ? "ON" : "OFF")),
+            this.hungerDebugInfoToggleButton = addButton(() -> Component.literal("Debug HUD Food Info: " + (ModConfig.hungerTweaksShowFoodDebugInfo ? "ON" : "OFF")),
                     () -> ModConfig.updateAndSave(() -> ModConfig.hungerTweaksShowFoodDebugInfo = !ModConfig.hungerTweaksShowFoodDebugInfo), rightX, settingW, 8);
-            this.hungerVanillaAnimationToggleButton = addButton(() -> Text.literal("Match Vanilla Animation: " + (ModConfig.hungerTweaksShowVanillaAnimationsOverlay ? "ON" : "OFF")),
+            this.hungerVanillaAnimationToggleButton = addButton(() -> Component.literal("Match Vanilla Animation: " + (ModConfig.hungerTweaksShowVanillaAnimationsOverlay ? "ON" : "OFF")),
                     () -> ModConfig.updateAndSave(() -> ModConfig.hungerTweaksShowVanillaAnimationsOverlay = !ModConfig.hungerTweaksShowVanillaAnimationsOverlay), rightX, settingW, 9);
-            this.hungerMaxFlashAlphaButton = addButton(() -> Text.literal("Max Flash Alpha: " + HungerTweaksModule.formatFlashAlpha(ModConfig.hungerTweaksMaxHudOverlayFlashAlpha)),
+            this.hungerMaxFlashAlphaButton = addButton(() -> Component.literal("Max Flash Alpha: " + HungerTweaksModule.formatFlashAlpha(ModConfig.hungerTweaksMaxHudOverlayFlashAlpha)),
                     () -> adjustFlashAlpha(1), rightX, settingW, 10);
         }
 
         @Override
         protected boolean handleMouseClick(double mouseX, double mouseY, int button) {
-            if (button != 0 && button != 1) {
+            if (button != InputConstants.MOUSE_BUTTON_LEFT && button != InputConstants.MOUSE_BUTTON_RIGHT) {
                 return false;
             }
             if (contains(mouseX, mouseY, this.hungerMaxFlashAlphaButton)) {
-                adjustFlashAlpha(button == 0 ? 1 : -1);
+                adjustFlashAlpha(button == InputConstants.MOUSE_BUTTON_LEFT ? 1 : -1);
                 return true;
             }
             return false;
@@ -1158,7 +1169,7 @@ final class MacroWorkbenchConfigurationTab {
     }
 
     private final class BridgingTweaksControls extends ControlSection {
-        private final List<ButtonWidget> buttons = new ArrayList<>();
+        private final List<Button> buttons = new ArrayList<>();
 
         @Override
         protected void init(int rightX, int settingW) {
@@ -1175,10 +1186,10 @@ final class MacroWorkbenchConfigurationTab {
 
         @Override
         protected boolean handleMouseClick(double mouseX, double mouseY, int button) {
-            if (button != 0 && button != 1) {
+            if (button != InputConstants.MOUSE_BUTTON_LEFT && button != InputConstants.MOUSE_BUTTON_RIGHT) {
                 return false;
             }
-            int direction = button == 0 ? 1 : -1;
+            int direction = button == InputConstants.MOUSE_BUTTON_LEFT ? 1 : -1;
             for (int i = 0; i < this.buttons.size(); i++) {
                 if (contains(mouseX, mouseY, this.buttons.get(i))) {
                     adjustSetting(i, direction);
@@ -1188,29 +1199,29 @@ final class MacroWorkbenchConfigurationTab {
             return false;
         }
 
-        private Text bridgingMessage(int index) {
+        private Component bridgingMessage(int index) {
             return switch (index) {
-                case 0 -> Text.literal("Bridging Tweaks: " + (BridgingTweaksModule.INSTANCE.isEnabled() ? "ON" : "OFF"));
-                case 1 -> Text.literal("Minimum Distance: " + String.format(Locale.ROOT, "%.1f%%", ModConfig.bridgingMinBridgeDistance));
-                case 2 -> Text.literal("Only When Crouched: " + (ModConfig.bridgingOnlyWhenCrouched ? "ON" : "OFF"));
-                case 3 -> Text.literal("Bridge Axes: " + ModConfig.bridgingSupportedAxes);
-                case 4 -> Text.literal("Crouched Axes: " + ModConfig.bridgingSupportedAxesWhenCrouched);
-                case 5 -> Text.literal("Post Delay: " + ModConfig.bridgingDelayPostBridging + " ticks");
-                case 6 -> Text.literal("Show Crosshair: " + (ModConfig.bridgingShowCrosshair ? "ON" : "OFF"));
-                case 7 -> Text.literal("Show Outline: " + (ModConfig.bridgingShowOutline ? "ON" : "OFF"));
-                case 8 -> Text.literal("Outline When Not Bridging: " + (ModConfig.bridgingShowOutlineWhenNotBridging ? "ON" : "OFF"));
-                case 9 -> Text.literal("Outline Respects Crouch: " + (ModConfig.bridgingNonBridgeRespectsCrouchRules ? "ON" : "OFF"));
-                case 10 -> Text.literal("Outline Color: " + String.format(Locale.ROOT, "#%08X", ModConfig.bridgingOutlineColor));
-                case 11 -> Text.literal("Skip Torch Blocks: " + (ModConfig.bridgingSkipTorchBridging ? "ON" : "OFF"));
-                case 12 -> Text.literal("Slab Assist: " + (ModConfig.bridgingEnableSlabAssist ? "ON" : "OFF"));
-                case 13 -> Text.literal("Replaceable Targets: " + (ModConfig.bridgingEnableNonSolidReplace ? "ON" : "OFF"));
-                case 14 -> Text.literal("Snap Strength: " + String.format(Locale.ROOT, "%.2f", ModConfig.bridgingSnapStrength));
-                case 15 -> Text.literal("Adjacency: " + ModConfig.bridgingAdjacency);
-                case 16 -> Text.literal("Perspective Lock: " + ModConfig.bridgingPerspectiveLock);
-                case 17 -> Text.literal("Debug Highlight: " + (ModConfig.bridgingShowDebugHighlight ? "ON" : "OFF"));
-                case 18 -> Text.literal("Debug Non-Bridging: " + (ModConfig.bridgingShowDebugNonBridgingHighlight ? "ON" : "OFF"));
-                case 19 -> Text.literal("Debug Trace: " + (ModConfig.bridgingShowDebugTrace ? "ON" : "OFF"));
-                default -> Text.literal("");
+                case 0 -> Component.literal("Bridging Tweaks: " + (BridgingTweaksModule.INSTANCE.isEnabled() ? "ON" : "OFF"));
+                case 1 -> Component.literal("Minimum Distance: " + String.format(Locale.ROOT, "%.1f%%", ModConfig.bridgingMinBridgeDistance));
+                case 2 -> Component.literal("Only When Crouched: " + (ModConfig.bridgingOnlyWhenCrouched ? "ON" : "OFF"));
+                case 3 -> Component.literal("Bridge Axes: " + ModConfig.bridgingSupportedAxes);
+                case 4 -> Component.literal("Crouched Axes: " + ModConfig.bridgingSupportedAxesWhenCrouched);
+                case 5 -> Component.literal("Post Delay: " + ModConfig.bridgingDelayPostBridging + " ticks");
+                case 6 -> Component.literal("Show Crosshair: " + (ModConfig.bridgingShowCrosshair ? "ON" : "OFF"));
+                case 7 -> Component.literal("Show Outline: " + (ModConfig.bridgingShowOutline ? "ON" : "OFF"));
+                case 8 -> Component.literal("Outline When Not Bridging: " + (ModConfig.bridgingShowOutlineWhenNotBridging ? "ON" : "OFF"));
+                case 9 -> Component.literal("Outline Respects Crouch: " + (ModConfig.bridgingNonBridgeRespectsCrouchRules ? "ON" : "OFF"));
+                case 10 -> Component.literal("Outline Color: " + String.format(Locale.ROOT, "#%08X", ModConfig.bridgingOutlineColor));
+                case 11 -> Component.literal("Skip Torch Blocks: " + (ModConfig.bridgingSkipTorchBridging ? "ON" : "OFF"));
+                case 12 -> Component.literal("Slab Assist: " + (ModConfig.bridgingEnableSlabAssist ? "ON" : "OFF"));
+                case 13 -> Component.literal("Replaceable Targets: " + (ModConfig.bridgingEnableNonSolidReplace ? "ON" : "OFF"));
+                case 14 -> Component.literal("Snap Strength: " + String.format(Locale.ROOT, "%.2f", ModConfig.bridgingSnapStrength));
+                case 15 -> Component.literal("Adjacency: " + ModConfig.bridgingAdjacency);
+                case 16 -> Component.literal("Perspective Lock: " + ModConfig.bridgingPerspectiveLock);
+                case 17 -> Component.literal("Debug Highlight: " + (ModConfig.bridgingShowDebugHighlight ? "ON" : "OFF"));
+                case 18 -> Component.literal("Debug Non-Bridging: " + (ModConfig.bridgingShowDebugNonBridgingHighlight ? "ON" : "OFF"));
+                case 19 -> Component.literal("Debug Trace: " + (ModConfig.bridgingShowDebugTrace ? "ON" : "OFF"));
+                default -> Component.literal("");
             };
         }
 
@@ -1259,11 +1270,11 @@ final class MacroWorkbenchConfigurationTab {
         syncControls();
     }
 
-    private static String safeField(TextFieldWidget field) {
-        if (field == null || field.getText() == null) {
+    private static String safeField(EditBox field) {
+        if (field == null || field.getValue() == null) {
             return "";
         }
-        return field.getText().trim();
+        return field.getValue().trim();
     }
 
     private ControlSection activeSection() {
@@ -1286,20 +1297,33 @@ final class MacroWorkbenchConfigurationTab {
         };
     }
 
+    private int categoryListWidth() {
+        return Math.clamp(Math.round(this.owner.contentWidth() * 0.28f), 92, 150);
+    }
+
+    private int categoryItemHeight() {
+        int available = this.owner.contentHeight();
+        return Math.clamp(available / Category.values().length - 1, 13, 18);
+    }
+
+    private int cardLeft() {
+        return this.owner.contentLeft() + categoryListWidth() + Theme.GAP_L;
+    }
+
     private int sectionViewportLeft() {
-        return (this.owner.width / 2) + 12;
+        return cardLeft() + CARD_PADDING;
     }
 
     private int sectionViewportTop() {
-        return CONTENT_START_Y;
+        return this.owner.contentTop() + CARD_HEADER_H;
     }
 
     private int sectionViewportBottom() {
-        return this.owner.height - 30;
+        return this.owner.contentBottom() - Theme.GAP_S;
     }
 
     private int sectionViewportWidth() {
-        return Math.max(180, this.owner.width - sectionViewportLeft() - 12);
+        return this.owner.contentRight() - CARD_PADDING - sectionViewportLeft();
     }
 
     private int sectionViewportHeight() {
@@ -1307,23 +1331,23 @@ final class MacroWorkbenchConfigurationTab {
     }
 
     private int rowY(int index) {
-        return CONTENT_START_Y + (index * ROW_GAP);
+        return sectionViewportTop() + (index * ROW_GAP);
     }
 
-    private ButtonWidget button(String label, ButtonWidget.PressAction action, int x, int y, int width, int height) {
-        return ButtonWidget.builder(Text.literal(label), action)
-                .dimensions(x, y, width, height)
+    private Button button(String label, Button.OnPress action, int x, int y, int width, int height) {
+        return Button.builder(Component.literal(label), action)
+                .bounds(x, y, width, height)
                 .build();
     }
 
-    private void register(ClickableWidget... widgets) {
-        for (ClickableWidget widget : widgets) {
+    private void register(AbstractWidget... widgets) {
+        for (AbstractWidget widget : widgets) {
             this.configWidgets.add(widget);
-            this.owner.addDrawableChild(widget);
+            this.owner.addRenderableWidget(widget);
         }
     }
 
-    private static void setVisible(ClickableWidget widget, boolean visible) {
+    private static void setVisible(AbstractWidget widget, boolean visible) {
         widget.visible = visible;
         widget.active = visible;
     }
@@ -1332,7 +1356,7 @@ final class MacroWorkbenchConfigurationTab {
         return mx >= x && mx <= x + w && my >= y && my <= y + h;
     }
 
-    private static boolean contains(double mx, double my, ClickableWidget widget) {
+    private static boolean contains(double mx, double my, AbstractWidget widget) {
         return widget != null
                 && widget.visible
                 && contains(mx, my, widget.getX(), widget.getY(), widget.getWidth(), widget.getHeight());

@@ -1,12 +1,13 @@
 package me.m0dii.utils;
 
-import com.mojang.blaze3d.pipeline.RenderPipeline;
-import com.mojang.blaze3d.platform.DepthTestFunction;
-import net.minecraft.client.gl.RenderPipelines;
-import net.minecraft.client.render.LayeringTransform;
-import net.minecraft.client.render.OutputTarget;
-import net.minecraft.client.render.RenderLayer;
-import net.minecraft.client.render.RenderSetup;
+import com.mojang.renderpearl.api.pipeline.ColorTargetState;
+import com.mojang.renderpearl.api.pipeline.CompareOp;
+import com.mojang.renderpearl.api.pipeline.DepthStencilState;
+import com.mojang.renderpearl.api.pipeline.RenderPipeline;
+import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.client.renderer.rendertype.LayeringTransform;
+import net.minecraft.client.renderer.rendertype.RenderSetup;
+import net.minecraft.client.renderer.rendertype.RenderType;
 
 /**
  * Custom render layers used for special rendering effects.
@@ -17,28 +18,27 @@ public final class CustomRenderLayers {
     }
 
     /**
-     * Like {@link net.minecraft.client.render.RenderLayers#LINES} but with
+     * Like {@link net.minecraft.client.renderer.rendertype.RenderTypes#LINES} but with
      * {@link DepthTestFunction#NO_DEPTH_TEST}, so lines are rendered through
      * solid blocks (see-through / occluded pass).
      */
-    public static final RenderLayer LINES_NO_DEPTH;
+    public static final RenderType LINES_NO_DEPTH;
 
     static {
         RenderPipeline linesNoDepthPipeline = RenderPipelines.register(
-                RenderPipeline.builder(RenderPipelines.RENDERTYPE_LINES_SNIPPET)
+                RenderPipeline.builder(RenderPipelines.LINES_SNIPPET)
                         .withLocation("m0-dev-tools-rendertype_lines_no_depth")
-                        .withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
+                        .withColorTargetState(ColorTargetState.DEFAULT)
+                        .withDepthStencilState(new DepthStencilState(CompareOp.ALWAYS_PASS, false))
                         .build()
         );
 
+        // No sortOnUpload(): since 26.x only quad draws may be depth-sorted, and sorting LINES throws.
         RenderSetup setup = RenderSetup.builder(linesNoDepthPipeline)
-                .translucent()
-                .layeringTransform(LayeringTransform.VIEW_OFFSET_Z_LAYERING)
-                .outputTarget(OutputTarget.ITEM_ENTITY_TARGET)
-                .expectedBufferSize(1536)
-                .build();
+                .setLayeringTransform(LayeringTransform.VIEW_OFFSET_Z_LAYERING)
+                .createRenderSetup();
 
-        LINES_NO_DEPTH = RenderLayer.of("m0-dev-tools-lines_no_depth", setup);
+        LINES_NO_DEPTH = RenderType.create("m0-dev-tools-lines_no_depth", setup);
     }
 }
 

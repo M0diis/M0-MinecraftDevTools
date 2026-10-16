@@ -1,11 +1,11 @@
 package me.m0dii.modules.chat;
 
-import net.minecraft.client.font.TextRenderer;
-import net.minecraft.text.MutableText;
-import net.minecraft.text.OrderedText;
-import net.minecraft.text.Style;
-import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
+import net.minecraft.ChatFormatting;
+import net.minecraft.client.gui.Font;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.network.chat.Style;
+import net.minecraft.util.FormattedCharSequence;
 
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -33,7 +33,7 @@ final class SecondaryChatTextLayout {
     }
 
     record VisibleLine(SecondaryChatManager.ChatMessage message,
-                       OrderedText text,
+                       FormattedCharSequence text,
                        int x,
                        int y,
                        int width,
@@ -49,7 +49,7 @@ final class SecondaryChatTextLayout {
     record Hit(VisibleLine line, Style style) {
     }
 
-    static Layout layout(SecondaryChatWindowLayout.Frame frame, TextRenderer textRenderer) {
+    static Layout layout(SecondaryChatWindowLayout.Frame frame, Font textRenderer) {
         SecondaryChatSettings.TabConfig selected = SecondaryChatManager.selectedTab(frame.window);
         if (selected == null) {
             return emptyLayout(null, frame);
@@ -58,9 +58,9 @@ final class SecondaryChatTextLayout {
         List<WrappedLine> wrappedLines = new ArrayList<>();
         int scaledW = Math.max(20, Math.round(frame.contentWidth() / frame.scale));
         for (SecondaryChatManager.ChatMessage message : SecondaryChatManager.snapshot(frame.window.id, selected.id)) {
-            MutableText display = displayText(message, frame.window.showTimestamps, frame.window.compactRepeats);
-            for (OrderedText line : textRenderer.wrapLines(display, scaledW)) {
-                wrappedLines.add(new WrappedLine(message, line, textRenderer.getWidth(line)));
+            MutableComponent display = displayText(message, frame.window.showTimestamps, frame.window.compactRepeats);
+            for (FormattedCharSequence line : textRenderer.split(display, scaledW)) {
+                wrappedLines.add(new WrappedLine(message, line, textRenderer.width(line)));
             }
         }
 
@@ -92,7 +92,7 @@ final class SecondaryChatTextLayout {
     }
 
     static Hit hitAt(SecondaryChatWindowLayout.Frame frame,
-                     TextRenderer textRenderer,
+                     Font textRenderer,
                      double mouseX,
                      double mouseY) {
         if (mouseX < frame.contentX()
@@ -116,17 +116,17 @@ final class SecondaryChatTextLayout {
         return null;
     }
 
-    static MutableText displayText(SecondaryChatManager.ChatMessage message,
+    static MutableComponent displayText(SecondaryChatManager.ChatMessage message,
                                    boolean showTimestamp,
                                    boolean compactRepeats) {
-        MutableText display = Text.empty();
+        MutableComponent display = Component.empty();
         if (showTimestamp) {
-            display.append(Text.literal("[" + TIME_FORMAT.format(message.receivedAt()) + "] ")
-                    .formatted(Formatting.DARK_GRAY));
+            display.append(Component.literal("[" + TIME_FORMAT.format(message.receivedAt()) + "] ")
+                    .withStyle(ChatFormatting.DARK_GRAY));
         }
         display.append(message.text().copy());
         if (compactRepeats && message.repeats() > 1) {
-            display.append(Text.literal(" x" + message.repeats()).formatted(Formatting.GRAY));
+            display.append(Component.literal(" x" + message.repeats()).withStyle(ChatFormatting.GRAY));
         }
         return display;
     }
@@ -141,11 +141,11 @@ final class SecondaryChatTextLayout {
         return new Layout(tab, List.of(), 0, maxVisible, 0, 0, x, y, contentBottom, lineHeight, scaledW);
     }
 
-    private static Style styleAt(TextRenderer textRenderer, OrderedText line, int localX) {
+    private static Style styleAt(Font textRenderer, FormattedCharSequence line, int localX) {
         final int[] cursorX = {0};
         final Style[] result = {Style.EMPTY};
         line.accept((index, style, codePoint) -> {
-            int charWidth = Math.max(1, textRenderer.getWidth(OrderedText.styled(codePoint, style)));
+            int charWidth = Math.max(1, textRenderer.width(FormattedCharSequence.codepoint(codePoint, style)));
             if (localX >= cursorX[0] && localX < cursorX[0] + charWidth) {
                 result[0] = style;
                 return false;
@@ -157,7 +157,7 @@ final class SecondaryChatTextLayout {
     }
 
     private record WrappedLine(SecondaryChatManager.ChatMessage message,
-                               OrderedText text,
+                               FormattedCharSequence text,
                                int width) {
     }
 }

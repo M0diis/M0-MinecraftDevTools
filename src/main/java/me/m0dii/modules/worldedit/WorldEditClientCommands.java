@@ -6,21 +6,21 @@ import com.mojang.brigadier.suggestion.Suggestions;
 import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 import com.mojang.brigadier.tree.RootCommandNode;
 import me.m0dii.modules.debugdraw.DebugDrawManager;
-import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
+import net.fabricmc.fabric.api.client.command.v2.ClientCommands;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.network.ClientPlayerEntity;
-import net.minecraft.command.argument.BlockArgumentParser;
-import net.minecraft.item.ItemStack;
-import net.minecraft.network.packet.c2s.play.CreativeInventoryActionC2SPacket;
-import net.minecraft.registry.Registries;
-import net.minecraft.registry.RegistryKeys;
-import net.minecraft.text.Text;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Direction;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.commands.arguments.blocks.BlockStateParser;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.protocol.game.ServerboundSetCreativeModeSlotPacket;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.item.ItemStack;
 
 import java.util.List;
 import java.util.Locale;
@@ -41,283 +41,283 @@ public final class WorldEditClientCommands {
 
     public static void register() {
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> {
-            dispatcher.register(ClientCommandManager.literal("/expand")
+            dispatcher.register(ClientCommands.literal("/expand")
                     .requires(WorldEditClientCommands::canUseLocalSelectionCommands)
                     .executes(WorldEditClientCommands::showExpandUsage)
-                    .then(ClientCommandManager.argument("args", StringArgumentType.greedyString())
+                    .then(ClientCommands.argument("args", StringArgumentType.greedyString())
                             .suggests(WorldEditClientCommands::suggestExpandArgs)
                             .executes(ctx -> handleExpand(ctx, StringArgumentType.getString(ctx, "args")))));
 
-            dispatcher.register(ClientCommandManager.literal("/contract")
+            dispatcher.register(ClientCommands.literal("/contract")
                     .requires(WorldEditClientCommands::canUseLocalSelectionCommands)
                     .executes(WorldEditClientCommands::showContractUsage)
-                    .then(ClientCommandManager.argument("args", StringArgumentType.greedyString())
+                    .then(ClientCommands.argument("args", StringArgumentType.greedyString())
                             .suggests(WorldEditClientCommands::suggestContractArgs)
                             .executes(ctx -> handleContract(ctx, StringArgumentType.getString(ctx, "args")))));
 
-            dispatcher.register(ClientCommandManager.literal("/shift")
+            dispatcher.register(ClientCommands.literal("/shift")
                     .requires(WorldEditClientCommands::canUseLocalSelectionCommands)
                     .executes(WorldEditClientCommands::showShiftUsage)
-                    .then(ClientCommandManager.argument("args", StringArgumentType.greedyString())
+                    .then(ClientCommands.argument("args", StringArgumentType.greedyString())
                             .suggests(WorldEditClientCommands::suggestShiftArgs)
                             .executes(ctx -> handleShift(ctx, StringArgumentType.getString(ctx, "args")))));
 
-            dispatcher.register(ClientCommandManager.literal("/outset")
+            dispatcher.register(ClientCommands.literal("/outset")
                     .requires(WorldEditClientCommands::canUseLocalSelectionCommands)
                     .executes(WorldEditClientCommands::showOutsetUsage)
-                    .then(ClientCommandManager.argument("args", StringArgumentType.greedyString())
+                    .then(ClientCommands.argument("args", StringArgumentType.greedyString())
                             .suggests(WorldEditClientCommands::suggestOutsetArgs)
                             .executes(ctx -> handleOutset(ctx, StringArgumentType.getString(ctx, "args")))));
 
-            dispatcher.register(ClientCommandManager.literal("/inset")
+            dispatcher.register(ClientCommands.literal("/inset")
                     .requires(WorldEditClientCommands::canUseLocalSelectionCommands)
                     .executes(WorldEditClientCommands::showInsetUsage)
-                    .then(ClientCommandManager.argument("args", StringArgumentType.greedyString())
+                    .then(ClientCommands.argument("args", StringArgumentType.greedyString())
                             .suggests(WorldEditClientCommands::suggestInsetArgs)
                             .executes(ctx -> handleInset(ctx, StringArgumentType.getString(ctx, "args")))));
 
-            dispatcher.register(ClientCommandManager.literal("/set")
+            dispatcher.register(ClientCommands.literal("/set")
                     .requires(WorldEditClientCommands::canUseEditCommands)
                     .executes(WorldEditClientCommands::showSetUsage)
-                    .then(ClientCommandManager.argument("args", StringArgumentType.greedyString())
+                    .then(ClientCommands.argument("args", StringArgumentType.greedyString())
                             .suggests(WorldEditClientCommands::suggestSetArgs)
                             .executes(ctx -> handleSet(ctx, StringArgumentType.getString(ctx, "args")))));
 
-            dispatcher.register(ClientCommandManager.literal("/replace")
+            dispatcher.register(ClientCommands.literal("/replace")
                     .requires(WorldEditClientCommands::canUseEditCommands)
                     .executes(WorldEditClientCommands::showReplaceUsage)
-                    .then(ClientCommandManager.argument("args", StringArgumentType.greedyString())
+                    .then(ClientCommands.argument("args", StringArgumentType.greedyString())
                             .suggests(WorldEditClientCommands::suggestReplaceArgs)
                             .executes(ctx -> handleReplace(ctx, StringArgumentType.getString(ctx, "args")))));
 
-            dispatcher.register(ClientCommandManager.literal("/walls")
+            dispatcher.register(ClientCommands.literal("/walls")
                     .requires(WorldEditClientCommands::canUseEditCommands)
                     .executes(WorldEditClientCommands::showWallsUsage)
-                    .then(ClientCommandManager.argument("args", StringArgumentType.greedyString())
+                    .then(ClientCommands.argument("args", StringArgumentType.greedyString())
                             .suggests(WorldEditClientCommands::suggestSetArgs)
                             .executes(ctx -> handleSurfaceFill(ctx, StringArgumentType.getString(ctx, "args"),
                                     "//walls", WorldEditSyncPayloads.Operation.WALLS))));
 
-            dispatcher.register(ClientCommandManager.literal("/floor")
+            dispatcher.register(ClientCommands.literal("/floor")
                     .requires(WorldEditClientCommands::canUseEditCommands)
                     .executes(WorldEditClientCommands::showFloorUsage)
-                    .then(ClientCommandManager.argument("args", StringArgumentType.greedyString())
+                    .then(ClientCommands.argument("args", StringArgumentType.greedyString())
                             .suggests(WorldEditClientCommands::suggestSetArgs)
                             .executes(ctx -> handleSurfaceFill(ctx, StringArgumentType.getString(ctx, "args"),
                                     "//floor", WorldEditSyncPayloads.Operation.FLOOR))));
 
-            dispatcher.register(ClientCommandManager.literal("/roof")
+            dispatcher.register(ClientCommands.literal("/roof")
                     .requires(WorldEditClientCommands::canUseEditCommands)
                     .executes(WorldEditClientCommands::showRoofUsage)
-                    .then(ClientCommandManager.argument("args", StringArgumentType.greedyString())
+                    .then(ClientCommands.argument("args", StringArgumentType.greedyString())
                             .suggests(WorldEditClientCommands::suggestSetArgs)
                             .executes(ctx -> handleSurfaceFill(ctx, StringArgumentType.getString(ctx, "args"),
                                     "//roof", WorldEditSyncPayloads.Operation.ROOF))));
 
-            dispatcher.register(ClientCommandManager.literal("/enclose")
+            dispatcher.register(ClientCommands.literal("/enclose")
                     .requires(WorldEditClientCommands::canUseEditCommands)
                     .executes(WorldEditClientCommands::showEncloseUsage)
-                    .then(ClientCommandManager.argument("args", StringArgumentType.greedyString())
+                    .then(ClientCommands.argument("args", StringArgumentType.greedyString())
                             .suggests(WorldEditClientCommands::suggestSetArgs)
                             .executes(ctx -> handleSurfaceFill(ctx, StringArgumentType.getString(ctx, "args"),
                                     "//enclose", WorldEditSyncPayloads.Operation.ENCLOSE))));
 
-            dispatcher.register(ClientCommandManager.literal("/faces")
+            dispatcher.register(ClientCommands.literal("/faces")
                     .requires(WorldEditClientCommands::canUseEditCommands)
                     .executes(WorldEditClientCommands::showEncloseUsage)
-                    .then(ClientCommandManager.argument("args", StringArgumentType.greedyString())
+                    .then(ClientCommands.argument("args", StringArgumentType.greedyString())
                             .suggests(WorldEditClientCommands::suggestSetArgs)
                             .executes(ctx -> handleSurfaceFill(ctx, StringArgumentType.getString(ctx, "args"),
                                     "//faces", WorldEditSyncPayloads.Operation.ENCLOSE))));
 
-            dispatcher.register(ClientCommandManager.literal("/outline")
+            dispatcher.register(ClientCommands.literal("/outline")
                     .requires(WorldEditClientCommands::canUseEditCommands)
                     .executes(WorldEditClientCommands::showEncloseUsage)
-                    .then(ClientCommandManager.argument("args", StringArgumentType.greedyString())
+                    .then(ClientCommands.argument("args", StringArgumentType.greedyString())
                             .suggests(WorldEditClientCommands::suggestSetArgs)
                             .executes(ctx -> handleSurfaceFill(ctx, StringArgumentType.getString(ctx, "args"),
                                     "//outline", WorldEditSyncPayloads.Operation.ENCLOSE))));
 
-            dispatcher.register(ClientCommandManager.literal("/stack")
+            dispatcher.register(ClientCommands.literal("/stack")
                     .requires(WorldEditClientCommands::canUseEditCommands)
                     .executes(WorldEditClientCommands::showStackUsage)
-                    .then(ClientCommandManager.argument("args", StringArgumentType.greedyString())
+                    .then(ClientCommands.argument("args", StringArgumentType.greedyString())
                             .suggests(WorldEditClientCommands::suggestStackArgs)
                             .executes(ctx -> handleStack(ctx, StringArgumentType.getString(ctx, "args")))));
 
-            dispatcher.register(ClientCommandManager.literal("/move")
+            dispatcher.register(ClientCommands.literal("/move")
                     .requires(WorldEditClientCommands::canUseEditCommands)
                     .executes(WorldEditClientCommands::showMoveUsage)
-                    .then(ClientCommandManager.argument("args", StringArgumentType.greedyString())
+                    .then(ClientCommands.argument("args", StringArgumentType.greedyString())
                             .suggests(WorldEditClientCommands::suggestMoveArgs)
                             .executes(ctx -> handleMove(ctx, StringArgumentType.getString(ctx, "args")))));
 
-            dispatcher.register(ClientCommandManager.literal("/undo")
+            dispatcher.register(ClientCommands.literal("/undo")
                     .requires(WorldEditClientCommands::canUseEditCommands)
                     .executes(WorldEditClientCommands::handleUndo));
 
-            dispatcher.register(ClientCommandManager.literal("/redo")
+            dispatcher.register(ClientCommands.literal("/redo")
                     .requires(WorldEditClientCommands::canUseEditCommands)
                     .executes(WorldEditClientCommands::handleRedo));
 
-            dispatcher.register(ClientCommandManager.literal("/cyl")
+            dispatcher.register(ClientCommands.literal("/cyl")
                     .requires(WorldEditClientCommands::canUseEditCommands)
                     .executes(WorldEditClientCommands::showCylUsage)
-                    .then(ClientCommandManager.argument("args", StringArgumentType.greedyString())
+                    .then(ClientCommands.argument("args", StringArgumentType.greedyString())
                             .suggests(WorldEditClientCommands::suggestCylArgs)
                             .executes(ctx -> handleCylinder(ctx, StringArgumentType.getString(ctx, "args"), false))));
 
-            dispatcher.register(ClientCommandManager.literal("/hcyl")
+            dispatcher.register(ClientCommands.literal("/hcyl")
                     .requires(WorldEditClientCommands::canUseEditCommands)
                     .executes(WorldEditClientCommands::showHCylUsage)
-                    .then(ClientCommandManager.argument("args", StringArgumentType.greedyString())
+                    .then(ClientCommands.argument("args", StringArgumentType.greedyString())
                             .suggests(WorldEditClientCommands::suggestCylArgs)
                             .executes(ctx -> handleCylinder(ctx, StringArgumentType.getString(ctx, "args"), true))));
 
-            dispatcher.register(ClientCommandManager.literal("/sphere")
+            dispatcher.register(ClientCommands.literal("/sphere")
                     .requires(WorldEditClientCommands::canUseEditCommands)
                     .executes(WorldEditClientCommands::showSphereUsage)
-                    .then(ClientCommandManager.argument("args", StringArgumentType.greedyString())
+                    .then(ClientCommands.argument("args", StringArgumentType.greedyString())
                             .suggests(WorldEditClientCommands::suggestSphereArgs)
                             .executes(ctx -> handleSphere(ctx, StringArgumentType.getString(ctx, "args"), false))));
 
-            dispatcher.register(ClientCommandManager.literal("/hsphere")
+            dispatcher.register(ClientCommands.literal("/hsphere")
                     .requires(WorldEditClientCommands::canUseEditCommands)
                     .executes(WorldEditClientCommands::showHSphereUsage)
-                    .then(ClientCommandManager.argument("args", StringArgumentType.greedyString())
+                    .then(ClientCommands.argument("args", StringArgumentType.greedyString())
                             .suggests(WorldEditClientCommands::suggestSphereArgs)
                             .executes(ctx -> handleSphere(ctx, StringArgumentType.getString(ctx, "args"), true))));
 
-            dispatcher.register(ClientCommandManager.literal("/wand")
+            dispatcher.register(ClientCommands.literal("/wand")
                     .requires(WorldEditClientCommands::canUseLocalSelectionCommands)
                     .executes(ctx -> handleWand(ctx, "default"))
-                    .then(ClientCommandManager.argument("args", StringArgumentType.greedyString())
+                    .then(ClientCommands.argument("args", StringArgumentType.greedyString())
                             .suggests(WorldEditClientCommands::suggestWandArgs)
                             .executes(ctx -> handleWand(ctx, StringArgumentType.getString(ctx, "args")))));
 
-            dispatcher.register(ClientCommandManager.literal("/pos1")
+            dispatcher.register(ClientCommands.literal("/pos1")
                     .requires(WorldEditClientCommands::canUseLocalSelectionCommands)
                     .executes(ctx -> handlePos(ctx, false, "look"))
-                    .then(ClientCommandManager.argument("args", StringArgumentType.greedyString())
+                    .then(ClientCommands.argument("args", StringArgumentType.greedyString())
                             .suggests(WorldEditClientCommands::suggestPosArgs)
                             .executes(ctx -> handlePos(ctx, false, StringArgumentType.getString(ctx, "args")))));
 
-            dispatcher.register(ClientCommandManager.literal("/pos2")
+            dispatcher.register(ClientCommands.literal("/pos2")
                     .requires(WorldEditClientCommands::canUseLocalSelectionCommands)
                     .executes(ctx -> handlePos(ctx, true, "look"))
-                    .then(ClientCommandManager.argument("args", StringArgumentType.greedyString())
+                    .then(ClientCommands.argument("args", StringArgumentType.greedyString())
                             .suggests(WorldEditClientCommands::suggestPosArgs)
                             .executes(ctx -> handlePos(ctx, true, StringArgumentType.getString(ctx, "args")))));
 
-            dispatcher.register(ClientCommandManager.literal("/desel")
+            dispatcher.register(ClientCommands.literal("/desel")
                     .requires(WorldEditClientCommands::canUseLocalSelectionCommands)
                     .executes(WorldEditClientCommands::clearSelection));
 
-            dispatcher.register(ClientCommandManager.literal("/deselect")
+            dispatcher.register(ClientCommands.literal("/deselect")
                     .requires(WorldEditClientCommands::canUseLocalSelectionCommands)
                     .executes(WorldEditClientCommands::clearSelection));
 
-            dispatcher.register(ClientCommandManager.literal("/size")
+            dispatcher.register(ClientCommands.literal("/size")
                     .requires(WorldEditClientCommands::canUseLocalSelectionCommands)
                     .executes(WorldEditClientCommands::showSelectionSize));
 
-            dispatcher.register(ClientCommandManager.literal("/sel")
+            dispatcher.register(ClientCommands.literal("/sel")
                     .requires(WorldEditClientCommands::canUseLocalSelectionCommands)
                     .executes(WorldEditClientCommands::showSelectionSize));
         });
     }
 
     private static int showSetUsage(CommandContext<FabricClientCommandSource> context) {
-        context.getSource().sendFeedback(Text.literal("[WE] Usage: //set <block>"));
+        context.getSource().sendFeedback(Component.literal("[WE] Usage: //set <block>"));
         return 1;
     }
 
     private static int showExpandUsage(CommandContext<FabricClientCommandSource> context) {
-        context.getSource().sendFeedback(Text.literal("[WE] Usage: //expand <amount|vert> [reverseAmount] [direction]"));
-        context.getSource().sendFeedback(Text.literal("[WE] Directions: north south east west up down forward back left right"));
+        context.getSource().sendFeedback(Component.literal("[WE] Usage: //expand <amount|vert> [reverseAmount] [direction]"));
+        context.getSource().sendFeedback(Component.literal("[WE] Directions: north south east west up down forward back left right"));
         return 1;
     }
 
     private static int showContractUsage(CommandContext<FabricClientCommandSource> context) {
-        context.getSource().sendFeedback(Text.literal("[WE] Usage: //contract <amount> [reverseAmount] [direction]"));
-        context.getSource().sendFeedback(Text.literal("[WE] Directions: north south east west up down forward back left right"));
+        context.getSource().sendFeedback(Component.literal("[WE] Usage: //contract <amount> [reverseAmount] [direction]"));
+        context.getSource().sendFeedback(Component.literal("[WE] Directions: north south east west up down forward back left right"));
         return 1;
     }
 
     private static int showShiftUsage(CommandContext<FabricClientCommandSource> context) {
-        context.getSource().sendFeedback(Text.literal("[WE] Usage: //shift <amount> [direction]"));
-        context.getSource().sendFeedback(Text.literal("[WE] Directions: north south east west up down forward back left right"));
+        context.getSource().sendFeedback(Component.literal("[WE] Usage: //shift <amount> [direction]"));
+        context.getSource().sendFeedback(Component.literal("[WE] Directions: north south east west up down forward back left right"));
         return 1;
     }
 
     private static int showOutsetUsage(CommandContext<FabricClientCommandSource> context) {
-        context.getSource().sendFeedback(Text.literal("[WE] Usage: //outset <amount> [-h] [-v]"));
+        context.getSource().sendFeedback(Component.literal("[WE] Usage: //outset <amount> [-h] [-v]"));
         return 1;
     }
 
     private static int showInsetUsage(CommandContext<FabricClientCommandSource> context) {
-        context.getSource().sendFeedback(Text.literal("[WE] Usage: //inset <amount> [-h] [-v]"));
+        context.getSource().sendFeedback(Component.literal("[WE] Usage: //inset <amount> [-h] [-v]"));
         return 1;
     }
 
     private static int showReplaceUsage(CommandContext<FabricClientCommandSource> context) {
-        context.getSource().sendFeedback(Text.literal("[WE] Usage: //replace <from> <to>"));
+        context.getSource().sendFeedback(Component.literal("[WE] Usage: //replace <from> <to>"));
         return 1;
     }
 
     private static int showWallsUsage(CommandContext<FabricClientCommandSource> context) {
-        context.getSource().sendFeedback(Text.literal("[WE] Usage: //walls <block>"));
+        context.getSource().sendFeedback(Component.literal("[WE] Usage: //walls <block>"));
         return 1;
     }
 
     private static int showFloorUsage(CommandContext<FabricClientCommandSource> context) {
-        context.getSource().sendFeedback(Text.literal("[WE] Usage: //floor <block>"));
+        context.getSource().sendFeedback(Component.literal("[WE] Usage: //floor <block>"));
         return 1;
     }
 
     private static int showRoofUsage(CommandContext<FabricClientCommandSource> context) {
-        context.getSource().sendFeedback(Text.literal("[WE] Usage: //roof <block>"));
+        context.getSource().sendFeedback(Component.literal("[WE] Usage: //roof <block>"));
         return 1;
     }
 
     private static int showEncloseUsage(CommandContext<FabricClientCommandSource> context) {
-        context.getSource().sendFeedback(Text.literal("[WE] Usage: //enclose <block>"));
+        context.getSource().sendFeedback(Component.literal("[WE] Usage: //enclose <block>"));
         return 1;
     }
 
     private static int showStackUsage(CommandContext<FabricClientCommandSource> context) {
-        context.getSource().sendFeedback(Text.literal("[WE] Usage: //stack <count> [direction] [-a]"));
-        context.getSource().sendFeedback(Text.literal("[WE] Directions: north south east west up down forward back left right"));
+        context.getSource().sendFeedback(Component.literal("[WE] Usage: //stack <count> [direction] [-a]"));
+        context.getSource().sendFeedback(Component.literal("[WE] Directions: north south east west up down forward back left right"));
         return 1;
     }
 
     private static int showMoveUsage(CommandContext<FabricClientCommandSource> context) {
-        context.getSource().sendFeedback(Text.literal("[WE] Usage: //move <distance> [direction] [-a]"));
-        context.getSource().sendFeedback(Text.literal("[WE] Directions: north south east west up down forward back left right"));
+        context.getSource().sendFeedback(Component.literal("[WE] Usage: //move <distance> [direction] [-a]"));
+        context.getSource().sendFeedback(Component.literal("[WE] Directions: north south east west up down forward back left right"));
         return 1;
     }
 
     private static int showCylUsage(CommandContext<FabricClientCommandSource> context) {
-        context.getSource().sendFeedback(Text.literal("[WE] Usage: //cyl <block> <radius> [height]"));
-        context.getSource().sendFeedback(Text.literal("[WE]        //cyl <block> <radiusX> <radiusZ> <height>"));
+        context.getSource().sendFeedback(Component.literal("[WE] Usage: //cyl <block> <radius> [height]"));
+        context.getSource().sendFeedback(Component.literal("[WE]        //cyl <block> <radiusX> <radiusZ> <height>"));
         return 1;
     }
 
     private static int showHCylUsage(CommandContext<FabricClientCommandSource> context) {
-        context.getSource().sendFeedback(Text.literal("[WE] Usage: //hcyl <block> <radius> [height]"));
-        context.getSource().sendFeedback(Text.literal("[WE]        //hcyl <block> <radiusX> <radiusZ> <height>"));
+        context.getSource().sendFeedback(Component.literal("[WE] Usage: //hcyl <block> <radius> [height]"));
+        context.getSource().sendFeedback(Component.literal("[WE]        //hcyl <block> <radiusX> <radiusZ> <height>"));
         return 1;
     }
 
     private static int showSphereUsage(CommandContext<FabricClientCommandSource> context) {
-        context.getSource().sendFeedback(Text.literal("[WE] Usage: //sphere <block> <radius> [-r]"));
-        context.getSource().sendFeedback(Text.literal("[WE]        //sphere <block> <radiusX> <radiusY> <radiusZ> [-r]"));
+        context.getSource().sendFeedback(Component.literal("[WE] Usage: //sphere <block> <radius> [-r]"));
+        context.getSource().sendFeedback(Component.literal("[WE]        //sphere <block> <radiusX> <radiusY> <radiusZ> [-r]"));
         return 1;
     }
 
     private static int showHSphereUsage(CommandContext<FabricClientCommandSource> context) {
-        context.getSource().sendFeedback(Text.literal("[WE] Usage: //hsphere <block> <radius> [-r]"));
-        context.getSource().sendFeedback(Text.literal("[WE]        //hsphere <block> <radiusX> <radiusY> <radiusZ> [-r]"));
+        context.getSource().sendFeedback(Component.literal("[WE] Usage: //hsphere <block> <radius> [-r]"));
+        context.getSource().sendFeedback(Component.literal("[WE]        //hsphere <block> <radiusX> <radiusY> <radiusZ> [-r]"));
         return 1;
     }
 
@@ -337,13 +337,13 @@ public final class WorldEditClientCommands {
                 return showExpandUsage(context);
             }
 
-            MinecraftClient client = context.getSource().getClient();
-            if (client.world == null) {
+            Minecraft client = context.getSource().getClient();
+            if (client.level == null) {
                 return 0;
             }
             return applySelectionUpdate(context, "Expanded", selection.verticalColumn(
-                    client.world.getBottomY(),
-                    client.world.getTopYInclusive()
+                    client.level.getMinY(),
+                    client.level.getMaxY()
             ));
         }
 
@@ -352,7 +352,7 @@ public final class WorldEditClientCommands {
             return showExpandUsage(context);
         }
         if (amount < 0) {
-            context.getSource().sendFeedback(Text.literal("[WE] Expand amount must be >= 0."));
+            context.getSource().sendFeedback(Component.literal("[WE] Expand amount must be >= 0."));
             return 0;
         }
 
@@ -362,7 +362,7 @@ public final class WorldEditClientCommands {
             Integer parsedReverseAmount = tryParseInt(tokens[1]);
             if (parsedReverseAmount != null) {
                 if (parsedReverseAmount < 0) {
-                    context.getSource().sendFeedback(Text.literal("[WE] Reverse amount must be >= 0."));
+                    context.getSource().sendFeedback(Component.literal("[WE] Reverse amount must be >= 0."));
                     return 0;
                 }
                 reverseAmount = parsedReverseAmount;
@@ -382,7 +382,7 @@ public final class WorldEditClientCommands {
         try {
             return applySelectionUpdate(context, "Expanded", selection.expand(direction, amount, reverseAmount));
         } catch (IllegalArgumentException e) {
-            context.getSource().sendFeedback(Text.literal("[WE] " + e.getMessage()));
+            context.getSource().sendFeedback(Component.literal("[WE] " + e.getMessage()));
             return 0;
         }
     }
@@ -398,7 +398,7 @@ public final class WorldEditClientCommands {
             return showContractUsage(context);
         }
         if (amount < 0) {
-            context.getSource().sendFeedback(Text.literal("[WE] Contract amount must be >= 0."));
+            context.getSource().sendFeedback(Component.literal("[WE] Contract amount must be >= 0."));
             return 0;
         }
 
@@ -408,7 +408,7 @@ public final class WorldEditClientCommands {
             Integer parsedReverseAmount = tryParseInt(tokens[1]);
             if (parsedReverseAmount != null) {
                 if (parsedReverseAmount < 0) {
-                    context.getSource().sendFeedback(Text.literal("[WE] Reverse amount must be >= 0."));
+                    context.getSource().sendFeedback(Component.literal("[WE] Reverse amount must be >= 0."));
                     return 0;
                 }
                 reverseAmount = parsedReverseAmount;
@@ -433,7 +433,7 @@ public final class WorldEditClientCommands {
         try {
             return applySelectionUpdate(context, "Contracted", selection.contract(direction, amount, reverseAmount));
         } catch (IllegalArgumentException e) {
-            context.getSource().sendFeedback(Text.literal("[WE] " + e.getMessage()));
+            context.getSource().sendFeedback(Component.literal("[WE] " + e.getMessage()));
             return 0;
         }
     }
@@ -476,7 +476,7 @@ public final class WorldEditClientCommands {
             return showOutsetUsage(context);
         }
         if (amount < 0) {
-            context.getSource().sendFeedback(Text.literal("[WE] Outset amount must be >= 0."));
+            context.getSource().sendFeedback(Component.literal("[WE] Outset amount must be >= 0."));
             return 0;
         }
 
@@ -493,7 +493,7 @@ public final class WorldEditClientCommands {
         try {
             return applySelectionUpdate(context, "Outset", selection.outset(amount, options.onlyHorizontal(), options.onlyVertical()));
         } catch (IllegalArgumentException e) {
-            context.getSource().sendFeedback(Text.literal("[WE] " + e.getMessage()));
+            context.getSource().sendFeedback(Component.literal("[WE] " + e.getMessage()));
             return 0;
         }
     }
@@ -509,7 +509,7 @@ public final class WorldEditClientCommands {
             return showInsetUsage(context);
         }
         if (amount < 0) {
-            context.getSource().sendFeedback(Text.literal("[WE] Inset amount must be >= 0."));
+            context.getSource().sendFeedback(Component.literal("[WE] Inset amount must be >= 0."));
             return 0;
         }
 
@@ -526,7 +526,7 @@ public final class WorldEditClientCommands {
         try {
             return applySelectionUpdate(context, "Inset", selection.inset(amount, options.onlyHorizontal(), options.onlyVertical()));
         } catch (IllegalArgumentException e) {
-            context.getSource().sendFeedback(Text.literal("[WE] " + e.getMessage()));
+            context.getSource().sendFeedback(Component.literal("[WE] " + e.getMessage()));
             return 0;
         }
     }
@@ -636,11 +636,11 @@ public final class WorldEditClientCommands {
             return showStackUsage(context);
         }
         if (count < 1) {
-            context.getSource().sendFeedback(Text.literal("[WE] Count must be >= 1."));
+            context.getSource().sendFeedback(Component.literal("[WE] Count must be >= 1."));
             return 0;
         }
 
-        MinecraftClient client = context.getSource().getClient();
+        Minecraft client = context.getSource().getClient();
         int optionStart = 1;
         String directionToken = "forward";
         if (tokens.length >= 2 && !isMaskedFlag(tokens[1])) {
@@ -649,14 +649,14 @@ public final class WorldEditClientCommands {
         }
         Direction direction = resolveDirection(client.player, directionToken);
         if (direction == null) {
-            context.getSource().sendFeedback(Text.literal("[WE] Unknown direction."));
+            context.getSource().sendFeedback(Component.literal("[WE] Unknown direction."));
             return 0;
         }
 
         boolean masked = hasMaskedFlag(tokens, optionStart);
         String invalidStackOption = firstNonMaskedFlag(tokens, optionStart);
         if (invalidStackOption != null) {
-            context.getSource().sendFeedback(Text.literal("[WE] Unknown stack option: " + invalidStackOption));
+            context.getSource().sendFeedback(Component.literal("[WE] Unknown stack option: " + invalidStackOption));
             return 0;
         }
 
@@ -673,7 +673,7 @@ public final class WorldEditClientCommands {
                 "",
                 "",
                 count,
-                direction.asString(),
+                direction.getSerializedName(),
                 masked
         ));
     }
@@ -691,11 +691,11 @@ public final class WorldEditClientCommands {
             return showMoveUsage(context);
         }
         if (distance == 0) {
-            context.getSource().sendFeedback(Text.literal("[WE] Distance must not be 0."));
+            context.getSource().sendFeedback(Component.literal("[WE] Distance must not be 0."));
             return 0;
         }
 
-        MinecraftClient client = context.getSource().getClient();
+        Minecraft client = context.getSource().getClient();
         int optionStart = 1;
         String directionToken = "forward";
         if (tokens.length >= 2 && !isMaskedFlag(tokens[1])) {
@@ -704,14 +704,14 @@ public final class WorldEditClientCommands {
         }
         Direction direction = resolveDirection(client.player, directionToken);
         if (direction == null) {
-            context.getSource().sendFeedback(Text.literal("[WE] Unknown direction."));
+            context.getSource().sendFeedback(Component.literal("[WE] Unknown direction."));
             return 0;
         }
 
         boolean masked = hasMaskedFlag(tokens, optionStart);
         String invalidMoveOption = firstNonMaskedFlag(tokens, optionStart);
         if (invalidMoveOption != null) {
-            context.getSource().sendFeedback(Text.literal("[WE] Unknown move option: " + invalidMoveOption));
+            context.getSource().sendFeedback(Component.literal("[WE] Unknown move option: " + invalidMoveOption));
             return 0;
         }
 
@@ -728,21 +728,21 @@ public final class WorldEditClientCommands {
                 "",
                 "",
                 distance,
-                direction.asString(),
+                direction.getSerializedName(),
                 masked
         ));
     }
 
     private static int handleUndo(CommandContext<FabricClientCommandSource> context) {
         if (!supportsServerBackedWorldEdit(context.getSource().getClient())) {
-            context.getSource().sendFeedback(Text.literal("[WE] Server-side WorldEdit support is not available on this server."));
+            context.getSource().sendFeedback(Component.literal("[WE] Server-side WorldEdit support is not available on this server."));
             return 0;
         }
 
         ClientPlayNetworking.send(new WorldEditSyncPayloads.EditRequestPayload(
                 WorldEditSyncPayloads.Operation.UNDO,
-                BlockPos.ORIGIN,
-                BlockPos.ORIGIN,
+                BlockPos.ZERO,
+                BlockPos.ZERO,
                 WorldEditRegionShape.BOX.name(),
                 "",
                 "",
@@ -755,14 +755,14 @@ public final class WorldEditClientCommands {
 
     private static int handleRedo(CommandContext<FabricClientCommandSource> context) {
         if (!supportsServerBackedWorldEdit(context.getSource().getClient())) {
-            context.getSource().sendFeedback(Text.literal("[WE] Server-side WorldEdit support is not available on this server."));
+            context.getSource().sendFeedback(Component.literal("[WE] Server-side WorldEdit support is not available on this server."));
             return 0;
         }
 
         ClientPlayNetworking.send(new WorldEditSyncPayloads.EditRequestPayload(
                 WorldEditSyncPayloads.Operation.REDO,
-                BlockPos.ORIGIN,
-                BlockPos.ORIGIN,
+                BlockPos.ZERO,
+                BlockPos.ZERO,
                 WorldEditRegionShape.BOX.name(),
                 "",
                 "",
@@ -863,20 +863,20 @@ public final class WorldEditClientCommands {
     }
 
     private static int handleWand(CommandContext<FabricClientCommandSource> context, String rawArgs) {
-        MinecraftClient client = context.getSource().getClient();
+        Minecraft client = context.getSource().getClient();
         String token = rawArgs == null ? "" : rawArgs.trim();
         String wandValue = token.isEmpty() ? "default" : token;
 
         if ("hand".equalsIgnoreCase(wandValue)) {
-            if (client.player == null || client.player.getMainHandStack().isEmpty()) {
-                context.getSource().sendFeedback(Text.literal("[WE] Hold an item in your main hand first."));
+            if (client.player == null || client.player.getMainHandItem().isEmpty()) {
+                context.getSource().sendFeedback(Component.literal("[WE] Hold an item in your main hand first."));
                 return 0;
             }
-            wandValue = Registries.ITEM.getId(client.player.getMainHandStack().getItem()).toString();
+            wandValue = BuiltInRegistries.ITEM.getKey(client.player.getMainHandItem().getItem()).toString();
         }
 
         if (!DebugDrawManager.setSelectionWandItem(wandValue)) {
-            context.getSource().sendFeedback(Text.literal("[WE] Invalid wand item: " + rawArgs));
+            context.getSource().sendFeedback(Component.literal("[WE] Invalid wand item: " + rawArgs));
             return 0;
         }
 
@@ -884,17 +884,17 @@ public final class WorldEditClientCommands {
         DebugDrawManager.setSelectionUseAnyClick(false);
 
         boolean given = giveSelectionWand(client);
-        context.getSource().sendFeedback(Text.literal("[WE] Selection wand enabled with " + DebugDrawManager.getSelectionWandItemId() + "."));
+        context.getSource().sendFeedback(Component.literal("[WE] Selection wand enabled with " + DebugDrawManager.getSelectionWandItemId() + "."));
         if (given) {
-            context.getSource().sendFeedback(Text.literal("[WE] Placed the wand into your selected hotbar slot."));
+            context.getSource().sendFeedback(Component.literal("[WE] Placed the wand into your selected hotbar slot."));
         } else {
-            context.getSource().sendFeedback(Text.literal("[WE] Hold " + DebugDrawManager.getSelectionWandItemId() + " to use the wand mode."));
+            context.getSource().sendFeedback(Component.literal("[WE] Hold " + DebugDrawManager.getSelectionWandItemId() + " to use the wand mode."));
         }
         return 1;
     }
 
     private static int handlePos(CommandContext<FabricClientCommandSource> context, boolean pos2, String rawArgs) {
-        MinecraftClient client = context.getSource().getClient();
+        Minecraft client = context.getSource().getClient();
         if (client.player == null) {
             return 0;
         }
@@ -902,21 +902,21 @@ public final class WorldEditClientCommands {
         String[] tokens = tokenize(rawArgs);
         if (tokens.length == 0 || "look".equalsIgnoreCase(tokens[0])) {
             boolean ok = DebugDrawManager.pickSelectionPos(pos2);
-            context.getSource().sendFeedback(Text.literal(ok
+            context.getSource().sendFeedback(Component.literal(ok
                     ? "[WE] Set " + (pos2 ? "pos2" : "pos1") + " from crosshair."
                     : "[WE] No block under crosshair."));
             return ok ? 1 : 0;
         }
 
         if ("here".equalsIgnoreCase(tokens[0])) {
-            BlockPos pos = client.player.getBlockPos();
+            BlockPos pos = client.player.blockPosition();
             DebugDrawManager.setSelectionPos(pos2, pos);
-            context.getSource().sendFeedback(Text.literal("[WE] Set " + (pos2 ? "pos2" : "pos1") + " to " + pos.toShortString() + "."));
+            context.getSource().sendFeedback(Component.literal("[WE] Set " + (pos2 ? "pos2" : "pos1") + " to " + pos.toShortString() + "."));
             return 1;
         }
 
         if (tokens.length < 3) {
-            context.getSource().sendFeedback(Text.literal("[WE] Usage: //" + (pos2 ? "pos2" : "pos1") + " [look|here|<x> <y> <z>]"));
+            context.getSource().sendFeedback(Component.literal("[WE] Usage: //" + (pos2 ? "pos2" : "pos1") + " [look|here|<x> <y> <z>]"));
             return 0;
         }
 
@@ -927,28 +927,28 @@ public final class WorldEditClientCommands {
                     (int) Math.floor(parseCoord(tokens[2], client.player.getZ()))
             );
             DebugDrawManager.setSelectionPos(pos2, pos);
-            context.getSource().sendFeedback(Text.literal("[WE] Set " + (pos2 ? "pos2" : "pos1") + " to " + pos.toShortString() + "."));
+            context.getSource().sendFeedback(Component.literal("[WE] Set " + (pos2 ? "pos2" : "pos1") + " to " + pos.toShortString() + "."));
             return 1;
         } catch (RuntimeException e) {
-            context.getSource().sendFeedback(Text.literal("[WE] Invalid coordinates: " + e.getMessage()));
+            context.getSource().sendFeedback(Component.literal("[WE] Invalid coordinates: " + e.getMessage()));
             return 0;
         }
     }
 
     private static int clearSelection(CommandContext<FabricClientCommandSource> context) {
         DebugDrawManager.clearSelectionPositions();
-        context.getSource().sendFeedback(Text.literal("[WE] Selection cleared."));
+        context.getSource().sendFeedback(Component.literal("[WE] Selection cleared."));
         return 1;
     }
 
     private static int showSelectionSize(CommandContext<FabricClientCommandSource> context) {
         WorldEditSelection selection = WorldEditSelection.fromDebugDrawSelection();
         if (selection == null) {
-            context.getSource().sendFeedback(Text.literal("[WE] Selection: " + DebugDrawManager.selectionStatus()));
+            context.getSource().sendFeedback(Component.literal("[WE] Selection: " + DebugDrawManager.selectionStatus()));
             return 1;
         }
 
-        context.getSource().sendFeedback(Text.literal("[WE] Selection: " + DebugDrawManager.selectionStatus()));
+        context.getSource().sendFeedback(Component.literal("[WE] Selection: " + DebugDrawManager.selectionStatus()));
         sendSelectionSize(context.getSource(), selection);
         return 1;
     }
@@ -956,7 +956,7 @@ public final class WorldEditClientCommands {
     private static WorldEditSelection requireSelection(CommandContext<FabricClientCommandSource> context) {
         WorldEditSelection selection = WorldEditSelection.fromDebugDrawSelection();
         if (selection == null) {
-            context.getSource().sendFeedback(Text.literal("[WE] Set pos1 and pos2 first with //pos1 and //pos2 or /draw select."));
+            context.getSource().sendFeedback(Component.literal("[WE] Set pos1 and pos2 first with //pos1 and //pos2 or /draw select."));
             return null;
         }
         return selection;
@@ -967,7 +967,7 @@ public final class WorldEditClientCommands {
                                             WorldEditSelection selection) {
         DebugDrawManager.setSelectionPos(false, selection.min());
         DebugDrawManager.setSelectionPos(true, selection.max());
-        context.getSource().sendFeedback(Text.literal("[WE] " + action + " selection to "
+        context.getSource().sendFeedback(Component.literal("[WE] " + action + " selection to "
                 + selection.min().toShortString() + " -> " + selection.max().toShortString() + "."));
         sendSelectionSize(context.getSource(), selection);
         return 1;
@@ -977,14 +977,14 @@ public final class WorldEditClientCommands {
                                   String label,
                                   WorldEditSelection selection,
                                   WorldEditSyncPayloads.EditRequestPayload payload) {
-        MinecraftClient client = context.getSource().getClient();
+        Minecraft client = context.getSource().getClient();
         if (!supportsServerBackedWorldEdit(client)) {
-            context.getSource().sendFeedback(Text.literal("[WE] Server-side WorldEdit support is not available on this server."));
+            context.getSource().sendFeedback(Component.literal("[WE] Server-side WorldEdit support is not available on this server."));
             return 0;
         }
 
         ClientPlayNetworking.send(payload);
-        context.getSource().sendFeedback(Text.literal("[WE] Sent " + label + " for "
+        context.getSource().sendFeedback(Component.literal("[WE] Sent " + label + " for "
                 + selection.sizeX() + "x" + selection.sizeY() + "x" + selection.sizeZ()
                 + " (" + selection.volume() + " blocks)."));
         return 1;
@@ -993,14 +993,14 @@ public final class WorldEditClientCommands {
     private static int submitPlacementEdit(CommandContext<FabricClientCommandSource> context,
                                            String label,
                                            WorldEditSyncPayloads.EditRequestPayload payload) {
-        MinecraftClient client = context.getSource().getClient();
+        Minecraft client = context.getSource().getClient();
         if (!supportsServerBackedWorldEdit(client)) {
-            context.getSource().sendFeedback(Text.literal("[WE] Server-side WorldEdit support is not available on this server."));
+            context.getSource().sendFeedback(Component.literal("[WE] Server-side WorldEdit support is not available on this server."));
             return 0;
         }
 
         ClientPlayNetworking.send(payload);
-        context.getSource().sendFeedback(Text.literal("[WE] Sent " + label + " at " + payload.min().toShortString() + "."));
+        context.getSource().sendFeedback(Component.literal("[WE] Sent " + label + " at " + payload.min().toShortString() + "."));
         return 1;
     }
 
@@ -1145,7 +1145,7 @@ public final class WorldEditClientCommands {
         if ("default".startsWith(prefix)) {
             tokenBuilder.suggest("default");
         }
-        for (Identifier id : Registries.ITEM.getIds()) {
+        for (Identifier id : BuiltInRegistries.ITEM.keySet()) {
             String full = id.toString();
             String path = id.getPath();
             String normalizedFull = full.toLowerCase(Locale.ROOT);
@@ -1175,12 +1175,12 @@ public final class WorldEditClientCommands {
     }
 
     private static CompletableFuture<Suggestions> suggestBlockArgument(SuggestionsBuilder builder) {
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (client.world == null) {
+        Minecraft client = Minecraft.getInstance();
+        if (client.level == null) {
             return builder.buildFuture();
         }
-        return BlockArgumentParser.getSuggestions(
-                client.world.getRegistryManager().getOrThrow(RegistryKeys.BLOCK),
+        return BlockStateParser.fillSuggestions(
+                client.level.registryAccess().lookupOrThrow(Registries.BLOCK),
                 tokenBuilder(builder),
                 false,
                 true
@@ -1198,7 +1198,7 @@ public final class WorldEditClientCommands {
     }
 
     private static void sendSelectionSize(FabricClientCommandSource source, WorldEditSelection selection) {
-        source.sendFeedback(Text.literal("[WE] Size: " + selection.sizeX() + " x " + selection.sizeY() + " x " + selection.sizeZ()
+        source.sendFeedback(Component.literal("[WE] Size: " + selection.sizeX() + " x " + selection.sizeY() + " x " + selection.sizeZ()
                 + " (" + selection.volume() + " blocks)"));
     }
 
@@ -1211,17 +1211,17 @@ public final class WorldEditClientCommands {
         };
     }
 
-    private static BlockPos resolvePlacementAnchor(MinecraftClient client) {
+    private static BlockPos resolvePlacementAnchor(Minecraft client) {
         if (client == null || client.player == null) {
             return null;
         }
-        if (client.crosshairTarget instanceof net.minecraft.util.hit.BlockHitResult blockHit) {
+        if (client.hitResult instanceof net.minecraft.world.phys.BlockHitResult blockHit) {
             return blockHit.getBlockPos();
         }
-        return client.player.getBlockPos();
+        return client.player.blockPosition();
     }
 
-    private static Direction resolveDirection(ClientPlayerEntity player, String token) {
+    private static Direction resolveDirection(LocalPlayer player, String token) {
         if (player == null || token == null || token.isBlank()) {
             return null;
         }
@@ -1234,10 +1234,10 @@ public final class WorldEditClientCommands {
             case "west", "w" -> Direction.WEST;
             case "up", "u" -> Direction.UP;
             case "down", "d" -> Direction.DOWN;
-            case "forward", "f" -> player.getHorizontalFacing();
-            case "back", "backward", "b" -> player.getHorizontalFacing().getOpposite();
-            case "left", "l" -> rotateLeft(player.getHorizontalFacing());
-            case "right", "r" -> rotateRight(player.getHorizontalFacing());
+            case "forward", "f" -> player.getDirection();
+            case "back", "backward", "b" -> player.getDirection().getOpposite();
+            case "left", "l" -> rotateLeft(player.getDirection());
+            case "right", "r" -> rotateRight(player.getDirection());
             default -> null;
         };
     }
@@ -1354,7 +1354,7 @@ public final class WorldEditClientCommands {
     }
 
     private static Direction parseDirectionOrDefault(CommandContext<FabricClientCommandSource> context, String[] tokens, int tokenIndex) {
-        MinecraftClient client = context.getSource().getClient();
+        Minecraft client = context.getSource().getClient();
         if (client.player == null) {
             return null;
         }
@@ -1364,7 +1364,7 @@ public final class WorldEditClientCommands {
 
         Direction direction = resolveDirection(client.player, tokens[tokenIndex]);
         if (direction == null) {
-            context.getSource().sendFeedback(Text.literal("[WE] Unknown direction."));
+            context.getSource().sendFeedback(Component.literal("[WE] Unknown direction."));
         }
         return direction;
     }
@@ -1381,7 +1381,7 @@ public final class WorldEditClientCommands {
                 case "-h" -> onlyHorizontal = true;
                 case "-v" -> onlyVertical = true;
                 default -> {
-                    context.getSource().sendFeedback(Text.literal("[WE] Unknown " + label + " option: " + tokens[i]));
+                    context.getSource().sendFeedback(Component.literal("[WE] Unknown " + label + " option: " + tokens[i]));
                     return null;
                 }
             }
@@ -1421,22 +1421,22 @@ public final class WorldEditClientCommands {
         return isClientWorldEditActive(source.getClient());
     }
 
-    private static boolean isClientWorldEditActive(MinecraftClient client) {
+    private static boolean isClientWorldEditActive(Minecraft client) {
         return WorldEditModule.INSTANCE.isEnabled() && !serverHasNativeWorldEdit(client);
     }
 
-    private static boolean supportsServerBackedWorldEdit(MinecraftClient client) {
+    private static boolean supportsServerBackedWorldEdit(Minecraft client) {
         return client != null
-                && (client.isInSingleplayer()
-                || (client.getNetworkHandler() != null && ClientPlayNetworking.canSend(WorldEditSyncPayloads.EditRequestPayload.ID)));
+                && (client.isLocalServer()
+                || (client.getConnection() != null && ClientPlayNetworking.canSend(WorldEditSyncPayloads.EditRequestPayload.ID)));
     }
 
-    private static boolean serverHasNativeWorldEdit(MinecraftClient client) {
-        if (client == null || client.getNetworkHandler() == null || client.getNetworkHandler().getCommandDispatcher() == null) {
+    private static boolean serverHasNativeWorldEdit(Minecraft client) {
+        if (client == null || client.getConnection() == null || client.getConnection().getCommands() == null) {
             return false;
         }
 
-        return hasNativeWorldEditCommandSignature(client.getNetworkHandler().getCommandDispatcher().getRoot());
+        return hasNativeWorldEditCommandSignature(client.getConnection().getCommands().getRoot());
     }
 
     static boolean hasNativeWorldEditCommandSignature(RootCommandNode<?> root) {
@@ -1466,25 +1466,25 @@ public final class WorldEditClientCommands {
         return true;
     }
 
-    private static boolean giveSelectionWand(MinecraftClient client) {
-        if (client == null || client.player == null || client.getNetworkHandler() == null || !client.player.getAbilities().creativeMode) {
+    private static boolean giveSelectionWand(Minecraft client) {
+        if (client == null || client.player == null || client.getConnection() == null || !client.player.getAbilities().instabuild) {
             return false;
         }
 
         Identifier itemId = Identifier.tryParse(DebugDrawManager.getSelectionWandItemId());
-        if (itemId == null || !Registries.ITEM.containsId(itemId)) {
+        if (itemId == null || !BuiltInRegistries.ITEM.containsKey(itemId)) {
             return false;
         }
 
-        ItemStack stack = Registries.ITEM.get(itemId).getDefaultStack();
+        ItemStack stack = BuiltInRegistries.ITEM.getValue(itemId).getDefaultInstance();
         if (stack.isEmpty()) {
             return false;
         }
 
         int selectedSlot = client.player.getInventory().getSelectedSlot();
         int creativeSlot = selectedSlot + 36;
-        client.player.networkHandler.sendPacket(new CreativeInventoryActionC2SPacket(creativeSlot, stack));
-        client.player.getInventory().setStack(selectedSlot, stack);
+        client.player.connection.send(new ServerboundSetCreativeModeSlotPacket(creativeSlot, stack));
+        client.player.getInventory().setItem(selectedSlot, stack);
         return true;
     }
 

@@ -1,35 +1,34 @@
 package me.m0dii.utils;
 
-import net.minecraft.block.BlockState;
-import net.minecraft.block.entity.BlockEntity;
-import net.minecraft.nbt.NbtCompound;
-import net.minecraft.nbt.NbtElement;
-import net.minecraft.nbt.NbtString;
-import net.minecraft.registry.Registries;
-import net.minecraft.state.property.Property;
-import net.minecraft.storage.NbtWriteView;
-import net.minecraft.util.ErrorReporter;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.World;
-
-import java.lang.reflect.Method;
 import java.util.UUID;
+import java.util.function.Supplier;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.StringTag;
+import net.minecraft.nbt.Tag;
+import net.minecraft.util.ProblemReporter;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.Property;
+import net.minecraft.world.level.storage.TagValueOutput;
 
 public final class NbtExtractors {
     private NbtExtractors() {
     }
 
-    public static NbtCompound extractEntityNbt(net.minecraft.entity.Entity entity) {
+    public static CompoundTag extractEntityNbt(net.minecraft.world.entity.Entity entity) {
         if (entity == null) {
             return null;
         }
         try {
-            NbtWriteView view = NbtWriteView.create(ErrorReporter.EMPTY, entity.getRegistryManager());
+            TagValueOutput view = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, entity.registryAccess());
             // 1.21.11+: entity serialization is WriteView-based
-            if (!entity.saveData(view)) {
+            if (!entity.save(view)) {
                 return null;
             }
-            NbtCompound out = view.getNbt();
+            CompoundTag out = view.buildResult();
             return out == null || out.isEmpty() ? null : out;
         } catch (Exception ignored) {
             // Keep callers stable in case modded entities throw while serializing.
@@ -37,39 +36,37 @@ public final class NbtExtractors {
         }
     }
 
-    public static NbtCompound extractBlockData(World world, BlockPos pos) {
-        NbtCompound out = new NbtCompound();
+    public static CompoundTag extractBlockData(Level world, BlockPos pos) {
+        CompoundTag out = new CompoundTag();
         if (world == null || pos == null) {
             return out;
         }
 
         BlockState state = world.getBlockState(pos);
-        out.putString("id", String.valueOf(Registries.BLOCK.getId(state.getBlock())));
+        out.putString("id", String.valueOf(BuiltInRegistries.BLOCK.getKey(state.getBlock())));
         out.putInt("x", pos.getX());
         out.putInt("y", pos.getY());
         out.putInt("z", pos.getZ());
 
         if (!state.getProperties().isEmpty()) {
-            NbtCompound stateNbt = new NbtCompound();
+            CompoundTag stateNbt = new CompoundTag();
             for (Property<?> property : state.getProperties()) {
-                stateNbt.put(property.getName(), NbtString.of(getPropertyValue(state, property)));
+                stateNbt.put(property.getName(), StringTag.valueOf(getPropertyValue(state, property)));
             }
             out.put("Properties", stateNbt);
         }
 
         BlockEntity blockEntity = world.getBlockEntity(pos);
         if (blockEntity != null) {
-            // Different implementations expose different serializers. Merge as many as we can.
-            mergeInto(out, safeInvoke(blockEntity, "createNbtWithIdentifyingData", world.getRegistryManager()));
-            mergeInto(out, safeInvoke(blockEntity, "createNbt", world.getRegistryManager()));
-            mergeInto(out, safeInvoke(blockEntity, "toInitialChunkDataNbt", world.getRegistryManager()));
-            mergeInto(out, safeInvoke(blockEntity, "createNbt"));
-            mergeInto(out, safeInvoke(blockEntity, "toInitialChunkDataNbt"));
+            // Different serializers can expose different fields. Merge as many as we can.
+            mergeInto(out, safeSerialize(() -> blockEntity.saveWithFullMetadata(world.registryAccess())));
+            mergeInto(out, safeSerialize(() -> blockEntity.saveWithoutMetadata(world.registryAccess())));
+            mergeInto(out, safeSerialize(() -> blockEntity.getUpdateTag(world.registryAccess())));
         }
 
         try {
             // Chunk snapshot NBT may contain fields not present in live client BlockEntity instances.
-            NbtCompound chunkNbt = world.getChunk(pos).getBlockEntityNbt(pos);
+            CompoundTag chunkNbt = world.getChunk(pos).getBlockEntityNbt(pos);
             mergeInto(out, chunkNbt);
         } catch (Exception ignored) {
             // Ignore and keep partial data.
@@ -77,57 +74,35 @@ public final class NbtExtractors {
         return out;
     }
 
-    private static void mergeInto(NbtCompound target, NbtCompound source) {
+    private static void mergeInto(CompoundTag target, CompoundTag source) {
         if (target == null || source == null || source.isEmpty()) {
             return;
         }
-        for (String key : source.getKeys()) {
-            NbtElement element = source.get(key);
+        for (String key : source.keySet()) {
+            Tag element = source.get(key);
             if (element != null) {
                 target.put(key, element.copy());
             }
         }
     }
 
-    private static NbtCompound safeInvoke(Object target, String methodName, Object... args) {
-        if (target == null) {
-            return null;
-        }
+    private static CompoundTag safeSerialize(Supplier<CompoundTag> serializer) {
         try {
-            Method method = findMethod(target.getClass(), methodName, args.length);
-            if (method == null) {
-                return null;
-            }
-            method.setAccessible(true);
-            Object value = method.invoke(target, args);
-            return value instanceof NbtCompound nbt ? nbt : null;
+            return serializer.get();
         } catch (Exception ignored) {
+            // Modded block entities may throw while serializing.
             return null;
         }
-    }
-
-    private static Method findMethod(Class<?> type, String name, int parameterCount) {
-        for (Method method : type.getMethods()) {
-            if (method.getName().equals(name) && method.getParameterCount() == parameterCount) {
-                return method;
-            }
-        }
-        for (Method method : type.getDeclaredMethods()) {
-            if (method.getName().equals(name) && method.getParameterCount() == parameterCount) {
-                return method;
-            }
-        }
-        return null;
     }
 
     private static <T extends Comparable<T>> String getPropertyValue(BlockState state, Property<T> property) {
-        return property.name(state.get(property));
+        return property.getName(state.getValue(property));
     }
 
-    public static net.minecraft.entity.Entity resolveEntityTarget(World world,
-                                                                  net.minecraft.entity.player.PlayerEntity player,
+    public static net.minecraft.world.entity.Entity resolveEntityTarget(Level world,
+                                                                  net.minecraft.world.entity.player.Player player,
                                                                   String token,
-                                                                  net.minecraft.entity.Entity lookedEntity) {
+                                                                  net.minecraft.world.entity.Entity lookedEntity) {
         if (world == null || player == null || token == null || token.isBlank()) {
             return null;
         }
@@ -142,12 +117,12 @@ public final class NbtExtractors {
 
         try {
             UUID uuid = UUID.fromString(t);
-            for (var entity : world.getOtherEntities(player, player.getBoundingBox().expand(512.0))) {
-                if (uuid.equals(entity.getUuid())) {
+            for (var entity : world.getEntities(player, player.getBoundingBox().inflate(512.0))) {
+                if (uuid.equals(entity.getUUID())) {
                     return entity;
                 }
             }
-            if (uuid.equals(player.getUuid())) {
+            if (uuid.equals(player.getUUID())) {
                 return player;
             }
         } catch (Exception ignored) {

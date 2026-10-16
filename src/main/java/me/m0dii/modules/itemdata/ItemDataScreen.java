@@ -1,36 +1,38 @@
 package me.m0dii.modules.itemdata;
 
+
+import com.mojang.blaze3d.platform.InputConstants;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import me.m0dii.gui.local.FormPanel;
 import me.m0dii.gui.local.ListPanel;
 import me.m0dii.gui.local.UiRect;
 import me.m0dii.gui.local.UiTheme;
+import me.m0dii.gui.theme.ThemedScreen;
 import me.m0dii.modules.getdata.GetDataScreen;
 import me.m0dii.utils.NbtEditorUtils;
-import net.minecraft.client.gui.Click;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.client.gui.widget.TextFieldWidget;
-import net.minecraft.client.input.KeyInput;
-import net.minecraft.item.ItemStack;
-import net.minecraft.nbt.NbtCompound;
-import net.minecraft.nbt.NbtElement;
-import net.minecraft.registry.RegistryWrapper;
-import net.minecraft.text.Text;
-import org.lwjgl.glfw.GLFW;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.KeyEvent;
+import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.Tag;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.item.ItemStack;
 
 import java.util.*;
 import java.util.function.IntConsumer;
 
-public final class ItemDataScreen extends Screen {
+public final class ItemDataScreen extends Screen implements ThemedScreen {
     private static final int LIST_ROW_HEIGHT = 12;
     private static final int DETAIL_ROW_HEIGHT = 10;
     private static final int DETAIL_WRAP = 60;
 
     private final Screen parent;
     private final ItemDataReference reference;
-    private NbtCompound itemData;
+    private CompoundTag itemData;
 
     private UiRect summaryRect;
     private UiRect currentPanelRect;
@@ -40,16 +42,16 @@ public final class ItemDataScreen extends Screen {
     private UiRect detailPanelRect;
     private UiRect detailListRect;
 
-    private TextFieldWidget availableFilterField;
-    private TextFieldWidget nameField;
-    private TextFieldWidget countField;
+    private EditBox availableFilterField;
+    private EditBox nameField;
+    private EditBox countField;
 
-    private ButtonWidget addButton;
-    private ButtonWidget editButton;
-    private ButtonWidget removeButton;
-    private ButtonWidget copyButton;
-    private ButtonWidget applyNameButton;
-    private ButtonWidget applyCountButton;
+    private Button addButton;
+    private Button editButton;
+    private Button removeButton;
+    private Button copyButton;
+    private Button applyNameButton;
+    private Button applyCountButton;
 
     private String selectedComponentId;
     private int presentScroll;
@@ -58,11 +60,11 @@ public final class ItemDataScreen extends Screen {
     private String statusMessage = "Choose a component on the left, or add one from the middle catalog.";
     private int statusColor = UiTheme.TEXT_MUTED;
 
-    public ItemDataScreen(Screen parent, ItemDataReference reference, NbtCompound itemData) {
-        super(Text.literal("Item Components"));
+    public ItemDataScreen(Screen parent, ItemDataReference reference, CompoundTag itemData) {
+        super(Component.literal("Item Components"));
         this.parent = parent;
         this.reference = reference;
-        this.itemData = itemData == null ? new NbtCompound() : itemData.copy();
+        this.itemData = itemData == null ? new CompoundTag() : itemData.copy();
     }
 
     @Override
@@ -80,71 +82,71 @@ public final class ItemDataScreen extends Screen {
         this.availableListRect = this.availablePanelRect.inset(8, 44, 8, 8);
         this.detailListRect = this.detailPanelRect.inset(8, 78, 8, 8);
 
-        this.availableFilterField = new TextFieldWidget(
-                this.textRenderer,
+        this.availableFilterField = new EditBox(
+                this.font,
                 this.availablePanelRect.x() + 8,
                 this.availablePanelRect.y() + 20,
                 this.availablePanelRect.width() - 16,
                 18,
-                Text.literal("Search Components")
+                Component.literal("Search Components")
         );
         this.availableFilterField.setMaxLength(128);
-        this.availableFilterField.setChangedListener(value -> {
+        this.availableFilterField.setResponder(value -> {
             refreshSelection();
             updateAvailableSuggestion();
             updateButtons();
         });
-        this.addDrawableChild(this.availableFilterField);
+        this.addRenderableWidget(this.availableFilterField);
 
-        this.countField = new TextFieldWidget(
-                this.textRenderer,
+        this.countField = new EditBox(
+                this.font,
                 this.summaryRect.x() + 300,
                 this.summaryRect.y() + 32,
                 56,
                 18,
-                Text.literal("Count")
+                Component.literal("Count")
         );
         this.countField.setMaxLength(16);
-        this.addDrawableChild(this.countField);
+        this.addRenderableWidget(this.countField);
 
-        this.nameField = new TextFieldWidget(
-                this.textRenderer,
+        this.nameField = new EditBox(
+                this.font,
                 this.summaryRect.x() + 460,
                 this.summaryRect.y() + 32,
                 Math.max(110, this.summaryRect.width() - 620),
                 18,
-                Text.literal("Display Name")
+                Component.literal("Display Name")
         );
         this.nameField.setMaxLength(256);
-        this.addDrawableChild(this.nameField);
+        this.addRenderableWidget(this.nameField);
 
-        this.applyCountButton = this.addDrawableChild(ButtonWidget.builder(Text.literal("Apply Count"), b -> applyCount())
-                .dimensions(this.summaryRect.x() + 364, this.summaryRect.y() + 32, 84, 18)
+        this.applyCountButton = this.addRenderableWidget(Button.builder(Component.literal("Apply Count"), b -> applyCount())
+                .bounds(this.summaryRect.x() + 364, this.summaryRect.y() + 32, 84, 18)
                 .build());
-        this.applyNameButton = this.addDrawableChild(ButtonWidget.builder(Text.literal("Apply Name"), b -> applyPlainName())
-                .dimensions(this.summaryRect.right() - 100, this.summaryRect.y() + 32, 88, 18)
+        this.applyNameButton = this.addRenderableWidget(Button.builder(Component.literal("Apply Name"), b -> applyPlainName())
+                .bounds(this.summaryRect.right() - 100, this.summaryRect.y() + 32, 88, 18)
                 .build());
 
-        this.addButton = this.addDrawableChild(ButtonWidget.builder(Text.literal("Add"), b -> addSelectedComponent())
-                .dimensions(12, bottomButtonsY, 58, 20)
+        this.addButton = this.addRenderableWidget(Button.builder(Component.literal("Add"), b -> addSelectedComponent())
+                .bounds(12, bottomButtonsY, 58, 20)
                 .build());
-        this.editButton = this.addDrawableChild(ButtonWidget.builder(Text.literal("Edit"), b -> editSelectedComponent())
-                .dimensions(74, bottomButtonsY, 58, 20)
+        this.editButton = this.addRenderableWidget(Button.builder(Component.literal("Edit"), b -> editSelectedComponent())
+                .bounds(74, bottomButtonsY, 58, 20)
                 .build());
-        this.removeButton = this.addDrawableChild(ButtonWidget.builder(Text.literal("Remove"), b -> removeSelectedComponent())
-                .dimensions(136, bottomButtonsY, 68, 20)
+        this.removeButton = this.addRenderableWidget(Button.builder(Component.literal("Remove"), b -> removeSelectedComponent())
+                .bounds(136, bottomButtonsY, 68, 20)
                 .build());
-        this.copyButton = this.addDrawableChild(ButtonWidget.builder(Text.literal("Copy"), b -> copySelectedValue())
-                .dimensions(208, bottomButtonsY, 58, 20)
+        this.copyButton = this.addRenderableWidget(Button.builder(Component.literal("Copy"), b -> copySelectedValue())
+                .bounds(208, bottomButtonsY, 58, 20)
                 .build());
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("JSON Mode"), b -> openFullItemEditor())
-                .dimensions(this.width - 248, bottomButtonsY, 82, 20)
+        this.addRenderableWidget(Button.builder(Component.literal("JSON Mode"), b -> openFullItemEditor())
+                .bounds(this.width - 248, bottomButtonsY, 82, 20)
                 .build());
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("Save"), b -> saveToServer())
-                .dimensions(this.width - 160, bottomButtonsY, 60, 20)
+        this.addRenderableWidget(Button.builder(Component.literal("Save"), b -> saveToServer())
+                .bounds(this.width - 160, bottomButtonsY, 60, 20)
                 .build());
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("Done"), b -> close())
-                .dimensions(this.width - 94, bottomButtonsY, 60, 20)
+        this.addRenderableWidget(Button.builder(Component.literal("Done"), b -> onClose())
+                .bounds(this.width - 94, bottomButtonsY, 60, 20)
                 .build());
 
         refreshFieldsFromData();
@@ -154,36 +156,36 @@ public final class ItemDataScreen extends Screen {
     }
 
     @Override
-    public boolean shouldPause() {
+    public boolean isPauseScreen() {
         return false;
     }
 
     @Override
-    public void close() {
-        if (this.client != null) {
-            this.client.setScreen(this.parent);
+    public void onClose() {
+        if (this.minecraft != null) {
+            this.minecraft.gui.setScreen(this.parent);
         }
     }
 
     @Override
-    public void render(DrawContext context, int mouseX, int mouseY, float delta) {
+    public void extractRenderState(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
         context.fill(0, 0, this.width, this.height, UiTheme.BG);
 
         renderSummaryPanel(context);
         renderCurrentPanel(context);
         renderAvailablePanel(context);
         renderDetailPanel(context);
-        context.drawTextWithShadow(this.textRenderer, this.statusMessage, 12, this.height - 44, this.statusColor);
+        context.text(this.font, this.statusMessage, 12, this.height - 44, this.statusColor);
 
-        super.render(context, mouseX, mouseY, delta);
+        super.extractRenderState(context, mouseX, mouseY, delta);
     }
 
     @Override
-    public boolean mouseClicked(Click click, boolean doubled) {
+    public boolean mouseClicked(MouseButtonEvent click, boolean doubled) {
         if (super.mouseClicked(click, doubled)) {
             return true;
         }
-        if (click.button() != 0) {
+        if (click.button() != InputConstants.MOUSE_BUTTON_LEFT) {
             return false;
         }
 
@@ -208,12 +210,12 @@ public final class ItemDataScreen extends Screen {
     }
 
     @Override
-    public boolean keyPressed(KeyInput input) {
-        if (input.getKeycode() == GLFW.GLFW_KEY_TAB && this.availableFilterField != null && this.availableFilterField.isFocused()) {
+    public boolean keyPressed(KeyEvent input) {
+        if (input.input() == InputConstants.KEY_TAB && this.availableFilterField != null && this.availableFilterField.isFocused()) {
             String suggestion = availableSuggestionSuffix();
             if (suggestion != null && !suggestion.isBlank()) {
-                this.availableFilterField.setText(this.availableFilterField.getText() + suggestion);
-                this.availableFilterField.setCursor(this.availableFilterField.getText().length(), false);
+                this.availableFilterField.setValue(this.availableFilterField.getValue() + suggestion);
+                this.availableFilterField.moveCursorTo(this.availableFilterField.getValue().length(), false);
                 updateAvailableSuggestion();
                 return true;
             }
@@ -221,38 +223,38 @@ public final class ItemDataScreen extends Screen {
         return super.keyPressed(input);
     }
 
-    private void renderSummaryPanel(DrawContext context) {
+    private void renderSummaryPanel(GuiGraphicsExtractor context) {
         FormPanel summaryPanel = new FormPanel(this.summaryRect);
-        summaryPanel.render(context);
+        summaryPanel.extractRenderState(context);
 
         ItemStack previewStack = previewStack();
         if (!previewStack.isEmpty()) {
-            context.drawItem(previewStack, this.summaryRect.x() + 10, this.summaryRect.y() + 18);
+            context.item(previewStack, this.summaryRect.x() + 10, this.summaryRect.y() + 18);
         }
 
         String itemTitle = currentItemTitle();
         String itemId = this.itemData.getString("id").orElse("minecraft:air");
-        context.drawTextWithShadow(this.textRenderer, itemTitle, this.summaryRect.x() + 40, this.summaryRect.y() + 10, UiTheme.TEXT);
-        context.drawTextWithShadow(this.textRenderer, this.reference.slotLabel() + " | " + itemId, this.summaryRect.x() + 40, this.summaryRect.y() + 22, UiTheme.TEXT_MUTED);
-        context.drawTextWithShadow(this.textRenderer, "Mode: Easy", this.summaryRect.right() - 76, this.summaryRect.y() + 10, UiTheme.TEXT_ACCENT);
-        context.drawTextWithShadow(this.textRenderer, "Count", this.countField.getX(), this.countField.getY() - 10, UiTheme.TEXT_MUTED);
-        context.drawTextWithShadow(this.textRenderer, "Rename (minecraft:custom_name, supports & codes and <#hex>)", this.nameField.getX(), this.nameField.getY() - 10, UiTheme.TEXT_MUTED);
-        context.drawTextWithShadow(this.textRenderer,
+        context.text(this.font, itemTitle, this.summaryRect.x() + 40, this.summaryRect.y() + 10, UiTheme.TEXT);
+        context.text(this.font, this.reference.slotLabel() + " | " + itemId, this.summaryRect.x() + 40, this.summaryRect.y() + 22, UiTheme.TEXT_MUTED);
+        context.text(this.font, "Mode: Easy", this.summaryRect.right() - 76, this.summaryRect.y() + 10, UiTheme.TEXT_ACCENT);
+        context.text(this.font, "Count", this.countField.getX(), this.countField.getY() - 10, UiTheme.TEXT_MUTED);
+        context.text(this.font, "Rename (minecraft:custom_name, supports & codes and <#hex>)", this.nameField.getX(), this.nameField.getY() - 10, UiTheme.TEXT_MUTED);
+        context.text(this.font,
                 "Current components: " + presentComponentIds().size(),
                 this.summaryRect.x() + 40,
                 this.summaryRect.y() + 56,
                 UiTheme.TEXT_MUTED);
     }
 
-    private void renderCurrentPanel(DrawContext context) {
+    private void renderCurrentPanel(GuiGraphicsExtractor context) {
         FormPanel panel = new FormPanel(this.currentPanelRect);
-        panel.render(context);
-        panel.drawLabel(context, this.textRenderer, "On Item (" + presentComponentIds().size() + ")", 8, 8);
+        panel.extractRenderState(context);
+        panel.drawLabel(context, this.font, "On Item (" + presentComponentIds().size() + ")", 8, 8);
 
         List<String> rows = presentRows();
-        new ListPanel(this.currentListRect).render(
+        new ListPanel(this.currentListRect).extractRenderState(
                 context,
-                this.textRenderer,
+                this.font,
                 rows,
                 selectedIndex(presentComponentIds()),
                 this.presentScroll,
@@ -260,15 +262,15 @@ public final class ItemDataScreen extends Screen {
         );
     }
 
-    private void renderAvailablePanel(DrawContext context) {
+    private void renderAvailablePanel(GuiGraphicsExtractor context) {
         FormPanel panel = new FormPanel(this.availablePanelRect);
-        panel.render(context);
-        panel.drawLabel(context, this.textRenderer, "Available Components", 8, 8);
+        panel.extractRenderState(context);
+        panel.drawLabel(context, this.font, "Available Components", 8, 8);
 
         List<String> rows = availableRows();
-        new ListPanel(this.availableListRect).render(
+        new ListPanel(this.availableListRect).extractRenderState(
                 context,
-                this.textRenderer,
+                this.font,
                 rows,
                 selectedIndex(availableComponentIds()),
                 this.availableScroll,
@@ -276,40 +278,40 @@ public final class ItemDataScreen extends Screen {
         );
     }
 
-    private void renderDetailPanel(DrawContext context) {
+    private void renderDetailPanel(GuiGraphicsExtractor context) {
         FormPanel panel = new FormPanel(this.detailPanelRect);
-        panel.render(context);
-        panel.drawLabel(context, this.textRenderer, "Component Details", 8, 8);
+        panel.extractRenderState(context);
+        panel.drawLabel(context, this.font, "Component Details", 8, 8);
 
         if (this.selectedComponentId == null) {
-            context.drawTextWithShadow(this.textRenderer, "No component selected.", this.detailPanelRect.x() + 8, this.detailPanelRect.y() + 24, UiTheme.TEXT_MUTED);
+            context.text(this.font, "No component selected.", this.detailPanelRect.x() + 8, this.detailPanelRect.y() + 24, UiTheme.TEXT_MUTED);
         } else {
             boolean present = isComponentPresent(this.selectedComponentId);
-            context.drawTextWithShadow(this.textRenderer,
+            context.text(this.font,
                     ItemComponentMetadata.label(this.selectedComponentId),
                     this.detailPanelRect.x() + 8,
                     this.detailPanelRect.y() + 24,
                     UiTheme.TEXT_ACCENT);
-            context.drawTextWithShadow(this.textRenderer,
+            context.text(this.font,
                     this.selectedComponentId,
                     this.detailPanelRect.x() + 8,
                     this.detailPanelRect.y() + 36,
                     UiTheme.TEXT_MUTED);
-            context.drawTextWithShadow(this.textRenderer,
+            context.text(this.font,
                     "Type: " + ItemComponentMetadata.typeHint(this.selectedComponentId),
                     this.detailPanelRect.x() + 8,
                     this.detailPanelRect.y() + 48,
                     UiTheme.TEXT_MUTED);
-            context.drawTextWithShadow(this.textRenderer,
+            context.text(this.font,
                     "State: " + (present ? "Present on item" : "Missing from item"),
                     this.detailPanelRect.x() + 8,
                     this.detailPanelRect.y() + 60,
                     present ? 0xFF70D070 : 0xFFFFD37A);
         }
 
-        new ListPanel(this.detailListRect).render(
+        new ListPanel(this.detailListRect).extractRenderState(
                 context,
-                this.textRenderer,
+                this.font,
                 buildDetailLines(),
                 -1,
                 this.detailScroll,
@@ -317,7 +319,7 @@ public final class ItemDataScreen extends Screen {
         );
     }
 
-    private boolean selectFromList(Click click, UiRect rect, List<String> ids, boolean presentList, boolean doubled) {
+    private boolean selectFromList(MouseButtonEvent click, UiRect rect, List<String> ids, boolean presentList, boolean doubled) {
         if (!rect.contains(click.x(), click.y())) {
             return false;
         }
@@ -385,32 +387,32 @@ public final class ItemDataScreen extends Screen {
     }
 
     private void openSelectedComponentEditor(boolean present) {
-        if (this.client == null || this.selectedComponentId == null) {
+        if (this.minecraft == null || this.selectedComponentId == null) {
             return;
         }
-        RegistryWrapper.WrapperLookup registryLookup = registryLookup();
+        HolderLookup.Provider registryLookup = registryLookup();
         if (registryLookup == null) {
             setStatus("Registry lookup is not available on the client right now.", 0xFFFF9090);
             return;
         }
 
         String componentId = this.selectedComponentId;
-        NbtElement currentValue = selectedComponentValue();
+        Tag currentValue = selectedComponentValue();
         String initialValue = present && currentValue != null
                 ? currentValue.toString()
                 : ItemDataCodec.defaultTemplateForComponent(componentId, registryLookup);
         String helperText = buildComponentEditorHelperText(componentId, present);
 
-        this.client.setScreen(GetDataScreen.createStandalone(
+        this.minecraft.gui.setScreen(GetDataScreen.createStandalone(
                 this,
-                Text.literal(present ? "Edit Component" : "Add Component"),
+                Component.literal(present ? "Edit Component" : "Add Component"),
                 ItemComponentMetadata.label(componentId) + " (" + componentId + ")",
                 initialValue,
                 helperText,
                 false,
                 true,
                 (screen, raw, path) -> {
-                    NbtElement normalized = ItemDataCodec.normalizeComponentValue(componentId, raw, registryLookup);
+                    Tag normalized = ItemDataCodec.normalizeComponentValue(componentId, raw, registryLookup);
                     ItemDataCodec.ensureComponents(this.itemData).put(componentId, normalized);
                     this.selectedComponentId = componentId;
                     refreshFieldsFromData();
@@ -424,18 +426,18 @@ public final class ItemDataScreen extends Screen {
     }
 
     private void openFullItemEditor() {
-        if (this.client == null) {
+        if (this.minecraft == null) {
             return;
         }
-        RegistryWrapper.WrapperLookup registryLookup = registryLookup();
+        HolderLookup.Provider registryLookup = registryLookup();
         if (registryLookup == null) {
             setStatus("Registry lookup is not available on the client right now.", 0xFFFF9090);
             return;
         }
 
-        this.client.setScreen(GetDataScreen.createStandalone(
+        this.minecraft.gui.setScreen(GetDataScreen.createStandalone(
                 this,
-                Text.literal("Item JSON Mode"),
+                Component.literal("Item JSON Mode"),
                 currentItemTitle(),
                 this.itemData.toString(),
                 "Edit the full serialized item root. Component ids under `components` support Tab/click completion.",
@@ -453,13 +455,13 @@ public final class ItemDataScreen extends Screen {
     }
 
     private void applyPlainName() {
-        RegistryWrapper.WrapperLookup registryLookup = registryLookup();
+        HolderLookup.Provider registryLookup = registryLookup();
         if (registryLookup == null) {
             setStatus("Registry lookup is not available on the client right now.", 0xFFFF9090);
             return;
         }
         try {
-            ItemDataCodec.applyPlainCustomName(this.itemData, this.nameField == null ? "" : this.nameField.getText(), registryLookup);
+            ItemDataCodec.applyPlainCustomName(this.itemData, this.nameField == null ? "" : this.nameField.getValue(), registryLookup);
             refreshFieldsFromData();
             refreshSelection();
             updateButtons();
@@ -471,7 +473,7 @@ public final class ItemDataScreen extends Screen {
 
     private void applyCount() {
         try {
-            ItemDataCodec.applyCount(this.itemData, this.countField == null ? "" : this.countField.getText());
+            ItemDataCodec.applyCount(this.itemData, this.countField == null ? "" : this.countField.getValue());
             refreshFieldsFromData();
             setStatus("Updated item count.", 0xFF70D070);
         } catch (CommandSyntaxException exception) {
@@ -489,7 +491,7 @@ public final class ItemDataScreen extends Screen {
             return;
         }
 
-        NbtCompound components = ItemDataCodec.getComponents(this.itemData);
+        CompoundTag components = ItemDataCodec.getComponents(this.itemData);
         components.remove(this.selectedComponentId);
         if (components.isEmpty()) {
             this.itemData.remove("components");
@@ -501,16 +503,16 @@ public final class ItemDataScreen extends Screen {
     }
 
     private void copySelectedValue() {
-        if (this.client == null || this.selectedComponentId == null || !isComponentPresent(this.selectedComponentId)) {
+        if (this.minecraft == null || this.selectedComponentId == null || !isComponentPresent(this.selectedComponentId)) {
             setStatus("Select an existing component to copy.", 0xFFFF9090);
             return;
         }
-        NbtElement value = selectedComponentValue();
+        Tag value = selectedComponentValue();
         if (value == null) {
             setStatus("That component does not have a readable value.", 0xFFFF9090);
             return;
         }
-        this.client.keyboard.setClipboard(value.toString());
+        this.minecraft.keyboardHandler.setClipboard(value.toString());
         setStatus("Copied " + this.selectedComponentId + " to the clipboard.", 0xFF70D070);
     }
 
@@ -524,10 +526,10 @@ public final class ItemDataScreen extends Screen {
 
     private void refreshFieldsFromData() {
         if (this.nameField != null) {
-            this.nameField.setText(ItemDataCodec.readPlainDisplayName(this.itemData, registryLookup()));
+            this.nameField.setValue(ItemDataCodec.readPlainDisplayName(this.itemData, registryLookup()));
         }
         if (this.countField != null) {
-            this.countField.setText(String.valueOf(ItemDataCodec.readCount(this.itemData)));
+            this.countField.setValue(String.valueOf(ItemDataCodec.readCount(this.itemData)));
         }
     }
 
@@ -575,7 +577,7 @@ public final class ItemDataScreen extends Screen {
     }
 
     private List<String> presentComponentIds() {
-        return ItemDataCodec.getComponents(this.itemData).getKeys().stream()
+        return ItemDataCodec.getComponents(this.itemData).keySet().stream()
                 .sorted(Comparator
                         .comparingInt(ItemComponentMetadata::priority)
                         .thenComparing(ItemComponentMetadata::label))
@@ -584,13 +586,13 @@ public final class ItemDataScreen extends Screen {
 
     private List<String> availableComponentIds() {
         Set<String> present = presentComponentIdSet();
-        return ItemComponentCatalog.filterComponentIds(this.availableFilterField == null ? "" : this.availableFilterField.getText(), present).stream()
+        return ItemComponentCatalog.filterComponentIds(this.availableFilterField == null ? "" : this.availableFilterField.getValue(), present).stream()
                 .filter(id -> !present.contains(id))
                 .toList();
     }
 
     private Set<String> presentComponentIdSet() {
-        return ItemDataCodec.getComponents(this.itemData).getKeys();
+        return ItemDataCodec.getComponents(this.itemData).keySet();
     }
 
     private List<String> presentRows() {
@@ -629,7 +631,7 @@ public final class ItemDataScreen extends Screen {
             );
         }
 
-        RegistryWrapper.WrapperLookup registryLookup = registryLookup();
+        HolderLookup.Provider registryLookup = registryLookup();
         boolean present = isComponentPresent(this.selectedComponentId);
         List<String> lines = new ArrayList<>();
         appendWrapped(lines, "Desc: ", ItemComponentMetadata.description(this.selectedComponentId));
@@ -695,7 +697,7 @@ public final class ItemDataScreen extends Screen {
         if (this.availableFilterField == null) {
             return null;
         }
-        String typed = this.availableFilterField.getText() == null ? "" : this.availableFilterField.getText().trim().toLowerCase(Locale.ROOT);
+        String typed = this.availableFilterField.getValue() == null ? "" : this.availableFilterField.getValue().trim().toLowerCase(Locale.ROOT);
         String hint = null;
         for (String componentId : availableComponentIds()) {
             String candidate = componentId.toLowerCase(Locale.ROOT);
@@ -719,7 +721,7 @@ public final class ItemDataScreen extends Screen {
         return componentId != null && ItemDataCodec.getComponents(this.itemData).contains(componentId);
     }
 
-    private NbtElement selectedComponentValue() {
+    private Tag selectedComponentValue() {
         if (this.selectedComponentId == null) {
             return null;
         }
@@ -747,15 +749,15 @@ public final class ItemDataScreen extends Screen {
     }
 
     private ItemStack previewStack() {
-        RegistryWrapper.WrapperLookup registryLookup = registryLookup();
+        HolderLookup.Provider registryLookup = registryLookup();
         if (registryLookup == null) {
             return ItemStack.EMPTY;
         }
         return ItemDataCodec.decode(this.itemData, registryLookup).orElse(ItemStack.EMPTY);
     }
 
-    private RegistryWrapper.WrapperLookup registryLookup() {
-        return this.client == null || this.client.world == null ? null : this.client.world.getRegistryManager();
+    private HolderLookup.Provider registryLookup() {
+        return this.minecraft == null || this.minecraft.level == null ? null : this.minecraft.level.registryAccess();
     }
 
     private void setStatus(String message, int color) {

@@ -1,17 +1,17 @@
 package bettercommandblockui.main.ui;
 
 import lombok.Setter;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gl.RenderPipelines;
-import net.minecraft.client.gui.Click;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.narration.NarrationMessageBuilder;
-import net.minecraft.client.gui.widget.ClickableWidget;
-import net.minecraft.text.Text;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.AbstractWidget;
+import net.minecraft.client.gui.narration.NarrationElementOutput;
+import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.network.chat.Component;
 
 import static bettercommandblockui.main.BetterCommandBlockUI.*;
 
-public class NotchedSlider extends ClickableWidget {
+public class NotchedSlider extends AbstractWidget {
     @Setter
     protected int subdivisions = 4;
     protected double pos = 0.0d;
@@ -23,15 +23,15 @@ public class NotchedSlider extends ClickableWidget {
     @Setter
     protected java.util.function.Consumer<Double> changedListener;
 
-    public NotchedSlider(int x, int y, int width, int height, Text message) {
+    public NotchedSlider(int x, int y, int width, int height, Component message) {
         super(x, y, width, height, message);
         this.length = width;
     }
 
     @Override
-    public void renderWidget(DrawContext context, int mouseX, int mouseY, float delta) {
+    public void extractWidgetRenderState(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
         //RenderSystem.setShaderTexture(0, SLIDER);
-        context.drawGuiTexture(
+        context.blitSprite(
                 RenderPipelines.GUI_TEXTURED,
                 SLIDER,
                 512,
@@ -43,7 +43,7 @@ public class NotchedSlider extends ClickableWidget {
                 4,
                 16
         );
-        context.drawGuiTexture(
+        context.blitSprite(
                 RenderPipelines.GUI_TEXTURED,
                 SLIDER,
                 512,
@@ -55,7 +55,7 @@ public class NotchedSlider extends ClickableWidget {
                 getWidth() - 4,
                 16
         );
-        context.drawGuiTexture(
+        context.blitSprite(
                 RenderPipelines.GUI_TEXTURED,
                 SLIDER,
                 512,
@@ -71,7 +71,7 @@ public class NotchedSlider extends ClickableWidget {
         //RenderSystem.setShaderTexture(0, SLIDER_NOTCH);
         float step = 1.0f / ((float) subdivisions);
         for (int i = 1; i < subdivisions; i++) {
-            context.drawGuiTexture(
+            context.blitSprite(
                     RenderPipelines.GUI_TEXTURED,
                     SLIDER_NOTCH,
                     4,
@@ -86,9 +86,9 @@ public class NotchedSlider extends ClickableWidget {
         }
 
         //RenderSystem.setShaderTexture(0, SLIDER_PICK);
-        context.drawGuiTexture(
+        context.blitSprite(
                 RenderPipelines.GUI_TEXTURED,
-                SLIDER_PICK.get(true, hovered),
+                SLIDER_PICK.get(true, isHovered),
                 (int) (getX() + (pos * getWidth()) - 4),
                 getY(),
                 8,
@@ -101,7 +101,7 @@ public class NotchedSlider extends ClickableWidget {
     }
 
     @Override
-    protected void appendClickableNarrations(NarrationMessageBuilder builder) {
+    protected void updateWidgetNarration(NarrationElementOutput builder) {
 
     }
 
@@ -114,10 +114,10 @@ public class NotchedSlider extends ClickableWidget {
     }
 
     @Override
-    public boolean mouseClicked(Click click, boolean doubled) {
+    public boolean mouseClicked(MouseButtonEvent click, boolean doubled) {
         if (this.isValidClickButton(click.buttonInfo()) && checkHovered(click.x(), click.y()) && this.visible) {
             this.dragging = true;
-            this.playDownSound(MinecraftClient.getInstance().getSoundManager());
+            this.playDownSound(Minecraft.getInstance().getSoundManager());
             this.onClick(click, doubled);
             return true;
         }
@@ -126,7 +126,7 @@ public class NotchedSlider extends ClickableWidget {
     }
 
     @Override
-    public void onRelease(Click click) {
+    public void onRelease(MouseButtonEvent click) {
         if (this.visible && this.isValidClickButton(click.buttonInfo())) {
             this.dragging = false;
             super.onRelease(click);
@@ -134,7 +134,7 @@ public class NotchedSlider extends ClickableWidget {
     }
 
     @Override
-    public void onClick(Click click, boolean doubled) {
+    public void onClick(MouseButtonEvent click, boolean doubled) {
         if (!this.visible || !checkHovered(click.x(), click.y())) {
             dragging = false;
             return;
@@ -150,7 +150,7 @@ public class NotchedSlider extends ClickableWidget {
     }
 
     @Override
-    public void onDrag(Click click, double distX, double distY) {
+    public void onDrag(MouseButtonEvent click, double distX, double distY) {
         if (dragging) {
             double posBefore = pos;
             pos = snap(Math.clamp((click.x() - getX()) / length, 0.0d, 1.0d), 1.0d / subdivisions);

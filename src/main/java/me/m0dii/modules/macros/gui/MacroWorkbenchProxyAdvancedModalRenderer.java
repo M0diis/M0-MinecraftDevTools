@@ -8,9 +8,8 @@ import me.m0dii.modules.macros.gui.MacroWorkbenchAdvancedLayouts.SecondaryAdvanc
 import me.m0dii.modules.macros.hud.MacroHudDataHandler;
 import me.m0dii.modules.pickup.PickupFeedSettings;
 import me.m0dii.utils.StringUtils;
-import net.minecraft.client.font.TextRenderer;
-import net.minecraft.client.gui.DrawContext;
-
+import net.minecraft.client.gui.Font;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import java.util.List;
 import java.util.Locale;
 
@@ -18,8 +17,8 @@ public final class MacroWorkbenchProxyAdvancedModalRenderer {
     private MacroWorkbenchProxyAdvancedModalRenderer() {
     }
 
-    public static void renderSecondary(DrawContext context,
-                                       TextRenderer textRenderer,
+    public static void renderSecondary(GuiGraphicsExtractor context,
+                                       Font textRenderer,
                                        MacroHudDataHandler.HudElement selected,
                                        SecondaryAdvancedLayout layout,
                                        int boxX,
@@ -52,8 +51,8 @@ public final class MacroWorkbenchProxyAdvancedModalRenderer {
                                        boolean advancedBorderColorFocused,
                                        int advancedBorderSelectionAnchor,
                                        int advancedBorderCursor) {
-        context.drawTextWithShadow(textRenderer, "Secondary Chat Settings", boxX + 12, boxY + 12, 0xFFFFFFFF);
-        context.drawTextWithShadow(textRenderer, "Canvas controls position/size. This panel edits behavior.", boxX + 12, boxY + 24, 0xFFB0B0B0);
+        context.text(textRenderer, "Secondary Chat Settings", boxX + 12, boxY + 12, 0xFFFFFFFF);
+        context.text(textRenderer, "Canvas controls position/size. This panel edits behavior.", boxX + 12, boxY + 24, 0xFFB0B0B0);
 
         drawModalButton(context, textRenderer, layout.guiOpen(), "GUI Open: " + (showWhileGuiOpen ? "ON" : "OFF"), mouseX, mouseY);
         drawModalButton(context, textRenderer, layout.fadeToggle(), "Fade: " + (fadeEnabled ? "ON" : "OFF"), mouseX, mouseY);
@@ -66,7 +65,7 @@ public final class MacroWorkbenchProxyAdvancedModalRenderer {
         drawModalButton(context, textRenderer, layout.linePlus(), "LH+", mouseX, mouseY);
         drawModalButton(context, textRenderer, layout.zMinus(), "Z-", mouseX, mouseY);
         drawModalButton(context, textRenderer, layout.zPlus(), "Z+", mouseX, mouseY);
-        context.drawTextWithShadow(textRenderer,
+        context.text(textRenderer,
                 "Scale: " + String.format("%.2f", scale) + "  Line: " + lineHeight + "  Z: " + (selected == null ? 0 : selected.zIndex),
                 layout.metricsText().x(), layout.metricsText().y(), 0xFFEAEAEA);
 
@@ -74,7 +73,7 @@ public final class MacroWorkbenchProxyAdvancedModalRenderer {
         int regexY = layout.regexInput().y();
         int regexW = layout.regexInput().width();
         int regexH = layout.regexInput().height();
-        context.drawTextWithShadow(textRenderer, "Regex List (one pattern per line)", regexX, regexY - 10, 0xFFB8B8B8);
+        context.text(textRenderer, "Regex List (one pattern per line)", regexX, regexY - 10, 0xFFB8B8B8);
         context.fill(regexX, regexY, regexX + regexW, regexY + regexH, advancedTextFocused ? 0xFF0F0F0F : 0xFF161616);
         context.fill(regexX, regexY, regexX + regexW, regexY + 1, 0x60FFFFFF);
         GuiTextEditingUtils.drawMultilineSelection(context, textRenderer, regexX + 4, regexY + 4, regexY + regexH - 12, advancedText, advancedSelectionAnchor, advancedCursor, 9);
@@ -84,7 +83,7 @@ public final class MacroWorkbenchProxyAdvancedModalRenderer {
             if (ry > regexY + regexH - 12) {
                 break;
             }
-            context.drawTextWithShadow(textRenderer, line, regexX + 4, ry, 0xFFEAEAEA);
+            context.text(textRenderer, line, regexX + 4, ry, 0xFFEAEAEA);
             ry += 9;
         }
         if (advancedTextFocused && (System.currentTimeMillis() / 500L) % 2L == 0L) {
@@ -96,13 +95,13 @@ public final class MacroWorkbenchProxyAdvancedModalRenderer {
         int outgoingY = layout.outgoingInput().y();
         int outgoingW = layout.outgoingInput().width();
         int outgoingH = layout.outgoingInput().height();
-        context.drawTextWithShadow(textRenderer, "Outgoing Regex", outgoingX, outgoingY - 10, 0xFFB8B8B8);
+        context.text(textRenderer, "Outgoing Regex", outgoingX, outgoingY - 10, 0xFFB8B8B8);
         context.fill(outgoingX, outgoingY, outgoingX + outgoingW, outgoingY + outgoingH, advancedActionFocused ? 0xFF0F0F0F : 0xFF161616);
         context.fill(outgoingX, outgoingY, outgoingX + outgoingW, outgoingY + 1, 0x60FFFFFF);
         GuiTextEditingUtils.drawSingleLineSelection(context, textRenderer, outgoingX + 4, outgoingY + 5, advancedAction, advancedActionSelectionAnchor, advancedActionCursor);
-        context.drawTextWithShadow(textRenderer, advancedAction, outgoingX + 4, outgoingY + 5, 0xFFEAEAEA);
+        context.text(textRenderer, advancedAction, outgoingX + 4, outgoingY + 5, 0xFFEAEAEA);
         if (advancedActionFocused && (System.currentTimeMillis() / 500L) % 2L == 0L) {
-            int ax = outgoingX + 4 + textRenderer.getWidth(advancedAction.substring(0, Math.clamp(advancedActionCursor, 0, advancedAction.length())));
+            int ax = outgoingX + 4 + textRenderer.width(advancedAction.substring(0, Math.clamp(advancedActionCursor, 0, advancedAction.length())));
             context.fill(ax, outgoingY + 4, ax + 1, outgoingY + 13, 0xFFFFFFFF);
         }
 
@@ -113,7 +112,7 @@ public final class MacroWorkbenchProxyAdvancedModalRenderer {
         drawModalButton(context, textRenderer, layout.linesMinus(), "L-", mouseX, mouseY);
         drawModalButton(context, textRenderer, layout.linesPlus(), "L+", mouseX, mouseY);
         int bgPercent = selected == null ? 0 : Math.round((Math.clamp(selected.backgroundAlpha, 0, 255) / 255.0f) * 100.0f);
-        context.drawTextWithShadow(textRenderer,
+        context.text(textRenderer,
                 "Fade: " + fadeDurationMs + "ms  Alpha: " + minAlpha + "  Max: " + maxLines + "  BG: " + bgPercent + "%",
                 layout.statsText().x(), layout.statsText().y(), 0xFFEAEAEA);
 
@@ -127,34 +126,34 @@ public final class MacroWorkbenchProxyAdvancedModalRenderer {
         drawModalButton(context, textRenderer, layout.bgPlus(), "BG+", mouseX, mouseY);
         drawModalButton(context, textRenderer, layout.bgAlphaMinus(), "Opacity-", mouseX, mouseY);
         drawModalButton(context, textRenderer, layout.bgAlphaPlus(), "Opacity+", mouseX, mouseY);
-        context.drawTextWithShadow(textRenderer, "BG", secondaryBgHexX, secondaryBgHexY - 10, 0xFFEAEAEA);
-        context.drawTextWithShadow(textRenderer, "TX", secondaryTxHexX, secondaryTxHexY - 10, 0xFFEAEAEA);
+        context.text(textRenderer, "BG", secondaryBgHexX, secondaryBgHexY - 10, 0xFFEAEAEA);
+        context.text(textRenderer, "TX", secondaryTxHexX, secondaryTxHexY - 10, 0xFFEAEAEA);
         int bgInputBg = advancedBgColorFocused ? 0xFF0F0F0F : 0xFF161616;
         context.fill(secondaryBgHexX, secondaryBgHexY, secondaryBgHexX + secondaryBgHexW, secondaryBgHexY + 18, bgInputBg);
         context.fill(secondaryBgHexX, secondaryBgHexY, secondaryBgHexX + secondaryBgHexW, secondaryBgHexY + 1, 0x60FFFFFF);
         GuiTextEditingUtils.drawSingleLineSelection(context, textRenderer, secondaryBgHexX + 4, secondaryBgHexY + 5, advancedBgColor, advancedBgSelectionAnchor, advancedBgCursor);
-        context.drawTextWithShadow(textRenderer, advancedBgColor, secondaryBgHexX + 4, secondaryBgHexY + 5, 0xFFEAEAEA);
+        context.text(textRenderer, advancedBgColor, secondaryBgHexX + 4, secondaryBgHexY + 5, 0xFFEAEAEA);
         int txInputBg = advancedBorderColorFocused ? 0xFF0F0F0F : 0xFF161616;
         context.fill(secondaryTxHexX, secondaryTxHexY, secondaryTxHexX + secondaryTxHexW, secondaryTxHexY + 18, txInputBg);
         context.fill(secondaryTxHexX, secondaryTxHexY, secondaryTxHexX + secondaryTxHexW, secondaryTxHexY + 1, 0x60FFFFFF);
         GuiTextEditingUtils.drawSingleLineSelection(context, textRenderer, secondaryTxHexX + 4, secondaryTxHexY + 5, advancedBorderColor, advancedBorderSelectionAnchor, advancedBorderCursor);
-        context.drawTextWithShadow(textRenderer, advancedBorderColor, secondaryTxHexX + 4, secondaryTxHexY + 5, 0xFFEAEAEA);
+        context.text(textRenderer, advancedBorderColor, secondaryTxHexX + 4, secondaryTxHexY + 5, 0xFFEAEAEA);
 
         drawModalButton(context, textRenderer, layout.apply(), "Apply", mouseX, mouseY);
         drawModalButton(context, textRenderer, layout.cancel(), "Cancel", mouseX, mouseY);
 
         if (advancedBgColorFocused && (System.currentTimeMillis() / 500L) % 2L == 0L) {
-            int cx = secondaryBgHexX + 4 + textRenderer.getWidth(advancedBgColor.substring(0, Math.clamp(advancedBgCursor, 0, advancedBgColor.length())));
+            int cx = secondaryBgHexX + 4 + textRenderer.width(advancedBgColor.substring(0, Math.clamp(advancedBgCursor, 0, advancedBgColor.length())));
             context.fill(cx, secondaryBgHexY + 4, cx + 1, secondaryBgHexY + 13, 0xFFFFFFFF);
         }
         if (advancedBorderColorFocused && (System.currentTimeMillis() / 500L) % 2L == 0L) {
-            int cx = secondaryTxHexX + 4 + textRenderer.getWidth(advancedBorderColor.substring(0, Math.clamp(advancedBorderCursor, 0, advancedBorderColor.length())));
+            int cx = secondaryTxHexX + 4 + textRenderer.width(advancedBorderColor.substring(0, Math.clamp(advancedBorderCursor, 0, advancedBorderColor.length())));
             context.fill(cx, secondaryTxHexY + 4, cx + 1, secondaryTxHexY + 13, 0xFFFFFFFF);
         }
     }
 
-    public static void renderProxy(DrawContext context,
-                                   TextRenderer textRenderer,
+    public static void renderProxy(GuiGraphicsExtractor context,
+                                   Font textRenderer,
                                    MacroHudDataHandler.HudElement selected,
                                    ProxyAdvancedLayout layout,
                                    int boxX,
@@ -173,14 +172,14 @@ public final class MacroWorkbenchProxyAdvancedModalRenderer {
                                    int advancedBorderSelectionAnchor,
                                    int advancedBorderCursor,
                                    boolean pickupProxy) {
-        context.drawTextWithShadow(textRenderer, title, boxX + 12, boxY + 12, 0xFFFFFFFF);
-        context.drawTextWithShadow(textRenderer, "Use canvas for positioning, this panel for style", boxX + 12, boxY + 24, 0xFFB0B0B0);
+        context.text(textRenderer, title, boxX + 12, boxY + 12, 0xFFFFFFFF);
+        context.text(textRenderer, "Use canvas for positioning, this panel for style", boxX + 12, boxY + 24, 0xFFB0B0B0);
 
         drawModalButton(context, textRenderer, layout.scaleMinus(), "S-", mouseX, mouseY);
         drawModalButton(context, textRenderer, layout.scalePlus(), "S+", mouseX, mouseY);
         drawModalButton(context, textRenderer, layout.lineMinus(), "LH-", mouseX, mouseY);
         drawModalButton(context, textRenderer, layout.linePlus(), "LH+", mouseX, mouseY);
-        context.drawTextWithShadow(textRenderer,
+        context.text(textRenderer,
                 "Scale: " + String.format("%.2f", selected == null ? 1.0f : selected.fontScale) +
                         "  Line: " + (selected == null ? 9 : selected.lineHeight)
                         + "  BG: " + (selected == null ? 0 : Math.round((Math.clamp(selected.backgroundAlpha, 0, 255) / 255.0f) * 100.0f)) + "%"
@@ -211,8 +210,8 @@ public final class MacroWorkbenchProxyAdvancedModalRenderer {
         int txInputX = layout.txInput().x();
         int txInputY = layout.txInput().y();
         int txInputW = layout.txInput().width();
-        context.drawTextWithShadow(textRenderer, "BG", bgInputX, bgInputY - 10, 0xFFEAEAEA);
-        context.drawTextWithShadow(textRenderer, "TX", txInputX, txInputY - 10, 0xFFEAEAEA);
+        context.text(textRenderer, "BG", bgInputX, bgInputY - 10, 0xFFEAEAEA);
+        context.text(textRenderer, "TX", txInputX, txInputY - 10, 0xFFEAEAEA);
         int bgInputBg = advancedBgColorFocused ? 0xFF0F0F0F : 0xFF161616;
         int txInputBg = advancedBorderColorFocused ? 0xFF0F0F0F : 0xFF161616;
         context.fill(bgInputX, bgInputY, bgInputX + bgInputW, bgInputY + 18, bgInputBg);
@@ -221,15 +220,15 @@ public final class MacroWorkbenchProxyAdvancedModalRenderer {
         context.fill(txInputX, txInputY, txInputX + txInputW, txInputY + 1, 0x60FFFFFF);
         GuiTextEditingUtils.drawSingleLineSelection(context, textRenderer, bgInputX + 4, bgInputY + 5, advancedBgColor, advancedBgSelectionAnchor, advancedBgCursor);
         GuiTextEditingUtils.drawSingleLineSelection(context, textRenderer, txInputX + 4, txInputY + 5, advancedBorderColor, advancedBorderSelectionAnchor, advancedBorderCursor);
-        context.drawTextWithShadow(textRenderer, advancedBgColor, bgInputX + 4, bgInputY + 5, 0xFFEAEAEA);
-        context.drawTextWithShadow(textRenderer, advancedBorderColor, txInputX + 4, txInputY + 5, 0xFFEAEAEA);
+        context.text(textRenderer, advancedBgColor, bgInputX + 4, bgInputY + 5, 0xFFEAEAEA);
+        context.text(textRenderer, advancedBorderColor, txInputX + 4, txInputY + 5, 0xFFEAEAEA);
 
         if (advancedBgColorFocused && (System.currentTimeMillis() / 500L) % 2L == 0L) {
-            int cx = bgInputX + 4 + textRenderer.getWidth(advancedBgColor.substring(0, Math.clamp(advancedBgCursor, 0, advancedBgColor.length())));
+            int cx = bgInputX + 4 + textRenderer.width(advancedBgColor.substring(0, Math.clamp(advancedBgCursor, 0, advancedBgColor.length())));
             context.fill(cx, bgInputY + 4, cx + 1, bgInputY + 13, 0xFFFFFFFF);
         }
         if (advancedBorderColorFocused && (System.currentTimeMillis() / 500L) % 2L == 0L) {
-            int cx = txInputX + 4 + textRenderer.getWidth(advancedBorderColor.substring(0, Math.clamp(advancedBorderCursor, 0, advancedBorderColor.length())));
+            int cx = txInputX + 4 + textRenderer.width(advancedBorderColor.substring(0, Math.clamp(advancedBorderCursor, 0, advancedBorderColor.length())));
             context.fill(cx, txInputY + 4, cx + 1, txInputY + 13, 0xFFFFFFFF);
         }
 
@@ -239,7 +238,7 @@ public final class MacroWorkbenchProxyAdvancedModalRenderer {
             drawModalButton(context, textRenderer, layout.pickupLines(), "Lines", mouseX, mouseY);
             drawModalButton(context, textRenderer, layout.pickupIcon(), "Icon", mouseX, mouseY);
             drawModalButton(context, textRenderer, layout.pickupDirection(), "Direction", mouseX, mouseY);
-            context.drawTextWithShadow(textRenderer,
+            context.text(textRenderer,
                     "Dur: " + pickup.durationMs + "ms  Max: " + pickup.maxLines + "  Scale: "
                             + String.format(Locale.ROOT, "%.2f", pickup.iconScale) + "  Dir: " + pickup.direction.name(),
                     layout.pickupInfo().x(), layout.pickupInfo().y(), 0xFFEAEAEA);
@@ -249,7 +248,7 @@ public final class MacroWorkbenchProxyAdvancedModalRenderer {
         drawModalButton(context, textRenderer, layout.cancel(), "Cancel", mouseX, mouseY);
     }
 
-    private static void drawModalButton(DrawContext context, TextRenderer textRenderer, me.m0dii.gui.local.UiRect rect, String label, int mouseX, int mouseY) {
+    private static void drawModalButton(GuiGraphicsExtractor context, Font textRenderer, me.m0dii.gui.local.UiRect rect, String label, int mouseX, int mouseY) {
         GuiSystem.drawButton(context, textRenderer, rect.x(), rect.y(), rect.width(), rect.height(), label, rect.contains(mouseX, mouseY), true);
     }
 }

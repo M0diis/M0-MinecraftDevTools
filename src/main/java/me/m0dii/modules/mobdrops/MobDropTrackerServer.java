@@ -11,30 +11,30 @@ import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
-import net.minecraft.block.entity.BlockEntity;
-import net.minecraft.entity.ItemEntity;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.damage.DamageSource;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.inventory.Inventory;
-import net.minecraft.item.ItemStack;
-import net.minecraft.registry.Registries;
-import net.minecraft.registry.RegistryKey;
-import net.minecraft.registry.RegistryKeys;
+import net.minecraft.ChatFormatting;
+import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.command.ServerCommandSource;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.WorldSavePath;
-import net.minecraft.util.hit.BlockHitResult;
-import net.minecraft.util.hit.HitResult;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.MathHelper;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.World;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.util.Mth;
+import net.minecraft.world.Container;
+import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.storage.LevelResource;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
+import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
 import java.nio.file.Files;
@@ -42,8 +42,8 @@ import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 
-import static net.minecraft.server.command.CommandManager.argument;
-import static net.minecraft.server.command.CommandManager.literal;
+import static net.minecraft.commands.Commands.argument;
+import static net.minecraft.commands.Commands.literal;
 
 public final class MobDropTrackerServer {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
@@ -91,11 +91,11 @@ public final class MobDropTrackerServer {
             ensureLoaded(server);
             sendState(handler.player);
         });
-        ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> VIEWER_PREFERENCES.remove(handler.player.getUuid()));
+        ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> VIEWER_PREFERENCES.remove(handler.player.getUUID()));
     }
 
     public static void beginDeathCapture(LivingEntity entity, DamageSource source) {
-        if (entity == null || entity.getEntityWorld().isClient()) {
+        if (entity == null || entity.level().isClientSide()) {
             return;
         }
         DROP_CONTEXT.get().push(new DropContext(entity));
@@ -122,14 +122,14 @@ public final class MobDropTrackerServer {
         }
 
         DropContext context = stackContext.peek();
-        if (context == null || itemEntity.getEntityWorld().isClient()) {
+        if (context == null || itemEntity.level().isClientSide()) {
             return;
         }
 
         recordDrop(context, itemEntity, stack);
     }
 
-    private static void registerCommands(CommandDispatcher<ServerCommandSource> dispatcher) {
+    private static void registerCommands(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(literal("mobdrops")
                 .executes(MobDropTrackerServer::showHelp)
                 .then(argument("args", StringArgumentType.greedyString())
@@ -137,20 +137,20 @@ public final class MobDropTrackerServer {
                         .executes(MobDropTrackerServer::handleArgs)));
     }
 
-    private static int showHelp(CommandContext<ServerCommandSource> context) {
-        ServerCommandSource source = context.getSource();
-        source.sendFeedback(() -> Text.literal("[MobDrops] Commands").formatted(Formatting.GOLD), false);
-        source.sendFeedback(() -> Text.literal("/mobdrops list | status <name> | report <name|all>").formatted(Formatting.GRAY), false);
-        source.sendFeedback(() -> Text.literal("/mobdrops add area <name> <x1 y1 z1> <x2 y2 z2> [anchorX anchorY anchorZ]").formatted(Formatting.GRAY), false);
-        source.sendFeedback(() -> Text.literal("/mobdrops add block <name> [radius] [x y z]   (tracks mob drops around a block)").formatted(Formatting.GRAY), false);
-        source.sendFeedback(() -> Text.literal("/mobdrops add container <name> [x y z]   (tracks throughput into a hopper/chest/container)").formatted(Formatting.GRAY), false);
-        source.sendFeedback(() -> Text.literal("/mobdrops add hopper <name> [x y z] | /mobdrops add chest <name> [x y z]").formatted(Formatting.GRAY), false);
-        source.sendFeedback(() -> Text.literal("/mobdrops remove <name> | reset <name|all> | overlay off|all|<name>").formatted(Formatting.GRAY), false);
+    private static int showHelp(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        source.sendSuccess(() -> Component.literal("[MobDrops] Commands").withStyle(ChatFormatting.GOLD), false);
+        source.sendSuccess(() -> Component.literal("/mobdrops list | status <name> | report <name|all>").withStyle(ChatFormatting.GRAY), false);
+        source.sendSuccess(() -> Component.literal("/mobdrops add area <name> <x1 y1 z1> <x2 y2 z2> [anchorX anchorY anchorZ]").withStyle(ChatFormatting.GRAY), false);
+        source.sendSuccess(() -> Component.literal("/mobdrops add block <name> [radius] [x y z]   (tracks mob drops around a block)").withStyle(ChatFormatting.GRAY), false);
+        source.sendSuccess(() -> Component.literal("/mobdrops add container <name> [x y z]   (tracks throughput into a hopper/chest/container)").withStyle(ChatFormatting.GRAY), false);
+        source.sendSuccess(() -> Component.literal("/mobdrops add hopper <name> [x y z] | /mobdrops add chest <name> [x y z]").withStyle(ChatFormatting.GRAY), false);
+        source.sendSuccess(() -> Component.literal("/mobdrops remove <name> | reset <name|all> | overlay off|all|<name>").withStyle(ChatFormatting.GRAY), false);
         return 1;
     }
 
-    private static int handleArgs(CommandContext<ServerCommandSource> context) {
-        ServerCommandSource source = context.getSource();
+    private static int handleArgs(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
         ensureLoaded(source.getServer());
 
         String raw = StringArgumentType.getString(context, "args");
@@ -180,7 +180,7 @@ public final class MobDropTrackerServer {
                 }
                 case "overlay" -> {
                     requireLength(tokens, 2, "/mobdrops overlay off|all|<name>");
-                    ServerPlayerEntity player = source.getPlayerOrThrow();
+                    ServerPlayer player = source.getPlayerOrException();
                     yield setOverlay(player, tokens[1]);
                 }
                 case "add" -> handleAdd(source, tokens);
@@ -191,19 +191,19 @@ public final class MobDropTrackerServer {
             };
 
             if (result != null && !result.isBlank()) {
-                source.sendFeedback(() -> Text.literal("[MobDrops] " + result).formatted(Formatting.GREEN), false);
+                source.sendSuccess(() -> Component.literal("[MobDrops] " + result).withStyle(ChatFormatting.GREEN), false);
             }
             return 1;
         } catch (IllegalStateException ex) {
-            source.sendError(Text.literal("[MobDrops] " + ex.getMessage()));
+            source.sendFailure(Component.literal("[MobDrops] " + ex.getMessage()));
             return 0;
         } catch (Exception ex) {
-            source.sendError(Text.literal("[MobDrops] " + ex.getMessage()));
+            source.sendFailure(Component.literal("[MobDrops] " + ex.getMessage()));
             return 0;
         }
     }
 
-    private static String handleAdd(ServerCommandSource source, String[] tokens) throws Exception {
+    private static String handleAdd(CommandSourceStack source, String[] tokens) throws Exception {
         requireLength(tokens, 3, "/mobdrops add <area|block|container> ...");
         String kind = tokens[1].toLowerCase(Locale.ROOT);
         String rawName = tokens[2];
@@ -215,7 +215,7 @@ public final class MobDropTrackerServer {
             throw new IllegalStateException("A tracker named '" + rawName + "' already exists.");
         }
 
-        ServerPlayerEntity player = source.getPlayerOrThrow();
+        ServerPlayer player = source.getPlayerOrException();
         TrackerData tracker = switch (kind) {
             case "block" -> buildBlockTracker(rawName, player, source, tokens);
             case "area" -> buildAreaTracker(rawName, source, tokens);
@@ -230,8 +230,8 @@ public final class MobDropTrackerServer {
     }
 
     private static TrackerData buildBlockTracker(String rawName,
-                                                 ServerPlayerEntity player,
-                                                 ServerCommandSource source,
+                                                 ServerPlayer player,
+                                                 CommandSourceStack source,
                                                  String[] tokens) {
         int radius = DEFAULT_RADIUS;
         BlockPos anchor;
@@ -250,12 +250,12 @@ public final class MobDropTrackerServer {
             throw new IllegalStateException("Expected: /mobdrops add block <name> [radius] [x y z]");
         }
 
-        BlockPos min = anchor.add(-radius, -radius, -radius);
-        BlockPos max = anchor.add(radius, radius, radius);
-        return new TrackerData(rawName.trim(), "block", worldId(player.getEntityWorld()), anchor, min, max);
+        BlockPos min = anchor.offset(-radius, -radius, -radius);
+        BlockPos max = anchor.offset(radius, radius, radius);
+        return new TrackerData(rawName.trim(), "block", worldId(player.level()), anchor, min, max);
     }
 
-    private static TrackerData buildAreaTracker(String rawName, ServerCommandSource source, String[] tokens) {
+    private static TrackerData buildAreaTracker(String rawName, CommandSourceStack source, String[] tokens) {
         if (tokens.length != 9 && tokens.length != 12) {
             throw new IllegalStateException("Expected: /mobdrops add area <name> <x1 y1 z1> <x2 y2 z2> [anchorX anchorY anchorZ]");
         }
@@ -276,12 +276,12 @@ public final class MobDropTrackerServer {
                 ? parseBlockPos(source, tokens, 9)
                 : new BlockPos((min.getX() + max.getX()) / 2, min.getY(), (min.getZ() + max.getZ()) / 2);
 
-        return new TrackerData(rawName.trim(), "area", worldId(source.getWorld()), anchor, min, max);
+        return new TrackerData(rawName.trim(), "area", worldId(source.getLevel()), anchor, min, max);
     }
 
     private static TrackerData buildContainerTracker(String rawName,
-                                                     ServerPlayerEntity player,
-                                                     ServerCommandSource source,
+                                                     ServerPlayer player,
+                                                     CommandSourceStack source,
                                                      String[] tokens) {
         BlockPos anchor;
         if (tokens.length == 3) {
@@ -292,12 +292,12 @@ public final class MobDropTrackerServer {
             throw new IllegalStateException("Expected: /mobdrops add container <name> [x y z]");
         }
 
-        BlockEntity blockEntity = player.getEntityWorld().getBlockEntity(anchor);
-        if (!(blockEntity instanceof Inventory inventory)) {
+        BlockEntity blockEntity = player.level().getBlockEntity(anchor);
+        if (!(blockEntity instanceof Container inventory)) {
             throw new IllegalStateException("The selected block is not a container inventory.");
         }
 
-        TrackerData tracker = new TrackerData(rawName.trim(), "container", worldId(player.getEntityWorld()), anchor, anchor, anchor);
+        TrackerData tracker = new TrackerData(rawName.trim(), "container", worldId(player.level()), anchor, anchor, anchor);
         tracker.setContainerSnapshot(snapshotInventory(inventory));
         return tracker;
     }
@@ -398,8 +398,8 @@ public final class MobDropTrackerServer {
         return "Reset counts for tracker '" + tracker.name + "'.";
     }
 
-    private static String setOverlay(ServerPlayerEntity player, String token) {
-        OverlayPreference preference = VIEWER_PREFERENCES.computeIfAbsent(player.getUuid(), ignored -> new OverlayPreference());
+    private static String setOverlay(ServerPlayer player, String token) {
+        OverlayPreference preference = VIEWER_PREFERENCES.computeIfAbsent(player.getUUID(), ignored -> new OverlayPreference());
         String normalized = normalizeName(token);
 
         if ("off".equals(normalized)) {
@@ -442,11 +442,11 @@ public final class MobDropTrackerServer {
         }
     }
 
-    private static BlockPos parseBlockPos(ServerCommandSource source, String[] tokens, int start) {
+    private static BlockPos parseBlockPos(CommandSourceStack source, String[] tokens, int start) {
         if (tokens.length <= start + 2) {
             throw new IllegalStateException("Expected three coordinates.");
         }
-        Vec3d base = source.getPosition();
+        Vec3 base = source.getPosition();
         return new BlockPos(
                 parseBlockCoord(tokens[start], base.x),
                 parseBlockCoord(tokens[start + 1], base.y),
@@ -459,20 +459,20 @@ public final class MobDropTrackerServer {
             if (token.startsWith("~")) {
                 String remainder = token.substring(1);
                 double offset = remainder.isBlank() ? 0.0 : Double.parseDouble(remainder);
-                return MathHelper.floor(base + offset);
+                return Mth.floor(base + offset);
             }
-            return MathHelper.floor(Double.parseDouble(token));
+            return Mth.floor(Double.parseDouble(token));
         } catch (NumberFormatException ex) {
             throw new IllegalStateException("Invalid coordinate: " + token);
         }
     }
 
-    private static BlockPos resolveLookedOrFeetBlock(ServerPlayerEntity player, ServerCommandSource source) {
-        HitResult hit = player.raycast(20.0, 1.0f, false);
+    private static BlockPos resolveLookedOrFeetBlock(ServerPlayer player, CommandSourceStack source) {
+        HitResult hit = player.pick(20.0, 1.0f, false);
         if (hit instanceof BlockHitResult blockHit) {
             return blockHit.getBlockPos();
         }
-        return player.getBlockPos();
+        return player.blockPosition();
     }
 
     private static void tick(MinecraftServer server) {
@@ -498,14 +498,14 @@ public final class MobDropTrackerServer {
 
     private static void recordDrop(DropContext context, ItemEntity itemEntity, ItemStack stack) {
         ensureLoaded(activeServer);
-        if (context.sourceEntity instanceof PlayerEntity) {
+        if (context.sourceEntity instanceof Player) {
             return;
         }
 
-        String dimensionId = worldId(itemEntity.getEntityWorld());
-        BlockPos dropPos = itemEntity.getBlockPos();
-        String itemId = Registries.ITEM.getId(stack.getItem()).toString();
-        String mobType = compactId(Registries.ENTITY_TYPE.getId(context.sourceEntity.getType()).toString());
+        String dimensionId = worldId(itemEntity.level());
+        BlockPos dropPos = itemEntity.blockPosition();
+        String itemId = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
+        String mobType = compactId(BuiltInRegistries.ENTITY_TYPE.getKey(context.sourceEntity.getType()).toString());
 
         boolean matched = false;
         for (TrackerData tracker : TRACKERS.values()) {
@@ -531,19 +531,19 @@ public final class MobDropTrackerServer {
                 continue;
             }
 
-            ServerWorld world = resolveWorld(server, tracker.dimensionId);
+            ServerLevel world = resolveWorld(server, tracker.dimensionId);
             if (world == null) {
                 continue;
             }
 
             int chunkX = tracker.anchor.getX() >> 4;
             int chunkZ = tracker.anchor.getZ() >> 4;
-            if (!world.isChunkLoaded(chunkX, chunkZ)) {
+            if (!world.hasChunk(chunkX, chunkZ)) {
                 continue;
             }
 
             BlockEntity blockEntity = world.getBlockEntity(tracker.anchor);
-            if (!(blockEntity instanceof Inventory inventory)) {
+            if (!(blockEntity instanceof Container inventory)) {
                 tracker.clearContainerSnapshot();
                 continue;
             }
@@ -573,14 +573,14 @@ public final class MobDropTrackerServer {
         nextSyncTick = nextSyncTick == 0L ? scheduledTick : Math.min(nextSyncTick, scheduledTick);
     }
 
-    private static Map<String, Long> snapshotInventory(Inventory inventory) {
+    private static Map<String, Long> snapshotInventory(Container inventory) {
         LinkedHashMap<String, Long> counts = new LinkedHashMap<>();
-        for (int slot = 0; slot < inventory.size(); slot++) {
-            ItemStack stack = inventory.getStack(slot);
+        for (int slot = 0; slot < inventory.getContainerSize(); slot++) {
+            ItemStack stack = inventory.getItem(slot);
             if (stack == null || stack.isEmpty()) {
                 continue;
             }
-            String itemId = Registries.ITEM.getId(stack.getItem()).toString();
+            String itemId = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
             counts.merge(itemId, (long) stack.getCount(), Long::sum);
         }
         return counts;
@@ -656,7 +656,7 @@ public final class MobDropTrackerServer {
     }
 
     private static Path savePath(MinecraftServer server) {
-        return server.getSavePath(WorldSavePath.ROOT).resolve(SAVE_FILE_NAME);
+        return server.getWorldPath(LevelResource.ROOT).resolve(SAVE_FILE_NAME);
     }
 
     private static JsonObject writeTracker(TrackerData tracker) {
@@ -732,17 +732,17 @@ public final class MobDropTrackerServer {
     }
 
     private static void sendStateToAll(MinecraftServer server) {
-        for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             sendState(player);
         }
     }
 
-    private static void sendState(ServerPlayerEntity player) {
+    private static void sendState(ServerPlayer player) {
         if (!ServerPlayNetworking.canSend(player, MobDropTrackerPayloads.StatePayload.ID)) {
             return;
         }
 
-        OverlayPreference preference = VIEWER_PREFERENCES.computeIfAbsent(player.getUuid(), ignored -> new OverlayPreference());
+        OverlayPreference preference = VIEWER_PREFERENCES.computeIfAbsent(player.getUUID(), ignored -> new OverlayPreference());
         ServerPlayNetworking.send(player, new MobDropTrackerPayloads.StatePayload(
                 TRACKERS.values().stream().map(tracker -> tracker.toPayload(tickCounter)).toList(),
                 preference.modeToken(),
@@ -750,7 +750,7 @@ public final class MobDropTrackerServer {
         ));
     }
 
-    private static CompletableFuture<Suggestions> suggestArgs(CommandContext<ServerCommandSource> context,
+    private static CompletableFuture<Suggestions> suggestArgs(CommandContext<CommandSourceStack> context,
                                                               SuggestionsBuilder builder) {
         ensureLoaded(context.getSource().getServer());
 
@@ -817,14 +817,14 @@ public final class MobDropTrackerServer {
         };
     }
 
-    private static String worldId(World world) {
-        return world.getRegistryKey().getValue().toString();
+    private static String worldId(Level world) {
+        return world.dimension().identifier().toString();
     }
 
-    private static @Nullable ServerWorld resolveWorld(MinecraftServer server, String dimensionId) {
+    private static @Nullable ServerLevel resolveWorld(MinecraftServer server, String dimensionId) {
         try {
-            RegistryKey<World> key = RegistryKey.of(RegistryKeys.WORLD, Identifier.of(dimensionId));
-            return server.getWorld(key);
+            ResourceKey<Level> key = ResourceKey.create(Registries.DIMENSION, Identifier.parse(dimensionId));
+            return server.getLevel(key);
         } catch (Exception ignored) {
             return null;
         }

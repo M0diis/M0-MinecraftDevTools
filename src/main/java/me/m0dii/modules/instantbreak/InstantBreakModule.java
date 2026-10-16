@@ -2,7 +2,7 @@ package me.m0dii.modules.instantbreak;
 
 import me.m0dii.modules.Module;
 import me.m0dii.modules.optin.RestrictedModuleOptInNetworking;
-import net.minecraft.util.Identifier;
+import net.minecraft.resources.Identifier;
 
 public class InstantBreakModule extends Module {
 
