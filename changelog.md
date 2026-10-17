@@ -92,9 +92,6 @@ Defaults no longer clash with vanilla 26.3 keys or with each other. Your own sav
 - Redstone Overlay: labels on repeaters, comparators, torches and other components were drawn flat on the block and hidden under its torches. They now float above the block, face the camera and have a dark backing. Repeaters also show when they are locked.
 - Structure Bounding Boxes never showed anything (servers don't send structure data). They now work in singleplayer, with structure pieces and name labels and settings for radius, pieces and labels. On servers the module says it isn't available.
 - Held Light caused big frame drops: every 2 blocks of movement it marked about 2.5 million block updates for rebuilding. It now rebuilds only the chunk sections the light reaches.
-- Freecam "Show Player Model" had no effect in 26.x; your player is drawn again. Freecam's chunk refresh no longer does per-block work and covers the full 26.x world height.
-- Redstone Timeline: left-click cleared the mark instead of setting it (mouse buttons are numbered from 1 in 26.x).
-- Build fixes after the 26.3 update (hide-GUI check, zombie entity type, keypad minus key, camera path recording).
 
 ### Known issues
 - Running a second JavaScript script in the same session can fail with "Found different host access configuration for a context with a shared engine".

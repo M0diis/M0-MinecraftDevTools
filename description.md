@@ -23,30 +23,30 @@ Things can change with any update, and I may not be able to provide support for 
 - **Fixes**: Redstone Overlay labels on repeaters and comparators, Structure Bounding Boxes, Held Light lag, Freecam "Show Player Model".
 - **Default keys** no longer clash with vanilla 26.3. See [Default keybindings](#default-keybindings).
 
-See `changelog.md` for the full list.
+See version changelog for the full list.
 
 ## Default keybindings
 
 All keys can be changed in Options → Controls → Key Binds (category "M0-Dev Tools"). Mod hotkeys are ignored while F3 is held, so vanilla F3 debug shortcuts never trigger them.
 
-| Action | Default key |
-|---|---|
-| Open ClickHUD | `` ` `` (grave / tilde) |
-| Open Module Browser | `N` |
-| Open Macro Manager / Workbench | `M` |
-| Open Macro Workbench (Canvas) | `K` |
-| Open Script Editor | `,` (comma) |
-| Open Command History | `;` (semicolon) |
-| Open Message History | `'` (apostrophe) |
-| Toggle Secondary Chat | `Y` |
-| Open Entity Radar Screen | `R` |
-| Toggle Freecam | `U` |
-| Zoom (hold) | `Z` |
-| Toggle Fullbright | `J` |
-| Toggle Xray | `]` |
-| Open Xray Menu | `[` |
-| Toggle Block Inspector | `F10` |
-| Toggle Watson CoreProtect | `.` (period) |
+| Action                         | Default key             |
+|--------------------------------|-------------------------|
+| Open ClickHUD                  | `` ` `` (grave / tilde) |
+| Open Module Browser            | `N`                     |
+| Open Macro Manager / Workbench | `M`                     |
+| Open Macro Workbench (Canvas)  | `K`                     |
+| Open Script Editor             | `,` (comma)             |
+| Open Command History           | `;` (semicolon)         |
+| Open Message History           | `'` (apostrophe)        |
+| Toggle Secondary Chat          | `Y`                     |
+| Open Entity Radar Screen       | `R`                     |
+| Toggle Freecam                 | `U`                     |
+| Zoom (hold)                    | `Z`                     |
+| Toggle Fullbright              | `J`                     |
+| Toggle Xray                    | `]`                     |
+| Open Xray Menu                 | `[`                     |
+| Toggle Block Inspector         | `F10`                   |
+| Toggle Watson CoreProtect      | `.` (period)            |
 
 Unbound by default (bind them if you use them): Redstone / Light / Slime Chunk / Biome Border / Command Block overlay toggles, Redstone BUD order, waypoint add/list/GUI/render toggle, quick teleport up/down/forward/left/right, Freecam control player / save spot / next spot, Ruler mark point, Packet Inspector, cycle placement restriction, next module profile, Macro Workbench (Keyboard tab), and Better Command Block UI area selection.
 
