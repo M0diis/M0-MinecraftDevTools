@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
 import me.m0dii.M0DevTools;
+import me.m0dii.utils.ConfigFileSafety;
 import me.m0dii.utils.ModConfig;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.network.chat.Component;
@@ -79,17 +80,23 @@ public class MessageHistoryManager {
             }.getType());
             if (loaded != null) {
                 messageHistory.clear();
-                messageHistory.addAll(loaded);
+                for (String entry : loaded) {
+                    if (entry != null) {
+                        messageHistory.add(entry);
+                    }
+                }
             }
-        } catch (IOException e) {
-            M0DevTools.LOGGER.error("Failed to load message history", e);
+        } catch (IOException | RuntimeException e) {
+            // RuntimeException covers malformed JSON; keep a copy so the next save doesn't destroy it.
+            ConfigFileSafety.backupUnreadable(HISTORY_FILE, e);
+            messageHistory.clear();
         }
     }
 
     private static void save() {
         try {
             String json = GSON.toJson(messageHistory);
-            Files.writeString(HISTORY_FILE, json);
+            ConfigFileSafety.writeAtomically(HISTORY_FILE, json);
         } catch (IOException e) {
             M0DevTools.LOGGER.error("Failed to save message history", e);
         }

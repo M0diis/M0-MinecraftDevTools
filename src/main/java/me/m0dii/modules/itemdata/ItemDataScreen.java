@@ -65,6 +65,61 @@ public final class ItemDataScreen extends Screen implements ThemedScreen {
         this.parent = parent;
         this.reference = reference;
         this.itemData = itemData == null ? new CompoundTag() : itemData.copy();
+        this.savedData = this.itemData.copy();
+    }
+
+    // ---- undo & review before saving -------------------------------------------------------------------------
+
+    /** The item as last loaded from / saved to the server, for the "review changes" step. */
+    private CompoundTag savedData;
+    private final java.util.ArrayDeque<CompoundTag> undoStack = new java.util.ArrayDeque<>();
+    private static final int UNDO_LIMIT = 50;
+    /** Set after the first Save click: the detail panel shows the changes and Save must be pressed again. */
+    private boolean reviewingSave;
+    private Button saveButton;
+    private Button undoButton;
+
+    /** Call before every edit so it can be undone. */
+    private void rememberForUndo() {
+        undoStack.push(this.itemData.copy());
+        while (undoStack.size() > UNDO_LIMIT) {
+            undoStack.removeLast();
+        }
+        reviewingSave = false;
+    }
+
+    private void undo() {
+        if (undoStack.isEmpty()) {
+            setStatus("Nothing to undo.", 0xFFFFD37A);
+            return;
+        }
+        this.itemData = undoStack.pop();
+        reviewingSave = false;
+        refreshFieldsFromData();
+        refreshSelection();
+        updateButtons();
+        setStatus("Undid the last change.", 0xFF70D070);
+    }
+
+    private List<String> pendingChanges() {
+        return ItemDataDiff.diff(flatten(this.savedData), flatten(this.itemData));
+    }
+
+    private static java.util.Map<String, String> flatten(CompoundTag root) {
+        java.util.Map<String, String> out = new java.util.TreeMap<>();
+        if (root == null) {
+            return out;
+        }
+        for (String key : root.keySet()) {
+            if (!"components".equals(key)) {
+                out.put(key, String.valueOf(root.get(key)));
+            }
+        }
+        CompoundTag components = ItemDataCodec.getComponents(root);
+        for (String key : components.keySet()) {
+            out.put("components/" + key, String.valueOf(components.get(key)));
+        }
+        return out;
     }
 
     @Override
@@ -142,8 +197,11 @@ public final class ItemDataScreen extends Screen implements ThemedScreen {
         this.addRenderableWidget(Button.builder(Component.literal("JSON Mode"), b -> openFullItemEditor())
                 .bounds(this.width - 248, bottomButtonsY, 82, 20)
                 .build());
-        this.addRenderableWidget(Button.builder(Component.literal("Save"), b -> saveToServer())
+        this.saveButton = this.addRenderableWidget(Button.builder(Component.literal("Save"), b -> saveToServer())
                 .bounds(this.width - 160, bottomButtonsY, 60, 20)
+                .build());
+        this.undoButton = this.addRenderableWidget(Button.builder(Component.literal("Undo"), b -> undo())
+                .bounds(270, bottomButtonsY, 52, 20)
                 .build());
         this.addRenderableWidget(Button.builder(Component.literal("Done"), b -> onClose())
                 .bounds(this.width - 94, bottomButtonsY, 60, 20)
@@ -211,6 +269,14 @@ public final class ItemDataScreen extends Screen implements ThemedScreen {
 
     @Override
     public boolean keyPressed(KeyEvent input) {
+        boolean ctrl = InputConstants.isKeyDown(InputConstants.KEY_LCONTROL) || InputConstants.isKeyDown(InputConstants.KEY_RCONTROL);
+        boolean typing = (this.availableFilterField != null && this.availableFilterField.isFocused())
+                || (this.nameField != null && this.nameField.isFocused())
+                || (this.countField != null && this.countField.isFocused());
+        if (ctrl && !typing && input.input() == InputConstants.KEY_Z) {
+            undo();
+            return true;
+        }
         if (input.input() == InputConstants.KEY_TAB && this.availableFilterField != null && this.availableFilterField.isFocused()) {
             String suggestion = availableSuggestionSuffix();
             if (suggestion != null && !suggestion.isBlank()) {
@@ -413,6 +479,7 @@ public final class ItemDataScreen extends Screen implements ThemedScreen {
                 true,
                 (screen, raw, path) -> {
                     Tag normalized = ItemDataCodec.normalizeComponentValue(componentId, raw, registryLookup);
+                    rememberForUndo();
                     ItemDataCodec.ensureComponents(this.itemData).put(componentId, normalized);
                     this.selectedComponentId = componentId;
                     refreshFieldsFromData();
@@ -444,7 +511,9 @@ public final class ItemDataScreen extends Screen implements ThemedScreen {
                 true,
                 true,
                 (screen, raw, path) -> {
-                    this.itemData = ItemDataCodec.normalizeItemData(raw, registryLookup);
+                    CompoundTag replacement = ItemDataCodec.normalizeItemData(raw, registryLookup);
+                    rememberForUndo();
+                    this.itemData = replacement;
                     refreshFieldsFromData();
                     refreshSelection();
                     updateButtons();
@@ -461,7 +530,9 @@ public final class ItemDataScreen extends Screen implements ThemedScreen {
             return;
         }
         try {
+            CompoundTag before = this.itemData.copy();
             ItemDataCodec.applyPlainCustomName(this.itemData, this.nameField == null ? "" : this.nameField.getValue(), registryLookup);
+            pushUndoIfChanged(before);
             refreshFieldsFromData();
             refreshSelection();
             updateButtons();
@@ -473,7 +544,9 @@ public final class ItemDataScreen extends Screen implements ThemedScreen {
 
     private void applyCount() {
         try {
+            CompoundTag before = this.itemData.copy();
             ItemDataCodec.applyCount(this.itemData, this.countField == null ? "" : this.countField.getValue());
+            pushUndoIfChanged(before);
             refreshFieldsFromData();
             setStatus("Updated item count.", 0xFF70D070);
         } catch (CommandSyntaxException exception) {
@@ -491,6 +564,7 @@ public final class ItemDataScreen extends Screen implements ThemedScreen {
             return;
         }
 
+        rememberForUndo();
         CompoundTag components = ItemDataCodec.getComponents(this.itemData);
         components.remove(this.selectedComponentId);
         if (components.isEmpty()) {
@@ -516,8 +590,37 @@ public final class ItemDataScreen extends Screen implements ThemedScreen {
         setStatus("Copied " + this.selectedComponentId + " to the clipboard.", 0xFF70D070);
     }
 
+    private void pushUndoIfChanged(CompoundTag before) {
+        if (!before.equals(this.itemData)) {
+            undoStack.push(before);
+            while (undoStack.size() > UNDO_LIMIT) {
+                undoStack.removeLast();
+            }
+            reviewingSave = false;
+        }
+    }
+
+    /** First click shows what will change; the second click sends it. */
     private void saveToServer() {
+        List<String> changes = pendingChanges();
+        if (changes.isEmpty()) {
+            reviewingSave = false;
+            setStatus("Nothing changed since the last save.", 0xFFFFD37A);
+            return;
+        }
+        if (!reviewingSave) {
+            reviewingSave = true;
+            this.detailScroll = 0;
+            setStatus(changes.size() + " change(s) listed on the right. Press Save again to send, or edit/Undo to cancel.", 0xFFFFD37A);
+            updateButtons();
+            return;
+        }
+        reviewingSave = false;
         boolean sent = ItemDataSyncClient.saveItemData(this.reference.slotIndex(), this.itemData);
+        if (sent) {
+            this.savedData = this.itemData.copy();
+        }
+        updateButtons();
         setStatus(
                 sent ? "Sent the updated item data to the server for " + this.reference.slotLabel() + "." : "Unable to send the item data to the server.",
                 sent ? 0xFF70D070 : 0xFFFF9090
@@ -620,6 +723,16 @@ public final class ItemDataScreen extends Screen implements ThemedScreen {
     }
 
     private List<String> buildDetailLines() {
+        if (reviewingSave) {
+            List<String> review = new ArrayList<>();
+            review.add("Changes to send (+ added, - removed, ~ changed):");
+            review.addAll(pendingChanges());
+            return review;
+        }
+        return buildComponentDetailLines();
+    }
+
+    private List<String> buildComponentDetailLines() {
         if (this.selectedComponentId == null) {
             return List.of(
                     "Pick a component from the left if it already exists on the item.",
@@ -682,6 +795,12 @@ public final class ItemDataScreen extends Screen implements ThemedScreen {
         }
         if (this.applyCountButton != null) {
             this.applyCountButton.active = true;
+        }
+        if (this.undoButton != null) {
+            this.undoButton.active = !undoStack.isEmpty();
+        }
+        if (this.saveButton != null) {
+            this.saveButton.setMessage(Component.literal(reviewingSave ? "Confirm" : "Save"));
         }
     }
 

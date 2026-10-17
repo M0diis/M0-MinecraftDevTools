@@ -192,8 +192,126 @@ class AutomationEngineTest {
         return engine;
     }
 
+    @Test
+    void regexCaptureGroupsAreExposedToActions() {
+        RecordingExecutor executor = new RecordingExecutor();
+        AutomationEngine engine = new AutomationEngine(EventBus.getInstance(), executor, (source, event) -> Map.of());
+        engine.configureInMemory(10, 10_000L, 10, 10_000L);
+
+        AutomationRule rule = new AutomationRule();
+        rule.id = "tpa_rule";
+        rule.eventType = AutomationEventType.CHAT_RECEIVED_REGEX;
+        rule.actions = List.of(AutomationRule.Action.command("/tpaccept {event.group1}"));
+        rule.eventFilters = List.of(AutomationRule.EventFilter.regex("message", "(?<who>\\w+) has requested to teleport"));
+        engine.setRulesInMemory(List.of(rule));
+
+        engine.onAutomationEvent(new AutomationEvent(
+                AutomationEventType.CHAT_RECEIVED_REGEX, 1_000L, 20L,
+                Map.of("message", "[Server] Steve has requested to teleport to you")));
+
+        assertEquals(List.of("tpa_rule@CHAT_RECEIVED_REGEX"), executor.executions);
+        assertEquals("Steve", executor.lastEvent.attribute("group1"));
+        assertEquals("Steve", executor.lastEvent.attribute("group.who"));
+        assertEquals("Steve has requested to teleport", executor.lastEvent.attribute("group0"));
+    }
+
+    @Test
+    void invalidRegexNeverThrowsAndNeverMatches() {
+        RecordingExecutor executor = new RecordingExecutor();
+        AutomationEngine engine = new AutomationEngine(EventBus.getInstance(), executor, (source, event) -> Map.of());
+        engine.configureInMemory(10, 10_000L, 10, 10_000L);
+
+        AutomationRule rule = new AutomationRule();
+        rule.id = "broken_rule";
+        rule.eventType = AutomationEventType.CHAT_RECEIVED_REGEX;
+        rule.actions = List.of(AutomationRule.Action.command("/say hi"));
+        rule.eventFilters = List.of(AutomationRule.EventFilter.regex("message", "(unclosed"));
+        engine.setRulesInMemory(List.of(rule));
+
+        engine.onAutomationEvent(new AutomationEvent(
+                AutomationEventType.CHAT_RECEIVED_REGEX, 1_000L, 20L, Map.of("message", "(unclosed")));
+
+        assertEquals(List.of(), executor.executions);
+    }
+
+    @Test
+    void regexHonoursIgnoreCase() {
+        RecordingExecutor executor = new RecordingExecutor();
+        AutomationEngine engine = new AutomationEngine(EventBus.getInstance(), executor, (source, event) -> Map.of());
+        engine.configureInMemory(10, 10_000L, 10, 10_000L);
+
+        AutomationRule rule = new AutomationRule();
+        rule.id = "case_rule";
+        rule.eventType = AutomationEventType.CHAT_RECEIVED_REGEX;
+        rule.actions = List.of(AutomationRule.Action.command("/say hi"));
+        AutomationRule.EventFilter filter = AutomationRule.EventFilter.regex("message", "joined the game");
+        filter.ignoreCase = true;
+        rule.eventFilters = List.of(filter);
+        engine.setRulesInMemory(List.of(rule));
+
+        engine.onAutomationEvent(new AutomationEvent(
+                AutomationEventType.CHAT_RECEIVED_REGEX, 1_000L, 20L, Map.of("message", "Alex JOINED THE GAME")));
+
+        assertEquals(List.of("case_rule@CHAT_RECEIVED_REGEX"), executor.executions);
+    }
+
+    @Test
+    void explainReportsChecksGroupsAndExpandedActions() {
+        RecordingExecutor executor = new RecordingExecutor();
+        AutomationEngine engine = new AutomationEngine(EventBus.getInstance(), executor, (source, event) -> Map.of());
+        AutomationRule rule = new AutomationRule();
+        rule.id = "explain_rule";
+        rule.eventType = AutomationEventType.CHAT_RECEIVED_REGEX;
+        rule.eventFilters = List.of(AutomationRule.EventFilter.regex("message", "(\\w+) says hi"));
+        rule.actions = List.of(AutomationRule.Action.command("/msg {event.group1} hello"));
+
+        List<String> lines = engine.explain(rule, new AutomationEvent(AutomationEventType.CHAT_RECEIVED_REGEX, 1L, 1L,
+                Map.of("message", "Alex says hi")));
+        String text = String.join("\n", lines);
+        org.junit.jupiter.api.Assertions.assertTrue(text.contains("✔ filter message REGEX"), text);
+        org.junit.jupiter.api.Assertions.assertTrue(text.contains("would run"), text);
+        org.junit.jupiter.api.Assertions.assertTrue(text.contains("SEND_CLIENT_COMMAND /msg Alex hello"), text);
+        assertEquals(List.of(), executor.executions);
+
+        List<String> miss = engine.explain(rule, new AutomationEvent(AutomationEventType.CHAT_RECEIVED_REGEX, 1L, 1L,
+                Map.of("message", "nothing")));
+        org.junit.jupiter.api.Assertions.assertTrue(String.join("\n", miss).contains("would NOT run"));
+    }
+
+    @Test
+    void mentionTemplateIgnoresOwnMessages() {
+        RecordingExecutor executor = new RecordingExecutor();
+        AutomationEngine engine = new AutomationEngine(EventBus.getInstance(), executor, (source, event) -> Map.of());
+        engine.configureInMemory(10, 10_000L, 10, 10_000L);
+        AutomationRule rule = AutomationTemplates.create(AutomationTemplates.find("mention_ping"),
+                new AutomationTemplates.Context("Steve"), List.of());
+        rule.cooldownMs = 0L;
+        engine.setRulesInMemory(List.of(rule));
+
+        engine.onAutomationEvent(new AutomationEvent(AutomationEventType.CHAT_RECEIVED_REGEX, 1_000L, 1L,
+                Map.of("message", "<Steve> hello there")));
+        engine.onAutomationEvent(new AutomationEvent(AutomationEventType.CHAT_RECEIVED_REGEX, 2_000L, 2L,
+                Map.of("message", "<Alex> hey steve, come here")));
+        engine.onAutomationEvent(new AutomationEvent(AutomationEventType.CHAT_RECEIVED_REGEX, 3_000L, 3L,
+                Map.of("message", "<Alex> Steven is not you")));
+
+        assertEquals(List.of(rule.id + "@CHAT_RECEIVED_REGEX"), executor.executions);
+    }
+
+    @Test
+    void templatesGetUniqueIds() {
+        AutomationTemplates.Template template = AutomationTemplates.find("death_coordinates");
+        AutomationRule first = AutomationTemplates.create(template, new AutomationTemplates.Context(null), List.of());
+        AutomationRule second = AutomationTemplates.create(template, new AutomationTemplates.Context(null), List.of(first));
+        assertEquals("death_coordinates", first.id);
+        assertEquals("death_coordinates_2", second.id);
+        org.junit.jupiter.api.Assertions.assertFalse(AutomationTemplates.create(AutomationTemplates.find("tpa_accept"),
+                new AutomationTemplates.Context(null), List.of()).enabled);
+    }
+
     private static final class RecordingExecutor extends ActionExecutor {
         private final List<String> executions = new ArrayList<>();
+        private AutomationEvent lastEvent;
 
         private RecordingExecutor() {
             super(new NoOpBridge());
@@ -202,6 +320,7 @@ class AutomationEngineTest {
         @Override
         public ActionResult execute(@NonNull AutomationRule rule, @NonNull AutomationEvent event) {
             executions.add(rule.id + "@" + event.type().name());
+            lastEvent = event;
             return ActionResult.ok("executed");
         }
     }

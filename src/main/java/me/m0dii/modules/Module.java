@@ -120,6 +120,9 @@ public abstract class Module {
         } else {
             onDisable();
         }
+
+        // onEnable may refuse (e.g. no world yet) and reset the flag; remember what actually happened.
+        me.m0dii.modules.state.ModuleStateStore.onModuleToggled(this);
     }
 
     public void toggleEnabled() {

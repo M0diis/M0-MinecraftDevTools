@@ -69,8 +69,45 @@ public final class MacroWorkbenchCustomWidgetTypeClickHandler {
         if (selected.type == MacroHudDataHandler.ElementType.SHAPE) {
             return handleShapeClick(click, layout, forward, selected, shapeTypePresets, ops);
         }
+        if (selected.type == MacroHudDataHandler.ElementType.REDSTONE_TIMELINE) {
+            return handleRedstoneTimelineClick(click, layout, forward, selected, ops);
+        }
         if (selected.type == MacroHudDataHandler.ElementType.STATE_BADGE) {
             return handleStateBadgeClick(click, layout, forward, selected, stateSourcePresets, ops);
+        }
+        return false;
+    }
+
+    private static boolean handleRedstoneTimelineClick(MouseButtonEvent click,
+                                                       CustomWidgetAdvancedLayout layout,
+                                                       boolean forward,
+                                                       MacroHudDataHandler.HudElement selected,
+                                                       Ops ops) {
+        List<UiRect> row1 = layout.typeRow1();
+        List<UiRect> row2 = layout.typeRow2();
+        if (ops.contains(click, row1.get(0))) {
+            selected.maxLines = Math.max(1, selected.maxLines - 1);
+            return true;
+        }
+        if (ops.contains(click, row1.get(1))) {
+            selected.maxLines = Math.min(24, selected.maxLines + 1);
+            return true;
+        }
+        if (ops.contains(click, row1.get(2))) {
+            selected.timelineWindowTicks = Math.max(20, selected.timelineWindowTicks - ops.stepInt(10));
+            return true;
+        }
+        if (ops.contains(click, row1.get(3))) {
+            selected.timelineWindowTicks = Math.min(1200, selected.timelineWindowTicks + ops.stepInt(10));
+            return true;
+        }
+        if (ops.contains(click, row2.get(0))) {
+            selected.timelineShowLabels = !selected.timelineShowLabels;
+            return true;
+        }
+        if (ops.contains(click, row2.get(1))) {
+            selected.colorStart = ops.cycleStyleColor(selected.colorStart, forward);
+            return true;
         }
         return false;
     }

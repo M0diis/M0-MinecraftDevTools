@@ -28,7 +28,8 @@ public class CameraUtils {
     }
 
     public static boolean shouldPreventPlayerMovement() {
-        return FreecamModule.INSTANCE.isEnabled() || CameraEntity.hasController();
+        return (FreecamModule.INSTANCE.isEnabled() && !FreecamModule.INSTANCE.isControllingPlayer())
+                || CameraEntity.hasController();
     }
 
     public static void updateCameraRotations(float yawChange, float pitchChange) {
@@ -109,17 +110,14 @@ public class CameraUtils {
     }
 
     public static void markChunkForReRender(@NotNull LevelRenderer renderer, int chunkX, int chunkZ) {
-        for (int cy = 0; cy < 16; ++cy) {
-            int minX = chunkX << 4;
-            int minY = cy << 4;
-            int minZ = chunkZ << 4;
-
-            int maxX = minX + 16;
-            int maxY = minY + 16;
-            int maxZ = minZ + 16;
-
-            Minecraft.getInstance().levelExtractor.setBlocksDirty(minX, minY, minZ, maxX, maxY, maxZ);
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.level == null) {
+            return;
         }
+        // Section coordinates: setBlocksDirty walks every block, which is far too slow for whole chunk columns.
+        int minSectionY = mc.level.getMinY() >> 4;
+        int maxSectionY = mc.level.getMaxY() >> 4;
+        mc.levelExtractor.setSectionRangeDirty(chunkX, minSectionY, chunkZ, chunkX, maxSectionY, chunkZ);
     }
 
     public static boolean isClientChunkLoaded(ClientLevel world, int chunkX, int chunkZ) {

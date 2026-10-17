@@ -6,9 +6,7 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 class MacroDataHandlerFormatTest {
     private static final String LEGACY = """
@@ -41,5 +39,27 @@ class MacroDataHandlerFormatTest {
         assertFalse(reloaded.convertedLegacyKeyCodes());
         assertEquals(InputConstants.KEY_K, reloaded.macros().get("creative").keyCode);
         assertEquals(List.of("creative", "unbound"), List.copyOf(reloaded.macros().keySet()));
+    }
+
+    @Test
+    void nonObjectFileIsAnErrorNotAnEmptyMacroList() {
+        // An unreadable file must fail loudly so it gets backed up instead of silently overwritten.
+        assertThrows(RuntimeException.class, () -> MacroDataHandler.parse("[1, 2, 3]"));
+        assertThrows(RuntimeException.class, () -> MacroDataHandler.parse("{ \"formatVersion\": 2, \"macros\": "));
+    }
+
+    @Test
+    void emptyFileLoadsAsNoMacros() {
+        assertTrue(MacroDataHandler.parse("").macros().isEmpty());
+        assertTrue(MacroDataHandler.parse("   ").macros().isEmpty());
+    }
+
+    @Test
+    void nullEntriesAreSkipped() {
+        String json = """
+                {"formatVersion": 2, "macros": {"a": null, "b": {"name": "B", "commands": [], "keyCode": -1}}}
+                """;
+        Map<String, MacroDataHandler.MacroEntry> macros = MacroDataHandler.parse(json).macros();
+        assertEquals(List.of("b"), List.copyOf(macros.keySet()));
     }
 }

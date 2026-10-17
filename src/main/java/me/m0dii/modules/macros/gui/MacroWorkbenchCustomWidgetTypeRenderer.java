@@ -69,6 +69,10 @@ public final class MacroWorkbenchCustomWidgetTypeRenderer {
             renderShape(context, textRenderer, selected, layout, mouseX, mouseY);
             return;
         }
+        if (selected.type == MacroHudDataHandler.ElementType.REDSTONE_TIMELINE) {
+            renderRedstoneTimeline(context, textRenderer, selected, layout, mouseX, mouseY);
+            return;
+        }
         if (selected.type == MacroHudDataHandler.ElementType.STATE_BADGE) {
             renderStateBadge(context, textRenderer, selected, layout, mouseX, mouseY,
                     advancedBgColor, advancedBgSelectionAnchor, advancedBgCursor, advancedBgColorFocused,
@@ -244,6 +248,27 @@ public final class MacroWorkbenchCustomWidgetTypeRenderer {
         drawModalButton(context, textRenderer, row1.get(2), "S-", mouseX, mouseY);
         drawModalButton(context, textRenderer, row1.get(3), "S+", mouseX, mouseY);
         context.text(textRenderer, "Max lines: " + selected.maxLines + "  Scroll: " + selected.listScroll, layout.typeInfo1().x(), layout.typeInfo1().y(), 0xFFEAEAEA);
+    }
+
+    private static void renderRedstoneTimeline(GuiGraphicsExtractor context,
+                                               Font textRenderer,
+                                               MacroHudDataHandler.HudElement selected,
+                                               CustomWidgetAdvancedLayout layout,
+                                               int mouseX,
+                                               int mouseY) {
+        List<UiRect> row1 = layout.typeRow1();
+        List<UiRect> row2 = layout.typeRow2();
+        drawModalButton(context, textRenderer, row1.get(0), "Rows-", mouseX, mouseY);
+        drawModalButton(context, textRenderer, row1.get(1), "Rows+", mouseX, mouseY);
+        drawModalButton(context, textRenderer, row1.get(2), "Ticks-", mouseX, mouseY);
+        drawModalButton(context, textRenderer, row1.get(3), "Ticks+", mouseX, mouseY);
+        drawModalButton(context, textRenderer, row2.get(0), "Labels: " + (selected.timelineShowLabels ? "ON" : "OFF"), mouseX, mouseY);
+        drawModalButton(context, textRenderer, row2.get(1), "Signal color", mouseX, mouseY);
+        context.fill(row2.get(1).right() - 10, row2.get(1).y() + 4, row2.get(1).right() - 4, row2.get(1).bottom() - 4, selected.colorStart);
+        context.text(textRenderer, "Rows: " + selected.maxLines + "  Window: " + selected.timelineWindowTicks + " gt (shift = x10)",
+                layout.typeInfo1().x(), layout.typeInfo1().y(), 0xFFEAEAEA);
+        context.text(textRenderer, "Shows the busiest tracks of /rstimeline.",
+                layout.typeInfo2().x(), layout.typeInfo2().y(), 0xFF98A1B3);
     }
 
     private static void renderShape(GuiGraphicsExtractor context,

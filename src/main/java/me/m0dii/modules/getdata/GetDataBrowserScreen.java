@@ -1,13 +1,13 @@
 package me.m0dii.modules.getdata;
 
 
-import me.m0dii.gui.theme.ThemedScreen;
 import com.mojang.blaze3d.platform.InputConstants;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import me.m0dii.gui.local.FormPanel;
 import me.m0dii.gui.local.ListPanel;
 import me.m0dii.gui.local.UiRect;
 import me.m0dii.gui.local.UiTheme;
+import me.m0dii.gui.theme.ThemedScreen;
 import me.m0dii.utils.NbtEditorUtils;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
@@ -103,6 +103,14 @@ public final class GetDataBrowserScreen extends Screen implements GetDataTargetV
                 .build());
         this.addRenderableWidget(Button.builder(Component.literal("Done"), b -> onClose())
                 .bounds(this.width - 94, bottomButtonsY, 60, 20)
+                .build());
+
+        this.addRenderableWidget(Button.builder(Component.literal("Quick Edit"), b -> {
+                    if (this.minecraft != null) {
+                        this.minecraft.gui.setScreen(QuickEditScreen.create(this.parent, this.targetName, this.targetToken, this.rootData.toString()));
+                    }
+                })
+                .bounds(this.width - 100, 16, 84, 18)
                 .build());
 
         refreshSelection();

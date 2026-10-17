@@ -114,13 +114,38 @@ public class M0DevToolsClient implements ClientModInitializer {
         me.m0dii.modules.actionrunner.ActionRunnerClientInit.register();
         me.m0dii.modules.actionrunner.ActionRunnerClientTick.register();
         AutomationModule.INSTANCE.register();
+        me.m0dii.modules.ruler.RulerModule.INSTANCE.register();
+        me.m0dii.modules.portals.PortalLinkerModule.INSTANCE.register();
+        me.m0dii.modules.packets.PacketInspectorModule.INSTANCE.register();
+        me.m0dii.modules.chathighlight.ChatHighlightModule.INSTANCE.register();
+        me.m0dii.modules.redstonetimeline.RedstoneTimelineModule.INSTANCE.register();
+        me.m0dii.modules.placement.PlacementRestrictionModule.INSTANCE.register();
+        me.m0dii.modules.ranges.RangeOverlaysModule.INSTANCE.register();
+        me.m0dii.modules.debugviews.DebugViewsModule.INSTANCE.register();
+        me.m0dii.modules.farmrate.FarmRateModule.INSTANCE.register();
 
         // Populate ModuleRegistry categories after modules have had a chance to create their singletons
         ModuleRegistry.initializeCategories();
+        // Saved settings, favourites and profiles; on/off states are restored on the first world join.
+        me.m0dii.modules.state.ModuleStateStore.register();
+        me.m0dii.modules.state.ProfileCommands.register();
 
-        KeybindManager.registerPressedKeybind(KeybindCatalog.OPEN_MODULES_SCREEN.translationKey(),
+        // Default N: vanilla 26.x took O for the Friends List.
+        me.m0dii.modules.clickgui.ModuleBrowserScreen.openKey = KeybindManager.registerPressedKeybind(KeybindCatalog.OPEN_MODULES_SCREEN.translationKey(),
                 InputConstants.Type.KEYBOARD, KeybindCatalog.OPEN_MODULES_SCREEN.defaultKey(),
-                client -> ClickHudModule.INSTANCE.getRenderer().toggle());
+                client -> {
+                    var clickHud = me.m0dii.modules.clickgui.ClickHudModule.INSTANCE.getRenderer();
+                    var focus = clickHud == null ? null : clickHud.focusedModule();
+                    client.gui.setScreen(new me.m0dii.modules.clickgui.ModuleBrowserScreen(client.gui.screen(), focus));
+                });
+        KeybindManager.registerPressedKeybind(KeybindCatalog.CYCLE_PROFILE.translationKey(),
+                InputConstants.Type.KEYBOARD, KeybindCatalog.CYCLE_PROFILE.defaultKey(),
+                client -> {
+                    String message = me.m0dii.modules.state.ModuleStateStore.cycleProfile();
+                    if (client.player != null) {
+                        client.player.sendOverlayMessage(net.minecraft.network.chat.Component.literal(message));
+                    }
+                });
 
         ClientCommandRunScript.register();
         GetDataClientCommand.register();

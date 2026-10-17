@@ -68,6 +68,7 @@ public final class MacroHudRuntime {
                 case INVENTORY -> renderInventoryElement(context, element, x, y);
                 case SHAPE -> renderShapeElement(context, element, x, y);
                 case STATE_BADGE -> renderStateBadgeElement(context, element, x, y);
+                case REDSTONE_TIMELINE -> renderRedstoneTimelineElement(context, element, x, y);
             }
         }
     }
@@ -544,6 +545,20 @@ public final class MacroHudRuntime {
         int tx = alignedStartX(x, element, text, true, scale);
         int ty = alignedStartY(y, element, Math.max(9, Math.round(9 * scale)), true);
         drawStyledTextLine(context, text, tx, ty, element.textColor, scale);
+    }
+
+    private static void renderRedstoneTimelineElement(GuiGraphicsExtractor context, MacroHudDataHandler.HudElement element, int x, int y) {
+        if (element.drawBackground) {
+            context.fill(x, y, x + element.width, y + element.height,
+                    effectiveBackgroundColor(element.backgroundColor, element.backgroundOpaque, element.backgroundAlpha));
+        }
+        if (element.drawBorder) {
+            drawBorder(context, x, y, element.width, element.height, element.borderColor, element.borderMode);
+        }
+        me.m0dii.modules.redstonetimeline.RedstoneTimelineWidget.render(context, Minecraft.getInstance().font,
+                x, y, element.width, element.height, safe(element.label).isBlank() ? "Redstone" : element.label,
+                Math.max(1, element.maxLines), element.timelineWindowTicks, element.timelineShowLabels,
+                element.colorStart, element.textColor, false);
     }
 
     private static void renderLinesElement(GuiGraphicsExtractor context, MacroHudDataHandler.HudElement element, int x, int y, List<String> lines) {

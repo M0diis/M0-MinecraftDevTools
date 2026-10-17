@@ -34,42 +34,7 @@ public final class NbtEditorUtils {
         if (raw == null || raw.isBlank()) {
             return "{}";
         }
-
-        StringBuilder out = new StringBuilder();
-        int indent = 0;
-        boolean inString = false;
-        for (int i = 0; i < raw.length(); i++) {
-            char ch = raw.charAt(i);
-            if (ch == '"' && (i == 0 || raw.charAt(i - 1) != '\\')) {
-                inString = !inString;
-                out.append(ch);
-                continue;
-            }
-            if (inString) {
-                out.append(ch);
-                continue;
-            }
-            switch (ch) {
-                case '{', '[' -> {
-                    out.append(ch).append('\n');
-                    indent++;
-                    appendIndent(out, indent);
-                }
-                case '}', ']' -> {
-                    out.append('\n');
-                    indent = Math.max(0, indent - 1);
-                    appendIndent(out, indent);
-                    out.append(ch);
-                }
-                case ',' -> {
-                    out.append(ch).append('\n');
-                    appendIndent(out, indent);
-                }
-                case ':' -> out.append(": ");
-                default -> out.append(ch);
-            }
-        }
-        return out.toString();
+        return SnbtText.format(raw);
     }
 
     public static boolean isContainer(Tag element) {
@@ -240,9 +205,5 @@ public final class NbtEditorUtils {
             }
         }
         return true;
-    }
-
-    private static void appendIndent(StringBuilder builder, int indent) {
-        builder.repeat("  ", Math.max(0, indent));
     }
 }

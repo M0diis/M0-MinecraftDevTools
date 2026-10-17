@@ -31,7 +31,12 @@ public final class EventBus {
 
     public void post(@NotNull AutomationEvent event) {
         for (Listener listener : listeners) {
-            listener.onAutomationEvent(event);
+            try {
+                listener.onAutomationEvent(event);
+            } catch (RuntimeException e) {
+                // Events are posted from chat, tick and screen hooks; a failing listener must not break those.
+                me.m0dii.M0DevTools.LOGGER.error("Automation listener failed for {}", event.type(), e);
+            }
         }
     }
 }

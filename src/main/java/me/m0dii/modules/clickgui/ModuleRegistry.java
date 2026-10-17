@@ -76,7 +76,10 @@ public class ModuleRegistry {
         safeAdd(overlays, StructureBoundingBoxOverlay.INSTANCE);
         safeAdd(overlays, CommandBlockOverlayModule.INSTANCE);
         safeAdd(overlays, MobAiVisualizerModule.INSTANCE);
+        safeAdd(overlays, me.m0dii.modules.debugviews.DebugViewsModule.INSTANCE);
         safeAdd(overlays, EntityHealthBarsModule.INSTANCE);
+        safeAdd(overlays, me.m0dii.modules.portals.PortalLinkerModule.INSTANCE);
+        safeAdd(overlays, me.m0dii.modules.ranges.RangeOverlaysModule.INSTANCE);
         categories.add(overlays);
 
         ModuleCategory hud = new ModuleCategory("HUD");
@@ -110,6 +113,11 @@ public class ModuleRegistry {
         safeAdd(utilities, MouseTweaksModule.INSTANCE);
         safeAdd(utilities, HungerTweaksModule.INSTANCE);
         safeAdd(utilities, BridgingTweaksModule.INSTANCE);
+        safeAdd(utilities, me.m0dii.modules.ruler.RulerModule.INSTANCE);
+        safeAdd(utilities, me.m0dii.modules.packets.PacketInspectorModule.INSTANCE);
+        safeAdd(utilities, me.m0dii.modules.redstonetimeline.RedstoneTimelineModule.INSTANCE);
+        safeAdd(utilities, me.m0dii.modules.placement.PlacementRestrictionModule.INSTANCE);
+        safeAdd(utilities, me.m0dii.modules.farmrate.FarmRateModule.INSTANCE);
         categories.add(utilities);
 
         ModuleCategory movement = new ModuleCategory("Movement");
@@ -123,6 +131,7 @@ public class ModuleRegistry {
         safeAdd(chat, CommandHistoryModule.INSTANCE);
         safeAdd(chat, MessageHistoryModule.INSTANCE);
         safeAdd(chat, SecondaryChatModule.INSTANCE);
+        safeAdd(chat, me.m0dii.modules.chathighlight.ChatHighlightModule.INSTANCE);
         categories.add(chat);
     }
 
@@ -131,6 +140,14 @@ public class ModuleRegistry {
             initializeCategories();
         }
         return categories.toArray(new ModuleCategory[0]);
+    }
+
+    /** Every module shown in ClickHUD, in category order. */
+    public static List<Module> allModules() {
+        if (categories.isEmpty()) {
+            initializeCategories();
+        }
+        return List.copyOf(modulesById.values());
     }
 
     public static @Nullable Module findModuleById(String id) {

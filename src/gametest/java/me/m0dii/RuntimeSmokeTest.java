@@ -43,6 +43,9 @@ public final class RuntimeSmokeTest implements FabricClientGameTest {
 
     @Override
     public void runTest(ClientGameTestContext context) {
+        if (!GameTestFilter.enabled("smoke")) {
+            return;
+        }
         // Force every mixin to apply, including those targeting lazily loaded classes (screens, etc.).
         context.runOnClient(client -> MixinEnvironment.getCurrentEnvironment().audit());
 

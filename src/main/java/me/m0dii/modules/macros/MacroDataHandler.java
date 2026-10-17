@@ -1,13 +1,10 @@
 package me.m0dii.modules.macros;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
+import com.google.gson.*;
 import com.google.gson.reflect.TypeToken;
 import lombok.Builder;
 import me.m0dii.M0DevTools;
+import me.m0dii.utils.ConfigFileSafety;
 import me.m0dii.utils.LegacyKeyCodes;
 import net.fabricmc.loader.api.FabricLoader;
 import org.jetbrains.annotations.NotNull;
@@ -62,7 +59,9 @@ public class MacroDataHandler {
                         macros.size(), backup.getFileName());
             }
         } catch (Exception e) {
-            M0DevTools.LOGGER.error("Failed to load macros: {}", e.getMessage());
+            // Keep a copy before the next save rewrites the file with the (now empty) macro list.
+            ConfigFileSafety.backupUnreadable(configFile, e);
+            macros = new LinkedHashMap<>();
         }
     }
 
@@ -70,22 +69,40 @@ public class MacroDataHandler {
     }
 
     static LoadResult parse(String json) {
-        JsonElement root = JsonParser.parseString(json);
-        if (root == null || !root.isJsonObject()) {
+        if (json == null || json.isBlank()) {
             return new LoadResult(new LinkedHashMap<>(), false);
+        }
+        JsonElement root = JsonParser.parseString(json);
+        if (root == null || root.isJsonNull()) {
+            return new LoadResult(new LinkedHashMap<>(), false);
+        }
+        if (!root.isJsonObject()) {
+            throw new JsonParseException("Expected a JSON object at the top level of the macros file");
         }
         JsonObject object = root.getAsJsonObject();
         if (object.has("formatVersion")) {
             Map<String, MacroEntry> loaded = GSON.fromJson(object.get("macros"), MACRO_MAP_TYPE.getType());
-            return new LoadResult(loaded == null ? new LinkedHashMap<>() : new LinkedHashMap<>(loaded), false);
+            return new LoadResult(withoutNullEntries(loaded), false);
         }
 
         Map<String, MacroEntry> legacy = GSON.fromJson(object, MACRO_MAP_TYPE.getType());
         Map<String, MacroEntry> converted = new LinkedHashMap<>();
         if (legacy != null) {
-            legacy.forEach((id, entry) -> converted.put(id, withKeyCode(entry, LegacyKeyCodes.fromGlfw(entry.keyCode))));
+            withoutNullEntries(legacy).forEach((id, entry) -> converted.put(id, withKeyCode(entry, LegacyKeyCodes.fromGlfw(entry.keyCode))));
         }
         return new LoadResult(converted, true);
+    }
+
+    private static Map<String, MacroEntry> withoutNullEntries(Map<String, MacroEntry> entries) {
+        Map<String, MacroEntry> clean = new LinkedHashMap<>();
+        if (entries != null) {
+            entries.forEach((id, entry) -> {
+                if (id != null && entry != null) {
+                    clean.put(id, entry);
+                }
+            });
+        }
+        return clean;
     }
 
     private static MacroEntry withKeyCode(MacroEntry entry, int keyCode) {
@@ -101,7 +118,7 @@ public class MacroDataHandler {
 
     public static void saveMacros() {
         try {
-            Files.writeString(configFile(), serialize(macros));
+            ConfigFileSafety.writeAtomically(configFile(), serialize(macros));
         } catch (IOException e) {
             M0DevTools.LOGGER.error("Failed to save macros: {}", e.getMessage());
         }

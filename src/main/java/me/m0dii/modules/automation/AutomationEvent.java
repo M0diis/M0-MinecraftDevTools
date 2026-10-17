@@ -54,6 +54,16 @@ public record AutomationEvent(AutomationEventType type, long timestampMs, long c
         return current;
     }
 
+    /** Returns a copy with extra attributes (e.g. regex capture groups) layered over the existing ones. */
+    public AutomationEvent withExtraAttributes(@Nullable Map<String, Object> extra) {
+        if (extra == null || extra.isEmpty()) {
+            return this;
+        }
+        Map<String, Object> merged = new LinkedHashMap<>(attributes);
+        merged.putAll(extra);
+        return new AutomationEvent(type, timestampMs, clientTick, merged);
+    }
+
     public String summary() {
         StringBuilder builder = new StringBuilder(type.name());
         if (!attributes.isEmpty()) {

@@ -1,16 +1,12 @@
 package me.m0dii.modules.macros.gui;
 
-import me.m0dii.gui.theme.SidebarNavButton;
-import me.m0dii.gui.theme.Theme;
-import me.m0dii.gui.theme.ThemeDraw;
-import me.m0dii.gui.theme.ThemedScreen;
-import me.m0dii.gui.theme.ThemedWidgets;
 import com.mojang.blaze3d.platform.InputConstants;
 import me.m0dii.gui.GuiSystem;
 import me.m0dii.gui.local.FormPanels;
 import me.m0dii.gui.local.GuiTextEditingUtils;
 import me.m0dii.gui.local.UiFlexLayout;
 import me.m0dii.gui.local.UiRect;
+import me.m0dii.gui.theme.*;
 import me.m0dii.mixin.InGameHudAccessor;
 import me.m0dii.mixin.PlayerListHudAccessor;
 import me.m0dii.modules.chat.SecondaryChatSettings;
@@ -36,7 +32,6 @@ import me.m0dii.modules.pickup.ItemPickupNotifierModule;
 import me.m0dii.modules.pickup.PickupFeedSettings;
 import me.m0dii.utils.*;
 import net.minecraft.client.KeyMapping;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractWidget;
@@ -72,6 +67,7 @@ public class MacroWorkbenchScreen extends Screen implements ThemedScreen {
         KEYBOARD("⌘", "Keyboard", "Keyboard", "Click a key to bind or edit its macro"),
         MACROS("⚡", "Macros", "Macros", "Command macros and their key bindings"),
         AUTOMATION("⚙", "Automation", "Automation", "Rules that react to game events"),
+        SCRIPTS("▶", "Scripts", "Scripts", "Groovy, Kotlin and JavaScript scripts: preview, run, bind a key, edit"),
         PLACEHOLDERS("{}", "Placeholders", "Placeholders", "Every {token} you can use; click one to copy it"),
         ENTITY_RADAR("◎", "Radar", "Entity Radar", "Entities currently tracked nearby"),
         COMMAND_HISTORY("/", "Commands", "Command History", "Recently sent commands; click to reuse"),
@@ -213,6 +209,8 @@ public class MacroWorkbenchScreen extends Screen implements ThemedScreen {
     private final List<AbstractWidget> cmdHistoryWidgets = new ArrayList<>();
     private final List<AbstractWidget> msgHistoryWidgets = new ArrayList<>();
     private final List<AbstractWidget> configWidgets = new ArrayList<>();
+    private final List<AbstractWidget> scriptsWidgets = new ArrayList<>();
+    private MacroWorkbenchScriptsTab scriptsTabController;
     private MacroWorkbenchMacrosTab macrosTabController;
     private MacroWorkbenchAutomationTab automationTabController;
     private MacroWorkbenchConfigurationTab configurationTabController;
@@ -663,6 +661,7 @@ public class MacroWorkbenchScreen extends Screen implements ThemedScreen {
 
         initMacrosWidgets();
         initAutomationWidgets();
+        initScriptsWidgets();
         initConfigurationWidgets();
 
         syncCanvasFields();
@@ -827,6 +826,14 @@ public class MacroWorkbenchScreen extends Screen implements ThemedScreen {
             closeKeyboardCommandsModal();
             dragging = false;
             syncConfigurationControls();
+        } else if (next == Tab.SCRIPTS) {
+            applyQuickEdit();
+            closeAdvancedModal();
+            closeKeyboardCommandsModal();
+            dragging = false;
+            if (this.scriptsTabController != null) {
+                this.scriptsTabController.reload();
+            }
         }
     }
 
@@ -854,6 +861,7 @@ public class MacroWorkbenchScreen extends Screen implements ThemedScreen {
         setWidgetState(cmdHistoryWidgets, cmdHistoryTab);
         setWidgetState(msgHistoryWidgets, msgHistoryTab);
         setWidgetState(configWidgets, configTab);
+        setWidgetState(scriptsWidgets, this.tab == Tab.SCRIPTS);
     }
 
     private static void setWidgetState(List<AbstractWidget> widgets, boolean visible) {
@@ -889,6 +897,10 @@ public class MacroWorkbenchScreen extends Screen implements ThemedScreen {
             renderMessageHistoryTab(context, mouseX, mouseY);
         } else if (this.tab == Tab.CONFIGURATION) {
             renderConfigurationTab(context);
+        } else if (this.tab == Tab.SCRIPTS) {
+            if (this.scriptsTabController != null) {
+                this.scriptsTabController.extractRenderState(context, mouseX, mouseY);
+            }
         } else {
             renderPlaceholdersTab(context, mouseX, mouseY);
         }
@@ -1249,6 +1261,12 @@ public class MacroWorkbenchScreen extends Screen implements ThemedScreen {
     private void initAutomationWidgets() {
         this.automationTabController = new MacroWorkbenchAutomationTab(this, this.automationWidgets);
         this.automationTabController.initWidgets();
+    }
+
+    private void initScriptsWidgets() {
+        this.scriptsWidgets.clear();
+        this.scriptsTabController = new MacroWorkbenchScriptsTab(this, this.scriptsWidgets);
+        this.scriptsTabController.initWidgets();
     }
 
     private void initConfigurationWidgets() {
@@ -1645,6 +1663,9 @@ public class MacroWorkbenchScreen extends Screen implements ThemedScreen {
         if (this.tab == Tab.AUTOMATION && this.automationTabController != null) {
             return this.automationTabController.handleMouseClick(click.x(), click.y(), click.button());
         }
+        if (this.tab == Tab.SCRIPTS && this.scriptsTabController != null) {
+            return this.scriptsTabController.handleMouseClick(click.x(), click.y(), click.button());
+        }
 
         if (click.button() != InputConstants.MOUSE_BUTTON_LEFT) {
             return false;
@@ -1752,6 +1773,11 @@ public class MacroWorkbenchScreen extends Screen implements ThemedScreen {
             if (this.automationTabController.handleMouseScroll(mouseX, mouseY, verticalAmount)) {
                 return true;
             }
+        }
+
+        if (this.tab == Tab.SCRIPTS && this.scriptsTabController != null
+                && this.scriptsTabController.handleMouseScroll(mouseX, mouseY, verticalAmount)) {
+            return true;
         }
 
         if (this.tab == Tab.COMMAND_HISTORY) {
@@ -1925,6 +1951,9 @@ public class MacroWorkbenchScreen extends Screen implements ThemedScreen {
             return true;
         }
         if (this.tab == Tab.MACROS && this.macrosTabController != null && this.macrosTabController.handleKeyPressed(keyCode)) {
+            return true;
+        }
+        if (this.tab == Tab.SCRIPTS && this.scriptsTabController != null && this.scriptsTabController.handleKeyPressed(keyCode)) {
             return true;
         }
         return super.keyPressed(input);
@@ -2799,7 +2828,8 @@ public class MacroWorkbenchScreen extends Screen implements ThemedScreen {
                 || element.type == MacroHudDataHandler.ElementType.LIST
                 || element.type == MacroHudDataHandler.ElementType.INVENTORY
                 || element.type == MacroHudDataHandler.ElementType.SHAPE
-                || element.type == MacroHudDataHandler.ElementType.STATE_BADGE;
+                || element.type == MacroHudDataHandler.ElementType.STATE_BADGE
+                || element.type == MacroHudDataHandler.ElementType.REDSTONE_TIMELINE;
 
         if (customWidget) {
             drawCanvasSpecialWidget(context, element, x1, y1, x2, y2);
@@ -2854,6 +2884,7 @@ public class MacroWorkbenchScreen extends Screen implements ThemedScreen {
             case INVENTORY -> drawCanvasInventoryPreview(context, e, x1, y1, x2, y2);
             case SHAPE -> drawCanvasShapePreview(context, e, x1, y1, x2, y2);
             case STATE_BADGE -> drawCanvasStateBadgePreview(context, e, x1, y1, x2, y2);
+            case REDSTONE_TIMELINE -> drawCanvasRedstoneTimelinePreview(context, e, x1, y1, x2, y2);
             default -> {
                 // no-op
             }
@@ -3068,6 +3099,18 @@ public class MacroWorkbenchScreen extends Screen implements ThemedScreen {
         if (e.drawBorder) {
             drawCanvasElementBorder(context, e, x1, y1, x2, y2);
         }
+    }
+
+    private void drawCanvasRedstoneTimelinePreview(GuiGraphicsExtractor context, MacroHudDataHandler.HudElement e, int x1, int y1, int x2, int y2) {
+        if (e.drawBackground) {
+            context.fill(x1, y1, x2, y2, canvasBackgroundColor(e));
+        }
+        if (e.drawBorder) {
+            drawCanvasElementBorder(context, e, x1, y1, x2, y2);
+        }
+        me.m0dii.modules.redstonetimeline.RedstoneTimelineWidget.render(context, this.font, x1, y1, x2 - x1, y2 - y1,
+                StringUtils.safe(e.label).isBlank() ? "Redstone" : e.label, Math.max(1, e.maxLines),
+                e.timelineWindowTicks, e.timelineShowLabels, e.colorStart, e.textColor, true);
     }
 
     private void drawCanvasStateBadgePreview(GuiGraphicsExtractor context, MacroHudDataHandler.HudElement e, int x1, int y1, int x2, int y2) {
@@ -4686,7 +4729,8 @@ public class MacroWorkbenchScreen extends Screen implements ThemedScreen {
                 || element.type == MacroHudDataHandler.ElementType.LIST
                 || element.type == MacroHudDataHandler.ElementType.INVENTORY
                 || element.type == MacroHudDataHandler.ElementType.SHAPE
-                || element.type == MacroHudDataHandler.ElementType.STATE_BADGE;
+                || element.type == MacroHudDataHandler.ElementType.STATE_BADGE
+                || element.type == MacroHudDataHandler.ElementType.REDSTONE_TIMELINE;
     }
 
     private int stepInt(int base) {
@@ -5003,7 +5047,7 @@ public class MacroWorkbenchScreen extends Screen implements ThemedScreen {
         context.text(this.font, "Add Element", boxX + 12, boxY + 10, 0xFFFFFFFF);
         context.text(this.font, "Pick element type", boxX + 12, boxY + 22, 0xFFB0B0B0);
 
-        String[] labels = {"Button", "Text", "Macro List", "Icon", "Bar", "Value", "List", "Inventory", "Shape", "State Badge"};
+        String[] labels = {"Button", "Text", "Macro List", "Icon", "Bar", "Value", "List", "Inventory", "Shape", "State Badge", "Redstone Timeline"};
         for (int i = 0; i < labels.length; i++) {
             int row = i / 3;
             int col = i % 3;
@@ -5037,7 +5081,8 @@ public class MacroWorkbenchScreen extends Screen implements ThemedScreen {
                 MacroHudDataHandler.ElementType.LIST,
                 MacroHudDataHandler.ElementType.INVENTORY,
                 MacroHudDataHandler.ElementType.SHAPE,
-                MacroHudDataHandler.ElementType.STATE_BADGE
+                MacroHudDataHandler.ElementType.STATE_BADGE,
+                MacroHudDataHandler.ElementType.REDSTONE_TIMELINE
         };
 
         for (int i = 0; i < types.length; i++) {

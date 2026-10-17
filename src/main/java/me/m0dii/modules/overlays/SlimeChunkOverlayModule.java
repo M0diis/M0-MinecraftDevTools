@@ -1,9 +1,11 @@
 package me.m0dii.modules.overlays;
 
+import com.google.gson.JsonObject;
 import com.mojang.blaze3d.platform.InputConstants;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import me.m0dii.modules.Module;
+import me.m0dii.modules.PersistentSettings;
 import me.m0dii.render.OverlayBufferSource;
 import me.m0dii.render.OverlayRenderEvents;
 import me.m0dii.utils.DrawUtil;
@@ -21,7 +23,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
-public class SlimeChunkOverlayModule extends Module {
+public class SlimeChunkOverlayModule extends Module implements PersistentSettings {
 
     public static final SlimeChunkOverlayModule INSTANCE = new SlimeChunkOverlayModule();
 
@@ -141,5 +143,17 @@ public class SlimeChunkOverlayModule extends Module {
                 0.0f, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f);
 
         matrices.popPose();
+    }
+
+    @Override
+    public JsonObject saveSettings() {
+        JsonObject json = new JsonObject();
+        json.addProperty("xzRadius", XZ_RADIUS);
+        return json;
+    }
+
+    @Override
+    public void loadSettings(JsonObject settings) {
+        XZ_RADIUS = PersistentSettings.readInt(settings, "xzRadius", XZ_RADIUS, 1, 256);
     }
 }

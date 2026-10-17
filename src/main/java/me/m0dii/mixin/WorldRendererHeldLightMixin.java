@@ -1,7 +1,6 @@
 package me.m0dii.mixin;
 
 import me.m0dii.modules.heldlight.HeldLightModule;
-import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.util.LightCoordsUtil;
 import net.minecraft.world.level.BlockAndLightGetter;
@@ -15,16 +14,17 @@ public interface WorldRendererHeldLightMixin {
 
     @Inject(method = "lambda$static$0", at = @At("TAIL"), cancellable = true)
     private static void injectHeldLight(BlockAndLightGetter world, BlockPos pos, CallbackInfoReturnable<Integer> cir) {
-        if (world.getBlockState(pos).isRedstoneConductor(world, pos)) {
-            return;
-        }
-        int heldBlockLight = HeldLightModule.getHeldLightLevel(Minecraft.getInstance(), pos);
+        // Cheapest checks first: this runs for every vertex of every chunk being meshed.
+        int heldBlockLight = HeldLightModule.getHeldLightLevel(pos);
         if (heldBlockLight <= 0) {
             return;
         }
         int packed = cir.getReturnValue();
         int currentBlock = (packed >> 4) & 0xF;
         if (heldBlockLight <= currentBlock) {
+            return;
+        }
+        if (world.getBlockState(pos).isRedstoneConductor(world, pos)) {
             return;
         }
 

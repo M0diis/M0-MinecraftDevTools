@@ -41,6 +41,16 @@ public final class ScriptStorage {
         return Files.readString(file);
     }
 
+    /** Last modification time in ms, or 0 when the file is missing. */
+    public static long lastModified(@NotNull String name) {
+        try {
+            Path file = SCRIPTS_DIR.resolve(name);
+            return Files.exists(file) ? Files.getLastModifiedTime(file).toMillis() : 0L;
+        } catch (IOException e) {
+            return 0L;
+        }
+    }
+
     public static boolean exists(@NotNull String name) {
         return Files.exists(SCRIPTS_DIR.resolve(name));
     }

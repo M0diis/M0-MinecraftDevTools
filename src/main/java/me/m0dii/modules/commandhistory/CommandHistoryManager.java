@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
 import me.m0dii.M0DevTools;
+import me.m0dii.utils.ConfigFileSafety;
 import me.m0dii.utils.ModConfig;
 import net.fabricmc.loader.api.FabricLoader;
 
@@ -70,17 +71,23 @@ public class CommandHistoryManager {
             }.getType());
             if (loaded != null) {
                 commandHistory.clear();
-                commandHistory.addAll(loaded);
+                for (String entry : loaded) {
+                    if (entry != null) {
+                        commandHistory.add(entry);
+                    }
+                }
             }
-        } catch (IOException e) {
-            M0DevTools.LOGGER.error("Failed to load command history", e);
+        } catch (IOException | RuntimeException e) {
+            // RuntimeException covers malformed JSON; keep a copy so the next save doesn't destroy it.
+            ConfigFileSafety.backupUnreadable(HISTORY_FILE, e);
+            commandHistory.clear();
         }
     }
 
     private static void save() {
         try {
             String json = GSON.toJson(commandHistory);
-            Files.writeString(HISTORY_FILE, json);
+            ConfigFileSafety.writeAtomically(HISTORY_FILE, json);
         } catch (IOException e) {
             M0DevTools.LOGGER.error("Failed to save command history", e);
         }

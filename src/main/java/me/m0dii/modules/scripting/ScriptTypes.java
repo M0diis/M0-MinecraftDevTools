@@ -1,11 +1,11 @@
 package me.m0dii.modules.scripting;
 
+import net.minecraft.client.Minecraft;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
-import net.minecraft.client.Minecraft;
 
 public final class ScriptTypes {
     public static final String GROOVY_EXT = ".groovy";
@@ -34,6 +34,18 @@ public final class ScriptTypes {
 
     public static boolean isJavaScript(@NotNull String name) {
         return name.toLowerCase(Locale.ROOT).endsWith(JAVASCRIPT_EXT);
+    }
+
+    public static @NotNull ScriptManager groovy() {
+        return GROOVY;
+    }
+
+    public static @NotNull ScriptManager kotlin() {
+        return KOTLIN;
+    }
+
+    public static @NotNull ScriptManager javascript() {
+        return JAVASCRIPT;
     }
 
     public static @NotNull ScriptManager managerFor(@NotNull String name) {

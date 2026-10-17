@@ -183,23 +183,122 @@ public final class AutomationEngine implements EventBus.Listener {
 
         List<AutomationRule> activeRules = matchingRulesFor(event.type());
         for (AutomationRule rule : activeRules) {
-            if (!matchesEventFilters(rule, event)) {
-                continue;
-            }
-            if (!matchesConditions(rule, event)) {
+            AutomationEvent ruleEvent;
+            try {
+                MatchContext match = new MatchContext(rule.id);
+                if (!matchesEventFilters(rule, event, match)) {
+                    continue;
+                }
+                if (!matchesConditions(rule, event, match)) {
+                    continue;
+                }
+                ruleEvent = match.captures.isEmpty() ? event : event.withExtraAttributes(match.captures);
+            } catch (RuntimeException e) {
+                // Never let a broken rule escape into the caller (chat handling, ticks, ...).
+                log(rule.id, "ERROR", "Rule evaluation failed: " + e);
                 continue;
             }
             if (rule.debounceMs > 0L) {
-                pendingDebounce.put(rule.id, new PendingExecution(rule.id, event, event.timestampMs() + rule.debounceMs));
+                pendingDebounce.put(rule.id, new PendingExecution(rule.id, ruleEvent, event.timestampMs() + rule.debounceMs));
                 log(rule.id, "DEBUG", "Debounced until " + formatTime(event.timestampMs() + rule.debounceMs));
                 continue;
             }
-            executeRule(rule, event);
+            executeRule(rule, ruleEvent);
         }
 
         if (event.type() == AutomationEventType.TICK_INTERVAL) {
             flushDebounced(event.timestampMs());
         }
+    }
+
+    /**
+     * Dry run: explains how {@code rule} would treat {@code event}, step by step, without executing anything.
+     * Cooldowns and rate limits are reported but not applied.
+     */
+    public synchronized List<String> explain(@NotNull AutomationRule rule, @NotNull AutomationEvent event) {
+        List<String> lines = new ArrayList<>();
+        lines.add("Rule '" + rule.displayName() + "' (" + rule.id + ")" + (rule.enabled ? "" : " — DISABLED, would not run"));
+        lines.add("Event: " + event.summary());
+        if (rule.eventType != event.type()) {
+            lines.add("✘ Rule listens for " + rule.eventType + ", not " + event.type());
+            return lines;
+        }
+
+        MatchContext match = new MatchContext(rule.id);
+        boolean passed = true;
+        if (rule.eventFilters != null) {
+            for (AutomationRule.EventFilter filter : rule.eventFilters) {
+                if (filter == null || filter.field == null || filter.field.isBlank()) {
+                    continue;
+                }
+                boolean ok;
+                try {
+                    ok = matchesFilter(filter, event, match);
+                } catch (RuntimeException e) {
+                    ok = false;
+                }
+                passed &= ok;
+                lines.add((ok ? "✔ " : "✘ ") + "filter " + filter.field + " " + filter.operator + " '" + filter.value
+                        + "' (actual: " + shorten(event.attribute(filter.field.trim())) + ")");
+            }
+        }
+        if (rule.conditions != null) {
+            for (AutomationRule.Condition condition : rule.conditions) {
+                if (condition == null) {
+                    continue;
+                }
+                AutomationRule.ConditionSource source = condition.source == null ? AutomationRule.ConditionSource.EVENT : condition.source;
+                Object actual;
+                boolean ok;
+                try {
+                    actual = contextSnapshotProvider.resolve(source, safeField(condition.field), event);
+                    ok = compareValues(actual, condition.operator, condition.value, condition.ignoreCase, match);
+                } catch (RuntimeException e) {
+                    actual = "error: " + e.getMessage();
+                    ok = false;
+                }
+                passed &= ok;
+                lines.add((ok ? "✔ " : "✘ ") + "condition " + source + "." + condition.field + " " + condition.operator
+                        + " '" + condition.value + "' (actual: " + shorten(actual) + ")");
+            }
+        }
+        if (!match.captures.isEmpty()) {
+            lines.add("Regex groups: " + match.captures);
+        }
+        if (!passed) {
+            lines.add("Result: would NOT run.");
+            return lines;
+        }
+
+        AutomationEvent ruleEvent = match.captures.isEmpty() ? event : event.withExtraAttributes(match.captures);
+        lines.add("Result: would run" + (rule.debounceMs > 0 ? " after " + rule.debounceMs + " ms debounce" : "") + ":");
+        if (rule.actions == null || rule.actions.isEmpty()) {
+            lines.add("  (no actions)");
+        } else {
+            for (AutomationRule.Action action : rule.actions) {
+                if (action == null) {
+                    continue;
+                }
+                String preview;
+                try {
+                    preview = actionExecutor.preview(action, ruleEvent).describe();
+                } catch (RuntimeException e) {
+                    preview = action.summary() + " (preview failed: " + e.getMessage() + ")";
+                }
+                lines.add("  " + (action.enabled ? "• " : "◦ (disabled) ") + preview);
+            }
+        }
+        RuleState state = stateByRule.get(rule.id);
+        if (rule.cooldownMs > 0 && state != null && state.lastExecution != null
+                && event.timestampMs() - state.lastExecution.timestampMs() < rule.cooldownMs) {
+            lines.add("Note: the rule is in its cooldown right now, so a real event would be skipped.");
+        }
+        return lines;
+    }
+
+    private static String shorten(Object value) {
+        String text = String.valueOf(value);
+        return text.length() > 80 ? text.substring(0, 80) + "…" : text;
     }
 
     private void setConfig(DataHandler.AutomationConfig nextConfig, boolean persist) {
@@ -268,20 +367,30 @@ public final class AutomationEngine implements EventBus.Listener {
         return null;
     }
 
-    private boolean matchesEventFilters(AutomationRule rule, AutomationEvent event) {
+    /** Per-rule evaluation state: regex capture groups and which invalid patterns were already reported. */
+    private static final class MatchContext {
+        final String ruleId;
+        final Map<String, Object> captures = new LinkedHashMap<>();
+
+        MatchContext(String ruleId) {
+            this.ruleId = ruleId;
+        }
+    }
+
+    private boolean matchesEventFilters(AutomationRule rule, AutomationEvent event, MatchContext match) {
         if (rule.eventFilters == null || rule.eventFilters.isEmpty()) {
             return true;
         }
 
         for (AutomationRule.EventFilter filter : rule.eventFilters) {
-            if (!matchesFilter(filter, event)) {
+            if (!matchesFilter(filter, event, match)) {
                 return false;
             }
         }
         return true;
     }
 
-    private boolean matchesFilter(AutomationRule.EventFilter filter, AutomationEvent event) {
+    private boolean matchesFilter(AutomationRule.EventFilter filter, AutomationEvent event, MatchContext match) {
         if (filter == null || filter.field == null || filter.field.isBlank()) {
             return true;
         }
@@ -297,10 +406,10 @@ public final class AutomationEngine implements EventBus.Listener {
         }
 
         Object actual = event.attribute(field);
-        return compareValues(actual, filter.operator, filter.value, filter.ignoreCase);
+        return compareValues(actual, filter.operator, filter.value, filter.ignoreCase, match);
     }
 
-    private boolean matchesConditions(AutomationRule rule, AutomationEvent event) {
+    private boolean matchesConditions(AutomationRule rule, AutomationEvent event, MatchContext match) {
         if (rule.conditions == null || rule.conditions.isEmpty()) {
             return true;
         }
@@ -311,14 +420,18 @@ public final class AutomationEngine implements EventBus.Listener {
             }
             AutomationRule.ConditionSource source = condition.source == null ? AutomationRule.ConditionSource.EVENT : condition.source;
             Object actual = contextSnapshotProvider.resolve(source, safeField(condition.field), event);
-            if (!compareValues(actual, condition.operator, condition.value, condition.ignoreCase)) {
+            if (!compareValues(actual, condition.operator, condition.value, condition.ignoreCase, match)) {
                 return false;
             }
         }
         return true;
     }
 
-    private boolean compareValues(@Nullable Object actual, @Nullable AutomationRule.Operator operator, @Nullable String expectedRaw, boolean ignoreCase) {
+    private boolean compareValues(@Nullable Object actual,
+                                  @Nullable AutomationRule.Operator operator,
+                                  @Nullable String expectedRaw,
+                                  boolean ignoreCase,
+                                  MatchContext match) {
         AutomationRule.Operator op = operator == null ? AutomationRule.Operator.EQUALS : operator;
         String expected = expectedRaw == null ? "" : expectedRaw;
 
@@ -330,7 +443,7 @@ public final class AutomationEngine implements EventBus.Listener {
             case CONTAINS -> stringValue(actual, ignoreCase).contains(normalize(expected, ignoreCase));
             case STARTS_WITH -> stringValue(actual, ignoreCase).startsWith(normalize(expected, ignoreCase));
             case ENDS_WITH -> stringValue(actual, ignoreCase).endsWith(normalize(expected, ignoreCase));
-            case REGEX -> stringValue(actual, false).matches(expected);
+            case REGEX -> matchRegex(actual, expected, ignoreCase, match);
             case GREATER_THAN -> compareNumbers(actual, expected) > 0;
             case GREATER_OR_EQUAL -> compareNumbers(actual, expected) >= 0;
             case LESS_THAN -> compareNumbers(actual, expected) < 0;
@@ -347,6 +460,25 @@ public final class AutomationEngine implements EventBus.Listener {
                 yield found;
             }
         };
+    }
+
+    private boolean matchRegex(@Nullable Object actual, String expected, boolean ignoreCase, MatchContext match) {
+        AutomationRegex.Result result = AutomationRegex.match(expected, stringValue(actual, false), ignoreCase);
+        if (result.error() != null) {
+            logOnce(match.ruleId, result.error());
+        }
+        if (result.matched()) {
+            match.captures.putAll(result.groups());
+        }
+        return result.matched();
+    }
+
+    private final Set<String> reportedErrors = new HashSet<>();
+
+    private void logOnce(@Nullable String ruleId, String message) {
+        if (reportedErrors.size() < 500 && reportedErrors.add(ruleId + "|" + message)) {
+            log(ruleId, "ERROR", message);
+        }
     }
 
     private int compareString(@Nullable Object actual, String expected, boolean ignoreCase) {
@@ -451,8 +583,15 @@ public final class AutomationEngine implements EventBus.Listener {
         return state.loopWindowExecutions.size() < burstCount;
     }
 
+    /** How many times the rule ran since the game started. */
+    public synchronized long fireCount(String ruleId) {
+        RuleState state = stateByRule.get(ruleId);
+        return state == null ? 0L : state.fireCount;
+    }
+
     private void markExecution(AutomationRule rule, RuleState state, long nowMs) {
         state.lastExecutionAtMs = nowMs;
+        state.fireCount++;
         if (rule.rateLimitCount > 0 && rule.rateLimitWindowMs > 0L) {
             trimWindow(state.executionTimes, nowMs, rule.rateLimitWindowMs);
             state.executionTimes.addLast(nowMs);
@@ -538,5 +677,6 @@ public final class AutomationEngine implements EventBus.Listener {
         private final Deque<Long> executionTimes = new ArrayDeque<>();
         private final Deque<Long> loopWindowExecutions = new ArrayDeque<>();
         private ExecutionRecord lastExecution;
+        private long fireCount;
     }
 }

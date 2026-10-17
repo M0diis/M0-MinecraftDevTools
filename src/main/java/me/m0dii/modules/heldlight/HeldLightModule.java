@@ -3,14 +3,15 @@ package me.m0dii.modules.heldlight;
 import me.m0dii.modules.Module;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.SectionPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.tags.TagKey;
+import net.minecraft.util.Mth;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.ChunkPos;
+
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -18,14 +19,18 @@ import java.util.Set;
 
 public class HeldLightModule extends Module {
     public static final HeldLightModule INSTANCE = new HeldLightModule();
-    private static ChunkPos lastLightChunkPos;
     private static BlockPos lastRefreshBlockPos;
-    private static int lastChunkRadius;
-    private static boolean lastHadLightSource;
-    private static boolean cachedLightActive;
-    private static int cachedBrightness;
-    private static double cachedFalloffDistance;
-    private static double cachedFalloffDistanceSq;
+    private static SectionBox lastLitBox;
+    private static double lastFalloff;
+
+    // Read from chunk-meshing threads, so published as volatiles; the position is sampled once per tick.
+    private static volatile boolean cachedLightActive;
+    private static volatile int cachedBrightness;
+    private static volatile double cachedFalloffDistance;
+    private static volatile double cachedFalloffDistanceSq;
+    private static volatile double cachedLightX;
+    private static volatile double cachedLightY;
+    private static volatile double cachedLightZ;
 
     private static int cachedWhitelistHash;
     private static Set<String> cachedItemWhitelist = Set.of();
@@ -42,11 +47,9 @@ public class HeldLightModule extends Module {
     }
 
     private void onEndTick(Minecraft client) {
-        if (client == null || client.player == null || client.level == null || client.levelRenderer == null) {
-            lastLightChunkPos = null;
+        if (client == null || client.player == null || client.level == null) {
             lastRefreshBlockPos = null;
-            lastChunkRadius = 0;
-            lastHadLightSource = false;
+            lastLitBox = null;
             cachedLightActive = false;
             return;
         }
@@ -58,56 +61,57 @@ public class HeldLightModule extends Module {
                 || isLightSource(client.player.getOffhandItem(), cfg);
         boolean active = isEnabled() && hasLightSource && cfg.falloffDistance > 0.0 && cfg.brightness > 0;
 
-        if (active) {
-            cachedLightActive = true;
-            cachedBrightness = cfg.brightness;
-            cachedFalloffDistance = cfg.falloffDistance;
-            cachedFalloffDistanceSq = cfg.falloffDistance * cfg.falloffDistance;
-        } else {
-            cachedLightActive = false;
-        }
-
         if (!active) {
-            if (lastHadLightSource && lastLightChunkPos != null) {
-                scheduleChunkRange(client.levelRenderer, lastLightChunkPos, Math.max(1, lastChunkRadius), client.level.getMinY(), client.level.getMaxY() + 1);
+            cachedLightActive = false;
+            if (lastLitBox != null) {
+                // Rebuild once more so the light disappears.
+                markSectionsDirty(client, lastLitBox);
             }
-            lastLightChunkPos = null;
+            lastLitBox = null;
             lastRefreshBlockPos = null;
-            lastChunkRadius = 0;
-            lastHadLightSource = false;
             return;
         }
 
-        int chunkRadius = Math.max(1, (int) Math.ceil(cfg.falloffDistance / 16.0) + 1);
-        BlockPos currentBlockPos = client.player.blockPosition();
-        ChunkPos currentChunk = ChunkPos.containing(currentBlockPos);
-        boolean movedEnough = lastRefreshBlockPos == null
-                || Math.abs(currentBlockPos.getX() - lastRefreshBlockPos.getX()) >= 2
-                || Math.abs(currentBlockPos.getY() - lastRefreshBlockPos.getY()) >= 2
-                || Math.abs(currentBlockPos.getZ() - lastRefreshBlockPos.getZ()) >= 2;
+        cachedBrightness = cfg.brightness;
+        cachedFalloffDistance = cfg.falloffDistance;
+        cachedFalloffDistanceSq = cfg.falloffDistance * cfg.falloffDistance;
+        cachedLightX = client.player.getX();
+        cachedLightY = client.player.getY() + client.player.getEyeHeight();
+        cachedLightZ = client.player.getZ();
+        cachedLightActive = true;
 
-        if (!lastHadLightSource || lastLightChunkPos == null || !lastLightChunkPos.equals(currentChunk) || lastChunkRadius != chunkRadius || movedEnough) {
-            int minY = client.level.getMinY();
-            int maxY = client.level.getMaxY() + 1;
-            if (lastHadLightSource && lastLightChunkPos != null) {
-                scheduleChunkRange(client.levelRenderer, lastLightChunkPos, Math.max(1, Math.max(lastChunkRadius, chunkRadius)), minY, maxY);
-            }
-            scheduleChunkRange(client.levelRenderer, currentChunk, chunkRadius, minY, maxY);
-            lastLightChunkPos = currentChunk;
-            lastRefreshBlockPos = currentBlockPos;
-            lastChunkRadius = chunkRadius;
-            lastHadLightSource = true;
+        BlockPos currentBlockPos = client.player.blockPosition();
+        if (currentBlockPos.equals(lastRefreshBlockPos) && cfg.falloffDistance == lastFalloff) {
+            return;
+        }
+
+        // Only the sections the light can reach (plus one block for smooth lighting of neighbouring faces).
+        SectionBox litBox = SectionBox.around(cachedLightX, cachedLightY, cachedLightZ, cfg.falloffDistance + 1.0);
+        if (lastLitBox != null && !lastLitBox.equals(litBox)) {
+            markSectionsDirty(client, lastLitBox);
+        }
+        markSectionsDirty(client, litBox);
+        lastLitBox = litBox;
+        lastRefreshBlockPos = currentBlockPos;
+        lastFalloff = cfg.falloffDistance;
+    }
+
+    /** Inclusive range of chunk sections. */
+    private record SectionBox(int minX, int minY, int minZ, int maxX, int maxY, int maxZ) {
+        static SectionBox around(double x, double y, double z, double radius) {
+            return new SectionBox(
+                    SectionPos.blockToSectionCoord(Mth.floor(x - radius)),
+                    SectionPos.blockToSectionCoord(Mth.floor(y - radius)),
+                    SectionPos.blockToSectionCoord(Mth.floor(z - radius)),
+                    SectionPos.blockToSectionCoord(Mth.floor(x + radius)),
+                    SectionPos.blockToSectionCoord(Mth.floor(y + radius)),
+                    SectionPos.blockToSectionCoord(Mth.floor(z + radius)));
         }
     }
 
-    private static void scheduleChunkRange(LevelRenderer renderer, ChunkPos centerChunk, int chunkRadius, int minY, int maxY) {
-        for (int cz = centerChunk.z() - chunkRadius; cz <= centerChunk.z() + chunkRadius; cz++) {
-            for (int cx = centerChunk.x() - chunkRadius; cx <= centerChunk.x() + chunkRadius; cx++) {
-                int minX = cx << 4;
-                int minZ = cz << 4;
-                Minecraft.getInstance().levelExtractor.setBlocksDirty(minX, minY, minZ, minX + 16, maxY, minZ + 16);
-            }
-        }
+    private static void markSectionsDirty(Minecraft client, SectionBox box) {
+        // Section-level call: LevelExtractor.setBlocksDirty visits every block, which is what made this lag.
+        client.levelExtractor.setSectionRangeDirty(box.minX(), box.minY(), box.minZ(), box.maxX(), box.maxY(), box.maxZ());
     }
 
     public static boolean isLightSource(ItemStack stack) {
@@ -131,18 +135,15 @@ public class HeldLightModule extends Module {
         return false;
     }
 
-    public static int getHeldLightLevel(Minecraft client, BlockPos pos) {
-        if (!INSTANCE.isEnabled() || client == null || client.player == null || pos == null || !cachedLightActive) {
+    /** Called for every vertex while chunks are meshed, so it must stay cheap. */
+    public static int getHeldLightLevel(BlockPos pos) {
+        if (!cachedLightActive || pos == null) {
             return 0;
         }
 
-        double playerX = client.player.getX();
-        double playerY = client.player.getY() + client.player.getEyeHeight();
-        double playerZ = client.player.getZ();
-
-        double dx = pos.getX() + 0.5 - playerX;
-        double dy = pos.getY() + 0.5 - playerY;
-        double dz = pos.getZ() + 0.5 - playerZ;
+        double dx = pos.getX() + 0.5 - cachedLightX;
+        double dy = pos.getY() + 0.5 - cachedLightY;
+        double dz = pos.getZ() + 0.5 - cachedLightZ;
         double distanceSq = dx * dx + dy * dy + dz * dz;
         if (distanceSq > cachedFalloffDistanceSq) {
             return 0;

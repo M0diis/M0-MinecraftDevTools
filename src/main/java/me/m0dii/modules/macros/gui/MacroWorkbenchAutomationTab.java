@@ -3,9 +3,9 @@ package me.m0dii.modules.macros.gui;
 import com.mojang.blaze3d.platform.InputConstants;
 import me.m0dii.gui.local.UiForms;
 import me.m0dii.gui.local.UiSelectionList;
-import me.m0dii.modules.automation.*;
 import me.m0dii.gui.theme.Theme;
 import me.m0dii.gui.theme.ThemedWidgets;
+import me.m0dii.modules.automation.*;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractWidget;
@@ -1652,7 +1652,9 @@ final class MacroWorkbenchAutomationTab {
 
     private static String displayRuleName(AutomationRule rule) {
         String name = safe(rule.name);
-        return name.isBlank() ? safe(rule.id) : name;
+        String label = name.isBlank() ? safe(rule.id) : name;
+        String folder = safe(rule.group);
+        return folder.isBlank() ? label : "[" + folder + "] " + label;
     }
 
     private static String filterSummary(AutomationRule.EventFilter filter) {
@@ -2455,6 +2457,7 @@ final class MacroWorkbenchAutomationTab {
             case RUN_SCRIPT -> "Argument (optional)";
             case RUN_MACRO -> "Modifier / Notes (optional)";
             case SEND_CLIENT_COMMAND -> "Unused / Notes (optional)";
+            case SHOW_MESSAGE -> "Options: actionbar, ping (optional)";
         };
     }
 
@@ -2468,6 +2471,7 @@ final class MacroWorkbenchAutomationTab {
             case RUN_SCRIPT -> "Target is a file in config/m0-dev-tools/scripts. Placeholders can change the file name.";
             case SEND_CLIENT_COMMAND -> "Target is a client command or chat message. Placeholders expand before sending.";
             case TOGGLE_MODULE -> "Target is a module id; argument can force on/off. Both can use placeholders.";
+            case SHOW_MESSAGE -> "Target is text only you see, e.g. 'Mentioned: {event.message}'. Placeholders expand.";
         };
     }
 

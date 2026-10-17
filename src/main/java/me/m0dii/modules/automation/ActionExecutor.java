@@ -28,6 +28,23 @@ public class ActionExecutor {
         @Nullable LocalPlayer player();
 
         @Nullable ClientLevel world();
+
+        /** Shows a message only to the local player. */
+        default boolean showMessage(@NotNull String text, boolean actionbar, boolean ping) {
+            return false;
+        }
+    }
+
+    /** What an action would do, with placeholders expanded, without running it. */
+    public record ActionPreview(AutomationActionType type, String target, String argument) {
+        public String describe() {
+            return type.name() + " " + target + (argument == null || argument.isBlank() ? "" : "  [" + argument + "]");
+        }
+    }
+
+    public ActionPreview preview(@NotNull AutomationRule.Action action, @NotNull AutomationEvent event) {
+        AutomationActionType type = action.type == null ? AutomationActionType.SEND_CLIENT_COMMAND : action.type;
+        return new ActionPreview(type, expandActionText(action.target, event).trim(), expandActionText(action.argument, event).trim());
     }
 
     public record ActionResult(boolean success, String message) {
@@ -101,6 +118,12 @@ public class ActionExecutor {
                 yield changed
                         ? ActionResult.ok("Module '" + target + "' " + suffix + " dispatched.")
                         : ActionResult.error("Module '" + target + "' was not found.");
+            }
+            case SHOW_MESSAGE -> {
+                String options = (argument + " " + parameters.getOrDefault("options", "")).toLowerCase(Locale.ROOT);
+                yield bridge.showMessage(target, options.contains("actionbar"), options.contains("ping"))
+                        ? ActionResult.ok("Showed message.")
+                        : ActionResult.error("Could not show message (not in a world?).");
             }
         };
     }

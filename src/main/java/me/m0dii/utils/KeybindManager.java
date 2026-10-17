@@ -92,11 +92,16 @@ public final class KeybindManager {
                 return;
             }
 
+            // F3+key is a vanilla debug shortcut (F3+N, F3+B, ...); don't also run a mod action for it.
+            boolean debugModifier = client.options.keyDebugModifier.isDown();
             synchronized (PRESSED_KEYBINDS) {
                 for (Map.Entry<KeyMapping, Consumer<Minecraft>> entry : PRESSED_KEYBINDS.entrySet()) {
                     KeyMapping kb = entry.getKey();
                     Consumer<Minecraft> action = entry.getValue();
                     while (kb.consumeClick()) {
+                        if (debugModifier) {
+                            continue;
+                        }
                         try {
                             action.accept(client);
                         } catch (Exception e) {

@@ -32,7 +32,8 @@ public final class MacroHudDataHandler {
         LIST,
         INVENTORY,
         SHAPE,
-        STATE_BADGE
+        STATE_BADGE,
+        REDSTONE_TIMELINE
     }
 
     public enum VisibilityMode {
@@ -185,6 +186,10 @@ public final class MacroHudDataHandler {
         public String stateTrueValues = "true,on,yes,1,enabled,active";
         public String stateFalseValues = "false,off,no,0,disabled,idle";
         public boolean stateShowValue = true;
+
+        // REDSTONE_TIMELINE behavior (rows use maxLines).
+        public int timelineWindowTicks = 100;
+        public boolean timelineShowLabels = true;
     }
 
     public static final class HudConfig {
@@ -425,6 +430,20 @@ public final class MacroHudDataHandler {
             element.drawBackground = true;
             element.drawBorder = true;
         }
+        if (type == ElementType.REDSTONE_TIMELINE) {
+            element.label = "Redstone";
+            element.width = 220;
+            element.height = 70;
+            element.maxLines = 5;
+            element.timelineWindowTicks = 100;
+            element.timelineShowLabels = true;
+            element.drawBackground = true;
+            element.drawBorder = true;
+            element.backgroundColor = 0xB0101318;
+            element.borderColor = 0xFF2A303B;
+            element.colorStart = 0xFFE5534B;
+            element.textColor = 0xFFE7EAF0;
+        }
         element.backgroundAlpha = (element.backgroundColor >>> 24) & 0xFF;
         return element;
     }
@@ -561,6 +580,8 @@ public final class MacroHudDataHandler {
             e.stateTrueValues = safe(raw.stateTrueValues, "true,on,yes,1,enabled,active");
             e.stateFalseValues = safe(raw.stateFalseValues, "false,off,no,0,disabled,idle");
             e.stateShowValue = raw.stateShowValue;
+            e.timelineWindowTicks = Math.clamp(raw.timelineWindowTicks, 20, 1200);
+            e.timelineShowLabels = raw.timelineShowLabels;
             if (e.type == ElementType.TEXT && "Open chat to click HUD buttons".equalsIgnoreCase(e.text)) {
                 continue;
             }
@@ -679,6 +700,8 @@ public final class MacroHudDataHandler {
         cloned.stateTrueValues = e.stateTrueValues;
         cloned.stateFalseValues = e.stateFalseValues;
         cloned.stateShowValue = e.stateShowValue;
+        cloned.timelineWindowTicks = e.timelineWindowTicks;
+        cloned.timelineShowLabels = e.timelineShowLabels;
         return cloned;
     }
 

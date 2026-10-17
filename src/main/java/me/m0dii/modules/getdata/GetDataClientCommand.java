@@ -6,8 +6,8 @@ import com.mojang.brigadier.suggestion.Suggestions;
 import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 import me.m0dii.modules.itemdata.ItemDataClientCommand;
 import me.m0dii.utils.NbtExtractors;
-import net.fabricmc.fabric.api.client.command.v2.ClientCommands;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
+import net.fabricmc.fabric.api.client.command.v2.ClientCommands;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
@@ -17,6 +17,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.HitResult;
+
 import java.util.concurrent.CompletableFuture;
 
 public final class GetDataClientCommand {
@@ -41,6 +42,7 @@ public final class GetDataClientCommand {
                                                 context.getSource(),
                                                 net.minecraft.world.entity.player.Inventory.SLOT_OFFHAND
                                         ))))
+                        .then(ClientCommands.literal("quick").executes(GetDataClientCommand::openQuickFromCrosshair))
                         .then(ClientCommands.argument("target", StringArgumentType.greedyString())
                                 .suggests(GetDataClientCommand::suggestTargets)
                                 .executes(GetDataClientCommand::openFromArgument))));
@@ -163,6 +165,40 @@ public final class GetDataClientCommand {
             return 1;
         }
 
+        return 0;
+    }
+
+    /** {@code /getdata quick}: the quick editor for the block or entity under the crosshair. */
+    private static int openQuickFromCrosshair(CommandContext<FabricClientCommandSource> context) {
+        Minecraft client = context.getSource().getClient();
+        if (client.player == null || client.level == null) {
+            return 0;
+        }
+        HitResult hit = client.hitResult;
+        if (hit instanceof BlockHitResult blockHit && hit.getType() == HitResult.Type.BLOCK) {
+            BlockPos pos = blockHit.getBlockPos();
+            String path = pos.getX() + " " + pos.getY() + " " + pos.getZ();
+            String token = "block " + path;
+            CompoundTag localNbt = NbtExtractors.extractBlockData(client.level, pos);
+            client.execute(() -> client.gui.setScreen(QuickEditScreen.create(client.gui.screen(), "Block " + path, token,
+                    localNbt == null ? "{}" : localNbt.toString())));
+            GetDataSyncClient.requestBlockNbt(pos, synced -> {
+                if (synced != null && !synced.isEmpty()
+                        && client.gui.screen() instanceof GetDataTargetView view && view.matchesTarget(token)) {
+                    view.applySyncedPayload(synced.toString());
+                }
+            });
+            return 1;
+        }
+        if (hit instanceof EntityHitResult entityHit) {
+            CompoundTag nbt = NbtExtractors.extractEntityNbt(entityHit.getEntity());
+            String uuid = entityHit.getEntity().getStringUUID();
+            String payload = nbt == null ? "{}" : nbt.toString();
+            client.execute(() -> client.gui.setScreen(QuickEditScreen.create(client.gui.screen(),
+                    "Entity " + entityHit.getEntity().getName().getString(), "entity " + uuid, payload)));
+            return 1;
+        }
+        client.player.sendSystemMessage(Component.literal("[GetData] Look at a block or entity first."));
         return 0;
     }
 

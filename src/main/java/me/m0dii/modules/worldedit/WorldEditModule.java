@@ -13,6 +13,7 @@ public final class WorldEditModule extends Module {
     @Override
     public void register() {
         WorldEditClientCommands.register();
+        MaterialsCommand.register();
     }
 
     @Override

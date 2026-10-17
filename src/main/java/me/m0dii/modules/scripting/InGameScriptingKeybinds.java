@@ -11,6 +11,7 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 
 import java.io.IOException;
@@ -43,39 +44,69 @@ public class InGameScriptingKeybinds {
             if (OPEN_SCRIPT_EDITOR.consumeClick()) {
                 client.execute(() -> Minecraft.getInstance().gui.setScreen(new ScriptEditorScreen()));
             }
-            // Check script keybinds manually
-            long window = Minecraft.getInstance().getWindow().handle();
+            pollScriptKeybinds(client);
+        });
+    }
+
+    private static void pollScriptKeybinds(Minecraft client) {
+        if (scriptKeybinds.isEmpty()) {
+            keyPressedLastTick.clear();
+            return;
+        }
+
+        // Read each key once per tick so several scripts bound to the same key all see the same press edge.
+        Map<Integer, Boolean> pressedNow = new HashMap<>();
+        for (int key : scriptKeybinds.values()) {
+            if (key >= 0) {
+                pressedNow.computeIfAbsent(key, k -> InputConstants.isKeyDown(k));
+            }
+        }
+
+        // Don't fire while typing in chat, the script editor or any other screen. Key state is still tracked,
+        // so closing a screen while a key is held does not trigger the script either.
+        boolean canFire = client.player != null && client.gui.screen() == null;
+        if (canFire) {
             for (Map.Entry<String, Integer> entry : scriptKeybinds.entrySet()) {
-                String script = entry.getKey();
                 int key = entry.getValue();
-                boolean isPressed = InputConstants.isKeyDown(key);
+                boolean isPressed = pressedNow.getOrDefault(key, false);
                 boolean wasPressed = keyPressedLastTick.getOrDefault(key, false);
                 if (isPressed && !wasPressed) {
-                    executeScriptByName(script);
+                    executeScriptByName(entry.getKey());
                 }
-                keyPressedLastTick.put(key, isPressed);
             }
-        });
+        }
+
+        keyPressedLastTick.clear();
+        keyPressedLastTick.putAll(pressedNow);
     }
 
     /**
      * Executes a script by name, using the correct script manager based on extension.
      */
     private static void executeScriptByName(String scriptName) {
+        if (!ScriptTypes.isScriptFile(scriptName)) {
+            M0DevTools.LOGGER.warn("Unknown script extension for '{}'. Supported: .groovy, .kts, .js", scriptName);
+            return;
+        }
+        String script;
         try {
-            String script = ScriptStorage.readScript(scriptName);
-            if (script == null) {
-                M0DevTools.LOGGER.warn("Script '{}' returned null content", scriptName);
-                return;
-            }
-            if (ScriptTypes.isScriptFile(scriptName)) {
-                ScriptManager manager = ScriptTypes.managerFor(scriptName);
-                manager.runScript(script, ScriptTypes.defaultContext());
-            } else {
-                M0DevTools.LOGGER.warn("Unknown script extension for '{}'. Supported: .groovy, .kts, .js", scriptName);
-            }
+            script = ScriptStorage.readScript(scriptName);
         } catch (Exception e) {
-            M0DevTools.LOGGER.error("Error executing script '{}':", scriptName, e);
+            reportFailure("Script '" + scriptName + "' could not be read: " + e.getMessage());
+            return;
+        }
+        ScriptRunner.run(scriptName, ScriptTypes.managerFor(scriptName), script, ScriptTypes.defaultContext(),
+                ScriptDirectives.isAsync(script), outcome -> {
+                    if (!outcome.success()) {
+                        reportFailure(outcome.error());
+                    }
+                });
+    }
+
+    private static void reportFailure(String message) {
+        M0DevTools.LOGGER.warn(message);
+        if (Minecraft.getInstance().player != null) {
+            Minecraft.getInstance().player.sendOverlayMessage(Component.literal(message));
         }
     }
 

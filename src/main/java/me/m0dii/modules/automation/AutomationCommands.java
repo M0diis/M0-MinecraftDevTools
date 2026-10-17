@@ -26,6 +26,50 @@ public final class AutomationCommands {
                 .then(literal("save").executes(ctx -> save(ctx, module)))
                 .then(literal("list").executes(ctx -> listRules(ctx, module)))
                 .then(literal("path").executes(AutomationCommands::printConfigPath))
+                .then(literal("test")
+                        .then(argument("id", StringArgumentType.word())
+                                .suggests((ctx, builder) -> {
+                                    module.engine().getRules().forEach(rule -> builder.suggest(rule.id));
+                                    return builder.buildFuture();
+                                })
+                                .executes(ctx -> testRule(ctx, module, null))
+                                .then(argument("input", StringArgumentType.greedyString())
+                                        .executes(ctx -> testRule(ctx, module, StringArgumentType.getString(ctx, "input"))))))
+                .then(literal("folder")
+                        .then(argument("id", StringArgumentType.word())
+                                .suggests((ctx, builder) -> {
+                                    module.engine().getRules().forEach(rule -> builder.suggest(rule.id));
+                                    return builder.buildFuture();
+                                })
+                                .then(argument("folder", StringArgumentType.greedyString())
+                                        .executes(ctx -> setFolder(ctx, module)))))
+                .then(literal("folder-on")
+                        .then(argument("folder", StringArgumentType.greedyString())
+                                .suggests((ctx, builder) -> suggestFolders(module, builder))
+                                .executes(ctx -> setFolderEnabled(ctx, module, true))))
+                .then(literal("folder-off")
+                        .then(argument("folder", StringArgumentType.greedyString())
+                                .suggests((ctx, builder) -> suggestFolders(module, builder))
+                                .executes(ctx -> setFolderEnabled(ctx, module, false))))
+                .then(literal("export")
+                        .executes(ctx -> exportRules(ctx, module, "all"))
+                        .then(argument("what", StringArgumentType.greedyString())
+                                .suggests((ctx, builder) -> {
+                                    builder.suggest("all");
+                                    module.engine().getRules().forEach(rule -> builder.suggest(rule.id));
+                                    folders(module).forEach(folder -> builder.suggest("folder:" + folder));
+                                    return builder.buildFuture();
+                                })
+                                .executes(ctx -> exportRules(ctx, module, StringArgumentType.getString(ctx, "what")))))
+                .then(literal("import").executes(ctx -> importRules(ctx, module)))
+                .then(literal("template")
+                        .executes(AutomationCommands::listTemplates)
+                        .then(argument("template", StringArgumentType.word())
+                                .suggests((ctx, builder) -> {
+                                    AutomationTemplates.ALL.forEach(t -> builder.suggest(t.id()));
+                                    return builder.buildFuture();
+                                })
+                                .executes(ctx -> addTemplate(ctx, module))))
                 .then(literal("enable")
                         .then(argument("id", StringArgumentType.word())
                                 .executes(ctx -> setRuleEnabled(ctx, module, true))))
@@ -90,6 +134,134 @@ public final class AutomationCommands {
         dispatcher.register(root);
     }
 
+    private static java.util.Set<String> folders(AutomationModule module) {
+        java.util.Set<String> folders = new java.util.TreeSet<>();
+        for (AutomationRule rule : module.engine().getRules()) {
+            if (rule.group != null && !rule.group.isBlank()) {
+                folders.add(rule.group);
+            }
+        }
+        return folders;
+    }
+
+    private static java.util.concurrent.CompletableFuture<com.mojang.brigadier.suggestion.Suggestions> suggestFolders(
+            AutomationModule module, com.mojang.brigadier.suggestion.SuggestionsBuilder builder) {
+        folders(module).forEach(builder::suggest);
+        return builder.buildFuture();
+    }
+
+    private static int setFolder(CommandContext<FabricClientCommandSource> context, AutomationModule module) {
+        String id = StringArgumentType.getString(context, "id");
+        String folder = StringArgumentType.getString(context, "folder").trim();
+        AutomationRule rule = module.engine().findRule(id);
+        if (rule == null) {
+            context.getSource().sendError(Component.literal("[automation] no rule with id '" + id + "'"));
+            return 0;
+        }
+        rule.group = "-".equals(folder) || "none".equalsIgnoreCase(folder) ? "" : folder;
+        module.engine().upsertRule(rule);
+        context.getSource().sendFeedback(Component.literal("[automation] '" + id + "' is now "
+                + (rule.group.isEmpty() ? "in no folder" : "in folder '" + rule.group + "'")));
+        return 1;
+    }
+
+    private static int setFolderEnabled(CommandContext<FabricClientCommandSource> context, AutomationModule module, boolean enabled) {
+        String folder = StringArgumentType.getString(context, "folder").trim();
+        int changed = 0;
+        for (AutomationRule rule : module.engine().getRules()) {
+            if (folder.equalsIgnoreCase(rule.group) && rule.enabled != enabled) {
+                rule.enabled = enabled;
+                module.engine().upsertRule(rule);
+                changed++;
+            }
+        }
+        context.getSource().sendFeedback(Component.literal("[automation] " + (enabled ? "enabled " : "disabled ")
+                + changed + " rule(s) in folder '" + folder + "'"));
+        return 1;
+    }
+
+    private static int exportRules(CommandContext<FabricClientCommandSource> context, AutomationModule module, String what) {
+        String selector = what == null ? "all" : what.trim();
+        List<AutomationRule> chosen = new java.util.ArrayList<>();
+        for (AutomationRule rule : module.engine().getRules()) {
+            boolean match = selector.equalsIgnoreCase("all")
+                    || rule.id.equalsIgnoreCase(selector)
+                    || (selector.regionMatches(true, 0, "folder:", 0, 7) && selector.substring(7).trim().equalsIgnoreCase(rule.group));
+            if (match) {
+                chosen.add(rule);
+            }
+        }
+        if (chosen.isEmpty()) {
+            context.getSource().sendError(Component.literal("[automation] nothing matches '" + selector + "' (use all, a rule id or folder:<name>)"));
+            return 0;
+        }
+        context.getSource().getClient().keyboardHandler.setClipboard(AutomationTransfer.exportJson(chosen));
+        long scripts = chosen.stream().flatMap(r -> r.actions.stream()).filter(a -> a.type == AutomationActionType.RUN_SCRIPT).count();
+        context.getSource().sendFeedback(Component.literal("[automation] copied " + chosen.size() + " rule(s) to the clipboard"
+                + (scripts > 0 ? ". They use " + scripts + " script action(s); share those script files too." : ".")));
+        return 1;
+    }
+
+    private static int importRules(CommandContext<FabricClientCommandSource> context, AutomationModule module) {
+        String clipboard = context.getSource().getClient().keyboardHandler.getClipboard();
+        java.util.Set<String> existing = new java.util.HashSet<>();
+        module.engine().getRules().forEach(rule -> existing.add(rule.id));
+        AutomationTransfer.ImportResult result;
+        try {
+            result = AutomationTransfer.parse(clipboard, existing);
+        } catch (IllegalArgumentException e) {
+            context.getSource().sendError(Component.literal("[automation] " + e.getMessage()));
+            return 0;
+        }
+        for (AutomationRule rule : result.rules()) {
+            module.engine().upsertRule(rule);
+        }
+        context.getSource().sendFeedback(Component.literal("[automation] imported " + result.rules().size() + " rule(s)."));
+        for (String note : result.notes()) {
+            context.getSource().sendFeedback(Component.literal("[automation]  - " + note));
+        }
+        return 1;
+    }
+
+    private static int testRule(CommandContext<FabricClientCommandSource> context, AutomationModule module, String input) {
+        String id = StringArgumentType.getString(context, "id");
+        AutomationRule rule = module.engine().findRule(id);
+        if (rule == null) {
+            context.getSource().sendError(Component.literal("[automation] no rule with id '" + id + "' (see /automation list)"));
+            return 0;
+        }
+        AutomationEvent event = module.sampleEvent(rule.eventType, input);
+        for (String line : module.engine().explain(rule, event)) {
+            context.getSource().sendFeedback(Component.literal("[test] " + line));
+        }
+        return 1;
+    }
+
+    private static int listTemplates(CommandContext<FabricClientCommandSource> context) {
+        context.getSource().sendFeedback(Component.literal("[automation] templates (add with /automation template <id>):"));
+        for (AutomationTemplates.Template template : AutomationTemplates.ALL) {
+            context.getSource().sendFeedback(Component.literal(" - " + template.id() + ": " + template.title()));
+        }
+        return 1;
+    }
+
+    private static int addTemplate(CommandContext<FabricClientCommandSource> context, AutomationModule module) {
+        String id = StringArgumentType.getString(context, "template");
+        AutomationTemplates.Template template = AutomationTemplates.find(id);
+        if (template == null) {
+            context.getSource().sendError(Component.literal("[automation] unknown template '" + id + "' (see /automation template)"));
+            return 0;
+        }
+        var player = context.getSource().getPlayer();
+        String playerName = player == null ? null : player.getName().getString();
+        AutomationRule rule = AutomationTemplates.create(template, new AutomationTemplates.Context(playerName), module.engine().getRules());
+        module.engine().upsertRule(rule);
+        context.getSource().sendFeedback(Component.literal("[automation] added rule '" + rule.id + "' ("
+                + (rule.enabled ? "on" : "OFF - check it in /automation ui, then /automation enable " + rule.id)
+                + "). Try it with /automation test " + rule.id));
+        return 1;
+    }
+
     private static int openUi(CommandContext<FabricClientCommandSource> context, AutomationModule module) {
         var client = context.getSource().getClient();
         client.execute(() -> module.openScreen(client.gui.screen()));
@@ -117,15 +289,28 @@ public final class AutomationCommands {
         }
 
         context.getSource().sendFeedback(Component.literal("[automation] rules:"));
+        java.util.Map<String, List<AutomationRule>> byFolder = new java.util.TreeMap<>();
         for (AutomationRule rule : rules) {
-            AutomationEngine.RuleRuntimeSnapshot snapshot = module.engine().getRuntimeSnapshot(rule.id);
-            String last = snapshot.lastExecution() == null
-                    ? "never"
-                    : (snapshot.lastExecution().success() ? "ok" : "fail") + " - " + snapshot.lastExecution().message();
-            context.getSource().sendFeedback(Component.literal(" - " + rule.id
-                    + " [" + (rule.enabled ? "on" : "off") + "] "
-                    + rule.eventType.name() + " prio=" + rule.priority
-                    + " last=" + last));
+            String folder = rule.group == null || rule.group.isBlank() ? "" : rule.group;
+            byFolder.computeIfAbsent(folder, ignored -> new java.util.ArrayList<>()).add(rule);
+        }
+        for (java.util.Map.Entry<String, List<AutomationRule>> folder : byFolder.entrySet()) {
+            String indent = " ";
+            if (!folder.getKey().isEmpty()) {
+                context.getSource().sendFeedback(Component.literal(" [" + folder.getKey() + "]"));
+                indent = "   ";
+            }
+            for (AutomationRule rule : folder.getValue()) {
+                AutomationEngine.RuleRuntimeSnapshot snapshot = module.engine().getRuntimeSnapshot(rule.id);
+                String last = snapshot.lastExecution() == null
+                        ? "never"
+                        : (snapshot.lastExecution().success() ? "ok" : "fail") + " - " + snapshot.lastExecution().message();
+                context.getSource().sendFeedback(Component.literal(indent + "- " + rule.id
+                        + " [" + (rule.enabled ? "on" : "off") + "] "
+                        + rule.eventType.name() + " prio=" + rule.priority
+                        + " fired=" + module.engine().fireCount(rule.id)
+                        + " last=" + last));
+            }
         }
         return 1;
     }

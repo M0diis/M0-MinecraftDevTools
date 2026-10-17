@@ -5,7 +5,7 @@
   "name": "M0 Dev Tools runtime tests",
   "environment": "client",
   "entrypoints": {
-    "fabric-client-gametest": ["me.m0dii.RuntimeSmokeTest"]
+    "fabric-client-gametest": ["me.m0dii.RuntimeSmokeTest", "me.m0dii.FeatureVisualTest"]
   },
   "depends": {
     "m0-dev-tools": "*",

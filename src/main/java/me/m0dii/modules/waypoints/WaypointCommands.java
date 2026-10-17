@@ -36,6 +36,35 @@ public class WaypointCommands {
                             return 1;
                         }))
 
+                // /waypoint track <id|nearest|off>
+                .then(ClientCommands.literal("track")
+                        .executes(context -> {
+                            WaypointHandler.track("nearest");
+                            return 1;
+                        })
+                        .then(ClientCommands.argument("id", StringArgumentType.word())
+                                .executes(context -> {
+                                    WaypointHandler.track(StringArgumentType.getString(context, "id"));
+                                    return 1;
+                                })))
+
+                // /waypoint beams
+                .then(ClientCommands.literal("beams")
+                        .executes(context -> {
+                            WaypointRenderer.setBeams(!WaypointRenderer.isBeams());
+                            me.m0dii.modules.state.ModuleStateStore.onSettingsChanged(WaypointModule.INSTANCE);
+                            context.getSource().sendFeedback(Component.literal("Waypoint beams "
+                                    + (WaypointRenderer.isBeams() ? "on" : "off")));
+                            return 1;
+                        }))
+
+                // /waypoint claim  (assign waypoints saved by older versions to this world)
+                .then(ClientCommands.literal("claim")
+                        .executes(context -> {
+                            WaypointHandler.claimUnassignedWaypoints();
+                            return 1;
+                        }))
+
                 // /waypoint gui
                 .then(ClientCommands.literal("gui")
                         .executes(context -> {

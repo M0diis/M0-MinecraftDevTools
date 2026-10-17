@@ -175,7 +175,8 @@ public class BetterCommandBlockUI implements ClientModInitializer {
         areaSelectionInput = KeyMappingHelper.registerKeyMapping(new KeyMapping(
                 "key.bcbui.areaselectioninput",
                 InputConstants.Type.KEYBOARD,
-                InputConstants.KEY_SEMICOLON,
+                // Unbound by default: ; already opens Command History.
+                InputConstants.UNKNOWN.getValue(),
                 KeybindManager.KEY_CATEGORY));
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {

@@ -1,14 +1,16 @@
 package me.m0dii.modules.scripting.gui;
 
 
-import me.m0dii.gui.theme.ThemedScreen;
 import com.mojang.blaze3d.platform.InputConstants;
 import groovy.lang.GroovyShell;
 import me.m0dii.gui.GuiSystem;
+import me.m0dii.gui.theme.ThemedScreen;
 import me.m0dii.modules.macros.MacroPlaceholders;
-import me.m0dii.modules.scripting.ScriptManager;
-import me.m0dii.modules.scripting.ScriptStorage;
-import me.m0dii.modules.scripting.ScriptTypes;
+import me.m0dii.modules.scripting.*;
+import me.m0dii.modules.scripting.ide.LineOps;
+import me.m0dii.modules.scripting.ide.ScriptOutline;
+import me.m0dii.modules.scripting.ide.ScriptSyntax;
+import me.m0dii.modules.scripting.ide.TextSearch;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.CharacterEvent;
@@ -116,9 +118,67 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
         private int lastClickCursor = -1;
     }
 
+    /** One open file: its own text, cursor, scroll and undo history. */
+    private static final class Buffer {
+        private String name;
+        private final EditorState state = new EditorState();
+        private final Deque<Snapshot> undo = new ArrayDeque<>();
+        private final Deque<Snapshot> redo = new ArrayDeque<>();
+        /** Text as last saved/loaded; null for a file that was never saved. */
+        private String savedText;
+
+        private Buffer(String name, String text, String savedText) {
+            this.name = name;
+            this.state.text = text;
+            this.savedText = savedText;
+        }
+
+        private boolean dirty() {
+            return savedText == null ? !state.text.isEmpty() : !savedText.equals(state.text);
+        }
+    }
+
+    private enum FindMode {NONE, FIND, REPLACE, GOTO}
+
+    private static final int FILE_TAB_H = 14;
+    private static final int STATUS_H = 11;
+
+    /** Open files survive closing the editor (until the game quits), like an IDE session. */
+    private static final List<Buffer> SESSION = new ArrayList<>();
+    private static Buffer sessionActive;
+    private static boolean sessionCaseSensitive;
+    private static boolean sessionWholeWord;
+
+    private final Screen parent;
+    private final String initialScript;
+    private Buffer active;
+    private Buffer pendingClose;
+    private long closeWarnedAtEdit = Long.MIN_VALUE;
+    private long globalEdits;
+
+    private FindMode findMode = FindMode.NONE;
+    private String findQuery = "";
+    private String replaceText = "";
+    private String gotoText = "";
+    private boolean replaceFocused;
+    private boolean findFocused;
+    private List<TextSearch.Match> findMatches = List.of();
+    private int findCurrent = -1;
+    private long findMatchesVersion = -1;
+    private Object findMatchesBuffer;
+
+    private boolean outlineVisible;
+    private String outlineQuery = "";
+    private int outlineSelected;
+    private List<ScriptOutline.Symbol> outlineItems = List.of();
+
+    private List<ScriptSyntax.State> cachedStates = List.of();
+    private long cachedStatesVersion = -1;
+    private Object cachedStatesBuffer;
+
     private UiTab tab = UiTab.SCRIPTS;
     private String currentScriptName = DEFAULT_SCRIPT_NAME;
-    private final EditorState editor = new EditorState();
+    private EditorState editor = new EditorState();
 
     private final List<String> docsLines = new ArrayList<>();
     private final List<String> allScripts = new ArrayList<>();
@@ -134,6 +194,10 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
 
     private final List<Diagnostic> diagnostics = new ArrayList<>();
     private int diagnosticsScroll = 0;
+    /** Bottom panel shows the Console tab instead of Problems. */
+    private boolean consoleTab = false;
+    private int consoleScroll = 0;
+    private long consoleSeenVersion = -1;
     private int docsScroll = 0;
     private String outputText = "";
     private long lastEditAt = 0L;
@@ -152,20 +216,137 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
     private int suggestionReplaceStart = -1;
     private int suggestionReplaceEnd = -1;
 
-    private final Deque<Snapshot> undo = new ArrayDeque<>();
-    private final Deque<Snapshot> redo = new ArrayDeque<>();
+    private Deque<Snapshot> undo = new ArrayDeque<>();
+    private Deque<Snapshot> redo = new ArrayDeque<>();
 
     public ScriptEditorScreen() {
+        this(null, null);
+    }
+
+    /** Opens the editor on {@code scriptName} (may be null) and returns to {@code parent} when closed. */
+    public ScriptEditorScreen(Screen parent, String scriptName) {
         super(Component.literal("Scripting"));
+        this.parent = parent;
+        this.initialScript = scriptName;
     }
 
     @Override
     protected void init() {
         rebuildDocs();
         refreshScripts();
-        if (!visibleScripts.isEmpty()) {
+        if (active != null) {
+            // Window resized: keep the open file as it is.
+            return;
+        }
+        restoreSession();
+        if (initialScript != null && ScriptStorage.exists(initialScript)) {
+            openScriptByName(initialScript);
+            tab = UiTab.MAIN;
+            editor.focused = true;
+        } else if (active == null && !visibleScripts.isEmpty()) {
             openScriptByVisibleIndex(Math.max(0, selectedScriptIndex), true);
         }
+        if (active == null) {
+            activate(new Buffer(DEFAULT_SCRIPT_NAME, "", null));
+        }
+    }
+
+    // ---- open files ----------------------------------------------------------------------------------------
+
+    private void restoreSession() {
+        // Drop saved files that were deleted outside the editor; keep unsaved work.
+        SESSION.removeIf(buffer -> !buffer.dirty() && buffer.savedText != null && !ScriptStorage.exists(buffer.name));
+        if (sessionActive != null && SESSION.contains(sessionActive)) {
+            activate(sessionActive);
+        } else if (!SESSION.isEmpty()) {
+            activate(SESSION.getFirst());
+        }
+    }
+
+    private void activate(Buffer buffer) {
+        if (!SESSION.contains(buffer)) {
+            SESSION.add(buffer);
+        }
+        active = buffer;
+        sessionActive = buffer;
+        editor = buffer.state;
+        undo = buffer.undo;
+        redo = buffer.redo;
+        currentScriptName = buffer.name;
+        renameDraft = buffer.name;
+        diagnostics.clear();
+        hideSuggestions();
+        outlineVisible = false;
+        int idx = visibleScripts.indexOf(buffer.name);
+        if (idx >= 0) {
+            selectedScriptIndex = idx;
+        }
+        clampEditor();
+    }
+
+    private Buffer findBuffer(String name) {
+        for (Buffer buffer : SESSION) {
+            if (buffer.name.equals(name)) {
+                return buffer;
+            }
+        }
+        return null;
+    }
+
+    /** Switches to the open file, or loads it from disk into a new tab. */
+    private void openScriptByName(String name) {
+        Buffer existing = findBuffer(name);
+        if (existing != null) {
+            activate(existing);
+            return;
+        }
+        try {
+            String text = normalize(ScriptStorage.readScript(name));
+            Buffer buffer = new Buffer(name, text, text);
+            activate(buffer);
+            outputText = "Opened " + name;
+        } catch (IOException e) {
+            outputText = "Load error: " + e.getMessage();
+        }
+    }
+
+    /** Closes a file tab. Unsaved changes need a second click (or Ctrl+W) to discard. */
+    private void closeBuffer(Buffer buffer) {
+        if (buffer.dirty() && pendingClose != buffer) {
+            pendingClose = buffer;
+            outputText = buffer.name + " has unsaved changes. Close again to discard them, or Ctrl+S to save.";
+            return;
+        }
+        pendingClose = null;
+        int index = SESSION.indexOf(buffer);
+        SESSION.remove(buffer);
+        if (buffer == active) {
+            active = null;
+            if (!SESSION.isEmpty()) {
+                activate(SESSION.get(Math.clamp(index, 0, SESSION.size() - 1)));
+            } else {
+                activate(new Buffer(DEFAULT_SCRIPT_NAME, "", null));
+            }
+        }
+        outputText = "Closed " + buffer.name;
+    }
+
+    private void cycleBuffer(int direction) {
+        if (SESSION.size() < 2 || active == null) {
+            return;
+        }
+        int index = SESSION.indexOf(active);
+        activate(SESSION.get(Math.floorMod(index + direction, SESSION.size())));
+    }
+
+    private int dirtyCount() {
+        int count = 0;
+        for (Buffer buffer : SESSION) {
+            if (buffer.dirty()) {
+                count++;
+            }
+        }
+        return count;
     }
 
     @Override
@@ -187,11 +368,48 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
 
     @Override
     public boolean mouseClicked(MouseButtonEvent click, boolean doubled) {
+        if (click.button() == InputConstants.MOUSE_BUTTON_MIDDLE && tab != UiTab.DOCS) {
+            for (FileTab fileTab : fileTabs()) {
+                if (fileTab.rect().contains(click.x(), click.y())) {
+                    closeBuffer(fileTab.buffer());
+                    return true;
+                }
+            }
+        }
         if (click.button() != InputConstants.MOUSE_BUTTON_LEFT) {
             return false;
         }
 
         editor.dragging = false;
+
+        if (tab != UiTab.DOCS) {
+            if (outlineVisible && handleOutlineClick(click.x(), click.y())) {
+                return true;
+            }
+            if (findMode != FindMode.NONE && handleFindBarClick(click.x(), click.y())) {
+                return true;
+            }
+            for (FileTab fileTab : fileTabs()) {
+                if (fileTab.close().contains(click.x(), click.y())) {
+                    closeBuffer(fileTab.buffer());
+                    return true;
+                }
+                if (fileTab.rect().contains(click.x(), click.y())) {
+                    activate(fileTab.buffer());
+                    editor.focused = true;
+                    return true;
+                }
+            }
+            Rect diag = diagnosticsRect();
+            String clear = "Clear";
+            int clearX = diag.x + diag.w - font.width(clear) - 6;
+            if (consoleTab && click.y() >= diag.y && click.y() < diag.y + 14 && click.x() >= clearX && click.x() < diag.x + diag.w) {
+                ScriptConsole.clear();
+                outputText = "Console cleared.";
+                return true;
+            }
+            findFocused = false;
+        }
 
         if (tabsArea().contains(click.x(), click.y())) {
             int idx = Math.clamp((int) ((click.x() - tabsArea().x) / TAB_W), 0, 2);
@@ -282,6 +500,20 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
             }
         }
 
+        if (diagnosticsRect().contains(click.x(), click.y()) && click.y() < diagnosticsRect().y + 14) {
+            // Header: "Problems (n)" and "Console (n)" act as tabs.
+            consoleTab = click.x() >= diagnosticsRect().x + 6 + font.width(problemsLabel()) + 6;
+            return true;
+        }
+        if (consoleTab && diagnosticsRect().contains(click.x(), click.y())) {
+            List<ScriptConsole.Line> lines = ScriptConsole.lines();
+            int idx = consoleScroll + (int) ((click.y() - (diagnosticsRect().y + 16)) / DIAG_ROW_H);
+            if (idx >= 0 && idx < lines.size() && minecraft != null) {
+                minecraft.keyboardHandler.setClipboard(lines.get(idx).text());
+                outputText = "Copied console line.";
+            }
+            return true;
+        }
         if (diagnosticsRect().contains(click.x(), click.y())) {
             int idx = diagnosticIndexAt(click.y());
             if (idx >= 0 && idx < diagnostics.size()) {
@@ -374,7 +606,11 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
             return true;
         }
         if (diagnosticsRect().contains(mouseX, mouseY)) {
-            diagnosticsScroll = Math.max(0, diagnosticsScroll + (verticalAmount > 0 ? -1 : 1));
+            if (consoleTab) {
+                consoleScroll = Math.max(0, consoleScroll + (verticalAmount > 0 ? -1 : 1));
+            } else {
+                diagnosticsScroll = Math.max(0, diagnosticsScroll + (verticalAmount > 0 ? -1 : 1));
+            }
             return true;
         }
         if (suggestionsVisible && suggestionsRect().contains(mouseX, mouseY)) {
@@ -387,6 +623,28 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
     @Override
     public boolean charTyped(CharacterEvent input) {
         int codepoint = input.codepoint();
+        if (codepoint >= 32 && codepoint != 127) {
+            String typed = new String(Character.toChars(codepoint));
+            if (outlineVisible) {
+                outlineQuery += typed;
+                refreshOutline();
+                return true;
+            }
+            if (findMode != FindMode.NONE && findFocused) {
+                if (findMode == FindMode.GOTO) {
+                    if (Character.isDigit(codepoint) || codepoint == ':') {
+                        gotoText += typed;
+                    }
+                } else if (replaceFocused) {
+                    replaceText += typed;
+                } else {
+                    findQuery += typed;
+                    findMatchesVersion = -1;
+                    jumpToFirstMatchFrom(Math.min(editor.cursor, editor.selectionAnchor < 0 ? editor.cursor : editor.selectionAnchor));
+                }
+                return true;
+            }
+        }
         if (tab == UiTab.SCRIPTS && scriptsSearchFocused && (codepoint >= 32 && codepoint != 127)) {
             scriptSearch = scriptSearch + new String(Character.toChars(codepoint));
             refreshScripts();
@@ -401,6 +659,10 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
             return false;
         }
         if (codepoint >= 32 && codepoint != 127) {
+            if (codepoint < 0x10000 && typeWithPairs((char) codepoint)) {
+                refreshSuggestions();
+                return true;
+            }
             replaceSelectionOrInsert(new String(Character.toChars(codepoint)), true);
             refreshSuggestions();
             return true;
@@ -408,11 +670,370 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
         return false;
     }
 
+    /** Closing brackets/quotes: wraps a selection, steps over an existing closer, or inserts the pair. */
+    private boolean typeWithPairs(char ch) {
+        if (hasSelection() && "([{\"'".indexOf(ch) >= 0) {
+            char close = switch (ch) {
+                case '(' -> ')';
+                case '[' -> ']';
+                case '{' -> '}';
+                default -> ch;
+            };
+            int start = Math.min(editor.selectionAnchor, editor.cursor);
+            int end = Math.max(editor.selectionAnchor, editor.cursor);
+            saveUndo();
+            editor.text = editor.text.substring(0, start) + ch + editor.text.substring(start, end) + close + editor.text.substring(end);
+            editor.selectionAnchor = start + 1;
+            editor.cursor = end + 1;
+            markEdited();
+            clampEditor();
+            return true;
+        }
+        if (hasSelection()) {
+            return false;
+        }
+        if (LineOps.skipsClosing(editor.text, editor.cursor, ch)) {
+            editor.cursor++;
+            clampEditor();
+            return true;
+        }
+        char close = LineOps.autoClose(editor.text, editor.cursor, ch);
+        if (close == 0) {
+            return false;
+        }
+        replaceSelectionOrInsert("" + ch + close, true);
+        editor.cursor--;
+        clampEditor();
+        return true;
+    }
+
+    private void applyLineEdit(LineOps.Edit edit) {
+        if (edit.text().equals(editor.text) && edit.cursor() == editor.cursor) {
+            return;
+        }
+        saveUndo();
+        applyEditWithoutUndo(edit);
+    }
+
+    private void applyEditWithoutUndo(LineOps.Edit edit) {
+        editor.text = edit.text();
+        editor.cursor = Math.clamp(edit.cursor(), 0, editor.text.length());
+        editor.selectionAnchor = edit.anchor() < 0 ? -1 : Math.clamp(edit.anchor(), 0, editor.text.length());
+        editor.preferredColumn = -1;
+        markEdited();
+        clampEditor();
+        hideSuggestions();
+    }
+
+    // ---- find, replace, go to line ------------------------------------------------------------------------
+
+    private void openFind(FindMode mode) {
+        findMode = mode;
+        findFocused = true;
+        replaceFocused = false;
+        outlineVisible = false;
+        hideSuggestions();
+        if (mode == FindMode.GOTO) {
+            gotoText = "";
+            outputText = "Go to line: type a number (line or line:column), Enter to jump, Esc to cancel.";
+            return;
+        }
+        if (hasSelection()) {
+            String selected = selectedTextOrAll();
+            if (!selected.contains("\n") && !selected.isBlank()) {
+                findQuery = selected;
+            }
+        }
+        findMatchesVersion = -1;
+        refreshFindMatches();
+        outputText = "Enter/Shift+Enter: next/previous · Tab: replace field · Alt+C case · Alt+W whole word · Esc closes";
+    }
+
+    private void closeFind() {
+        findMode = FindMode.NONE;
+        findFocused = false;
+        replaceFocused = false;
+        editor.focused = true;
+    }
+
+    private void refreshFindMatches() {
+        if (findMatchesVersion == editVersion && findMatchesBuffer == active) {
+            return;
+        }
+        findMatches = TextSearch.findAll(editor.text, findQuery, sessionCaseSensitive, sessionWholeWord);
+        findMatchesVersion = editVersion;
+        findMatchesBuffer = active;
+        if (findCurrent >= findMatches.size()) {
+            findCurrent = findMatches.isEmpty() ? -1 : 0;
+        }
+    }
+
+    private void jumpToFirstMatchFrom(int from) {
+        refreshFindMatches();
+        int index = TextSearch.nextIndex(findMatches, from, false);
+        selectMatch(index);
+    }
+
+    private void selectMatch(int index) {
+        findCurrent = index;
+        if (index < 0 || index >= findMatches.size()) {
+            return;
+        }
+        TextSearch.Match match = findMatches.get(index);
+        editor.selectionAnchor = match.start();
+        editor.cursor = match.end();
+        editor.preferredColumn = -1;
+        clampEditor();
+    }
+
+    private void findStep(boolean backwards) {
+        refreshFindMatches();
+        if (findMatches.isEmpty()) {
+            return;
+        }
+        int from = backwards ? Math.min(editor.cursor, editor.selectionAnchor < 0 ? editor.cursor : editor.selectionAnchor)
+                : editor.cursor;
+        selectMatch(TextSearch.nextIndex(findMatches, from, backwards));
+    }
+
+    private void replaceCurrent() {
+        refreshFindMatches();
+        int start = Math.min(editor.cursor, editor.selectionAnchor < 0 ? editor.cursor : editor.selectionAnchor);
+        int end = Math.max(editor.cursor, editor.selectionAnchor);
+        if (TextSearch.indexAt(findMatches, start, end) < 0) {
+            findStep(false);
+            return;
+        }
+        saveUndo();
+        editor.text = editor.text.substring(0, start) + replaceText + editor.text.substring(end);
+        editor.cursor = start + replaceText.length();
+        editor.selectionAnchor = -1;
+        markEdited();
+        clampEditor();
+        refreshFindMatches();
+        findStep(false);
+    }
+
+    private void replaceAllMatches() {
+        TextSearch.Replaced result = TextSearch.replaceAll(editor.text, findQuery, replaceText, sessionCaseSensitive, sessionWholeWord);
+        if (result.count() == 0) {
+            outputText = "No matches to replace.";
+            return;
+        }
+        saveUndo();
+        editor.text = result.text();
+        editor.selectionAnchor = -1;
+        markEdited();
+        clampEditor();
+        refreshFindMatches();
+        outputText = "Replaced " + result.count() + " match(es). Ctrl+Z undoes.";
+    }
+
+    private void goToLine() {
+        String[] parts = gotoText.split(":");
+        try {
+            int line = Integer.parseInt(parts[0].trim());
+            int col = parts.length > 1 && !parts[1].isBlank() ? Integer.parseInt(parts[1].trim()) : 1;
+            jumpToDiagnostic(new Diagnostic("INFO", currentScriptName, line, col, ""));
+            closeFind();
+        } catch (NumberFormatException e) {
+            outputText = "Type a line number.";
+        }
+    }
+
+    private boolean handleFindKey(int key, boolean ctrl, boolean shift, boolean alt) {
+        if (key == InputConstants.KEY_ESCAPE) {
+            closeFind();
+            return true;
+        }
+        if (findMode == FindMode.GOTO) {
+            if (key == InputConstants.KEY_BACKSPACE && !gotoText.isEmpty()) {
+                gotoText = gotoText.substring(0, gotoText.length() - 1);
+                return true;
+            }
+            if (key == InputConstants.KEY_RETURN || key == InputConstants.KEY_NUMPADENTER) {
+                goToLine();
+                return true;
+            }
+            return key == InputConstants.KEY_BACKSPACE;
+        }
+        if (alt && key == InputConstants.KEY_C) {
+            sessionCaseSensitive = !sessionCaseSensitive;
+            findMatchesVersion = -1;
+            refreshFindMatches();
+            return true;
+        }
+        if (alt && key == InputConstants.KEY_W) {
+            sessionWholeWord = !sessionWholeWord;
+            findMatchesVersion = -1;
+            refreshFindMatches();
+            return true;
+        }
+        if (key == InputConstants.KEY_TAB) {
+            if (findMode == FindMode.FIND) {
+                findMode = FindMode.REPLACE;
+            }
+            replaceFocused = !replaceFocused;
+            return true;
+        }
+        if (key == InputConstants.KEY_BACKSPACE) {
+            if (replaceFocused) {
+                replaceText = replaceText.isEmpty() ? "" : replaceText.substring(0, replaceText.length() - 1);
+            } else if (!findQuery.isEmpty()) {
+                findQuery = findQuery.substring(0, findQuery.length() - 1);
+                findMatchesVersion = -1;
+                refreshFindMatches();
+            }
+            return true;
+        }
+        if (key == InputConstants.KEY_RETURN || key == InputConstants.KEY_NUMPADENTER) {
+            if (replaceFocused) {
+                if (ctrl) {
+                    replaceAllMatches();
+                } else {
+                    replaceCurrent();
+                }
+            } else {
+                findStep(shift);
+            }
+            return true;
+        }
+        if (ctrl && key == InputConstants.KEY_V && minecraft != null) {
+            String clip = minecraft.keyboardHandler.getClipboard().replace("\n", " ");
+            if (replaceFocused) {
+                replaceText += clip;
+            } else {
+                findQuery += clip;
+                findMatchesVersion = -1;
+                jumpToFirstMatchFrom(editor.cursor);
+            }
+            return true;
+        }
+        if (key == InputConstants.KEY_F3) {
+            findStep(shift);
+            return true;
+        }
+        return false;
+    }
+
+    // ---- outline (Ctrl+O) ------------------------------------------------------------------------------------
+
+    private void openOutline() {
+        outlineVisible = true;
+        outlineQuery = "";
+        outlineSelected = 0;
+        findFocused = false;
+        hideSuggestions();
+        refreshOutline();
+        if (outlineItems.isEmpty()) {
+            outputText = "No functions, classes or top-level values found.";
+        }
+    }
+
+    private void refreshOutline() {
+        String language = inferLanguage(currentScriptName).name();
+        List<ScriptOutline.Symbol> all = ScriptOutline.symbols(editor.text, language);
+        String q = outlineQuery.toLowerCase(Locale.ROOT);
+        List<ScriptOutline.Symbol> filtered = new ArrayList<>();
+        for (ScriptOutline.Symbol symbol : all) {
+            if (q.isEmpty() || symbol.name().toLowerCase(Locale.ROOT).contains(q)) {
+                filtered.add(symbol);
+            }
+        }
+        outlineItems = filtered;
+        outlineSelected = Math.clamp(outlineSelected, 0, Math.max(0, filtered.size() - 1));
+    }
+
+    private boolean handleOutlineKey(int key) {
+        switch (key) {
+            case InputConstants.KEY_ESCAPE -> outlineVisible = false;
+            case InputConstants.KEY_UP -> outlineSelected = Math.max(0, outlineSelected - 1);
+            case InputConstants.KEY_DOWN -> outlineSelected = Math.min(Math.max(0, outlineItems.size() - 1), outlineSelected + 1);
+            case InputConstants.KEY_BACKSPACE -> {
+                if (!outlineQuery.isEmpty()) {
+                    outlineQuery = outlineQuery.substring(0, outlineQuery.length() - 1);
+                    refreshOutline();
+                }
+            }
+            case InputConstants.KEY_RETURN, InputConstants.KEY_NUMPADENTER -> jumpToOutlineItem(outlineSelected);
+            default -> {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private void jumpToOutlineItem(int index) {
+        if (index < 0 || index >= outlineItems.size()) {
+            outlineVisible = false;
+            return;
+        }
+        ScriptOutline.Symbol symbol = outlineItems.get(index);
+        outlineVisible = false;
+        jumpToDiagnostic(new Diagnostic("INFO", currentScriptName, symbol.line() + 1, symbol.column() + 1, ""));
+        // Put the symbol near the top of the view.
+        editor.scrollLine = Math.max(0, symbol.line() - 3);
+        clampEditor();
+    }
+
+    private boolean isAltDown() {
+        return InputConstants.isKeyDown(InputConstants.KEY_LALT) || InputConstants.isKeyDown(InputConstants.KEY_RALT);
+    }
+
+
     @Override
     public boolean keyPressed(KeyEvent input) {
         int key = input.input();
         boolean ctrl = isCtrlDown();
         boolean shift = isShiftDown();
+        boolean alt = isAltDown();
+
+        if (outlineVisible && handleOutlineKey(key)) {
+            return true;
+        }
+        if (findMode != FindMode.NONE && findFocused && handleFindKey(key, ctrl, shift, alt)) {
+            return true;
+        }
+        if (tab != UiTab.DOCS) {
+            if (key == InputConstants.KEY_F5) {
+                if (shift) {
+                    int stopped = ScriptRunner.cancelAll();
+                    outputText = stopped == 0 ? "Nothing is running." : "Stopped " + stopped + " script(s).";
+                    return true;
+                }
+                return runScript();
+            }
+            if (ctrl && !shift && key == InputConstants.KEY_F) {
+                openFind(FindMode.FIND);
+                return true;
+            }
+            if (ctrl && key == InputConstants.KEY_H) {
+                openFind(FindMode.REPLACE);
+                return true;
+            }
+            if (ctrl && key == InputConstants.KEY_G) {
+                openFind(FindMode.GOTO);
+                return true;
+            }
+            if (ctrl && key == InputConstants.KEY_O) {
+                openOutline();
+                return true;
+            }
+            if (ctrl && key == InputConstants.KEY_TAB) {
+                cycleBuffer(shift ? -1 : 1);
+                return true;
+            }
+            if (ctrl && key == InputConstants.KEY_W && active != null) {
+                closeBuffer(active);
+                return true;
+            }
+            if (ctrl && shift && key == InputConstants.KEY_S) {
+                return saveAll();
+            }
+            if (ctrl && key == InputConstants.KEY_N) {
+                return createScript();
+            }
+        }
 
         if (tab == UiTab.SCRIPTS && scriptsSearchFocused && key == InputConstants.KEY_BACKSPACE && !scriptSearch.isEmpty()) {
             scriptSearch = scriptSearch.substring(0, scriptSearch.length() - 1);
@@ -432,6 +1053,10 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
         if (key == InputConstants.KEY_ESCAPE) {
             if (suggestionsVisible) {
                 hideSuggestions();
+                return true;
+            }
+            if (hasSelection() && editor.focused) {
+                editor.selectionAnchor = -1;
                 return true;
             }
             onClose();
@@ -479,15 +1104,16 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
             return true;
         }
         if (ctrl && key == InputConstants.KEY_X && minecraft != null) {
-            minecraft.keyboardHandler.setClipboard(selectedTextOrAll());
             if (hasSelection()) {
+                minecraft.keyboardHandler.setClipboard(selectedTextOrAll());
                 deleteSelection(true);
             } else {
+                // No selection: cut the current line (like most editors), never the whole file.
+                int start = lineStart(editor.cursor);
+                int end = lineEnd(editor.cursor);
+                minecraft.keyboardHandler.setClipboard(editor.text.substring(start, end) + "\n");
                 saveUndo();
-                editor.text = "";
-                editor.cursor = 0;
-                editor.selectionAnchor = -1;
-                markEdited();
+                applyEditWithoutUndo(LineOps.deleteLines(editor.text, editor.cursor, -1));
             }
             refreshSuggestions();
             return true;
@@ -500,8 +1126,68 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
         if (ctrl && key == InputConstants.KEY_S) {
             return saveScript();
         }
+        if (ctrl && shift && key == InputConstants.KEY_R) {
+            return runSelection();
+        }
+        if (ctrl && shift && key == InputConstants.KEY_F) {
+            return formatCode();
+        }
+        if (ctrl && key == InputConstants.KEY_J) {
+            return showSnippets();
+        }
         if (ctrl && key == InputConstants.KEY_R) {
             return runScript();
+        }
+
+        if (ctrl && key == InputConstants.KEY_SLASH) {
+            applyLineEdit(LineOps.toggleComment(editor.text, editor.cursor, editor.selectionAnchor,
+                    LineOps.commentPrefix(currentScriptName)));
+            return true;
+        }
+        if (ctrl && key == InputConstants.KEY_D) {
+            applyLineEdit(LineOps.duplicate(editor.text, editor.cursor, editor.selectionAnchor));
+            return true;
+        }
+        if (ctrl && shift && key == InputConstants.KEY_K) {
+            applyLineEdit(LineOps.deleteLines(editor.text, editor.cursor, editor.selectionAnchor));
+            return true;
+        }
+        if (alt && (key == InputConstants.KEY_UP || key == InputConstants.KEY_DOWN)) {
+            applyLineEdit(LineOps.moveLines(editor.text, editor.cursor, editor.selectionAnchor,
+                    key == InputConstants.KEY_UP ? -1 : 1));
+            return true;
+        }
+        if (ctrl && (key == InputConstants.KEY_LEFT || key == InputConstants.KEY_RIGHT)) {
+            int target = key == InputConstants.KEY_LEFT
+                    ? LineOps.wordLeft(editor.text, editor.cursor)
+                    : LineOps.wordRight(editor.text, editor.cursor);
+            editor.preferredColumn = -1;
+            moveCursor(target, shift);
+            hideSuggestions();
+            return true;
+        }
+        if (ctrl && key == InputConstants.KEY_BACKSPACE && !hasSelection()) {
+            int start = LineOps.wordLeft(editor.text, editor.cursor);
+            if (start < editor.cursor) {
+                saveUndo();
+                editor.text = editor.text.substring(0, start) + editor.text.substring(editor.cursor);
+                editor.cursor = start;
+                markEdited();
+                clampEditor();
+            }
+            refreshSuggestions();
+            return true;
+        }
+        if (ctrl && key == InputConstants.KEY_DELETE && !hasSelection()) {
+            int end = LineOps.wordRight(editor.text, editor.cursor);
+            if (end > editor.cursor) {
+                saveUndo();
+                editor.text = editor.text.substring(0, editor.cursor) + editor.text.substring(end);
+                markEdited();
+                clampEditor();
+            }
+            refreshSuggestions();
+            return true;
         }
 
         if (key == InputConstants.KEY_TAB) {
@@ -524,7 +1210,8 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
                 deleteSelection(true);
             } else if (editor.cursor > 0) {
                 saveUndo();
-                editor.text = editor.text.substring(0, editor.cursor - 1) + editor.text.substring(editor.cursor);
+                int after = LineOps.betweenEmptyPair(editor.text, editor.cursor) ? editor.cursor + 1 : editor.cursor;
+                editor.text = editor.text.substring(0, editor.cursor - 1) + editor.text.substring(after);
                 editor.cursor--;
                 markEdited();
             }
@@ -556,12 +1243,12 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
             return true;
         }
         if (key == InputConstants.KEY_HOME) {
-            moveCursor(lineStart(editor.cursor), shift);
+            moveCursor(ctrl ? 0 : LineOps.smartHome(editor.text, editor.cursor), shift);
             refreshSuggestions();
             return true;
         }
         if (key == InputConstants.KEY_END) {
-            moveCursor(lineEnd(editor.cursor), shift);
+            moveCursor(ctrl ? editor.text.length() : lineEnd(editor.cursor), shift);
             refreshSuggestions();
             return true;
         }
@@ -592,13 +1279,220 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
             } else {
                 renderMainHeader(context, mouseX, mouseY);
             }
-            renderEditor(context);
+            renderFileTabs(context, mouseX, mouseY);
+            renderEditor(context, mouseX, mouseY);
+            renderStatusBar(context);
             renderDiagnostics(context, mouseX, mouseY);
+            if (findMode != FindMode.NONE) {
+                renderFindBar(context, mouseX, mouseY);
+            }
+            if (outlineVisible) {
+                renderOutline(context, mouseX, mouseY);
+            }
         }
 
         if (suggestionsVisible && !suggestions.isEmpty() && editor.focused) {
             renderSuggestions(context, mouseX, mouseY);
         }
+    }
+
+    // ---- file tabs, status bar, find bar and outline rendering -----------------------------------------------
+
+    private record FileTab(Buffer buffer, Rect rect, Rect close) {
+    }
+
+    private List<FileTab> fileTabs() {
+        Rect panel = editorRect();
+        List<FileTab> tabs = new ArrayList<>();
+        int x = panel.x;
+        int y = panel.y - FILE_TAB_H;
+        int maxX = panel.x + panel.w;
+        for (Buffer buffer : SESSION) {
+            String label = buffer.name + (buffer.dirty() ? " ●" : "");
+            int w = font.width(label) + 20;
+            if (x + w > maxX) {
+                break;
+            }
+            Rect rect = new Rect(x, y, w, FILE_TAB_H - 1);
+            tabs.add(new FileTab(buffer, rect, new Rect(x + w - 11, y + 2, 9, FILE_TAB_H - 5)));
+            x += w + 1;
+        }
+        return tabs;
+    }
+
+    private void renderFileTabs(GuiGraphicsExtractor context, int mouseX, int mouseY) {
+        int shown = 0;
+        for (FileTab fileTab : fileTabs()) {
+            Rect r = fileTab.rect();
+            boolean isActive = fileTab.buffer() == active;
+            boolean hover = r.contains(mouseX, mouseY);
+            context.fill(r.x, r.y, r.x + r.w, r.y + r.h, isActive ? 0xFF1E2A3A : hover ? 0xFF252525 : 0xFF181818);
+            if (isActive) {
+                context.fill(r.x, r.y + r.h - 1, r.x + r.w, r.y + r.h, 0xFF4A90E2);
+            }
+            String label = fileTab.buffer().name + (fileTab.buffer().dirty() ? " ●" : "");
+            context.text(font, label, r.x + 5, r.y + 3, isActive ? 0xFFFFFFFF : 0xFFAAAAAA, false);
+            boolean closeHover = fileTab.close().contains(mouseX, mouseY);
+            context.text(font, "×", fileTab.close().x + 1, r.y + 3, closeHover ? 0xFFFF8080 : 0xFF777777, false);
+            shown++;
+        }
+        if (shown < SESSION.size()) {
+            Rect panel = editorRect();
+            String more = "+" + (SESSION.size() - shown) + " (Ctrl+Tab)";
+            context.text(font, more, panel.x + panel.w - font.width(more) - 2, panel.y - FILE_TAB_H + 3, 0xFF888888, false);
+        }
+    }
+
+    private void renderStatusBar(GuiGraphicsExtractor context) {
+        Rect panel = editorRect();
+        int y = panel.y + panel.h + 2;
+        int lineNo = lineNumberOfCursor() + 1;
+        int col = editor.cursor - lineStart(editor.cursor) + 1;
+        StringBuilder left = new StringBuilder("Ln " + lineNo + ", Col " + col);
+        if (hasSelection()) {
+            left.append(" (").append(Math.abs(editor.cursor - editor.selectionAnchor)).append(" selected)");
+        }
+        left.append("  ·  ").append(inferLanguage(currentScriptName).name().charAt(0))
+                .append(inferLanguage(currentScriptName).name().substring(1).toLowerCase(Locale.ROOT));
+        left.append("  ·  ").append(splitLines(editor.text).size()).append(" lines");
+        left.append("  ·  ").append(active != null && active.dirty() ? "modified" : "saved");
+        left.append("  ·  async ").append(scriptRunsAsync(editor.text) ? "on" : "off");
+        context.text(font, left.toString(), panel.x + 2, y, 0xFF9AA4B2, false);
+        int running = ScriptRunner.activeJobs().size();
+        String right = (running > 0 ? "● " + running + " running (Shift+F5 stops)   " : "")
+                + "F5 run · Ctrl+F find · Ctrl+O outline · Ctrl+/ comment";
+        context.text(font, trimToWidth(right, Math.max(40, panel.w / 2)), panel.x + panel.w - Math.min(font.width(right), panel.w / 2) - 2, y,
+                running > 0 ? 0xFF9DFFB0 : 0xFF6F7782, false);
+    }
+
+    private Rect findBarRect() {
+        Rect code = codeTextRect();
+        int w = Math.min(360, code.w - 8);
+        int h = findMode == FindMode.REPLACE ? 30 : 16;
+        return new Rect(code.x + code.w - w - 4, code.y + 2, w, h);
+    }
+
+    private Rect findButton(int index, int row) {
+        Rect bar = findBarRect();
+        int bw = 18;
+        return new Rect(bar.x + bar.w - (index + 1) * (bw + 2) - 2, bar.y + 2 + row * 14, bw, 12);
+    }
+
+    private void renderFindBar(GuiGraphicsExtractor context, int mouseX, int mouseY) {
+        Rect bar = findBarRect();
+        context.fill(bar.x - 1, bar.y - 1, bar.x + bar.w + 1, bar.y + bar.h + 1, 0xFF4A90E2);
+        context.fill(bar.x, bar.y, bar.x + bar.w, bar.y + bar.h, 0xF0161B22);
+        if (findMode == FindMode.GOTO) {
+            String text = "Go to line: " + gotoText + (blinkOn() ? "_" : "");
+            context.text(font, text, bar.x + 4, bar.y + 4, 0xFFFFFFFF, false);
+            return;
+        }
+        refreshFindMatches();
+        String count = findQuery.isEmpty() ? "" : findMatches.isEmpty() ? "No results"
+                : (findCurrent >= 0 ? (findCurrent + 1) + "/" : "") + findMatches.size();
+        int fieldRight = findButton(4, 0).x - 4;
+        String query = "Find: " + findQuery + (findFocused && !replaceFocused && blinkOn() ? "_" : "");
+        context.fill(bar.x + 2, bar.y + 2, fieldRight, bar.y + 14, !replaceFocused && findFocused ? 0xFF1E2A3A : 0xFF111111);
+        context.text(font, trimToWidth(query, fieldRight - bar.x - 50), bar.x + 4, bar.y + 4, 0xFFE0E0E0, false);
+        context.text(font, count, fieldRight - font.width(count) - 2, bar.y + 4, findMatches.isEmpty() && !findQuery.isEmpty() ? 0xFFFF8080 : 0xFF9AA4B2, false);
+        drawFindToggle(context, findButton(4, 0), "Aa", sessionCaseSensitive, mouseX, mouseY);
+        drawFindToggle(context, findButton(3, 0), "W", sessionWholeWord, mouseX, mouseY);
+        drawFindToggle(context, findButton(2, 0), "↑", false, mouseX, mouseY);
+        drawFindToggle(context, findButton(1, 0), "↓", false, mouseX, mouseY);
+        drawFindToggle(context, findButton(0, 0), "×", false, mouseX, mouseY);
+        if (findMode == FindMode.REPLACE) {
+            int replaceRight = findButton(1, 1).x - 4;
+            String replace = "Replace: " + replaceText + (findFocused && replaceFocused && blinkOn() ? "_" : "");
+            context.fill(bar.x + 2, bar.y + 16, replaceRight, bar.y + 28, replaceFocused ? 0xFF1E2A3A : 0xFF111111);
+            context.text(font, trimToWidth(replace, replaceRight - bar.x - 6), bar.x + 4, bar.y + 18, 0xFFE0E0E0, false);
+            drawFindToggle(context, findButton(1, 1), "1", false, mouseX, mouseY);
+            drawFindToggle(context, findButton(0, 1), "All", false, mouseX, mouseY);
+        }
+    }
+
+    private void drawFindToggle(GuiGraphicsExtractor context, Rect r, String label, boolean on, int mouseX, int mouseY) {
+        boolean hover = r.contains(mouseX, mouseY);
+        context.fill(r.x, r.y, r.x + r.w, r.y + r.h, on ? 0xFF305084 : hover ? 0xFF2A2A2A : 0xFF1A1A1A);
+        context.text(font, label, r.x + (r.w - font.width(label)) / 2, r.y + 2, 0xFFFFFFFF, false);
+    }
+
+    private boolean handleFindBarClick(double mx, double my) {
+        Rect bar = findBarRect();
+        if (!bar.contains(mx, my)) {
+            return false;
+        }
+        findFocused = true;
+        if (findMode == FindMode.GOTO) {
+            return true;
+        }
+        if (findButton(4, 0).contains(mx, my)) {
+            sessionCaseSensitive = !sessionCaseSensitive;
+            findMatchesVersion = -1;
+        } else if (findButton(3, 0).contains(mx, my)) {
+            sessionWholeWord = !sessionWholeWord;
+            findMatchesVersion = -1;
+        } else if (findButton(2, 0).contains(mx, my)) {
+            findStep(true);
+        } else if (findButton(1, 0).contains(mx, my)) {
+            findStep(false);
+        } else if (findButton(0, 0).contains(mx, my)) {
+            closeFind();
+        } else if (findMode == FindMode.REPLACE && findButton(1, 1).contains(mx, my)) {
+            replaceCurrent();
+        } else if (findMode == FindMode.REPLACE && findButton(0, 1).contains(mx, my)) {
+            replaceAllMatches();
+        } else {
+            replaceFocused = findMode == FindMode.REPLACE && my >= bar.y + 15;
+        }
+        return true;
+    }
+
+    private Rect outlineRect() {
+        Rect code = codeTextRect();
+        int w = Math.min(300, code.w - 20);
+        int rows = Math.clamp(outlineItems.size(), 1, 12);
+        return new Rect(code.x + (code.w - w) / 2, code.y + 6, w, 16 + rows * SUGGESTION_ROW_H + 4);
+    }
+
+    private void renderOutline(GuiGraphicsExtractor context, int mouseX, int mouseY) {
+        Rect r = outlineRect();
+        context.fill(r.x - 1, r.y - 1, r.x + r.w + 1, r.y + r.h + 1, 0xFF4A90E2);
+        context.fill(r.x, r.y, r.x + r.w, r.y + r.h, 0xF0161B22);
+        context.text(font, "Go to symbol: " + outlineQuery + (blinkOn() ? "_" : ""), r.x + 4, r.y + 4, 0xFFFFFFFF, false);
+        if (outlineItems.isEmpty()) {
+            context.text(font, "Nothing found", r.x + 4, r.y + 18, 0xFF888888, false);
+            return;
+        }
+        int rows = Math.clamp(outlineItems.size(), 1, 12);
+        int first = Math.clamp(outlineSelected - rows + 1, 0, Math.max(0, outlineItems.size() - rows));
+        for (int i = 0; i < rows && first + i < outlineItems.size(); i++) {
+            ScriptOutline.Symbol symbol = outlineItems.get(first + i);
+            int y = r.y + 16 + i * SUGGESTION_ROW_H;
+            boolean selected = first + i == outlineSelected;
+            boolean hover = mouseX >= r.x && mouseX < r.x + r.w && mouseY >= y && mouseY < y + SUGGESTION_ROW_H;
+            if (selected || hover) {
+                context.fill(r.x + 1, y, r.x + r.w - 1, y + SUGGESTION_ROW_H, selected ? 0x804A7CC7 : 0x40FFFFFF);
+            }
+            context.text(font, symbol.kind(), r.x + 4, y + 1, ScriptSyntax.color(ScriptSyntax.Kind.KEYWORD), false);
+            context.text(font, symbol.name(), r.x + 8 + font.width("const val"), y + 1, ScriptSyntax.color(ScriptSyntax.Kind.FUNCTION), false);
+            String line = ":" + (symbol.line() + 1);
+            context.text(font, line, r.x + r.w - font.width(line) - 4, y + 1, 0xFF888888, false);
+        }
+    }
+
+    private boolean handleOutlineClick(double mx, double my) {
+        Rect r = outlineRect();
+        if (!r.contains(mx, my)) {
+            outlineVisible = false;
+            return false;
+        }
+        int rows = Math.clamp(outlineItems.size(), 1, 12);
+        int first = Math.clamp(outlineSelected - rows + 1, 0, Math.max(0, outlineItems.size() - rows));
+        int row = (int) ((my - (r.y + 16)) / SUGGESTION_ROW_H);
+        if (row >= 0 && row < rows) {
+            jumpToOutlineItem(first + row);
+        }
+        return true;
     }
 
     private void drawTabs(GuiGraphicsExtractor context, int mouseX, int mouseY) {
@@ -619,7 +1513,7 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
         Rect header = mainHeaderRect();
         context.fill(header.x, header.y, header.x + header.w, header.y + header.h, 0xAA151515);
         context.text(font,
-                "File: " + currentScriptName + " [" + inferLanguage(currentScriptName).name().toLowerCase(Locale.ROOT) + "]  Undo: " + undo.size() + "  Redo: " + redo.size(),
+                "File: " + currentScriptName + (active != null && active.dirty() ? " ●" : "") + " [" + inferLanguage(currentScriptName).name().toLowerCase(Locale.ROOT) + "]  Undo: " + undo.size() + "  Redo: " + redo.size(),
                 header.x + 8, header.y + 7, 0xFFE0E0E0);
         drawButton(context, mainBtnSave(), "Save", mouseX, mouseY);
         drawButton(context, mainBtnRun(), "Run", mouseX, mouseY);
@@ -677,7 +1571,9 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
             } else if (hover) {
                 context.fill(body.x + 1, y, body.x + body.w - 1, y + SCRIPT_ROW_H, 0xFF2A2A2A);
             }
-            context.text(font, name, body.x + 6, y + 3, selected ? 0xFFFFFFFF : 0xFFD0D0D0, false);
+            Buffer open = findBuffer(name);
+            String marker = open == null ? "" : open.dirty() ? " ●" : " ○";
+            context.text(font, name + marker, body.x + 6, y + 3, selected ? 0xFFFFFFFF : open != null ? 0xFFBFD8FF : 0xFFD0D0D0, false);
         }
 
         drawButton(context, scriptsBtnCreate(), "Create", mouseX, mouseY);
@@ -691,7 +1587,7 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
         drawButton(context, scriptsBtnAsync(), "Async:" + (scriptRunsAsync(editor.text) ? "ON" : "OFF"), mouseX, mouseY);
     }
 
-    private void renderEditor(GuiGraphicsExtractor context) {
+    private void renderEditor(GuiGraphicsExtractor context, int mouseX, int mouseY) {
         Rect panel = editorRect();
         Rect gutter = gutterRect(panel);
         Rect code = codeTextRect(panel, gutter);
@@ -704,9 +1600,18 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
         int maxScroll = Math.max(0, lines.size() - visible);
         editor.scrollLine = Math.clamp(editor.scrollLine, 0, maxScroll);
 
+        drawFindMatches(context, code, lines);
         drawSelection(context, code, lines);
         drawCurrentLineHighlight(context, code);
 
+        List<ScriptSyntax.State> states = syntaxStates(lines);
+        Set<Integer> errorLines = new HashSet<>();
+        for (Diagnostic d : diagnostics) {
+            errorLines.add(Math.max(1, d.line) - 1);
+        }
+        int cursorLine = lineNumberOfCursor();
+        String language = inferLanguage(currentScriptName).name();
+        String hoverMessage = null;
         int y = code.y + 3;
         for (int lineIdx = editor.scrollLine; lineIdx < lines.size(); lineIdx++) {
             if (y > code.y + code.h - CODE_LINE_H) {
@@ -714,10 +1619,20 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
             }
             String line = lines.get(lineIdx);
             String n = Integer.toString(lineIdx + 1);
-            context.text(font, n, gutter.x + gutter.w - 4 - font.width(n), y, 0xFF888888, false);
-            drawHighlightedLine(context, line, code.x + 4 - editor.viewLeft, y, inferLanguage(currentScriptName));
+            boolean error = errorLines.contains(lineIdx);
+            if (error) {
+                context.fill(gutter.x + 1, y, gutter.x + 3, y + 9, 0xFFFF5555);
+                if (mouseX >= gutter.x && mouseX < gutter.x + gutter.w && mouseY >= y && mouseY < y + CODE_LINE_H) {
+                    hoverMessage = diagnosticMessageForLine(lineIdx);
+                }
+            }
+            context.text(font, n, gutter.x + gutter.w - 4 - font.width(n), y,
+                    error ? 0xFFFF8080 : lineIdx == cursorLine ? 0xFFDDDDDD : 0xFF666666, false);
+            ScriptSyntax.State start = lineIdx < states.size() ? states.get(lineIdx) : ScriptSyntax.State.CODE;
+            drawSyntaxLine(context, line, code.x + 4 - editor.viewLeft, y, ScriptSyntax.line(line, language, start));
             y += CODE_LINE_H;
         }
+        drawIndentGuides(context, code, lines);
 
         highlightErrorSpans(context, code);
         highlightMatchingBracket(context, code);
@@ -725,6 +1640,108 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
         if (editor.focused && blinkOn()) {
             int[] p = cursorPixel(code, editor.cursor);
             context.fill(p[0], p[1], p[0] + 1, p[1] + 9, 0xFFFFFFFF);
+        }
+        if (hoverMessage != null) {
+            int w = Math.min(font.width(hoverMessage) + 8, width - mouseX - 12);
+            context.fill(mouseX + 8, mouseY + 4, mouseX + 8 + w, mouseY + 18, 0xF0301010);
+            context.text(font, trimToWidth(hoverMessage, w - 6), mouseX + 11, mouseY + 7, 0xFFFFB0B0, false);
+        }
+    }
+
+    private String diagnosticMessageForLine(int zeroBasedLine) {
+        for (Diagnostic d : diagnostics) {
+            if (Math.max(1, d.line) - 1 == zeroBasedLine) {
+                return d.message;
+            }
+        }
+        return null;
+    }
+
+    /** Block-comment / multi-line string state at the start of each line, recomputed only after edits. */
+    private List<ScriptSyntax.State> syntaxStates(List<String> lines) {
+        if (cachedStatesVersion != editVersion || cachedStatesBuffer != active || cachedStates.size() != lines.size()) {
+            cachedStates = ScriptSyntax.startStates(lines, inferLanguage(currentScriptName).name());
+            cachedStatesVersion = editVersion;
+            cachedStatesBuffer = active;
+        }
+        return cachedStates;
+    }
+
+    private void drawSyntaxLine(GuiGraphicsExtractor context, String line, int x, int y, ScriptSyntax.LineResult result) {
+        int drawX = x;
+        int pos = 0;
+        for (ScriptSyntax.Span span : result.spans()) {
+            if (span.start() > pos) {
+                String gap = line.substring(pos, span.start());
+                context.text(font, gap, drawX, y, ScriptSyntax.color(ScriptSyntax.Kind.PLAIN), false);
+                drawX += font.width(gap);
+            }
+            String part = line.substring(span.start(), Math.min(span.end(), line.length()));
+            context.text(font, part, drawX, y, ScriptSyntax.color(span.kind()), false);
+            drawX += font.width(part);
+            pos = Math.min(span.end(), line.length());
+        }
+        if (pos < line.length()) {
+            context.text(font, line.substring(pos), drawX, y, ScriptSyntax.color(ScriptSyntax.Kind.PLAIN), false);
+        }
+    }
+
+    /** Faint vertical lines at each 4-space indent level of the visible lines. */
+    private void drawIndentGuides(GuiGraphicsExtractor context, Rect code, List<String> lines) {
+        int spaceW = Math.max(1, font.width("    "));
+        int y = code.y + 3;
+        for (int lineIdx = editor.scrollLine; lineIdx < lines.size(); lineIdx++) {
+            if (y > code.y + code.h - CODE_LINE_H) {
+                break;
+            }
+            String line = lines.get(lineIdx);
+            int indent = 0;
+            while (indent < line.length() && line.charAt(indent) == ' ') {
+                indent++;
+            }
+            if (line.isBlank()) {
+                indent = 0;
+            }
+            for (int level = 1; level * 4 <= indent; level++) {
+                int gx = code.x + 4 + (level - 1) * spaceW - editor.viewLeft;
+                if (gx > code.x) {
+                    context.fill(gx, y, gx + 1, y + CODE_LINE_H, 0x18FFFFFF);
+                }
+            }
+            y += CODE_LINE_H;
+        }
+    }
+
+    private void drawFindMatches(GuiGraphicsExtractor context, Rect code, List<String> lines) {
+        if (findMode == FindMode.NONE || findMode == FindMode.GOTO || findQuery.isEmpty()) {
+            return;
+        }
+        refreshFindMatches();
+        if (findMatches.isEmpty()) {
+            return;
+        }
+        int firstVisible = editor.scrollLine;
+        int lastVisible = firstVisible + Math.max(1, (code.h - 6) / CODE_LINE_H);
+        int offset = 0;
+        int lineIdx = 0;
+        int matchIdx = 0;
+        while (lineIdx < lines.size() && lineIdx <= lastVisible && matchIdx < findMatches.size()) {
+            String line = lines.get(lineIdx);
+            int lineEndOffset = offset + line.length();
+            while (matchIdx < findMatches.size() && findMatches.get(matchIdx).start() <= lineEndOffset) {
+                TextSearch.Match match = findMatches.get(matchIdx);
+                if (match.start() >= offset && lineIdx >= firstVisible) {
+                    int s = match.start() - offset;
+                    int e = Math.min(match.end() - offset, line.length());
+                    int y = code.y + 3 + (lineIdx - editor.scrollLine) * CODE_LINE_H;
+                    int sx = code.x + 4 + font.width(line.substring(0, s)) - editor.viewLeft;
+                    int ex = code.x + 4 + font.width(line.substring(0, e)) - editor.viewLeft;
+                    context.fill(sx, y, Math.max(sx + 2, ex), y + 9, matchIdx == findCurrent ? 0x90E5A00D : 0x50E5C07B);
+                }
+                matchIdx++;
+            }
+            offset = lineEndOffset + 1;
+            lineIdx++;
         }
     }
 
@@ -739,13 +1756,63 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
         suggestionScroll = Math.clamp(suggestionScroll, 0, maxScroll);
     }
 
+    private String problemsLabel() {
+        return "Problems (" + diagnostics.size() + ")";
+    }
+
+    private String consoleLabel() {
+        return "Console (" + ScriptConsole.size() + ")";
+    }
+
+    private void renderConsole(GuiGraphicsExtractor context, Rect panel) {
+        List<ScriptConsole.Line> lines = ScriptConsole.lines();
+        int rows = Math.max(1, (panel.h - 18) / DIAG_ROW_H);
+        int maxScroll = Math.max(0, lines.size() - rows);
+        long version = ScriptConsole.version();
+        if (version != consoleSeenVersion) {
+            consoleSeenVersion = version;
+            consoleScroll = maxScroll; // follow new output
+        }
+        consoleScroll = Math.clamp(consoleScroll, 0, maxScroll);
+        if (lines.isEmpty()) {
+            context.text(font, "m0.print(...) output, run results and script errors appear here. Ctrl+Shift+R runs the selection.",
+                    panel.x + 6, panel.y + 18, 0xFF808080, false);
+            return;
+        }
+        java.text.SimpleDateFormat time = new java.text.SimpleDateFormat("HH:mm:ss");
+        for (int i = 0; i < rows && consoleScroll + i < lines.size(); i++) {
+            ScriptConsole.Line line = lines.get(consoleScroll + i);
+            int color = switch (line.level()) {
+                case ERROR -> 0xFFFF9D9D;
+                case RESULT -> 0xFF9DFFB0;
+                case INFO -> 0xFFE0E0E0;
+            };
+            String text = time.format(new java.util.Date(line.timeMs())) + "  " + line.text();
+            context.text(font, trimToWidth(text, Math.max(40, panel.w - 12)), panel.x + 6, panel.y + 16 + i * DIAG_ROW_H + 1, color, false);
+        }
+    }
+
     private void renderDiagnostics(GuiGraphicsExtractor context, int mouseX, int mouseY) {
         Rect panel = diagnosticsRect();
         context.fill(panel.x, panel.y, panel.x + panel.w, panel.y + panel.h, 0xAA151515);
-        String header = "Problems (" + diagnostics.size() + ")";
-        context.text(font, header, panel.x + 6, panel.y + 4, 0xFFFFFFFF);
+        String problems = problemsLabel();
+        String console = consoleLabel();
+        int consoleX = panel.x + 6 + font.width(problems) + 12;
+        context.text(font, problems, panel.x + 6, panel.y + 4, consoleTab ? 0xFF808080 : 0xFFFFFFFF);
+        context.text(font, console, consoleX, panel.y + 4, consoleTab ? 0xFFFFFFFF : 0xFF808080);
+        context.fill(consoleTab ? consoleX : panel.x + 6, panel.y + 13,
+                (consoleTab ? consoleX + font.width(console) : panel.x + 6 + font.width(problems)), panel.y + 14, 0xFF4A90E2);
+        int outputX = consoleX + font.width(console) + 14;
         if (!outputText.isBlank()) {
-            context.text(font, trimToWidth(outputText, Math.max(40, panel.w - 126)), panel.x + 120, panel.y + 4, 0xFFC6C6C6, false);
+            context.text(font, trimToWidth(outputText, Math.max(40, panel.x + panel.w - outputX - 6)), outputX, panel.y + 4, 0xFFC6C6C6, false);
+        }
+        if (consoleTab) {
+            String clear = "Clear";
+            int clearX = panel.x + panel.w - font.width(clear) - 6;
+            boolean hoverClear = mouseX >= clearX && mouseY >= panel.y && mouseY < panel.y + 14;
+            context.text(font, clear, clearX, panel.y + 4, hoverClear ? 0xFFFFFFFF : 0xFF9AA4B2, false);
+            renderConsole(context, panel);
+            return;
         }
 
         int rows = Math.max(1, (panel.h - 18) / DIAG_ROW_H);
@@ -827,15 +1894,27 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
         String base = "new_script";
         String name = base + KOTLIN_EXT;
         int i = 1;
-        while (allScripts.contains(name)) {
+        while (allScripts.contains(name) || findBuffer(name) != null) {
             name = base + "_" + i + KOTLIN_EXT;
             i++;
         }
-        currentScriptName = name;
-        renameDraft = name;
-        clearEditor();
-        outputText = "Created " + name + " (not saved yet)";
+        activate(new Buffer(name, newScriptTemplate(name), null));
+        editor.cursor = editor.text.length();
+        editor.focused = true;
+        outputText = "Created " + name + " (not saved yet; rename it, then Ctrl+S)";
         return true;
+    }
+
+    /** Starter text for a new script in its language. */
+    public static String newScriptTemplate(String name) {
+        String lower = name.toLowerCase(Locale.ROOT);
+        if (lower.endsWith(GROOVY_EXT)) {
+            return "// @async off\n// Groovy script. m0 is the helper: m0.message(\"hi\"), m0.command(\"time set day\")\n\nm0.message(\"Hello from \" + player.name.string)\n";
+        }
+        if (lower.endsWith(JAVASCRIPT_EXT)) {
+            return "// @async off\n// JavaScript. m0 is the helper: m0.message('hi'), m0.command('time set day')\n\nm0.message('Hello from ' + player.getName().getString());\n";
+        }
+        return "// @async off\n// Kotlin script. m0 is the helper: m0.message(\"hi\"), m0.command(\"time set day\")\n\nm0.message(\"Hello from ${player.name.string}\")\n";
     }
 
     private boolean renameScript() {
@@ -860,6 +1939,10 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
             if (!ScriptStorage.renameScript(current, renamed)) {
                 outputText = "Rename failed: target already exists.";
                 return true;
+            }
+            Buffer open = findBuffer(current);
+            if (open != null) {
+                open.name = renamed;
             }
             currentScriptName = renamed;
             renameDraft = renamed;
@@ -899,13 +1982,15 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
         }
         try {
             ScriptStorage.deleteScript(current);
+            Buffer open = findBuffer(current);
+            if (open != null) {
+                pendingClose = open; // deleting is the confirmation
+                closeBuffer(open);
+            }
             outputText = "Deleted " + current;
             refreshScripts();
-            if (!visibleScripts.isEmpty()) {
+            if (!visibleScripts.isEmpty() && (active == null || active.savedText == null && active.state.text.isEmpty())) {
                 openScriptByVisibleIndex(Math.clamp(selectedScriptIndex, 0, visibleScripts.size() - 1), true);
-            } else {
-                currentScriptName = DEFAULT_SCRIPT_NAME;
-                clearEditor();
             }
         } catch (IOException e) {
             outputText = "Delete error: " + e.getMessage();
@@ -940,13 +2025,48 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
         diagnostics.addAll(validateSyntax(editor.text, inferLanguage(currentScriptName), true));
         markStrictValidationComplete();
         try {
-            ScriptStorage.writeScript(currentScriptName, normalize(editor.text));
-            outputText = "Saved " + currentScriptName;
+            String text = normalize(editor.text);
+            ScriptStorage.writeScript(currentScriptName, text);
+            if (active != null) {
+                active.name = currentScriptName;
+                active.savedText = text;
+            }
+            pendingClose = null;
+            outputText = "Saved " + currentScriptName + (diagnostics.isEmpty() ? "" : " (" + diagnostics.size() + " problem(s))");
             refreshScripts();
-            selectByName(currentScriptName, true);
+            int idx = visibleScripts.indexOf(currentScriptName);
+            if (idx >= 0) {
+                selectedScriptIndex = idx;
+            }
         } catch (IOException e) {
             outputText = "Save error: " + e.getMessage();
         }
+        return true;
+    }
+
+    /** Ctrl+Shift+S: saves every open file with changes. */
+    private boolean saveAll() {
+        int saved = 0;
+        for (Buffer buffer : List.copyOf(SESSION)) {
+            if (!buffer.dirty()) {
+                continue;
+            }
+            try {
+                buffer.name = normalizeScriptName(buffer.name);
+                String text = normalize(buffer.state.text);
+                ScriptStorage.writeScript(buffer.name, text);
+                buffer.savedText = text;
+                saved++;
+            } catch (IOException e) {
+                outputText = "Save error (" + buffer.name + "): " + e.getMessage();
+                return true;
+            }
+        }
+        if (active != null) {
+            currentScriptName = active.name;
+        }
+        refreshScripts();
+        outputText = saved == 0 ? "Nothing to save." : "Saved " + saved + " file(s).";
         return true;
     }
 
@@ -964,35 +2084,103 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
         Map<String, Object> context = ScriptTypes.defaultContext();
         ScriptManager manager = ScriptTypes.managerFor(currentScriptName);
         boolean async = scriptRunsAsync(scriptSnapshot);
-        if (async) {
-            outputText = "Running script asynchronously...";
-            if (minecraft != null) {
-                minecraft.execute(() -> {
-                    try {
-                        Object result = manager.runScript(scriptSnapshot, context);
-                        outputText = ScriptTypes.formatResult(result);
-                    } catch (Exception e) {
-                        outputText = "Run error: " + e.getMessage();
-                    }
-                });
-            } else {
-                try {
-                    Object result = manager.runScript(scriptSnapshot, context);
-                    outputText = ScriptTypes.formatResult(result);
-                } catch (Exception e) {
-                    outputText = "Run error: " + e.getMessage();
-                }
+        return startRun(currentScriptName, manager, scriptSnapshot, context, async);
+    }
+
+    private boolean startRun(String name, ScriptManager manager, String source, Map<String, Object> context, boolean async) {
+        consoleTab = true;
+        outputText = async ? "Running in the background... (/runscript stop to cancel)" : "Running...";
+        ScriptConsole.add(ScriptConsole.Level.INFO, "▶ " + name + (async ? " (async)" : ""));
+        ScriptRunner.run(name, manager, source, context, async, outcome -> {
+            outputText = outcome.success() ? outcome.displayText() : "Run error: " + outcome.error();
+            if (outcome.success()) {
+                ScriptConsole.add(ScriptConsole.Level.RESULT, "✔ " + name + " → " + outcome.displayText());
             }
+        });
+        return true;
+    }
+
+    /** Ctrl+J: lists ready-made snippets for the current language; Enter/Tab inserts at the cursor. */
+    private boolean showSnippets() {
+        String language = inferLanguage(currentScriptName).name().toLowerCase(Locale.ROOT);
+        String indent = currentLineIndent();
+        suggestions.clear();
+        int score = 0;
+        for (me.m0dii.modules.scripting.ScriptSnippets.Snippet snippet : me.m0dii.modules.scripting.ScriptSnippets.forLanguage(language)) {
+            suggestions.add(new Suggestion("snippet", snippet.label(),
+                    me.m0dii.modules.scripting.ScriptSnippets.indented(snippet.body(), indent),
+                    SuggestionKind.SNIPPET, snippet.detail(), score++));
+        }
+        rebuildVisibleSuggestions();
+        suggestionReplaceStart = editor.cursor;
+        suggestionReplaceEnd = editor.cursor;
+        suggestionsVisible = !suggestions.isEmpty();
+        suggestionSelected = 0;
+        suggestionScroll = 0;
+        outputText = "Snippets: Up/Down to choose, Enter to insert, Esc to close.";
+        return true;
+    }
+
+    private String currentLineIndent() {
+        int lineStart = editor.text.lastIndexOf('\n', Math.max(0, editor.cursor - 1)) + 1;
+        if (editor.cursor == 0) {
+            lineStart = 0;
+        }
+        int i = lineStart;
+        while (i < editor.text.length() && (editor.text.charAt(i) == ' ' || editor.text.charAt(i) == '\t')) {
+            i++;
+        }
+        return editor.text.substring(lineStart, i);
+    }
+
+    /** Ctrl+Shift+F: re-indents the whole script from its brackets, keeping the cursor on the same line. */
+    private boolean formatCode() {
+        String before = editor.text;
+        String formatted = me.m0dii.modules.scripting.ScriptFormatter.reindent(before, "    ");
+        if (formatted.equals(before)) {
+            outputText = "Already formatted.";
             return true;
         }
-
-        try {
-            Object result = manager.runScript(scriptSnapshot, context);
-            outputText = ScriptTypes.formatResult(result);
-        } catch (Exception e) {
-            outputText = "Run error: " + e.getMessage();
+        int line = countLines(before.substring(0, Math.clamp(editor.cursor, 0, before.length())));
+        saveUndo();
+        editor.text = formatted;
+        int offset = 0;
+        for (int i = 0; i < line && offset >= 0; i++) {
+            offset = formatted.indexOf('\n', offset) + 1;
+            if (offset == 0) {
+                offset = formatted.length();
+                break;
+            }
         }
+        int lineEnd = formatted.indexOf('\n', offset);
+        editor.cursor = lineEnd < 0 ? formatted.length() : lineEnd;
+        editor.selectionAnchor = -1;
+        markEdited();
+        clampEditor();
+        outputText = "Formatted (Ctrl+Z to undo).";
         return true;
+    }
+
+    private static int countLines(String text) {
+        int count = 0;
+        for (int i = 0; i < text.length(); i++) {
+            if (text.charAt(i) == '\n') {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    /** Ctrl+Shift+R: runs only the selected code (handy for trying a line or two). */
+    private boolean runSelection() {
+        if (!hasSelection()) {
+            outputText = "Select some code first (Ctrl+Shift+R runs the selection).";
+            return true;
+        }
+        String selection = selectedTextOrAll();
+        ScriptManager manager = ScriptTypes.managerFor(currentScriptName);
+        return startRun(currentScriptName + " (selection)", manager, selection, ScriptTypes.defaultContext(),
+                scriptRunsAsync(editor.text));
     }
 
     private boolean toggleScriptAsync() {
@@ -1406,22 +2594,10 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
             return;
         }
         selectedScriptIndex = idx;
-        currentScriptName = visibleScripts.get(idx);
-        renameDraft = currentScriptName;
-        try {
-            editor.text = normalize(ScriptStorage.readScript(currentScriptName));
-            editor.cursor = editor.text.length();
-            editor.selectionAnchor = -1;
-            editor.scrollLine = 0;
-            editor.viewLeft = 0;
-            diagnostics.clear();
-            undo.clear();
-            redo.clear();
-            if (!keepOutput) {
-                outputText = "Loaded " + currentScriptName;
-            }
-        } catch (IOException e) {
-            outputText = "Load error: " + e.getMessage();
+        String previousOutput = outputText;
+        openScriptByName(visibleScripts.get(idx));
+        if (keepOutput) {
+            outputText = previousOutput;
         }
     }
 
@@ -1485,9 +2661,39 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
 
     private void rebuildDocs() {
         docsLines.clear();
-        docsLines.add("[Scripting]");
-        docsLines.add("- Ctrl+S save, Ctrl+R run");
-        docsLines.add("- Ctrl+Z undo, Ctrl+Y / Ctrl+Shift+Z redo");
+        docsLines.add("[Files]");
+        docsLines.add("- Files open in tabs above the editor; ● = unsaved. Click × or middle-click to close, Ctrl+W closes,");
+        docsLines.add("  Ctrl+Tab / Ctrl+Shift+Tab switch. Open files and unsaved edits stay until you quit the game.");
+        docsLines.add("- Ctrl+N new script, Ctrl+S save, Ctrl+Shift+S save all");
+        docsLines.add("");
+        docsLines.add("[Run]");
+        docsLines.add("- F5 or Ctrl+R run, Shift+F5 stop all scripts, Ctrl+Shift+R run the selection only");
+        docsLines.add("- First line '// @async on' runs the script in the background (stop: Shift+F5 or /runscript stop)");
+        docsLines.add("- The bottom panel has Problems and Console tabs; click a console line to copy it, 'Clear' empties it");
+        docsLines.add("");
+        docsLines.add("[Navigate]");
+        docsLines.add("- Ctrl+F find, Ctrl+H replace, Enter/Shift+Enter (or F3/Shift+F3) next/previous,");
+        docsLines.add("  Alt+C match case, Alt+W whole word, Tab switches to the replace field, Ctrl+Enter replaces all");
+        docsLines.add("- Ctrl+G go to line (line or line:column), Ctrl+O go to a function/class/value");
+        docsLines.add("- Ctrl+Left/Right move by word, Home jumps to the first character, Ctrl+Home/End to the file start/end");
+        docsLines.add("- Hover a red line number to see its problem");
+        docsLines.add("");
+        docsLines.add("[Edit]");
+        docsLines.add("- Ctrl+/ comment or uncomment lines, Ctrl+D duplicate, Alt+Up/Down move lines, Ctrl+Shift+K delete line");
+        docsLines.add("- Ctrl+X with nothing selected cuts the line, Ctrl+Backspace/Delete removes a word");
+        docsLines.add("- Brackets and quotes close themselves; typing one with a selection wraps it");
+        docsLines.add("- Ctrl+J snippet palette, Ctrl+Shift+F re-indent the script");
+        docsLines.add("");
+        docsLines.add("[m0 helper]");
+        docsLines.add("- m0.print(x)            line in the Console tab");
+        docsLines.add("- m0.message(x)          chat line only you see; m0.actionbar(x) for the action bar");
+        docsLines.add("- m0.chat(x), m0.command(\"time set day\")   send to the server");
+        docsLines.add("- m0.placeholders(\"{player.x}\"), m0.macro(\"id\")");
+        docsLines.add("- m0.sleep(ms)           async scripts only");
+        docsLines.add("- m0.sync { ... } / m0.call { ... }   run on the game thread from async scripts");
+        docsLines.add("- m0.checkCancelled()    call in long loops so timeouts and stop work");
+        docsLines.add("");
+        docsLines.add("- Ctrl+Z undo, Ctrl+Y / Ctrl+Shift+Z redo (per file)");
         docsLines.add("- Tab/Shift+Tab indent and unindent");
         docsLines.add("- Placeholder suggestions trigger after '{'");
         docsLines.add("- Supported extensions: .groovy, .kts, .js");
@@ -1518,17 +2724,6 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
             return Language.JAVASCRIPT;
         }
         return Language.KOTLIN;
-    }
-
-    private void clearEditor() {
-        editor.text = "";
-        editor.cursor = 0;
-        editor.selectionAnchor = -1;
-        editor.scrollLine = 0;
-        editor.viewLeft = 0;
-        diagnostics.clear();
-        undo.clear();
-        redo.clear();
     }
 
     private void updateClickCount(int cursorIdx) {
@@ -1624,7 +2819,17 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
         String line = editor.text.substring(startOfLine, endOfLine);
         String indent = leadingIndent(line);
         String beforeCursor = editor.text.substring(startOfLine, editor.cursor).trim();
-        if (beforeCursor.endsWith("{") || beforeCursor.endsWith("(")) {
+        boolean opens = beforeCursor.endsWith("{") || beforeCursor.endsWith("(") || beforeCursor.endsWith("[");
+        char next = editor.cursor < editor.text.length() ? editor.text.charAt(editor.cursor) : 0;
+        if (opens && (next == '}' || next == ')' || next == ']') && !hasSelection()) {
+            // Between a bracket pair: put the closer on its own line and the cursor on an indented line between.
+            String inner = "\n" + indent + "    ";
+            replaceSelectionOrInsert(inner + "\n" + indent, false);
+            editor.cursor -= indent.length() + 1;
+            clampEditor();
+            return;
+        }
+        if (opens) {
             indent += "    ";
         }
         replaceSelectionOrInsert("\n" + indent, false);
@@ -1938,71 +3143,6 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
         context.fill(p[0], p[1] + 8, p[0] + Math.max(2, charW), p[1] + 9, color);
     }
 
-    private void drawHighlightedLine(GuiGraphicsExtractor context, String line, int x, int y, Language language) {
-        List<TokenSpan> spans = tokenize(line, language);
-        int drawX = x;
-        for (TokenSpan span : spans) {
-            if (span.end <= span.start || span.start < 0 || span.end > line.length()) {
-                continue;
-            }
-            String part = line.substring(span.start, span.end);
-            context.text(font, part, drawX, y, span.color, false);
-            drawX += font.width(part);
-        }
-    }
-
-    private record TokenSpan(int start, int end, int color) {
-    }
-
-    private static List<TokenSpan> tokenize(String line, Language language) {
-        List<TokenSpan> out = new ArrayList<>();
-        if (line == null || line.isEmpty()) {
-            return out;
-        }
-        List<String> words = language == Language.GROOVY
-                ? List.of("def", "class", "if", "else", "for", "while", "return", "import", "new", "true", "false", "null")
-                : List.of("fun", "val", "var", "class", "if", "else", "for", "while", "return", "import", "object", "true", "false", "null", "when");
-        int i = 0;
-        while (i < line.length()) {
-            char c = line.charAt(i);
-            if (i + 1 < line.length() && c == '/' && line.charAt(i + 1) == '/') {
-                out.add(new TokenSpan(i, line.length(), 0xFF6FA86F));
-                break;
-            }
-            if (c == '"' || c == '\'') {
-                int j = i + 1;
-                while (j < line.length()) {
-                    if (line.charAt(j) == c && line.charAt(j - 1) != '\\') {
-                        j++;
-                        break;
-                    }
-                    j++;
-                }
-                out.add(new TokenSpan(i, Math.min(j, line.length()), 0xFFE6C07B));
-                i = j;
-                continue;
-            }
-            if (Character.isDigit(c)) {
-                int j = i + 1;
-                while (j < line.length() && (Character.isDigit(line.charAt(j)) || line.charAt(j) == '.')) j++;
-                out.add(new TokenSpan(i, j, 0xFFD19A66));
-                i = j;
-                continue;
-            }
-            if (Character.isLetter(c) || c == '_') {
-                int j = i + 1;
-                while (j < line.length() && (Character.isLetterOrDigit(line.charAt(j)) || line.charAt(j) == '_')) j++;
-                String token = line.substring(i, j);
-                out.add(new TokenSpan(i, j, words.contains(token) ? 0xFF61AFEF : 0xFFDCDCAA));
-                i = j;
-                continue;
-            }
-            out.add(new TokenSpan(i, i + 1, 0xFFD6D6D6));
-            i++;
-        }
-        return out;
-    }
-
     private void refreshSuggestions() {
         CodeCompletionContext codeContext = codeCompletionContext(editor.text, editor.cursor);
         if (codeContext != null) {
@@ -2264,6 +3404,8 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
         registerRoot("options", net.minecraft.client.Options.class.getName());
         registerRoot("server", net.minecraft.server.MinecraftServer.class.getName());
         registerRoot("source", net.minecraft.client.player.LocalPlayer.class.getName());
+        registerRoot("m0", me.m0dii.modules.scripting.ScriptApi.class.getName());
+        registerRoot("event", "me.m0dii.modules.automation.AutomationEvent");
 
         List<CompletionItem> global = new ArrayList<>();
         for (Map.Entry<String, String> root : ROOT_TYPE_KEYS.entrySet()) {
@@ -2693,6 +3835,8 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
     private void markEdited() {
         lastEditAt = System.currentTimeMillis();
         editVersion++;
+        globalEdits++;
+        pendingClose = null;
     }
 
     private void markStrictValidationComplete() {
@@ -2709,25 +3853,7 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
     }
 
     private static boolean scriptRunsAsync(String source) {
-        for (String line : splitLines(normalize(source))) {
-            String t = line == null ? "" : line.trim().toLowerCase(Locale.ROOT);
-            if (t.isEmpty()) {
-                continue;
-            }
-            if (t.startsWith("//") || t.startsWith("#") || t.startsWith("/*") || t.startsWith("*")) {
-                int idx = t.indexOf(ASYNC_DIRECTIVE);
-                if (idx >= 0) {
-                    String tail = t.substring(idx + ASYNC_DIRECTIVE.length()).trim();
-                    if (tail.startsWith(":")) {
-                        tail = tail.substring(1).trim();
-                    }
-                    return !tail.startsWith("off") && !tail.startsWith("false") && !tail.startsWith("0") && !tail.startsWith("no");
-                }
-                continue;
-            }
-            break;
-        }
-        return false;
+        return ScriptDirectives.isAsync(normalize(source));
     }
 
     private static String withAsyncDirective(String source, boolean enabled) {
@@ -2836,6 +3962,8 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
         if (tab == UiTab.MAIN) {
             top += 24;
         }
+        top += FILE_TAB_H;
+        bottom -= STATUS_H;
         return new Rect(left, top, Math.max(120, right - left), Math.max(90, bottom - top));
     }
 
@@ -2949,8 +4077,16 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
 
     @Override
     public void onClose() {
+        int unsaved = dirtyCount();
+        if (unsaved > 0 && closeWarnedAtEdit != globalEdits) {
+            // Unsaved files stay open for this game session; say so once before leaving.
+            closeWarnedAtEdit = globalEdits;
+            outputText = unsaved + " file(s) have unsaved changes. They stay open until you quit the game."
+                    + " Ctrl+Shift+S saves all; Esc again closes.";
+            return;
+        }
         if (minecraft != null) {
-            minecraft.gui.setScreen(null);
+            minecraft.gui.setScreen(parent);
         }
     }
 

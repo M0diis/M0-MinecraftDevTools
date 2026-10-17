@@ -17,6 +17,8 @@ public final class AutomationRule {
     public int rateLimitCount = 0;
     public long rateLimitWindowMs = 0L;
     public int priority = 0;
+    /** Optional folder name used to organise rules ("" = no folder). */
+    public String group = "";
 
     public static String newId() {
         return "rule_" + UUID.randomUUID().toString().substring(0, 8);
@@ -39,6 +41,7 @@ public final class AutomationRule {
         copy.rateLimitCount = rateLimitCount;
         copy.rateLimitWindowMs = rateLimitWindowMs;
         copy.priority = priority;
+        copy.group = group;
         copy.eventFilters = eventFilters == null ? new ArrayList<>() : eventFilters.stream().map(EventFilter::copy).collect(ArrayList::new, ArrayList::add, ArrayList::addAll);
         copy.conditions = conditions == null ? new ArrayList<>() : conditions.stream().map(Condition::copy).collect(ArrayList::new, ArrayList::add, ArrayList::addAll);
         copy.actions = actions == null ? new ArrayList<>() : actions.stream().map(Action::copy).collect(ArrayList::new, ArrayList::add, ArrayList::addAll);
@@ -150,6 +153,15 @@ public final class AutomationRule {
             Action action = new Action();
             action.type = AutomationActionType.RUN_SCRIPT;
             action.target = file;
+            return action;
+        }
+
+        /** Local message; {@code argument} may contain "actionbar" and/or "ping". */
+        public static Action message(@NotNull String text, @NotNull String options) {
+            Action action = new Action();
+            action.type = AutomationActionType.SHOW_MESSAGE;
+            action.target = text;
+            action.argument = options;
             return action;
         }
 

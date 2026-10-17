@@ -14,7 +14,10 @@ import java.util.*;
 public final class DataHandler {
     public static final int CURRENT_VERSION = 1;
 
-    private static final Path CONFIG_FILE = FabricLoader.getInstance().getConfigDir().resolve("m0-dev-tools-automation.json");
+    /** Resolved lazily so the pure helpers in this class can be used without a running game (tests, import). */
+    private static Path configFile() {
+        return FabricLoader.getInstance().getConfigDir().resolve("m0-dev-tools-automation.json");
+    }
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
     private static AutomationConfig config = defaults();
@@ -36,14 +39,14 @@ public final class DataHandler {
     }
 
     public static synchronized void load() {
-        if (!Files.exists(CONFIG_FILE)) {
+        if (!Files.exists(configFile())) {
             config = defaults();
             save();
             return;
         }
 
         try {
-            AutomationConfig loaded = GSON.fromJson(Files.readString(CONFIG_FILE), AutomationConfig.class);
+            AutomationConfig loaded = GSON.fromJson(Files.readString(configFile()), AutomationConfig.class);
             config = sanitize(loaded);
             save();
         } catch (Exception e) {
@@ -54,8 +57,8 @@ public final class DataHandler {
 
     public static synchronized void save() {
         try {
-            Files.createDirectories(CONFIG_FILE.getParent());
-            Files.writeString(CONFIG_FILE, GSON.toJson(sanitize(config)));
+            Files.createDirectories(configFile().getParent());
+            Files.writeString(configFile(), GSON.toJson(sanitize(config)));
         } catch (IOException e) {
             M0DevTools.LOGGER.error("Failed to save automation config: {}", e.getMessage());
         }
@@ -71,7 +74,7 @@ public final class DataHandler {
     }
 
     public static Path configPath() {
-        return CONFIG_FILE;
+        return configFile();
     }
 
     public static String exampleJson() {
@@ -120,7 +123,8 @@ public final class DataHandler {
         return rules;
     }
 
-    private static AutomationRule sanitizeRule(AutomationRule raw, Set<String> seenIds) {
+    /** Cleans up a rule from an untrusted source (file or clipboard), giving it an id not in {@code seenIds}. */
+    static AutomationRule sanitizeRule(AutomationRule raw, Set<String> seenIds) {
         AutomationRule cleaned = new AutomationRule();
         cleaned.id = sanitizeId(raw.id, seenIds);
         cleaned.name = sanitizeText(raw.name, "Rule");
@@ -131,6 +135,7 @@ public final class DataHandler {
         cleaned.rateLimitCount = Math.max(0, raw.rateLimitCount);
         cleaned.rateLimitWindowMs = raw.rateLimitCount <= 0 ? 0L : Math.max(0L, raw.rateLimitWindowMs);
         cleaned.priority = Math.clamp(raw.priority, -10_000, 10_000);
+        cleaned.group = sanitizeText(raw.group, "");
         cleaned.eventFilters = sanitizeFilters(raw.eventFilters);
         cleaned.conditions = sanitizeConditions(raw.conditions);
         cleaned.actions = sanitizeActions(raw.actions);

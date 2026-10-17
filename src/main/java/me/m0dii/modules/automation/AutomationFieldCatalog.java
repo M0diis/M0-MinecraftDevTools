@@ -63,7 +63,10 @@ public final class AutomationFieldCatalog {
         )));
         EVENT_FILTER_FIELDS.put(AutomationEventType.CHAT_RECEIVED_REGEX, join(EVENT_META_FIELDS, List.of(
                 field("message", "Message", "Rendered chat message text."),
-                field("messageLength", "Message Length", "Rendered chat message length.")
+                field("messageLength", "Message Length", "Rendered chat message length."),
+                field("group0", "Regex Match", "Whole text matched by the last REGEX filter/condition. Use {event.group0} in actions."),
+                field("group1", "Regex Group 1", "First capture group of the last matching REGEX. Use {event.group1}; named groups are {event.group.<name>}."),
+                field("group2", "Regex Group 2", "Second capture group of the last matching REGEX.")
         )));
         EVENT_FILTER_FIELDS.put(AutomationEventType.SCREEN_CHANGED, join(EVENT_META_FIELDS, List.of(
                 field("fromScreen", "From Screen", "Previous screen class name."),

@@ -8,14 +8,16 @@ import me.m0dii.M0DevToolsClient;
 import me.m0dii.modules.freecam.CameraEntity;
 import me.m0dii.modules.macros.MacroPlaceholderProvider;
 import me.m0dii.modules.macros.MacroPlaceholders;
+import me.m0dii.render.OverlayBufferSource;
+import me.m0dii.render.OverlayRenderEvents;
 import me.m0dii.utils.CustomRenderLayers;
 import me.m0dii.utils.DrawUtil;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
-import me.m0dii.render.OverlayRenderEvents;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
-import me.m0dii.render.OverlayBufferSource;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
+import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
@@ -92,6 +94,7 @@ public final class CameraPathManager {
         loadFromDisk();
         MacroPlaceholders.registerProvider(PLACEHOLDER_PROVIDER);
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> resetRuntimeState());
+        ClientTickEvents.END_CLIENT_TICK.register(client -> tickRecording());
         OverlayRenderEvents.AFTER_ENTITIES.register(context -> {
             if (!overlayVisible) {
                 return;
@@ -169,6 +172,9 @@ public final class CameraPathManager {
         String name = workingPath.name == null ? "unsaved" : workingPath.name;
         lines.add("Path: " + name + " | points=" + workingPath.points.size()
                 + " | interp=" + workingPath.interpolation.name().toLowerCase(Locale.ROOT));
+        if (recording) {
+            lines.add("RECORDING · " + workingPath.points.size() + " points · " + formatSeconds(recordTicks / 20.0));
+        }
         lines.add("Dimension: " + (workingPath.dimensionId.isBlank() ? "unset" : workingPath.dimensionId)
                 + " | overlay=" + (overlayVisible ? "shown" : "hidden")
                 + " | playing=" + (isPlaybackActive() ? "yes" : "no"));
@@ -501,7 +507,103 @@ public final class CameraPathManager {
     }
 
     private static void resetRuntimeState() {
+        if (recording) {
+            finishRecording();
+        }
         stopPlaybackInternal();
+    }
+
+    // ---- recording ----------------------------------------------------------------------------------------
+
+    private static final int MAX_RECORDED_POINTS = 2000;
+    private static boolean recording;
+    private static int recordTicks;
+    private static int recordIntervalTicks;
+    private static int lastRecordedTick;
+    private static String recordingDimension = "";
+
+    public static boolean isRecording() {
+        return recording;
+    }
+
+    /**
+     * Starts recording the camera (or player) as it moves: a keyframe every {@code intervalSeconds} while moving,
+     * plus one when it stops so pauses are kept. Replaces the working path.
+     */
+    public static String startRecording(double intervalSeconds) {
+        requireClientReady();
+        if (recording) {
+            return "Already recording. Use /camera record stop to finish.";
+        }
+        stopPlaybackInternal();
+        CameraPose pose = currentPose();
+        recordingDimension = currentDimensionId();
+        workingPath = new CameraPath(null, recordingDimension, workingPath.interpolation, new ArrayList<>(List.of(
+                new Keyframe(pose.position, pose.yaw, pose.pitch, 0)
+        )));
+        selectedIndex = 0;
+        recordIntervalTicks = secondsToTicks(intervalSeconds);
+        recordTicks = 0;
+        lastRecordedTick = 0;
+        recording = true;
+        return "Recording: move the camera (freecam works well), then /camera record stop. A point every "
+                + formatSeconds(recordIntervalTicks / 20.0) + ".";
+    }
+
+    public static String stopRecording() {
+        if (!recording) {
+            return "Not recording. Start with /camera record [seconds between points].";
+        }
+        return finishRecording();
+    }
+
+    private static String finishRecording() {
+        recording = false;
+        try {
+            CameraPose pose = currentPose();
+            Keyframe last = workingPath.points.getLast();
+            if (!samePose(last, pose) && recordTicks > last.timeTicks) {
+                workingPath.points.add(new Keyframe(pose.position, pose.yaw, pose.pitch, recordTicks));
+            }
+        } catch (IllegalStateException ignored) {
+            // no camera any more (disconnected); keep what was recorded
+        }
+        selectedIndex = workingPath.points.size() - 1;
+        saveToDisk();
+        return "Recorded " + workingPath.points.size() + " points over "
+                + formatSeconds(totalDurationTicks(workingPath) / 20.0) + ". Use /camera play to watch it, /camera save <name> to keep it.";
+    }
+
+    private static void tickRecording() {
+        if (!recording) {
+            return;
+        }
+        Minecraft client = Minecraft.getInstance();
+        if (client.player == null || client.level == null || !recordingDimension.equals(currentDimensionIdOrEmpty())) {
+            String message = finishRecording();
+            if (client.player != null) {
+                client.player.sendSystemMessage(Component.literal("[Camera] Recording stopped (dimension changed). " + message));
+            }
+            return;
+        }
+        recordTicks++;
+        if (recordTicks - lastRecordedTick < recordIntervalTicks) {
+            return;
+        }
+        CameraPose pose = currentPose();
+        List<Keyframe> points = workingPath.points;
+        Keyframe last = points.getLast();
+        boolean moved = !samePose(last, pose);
+        boolean lastWasMoving = points.size() < 2 || !samePose(points.get(points.size() - 2), last);
+        if (moved || lastWasMoving) {
+            // While still, add one "hold" keyframe so the pause is kept in playback.
+            points.add(new Keyframe(pose.position, pose.yaw, pose.pitch, recordTicks));
+            lastRecordedTick = recordTicks;
+        }
+        if (points.size() >= MAX_RECORDED_POINTS) {
+            String message = finishRecording();
+            client.player.sendSystemMessage(Component.literal("[Camera] Recording stopped at " + MAX_RECORDED_POINTS + " points. " + message));
+        }
     }
 
     private static void ensureEditablePath() {
@@ -804,6 +906,10 @@ public final class CameraPathManager {
         return point.position.distanceToSqr(pose.position) <= 1.0e-6
                 && angleDistance(point.yaw, pose.yaw) <= 0.05f
                 && angleDistance(point.pitch, pose.pitch) <= 0.05f;
+    }
+
+    private static boolean samePose(Keyframe first, Keyframe second) {
+        return samePose(first, new CameraPose(second.position, second.yaw, second.pitch));
     }
 
     private static float angleDistance(float first, float second) {

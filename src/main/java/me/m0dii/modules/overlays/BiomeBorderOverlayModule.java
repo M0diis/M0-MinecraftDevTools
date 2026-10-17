@@ -1,22 +1,25 @@
 package me.m0dii.modules.overlays;
 
+import com.google.gson.JsonObject;
+import com.mojang.blaze3d.platform.InputConstants;
+import com.mojang.blaze3d.vertex.VertexConsumer;
 import me.m0dii.modules.Module;
+import me.m0dii.modules.PersistentSettings;
+import me.m0dii.render.OverlayRenderEvents;
+import me.m0dii.render.OverlayRenderEvents.OverlayRenderContext;
 import me.m0dii.utils.DrawUtil;
 import me.m0dii.utils.KeybindCatalog;
-import me.m0dii.render.OverlayRenderEvents.OverlayRenderContext;
-import me.m0dii.render.OverlayRenderEvents;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.util.Mth;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.phys.Vec3;
-import com.mojang.blaze3d.platform.InputConstants;
-import com.mojang.blaze3d.vertex.VertexConsumer;
+
 import java.util.ArrayList;
 import java.util.List;
 
-public class BiomeBorderOverlayModule extends Module {
+public class BiomeBorderOverlayModule extends Module implements PersistentSettings {
     public static final BiomeBorderOverlayModule INSTANCE = new BiomeBorderOverlayModule();
 
     private int radius = 48;
@@ -186,5 +189,20 @@ public class BiomeBorderOverlayModule extends Module {
             }
         }
     }
-}
 
+    @Override
+    public JsonObject saveSettings() {
+        JsonObject json = new JsonObject();
+        json.addProperty("radius", radius);
+        json.addProperty("wallHalfHeight", wallHalfHeight);
+        json.addProperty("cellSize", cellSize);
+        return json;
+    }
+
+    @Override
+    public void loadSettings(JsonObject settings) {
+        radius = PersistentSettings.readInt(settings, "radius", radius, 16, 160);
+        wallHalfHeight = PersistentSettings.readInt(settings, "wallHalfHeight", wallHalfHeight, 4, 96);
+        cellSize = PersistentSettings.readInt(settings, "cellSize", cellSize, 1, 16);
+    }
+}

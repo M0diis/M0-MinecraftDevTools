@@ -4,11 +4,12 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.suggestion.Suggestions;
 import com.mojang.brigadier.suggestion.SuggestionsBuilder;
-import net.fabricmc.fabric.api.client.command.v2.ClientCommands;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
+import net.fabricmc.fabric.api.client.command.v2.ClientCommands;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
 import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.network.chat.Component;
+
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.CompletableFuture;
@@ -19,7 +20,7 @@ public final class CameraClientCommand {
             "add", "prepend", "move", "select", "duration",
             "split", "delete", "trim", "transpose", "stretch",
             "interpolation", "play", "stop", "show", "hide",
-            "save", "load", "delete_saved"
+            "save", "load", "delete_saved", "record"
     );
 
     private CameraClientCommand() {
@@ -41,6 +42,7 @@ public final class CameraClientCommand {
         send(context, "/camera select nearest|<index> | duration <seconds> | split | delete | trim");
         send(context, "/camera interpolation <linear|catmull_rom> | stretch <percent> | transpose");
         send(context, "/camera play [loops] | stop");
+        send(context, "/camera record [seconds between points] | record stop");
         send(context, "/camera show | hide");
         send(context, "/camera save <name> | load <name> | delete_saved <name>");
         return 1;
@@ -94,6 +96,12 @@ public final class CameraClientCommand {
                 case "interpolation", "interp" -> {
                     requireLength(tokens, 2, "/camera interpolation <linear|catmull_rom>");
                     yield CameraPathManager.setInterpolation(tokens[1]);
+                }
+                case "record" -> {
+                    if (tokens.length >= 2 && "stop".equalsIgnoreCase(tokens[1])) {
+                        yield CameraPathManager.stopRecording();
+                    }
+                    yield CameraPathManager.startRecording(tokens.length >= 2 ? parsePositiveDouble(tokens[1], "seconds") : 0.5);
                 }
                 case "play" -> CameraPathManager.play(tokens.length >= 2 ? parsePositiveInt(tokens[1], "loops") : 1);
                 case "stop" -> CameraPathManager.stopPlayback();
@@ -198,6 +206,8 @@ public final class CameraClientCommand {
                     List.of("stretch 50", "stretch 75", "stretch 100", "stretch 150", "stretch 200"), builder);
             case "interpolation", "interp" -> SharedSuggestionProvider.suggest(
                     List.of("interpolation linear", "interpolation catmull_rom"), builder);
+            case "record" -> SharedSuggestionProvider.suggest(
+                    List.of("record 0.5", "record 1", "record stop"), builder);
             case "play" -> SharedSuggestionProvider.suggest(
                     List.of("play 1", "play 2", "play 4"), builder);
             case "select" -> {

@@ -6,9 +6,7 @@ import me.m0dii.modules.clickgui.ModuleRegistry;
 import me.m0dii.modules.macros.CommandMacros;
 import me.m0dii.modules.macros.MacroPlaceholders;
 import me.m0dii.modules.macros.gui.MacroWorkbenchScreen;
-import me.m0dii.modules.scripting.ScriptManager;
-import me.m0dii.modules.scripting.ScriptStorage;
-import me.m0dii.modules.scripting.ScriptTypes;
+import me.m0dii.modules.scripting.*;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
@@ -18,6 +16,7 @@ import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.sounds.SoundEvents;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.NotNull;
@@ -93,13 +92,74 @@ public final class AutomationModule {
         Map<String, Object> attributes = new LinkedHashMap<>();
         attributes.put("message", rendered);
         attributes.put("messageLength", rendered.length());
-        eventBus.post(new AutomationEvent(AutomationEventType.CHAT_RECEIVED_REGEX, nowMs, clientTickCounter, attributes));
+        emit(new AutomationEvent(AutomationEventType.CHAT_RECEIVED_REGEX, nowMs, clientTickCounter, attributes));
+    }
+
+    /** While set, events are handed here instead of to the rules (used to build dry-run events). */
+    private java.util.function.Consumer<AutomationEvent> capture;
+
+    private void emit(AutomationEvent event) {
+        if (capture != null) {
+            capture.accept(event);
+        } else {
+            eventBus.post(event);
+        }
+    }
+
+    /**
+     * Builds an example event of {@code type} from the current game state without running any rule.
+     * {@code input} customises it where it makes sense (chat message, screen, dimension, item, slot, health, food).
+     */
+    public AutomationEvent sampleEvent(@NotNull AutomationEventType type, @Nullable String input) {
+        String arg = input == null ? "" : input.trim();
+        AutomationEvent[] captured = new AutomationEvent[1];
+        capture = event -> captured[0] = event;
+        try {
+            switch (type) {
+                case CHAT_RECEIVED_REGEX -> fireChatTest(arg.isEmpty() ? "test message" : arg);
+                case TICK_INTERVAL -> fireTickTest();
+                case PLAYER_MOVE -> firePlayerMoveTest();
+                case WORLD_JOIN -> fireWorldJoinTest();
+                case WORLD_LEAVE -> fireWorldLeaveTest();
+                case DIMENSION_CHANGE -> fireDimensionChangeTest(arg.isEmpty() ? "minecraft:the_nether" : arg);
+                case SCREEN_CHANGED -> fireScreenChangeTest(arg.isEmpty() ? "InventoryScreen" : arg);
+                case WEATHER_CHANGED -> fireWeatherChangeTest(false, true, false, false);
+                case HOTBAR_SLOT_CHANGED -> fireHotbarSlotChangeTest(parseInt(arg, 1));
+                case HELD_ITEM_CHANGED -> fireHeldItemChangeTest(arg.isEmpty() ? "minecraft:diamond_sword" : arg);
+                case PLAYER_LEVEL_CHANGED -> firePlayerLevelChangeTest(10, 11, 0.25F, 0.05F);
+                case PLAYER_HEALTH_CHANGED -> firePlayerHealthChangeTest(20.0F, parseFloat(arg, 6.0F));
+                case PLAYER_FOOD_CHANGED -> firePlayerFoodChangeTest(20, parseInt(arg, 6));
+                case PLAYER_DEATH -> firePlayerDeathTest(0.0F);
+                default -> {
+                    // unknown types produce no sample
+                }
+            }
+        } finally {
+            capture = null;
+        }
+        return captured[0] != null ? captured[0] : AutomationEvent.of(type, System.currentTimeMillis(), clientTickCounter);
+    }
+
+    private static int parseInt(String raw, int fallback) {
+        try {
+            return Integer.parseInt(raw);
+        } catch (NumberFormatException e) {
+            return fallback;
+        }
+    }
+
+    private static float parseFloat(String raw, float fallback) {
+        try {
+            return Float.parseFloat(raw);
+        } catch (NumberFormatException e) {
+            return fallback;
+        }
     }
 
     public void fireTickTest() {
         long nowMs = System.currentTimeMillis();
         Map<String, Object> attributes = buildTickAttributes(Minecraft.getInstance());
-        eventBus.post(new AutomationEvent(AutomationEventType.TICK_INTERVAL, nowMs, ++clientTickCounter, attributes));
+        emit(new AutomationEvent(AutomationEventType.TICK_INTERVAL, nowMs, ++clientTickCounter, attributes));
     }
 
     public void firePlayerMoveTest() {
@@ -115,7 +175,7 @@ public final class AutomationModule {
         Map<String, Object> attributes = new LinkedHashMap<>();
         attributes.put("dimension", dimension);
         attributes.put("playerName", client.player == null ? "" : client.player.getName().getString());
-        eventBus.post(new AutomationEvent(AutomationEventType.WORLD_JOIN, System.currentTimeMillis(), clientTickCounter, attributes));
+        emit(new AutomationEvent(AutomationEventType.WORLD_JOIN, System.currentTimeMillis(), clientTickCounter, attributes));
     }
 
     public void fireDimensionChangeTest(@NotNull String toDimension) {
@@ -123,7 +183,7 @@ public final class AutomationModule {
         Map<String, Object> attributes = new LinkedHashMap<>();
         attributes.put("fromDimension", currentDimensionId(client.level));
         attributes.put("toDimension", toDimension);
-        eventBus.post(new AutomationEvent(AutomationEventType.DIMENSION_CHANGE, System.currentTimeMillis(), clientTickCounter, attributes));
+        emit(new AutomationEvent(AutomationEventType.DIMENSION_CHANGE, System.currentTimeMillis(), clientTickCounter, attributes));
     }
 
     public void fireWorldLeaveTest() {
@@ -134,19 +194,19 @@ public final class AutomationModule {
         attributes.put("fromX", client.player == null ? 0.0D : client.player.getX());
         attributes.put("fromY", client.player == null ? 0.0D : client.player.getY());
         attributes.put("fromZ", client.player == null ? 0.0D : client.player.getZ());
-        eventBus.post(new AutomationEvent(AutomationEventType.WORLD_LEAVE, System.currentTimeMillis(), clientTickCounter, attributes));
+        emit(new AutomationEvent(AutomationEventType.WORLD_LEAVE, System.currentTimeMillis(), clientTickCounter, attributes));
     }
 
     public void fireChatTest(@NotNull String message) {
         Map<String, Object> attributes = new LinkedHashMap<>();
         attributes.put("message", message);
         attributes.put("messageLength", message.length());
-        eventBus.post(new AutomationEvent(AutomationEventType.CHAT_RECEIVED_REGEX, System.currentTimeMillis(), clientTickCounter, attributes));
+        emit(new AutomationEvent(AutomationEventType.CHAT_RECEIVED_REGEX, System.currentTimeMillis(), clientTickCounter, attributes));
     }
 
     public void fireScreenChangeTest(@NotNull String toScreen) {
         String fromScreen = currentScreenName(Minecraft.getInstance().gui.screen());
-        eventBus.post(new AutomationEvent(
+        emit(new AutomationEvent(
                 AutomationEventType.SCREEN_CHANGED,
                 System.currentTimeMillis(),
                 clientTickCounter,
@@ -164,7 +224,7 @@ public final class AutomationModule {
         Map<String, Object> attributes = new LinkedHashMap<>();
         attributes.put("fromSlot", fromSlot);
         attributes.put("toSlot", Math.clamp(toSlot, 0, 8));
-        eventBus.post(new AutomationEvent(AutomationEventType.HOTBAR_SLOT_CHANGED, System.currentTimeMillis(), clientTickCounter, attributes));
+        emit(new AutomationEvent(AutomationEventType.HOTBAR_SLOT_CHANGED, System.currentTimeMillis(), clientTickCounter, attributes));
     }
 
     public void fireHeldItemChangeTest(@NotNull String toItemId) {
@@ -177,7 +237,7 @@ public final class AutomationModule {
         attributes.put("toItemId", toItemId);
         attributes.put("fromItemName", fromItemName);
         attributes.put("toItemName", displayNameFromItemId(toItemId));
-        eventBus.post(new AutomationEvent(AutomationEventType.HELD_ITEM_CHANGED, System.currentTimeMillis(), clientTickCounter, attributes));
+        emit(new AutomationEvent(AutomationEventType.HELD_ITEM_CHANGED, System.currentTimeMillis(), clientTickCounter, attributes));
     }
 
     public void firePlayerHealthChangeTest(float fromHealth, float toHealth) {
@@ -185,7 +245,7 @@ public final class AutomationModule {
         attributes.put("fromHealth", fromHealth);
         attributes.put("toHealth", toHealth);
         attributes.put("deltaHealth", toHealth - fromHealth);
-        eventBus.post(new AutomationEvent(AutomationEventType.PLAYER_HEALTH_CHANGED, System.currentTimeMillis(), clientTickCounter, attributes));
+        emit(new AutomationEvent(AutomationEventType.PLAYER_HEALTH_CHANGED, System.currentTimeMillis(), clientTickCounter, attributes));
     }
 
     public void firePlayerFoodChangeTest(int fromFood, int toFood) {
@@ -193,7 +253,7 @@ public final class AutomationModule {
         attributes.put("fromFood", fromFood);
         attributes.put("toFood", toFood);
         attributes.put("deltaFood", toFood - fromFood);
-        eventBus.post(new AutomationEvent(AutomationEventType.PLAYER_FOOD_CHANGED, System.currentTimeMillis(), clientTickCounter, attributes));
+        emit(new AutomationEvent(AutomationEventType.PLAYER_FOOD_CHANGED, System.currentTimeMillis(), clientTickCounter, attributes));
     }
 
     public void firePlayerLevelChangeTest(int fromLevel, int toLevel, float fromProgress, float toProgress) {
@@ -204,7 +264,7 @@ public final class AutomationModule {
         attributes.put("fromProgress", fromProgress);
         attributes.put("toProgress", toProgress);
         attributes.put("deltaProgress", toProgress - fromProgress);
-        eventBus.post(new AutomationEvent(AutomationEventType.PLAYER_LEVEL_CHANGED, System.currentTimeMillis(), clientTickCounter, attributes));
+        emit(new AutomationEvent(AutomationEventType.PLAYER_LEVEL_CHANGED, System.currentTimeMillis(), clientTickCounter, attributes));
     }
 
     public void firePlayerDeathTest(float health) {
@@ -217,7 +277,7 @@ public final class AutomationModule {
         attributes.put("x", player == null ? 0.0D : player.getX());
         attributes.put("y", player == null ? 0.0D : player.getY());
         attributes.put("z", player == null ? 0.0D : player.getZ());
-        eventBus.post(new AutomationEvent(AutomationEventType.PLAYER_DEATH, System.currentTimeMillis(), clientTickCounter, attributes));
+        emit(new AutomationEvent(AutomationEventType.PLAYER_DEATH, System.currentTimeMillis(), clientTickCounter, attributes));
     }
 
     private void registerCommands(CommandDispatcher<FabricClientCommandSource> dispatcher, net.minecraft.commands.CommandBuildContext registryAccess) {
@@ -227,7 +287,7 @@ public final class AutomationModule {
     private void onClientTick(Minecraft client) {
         clientTickCounter++;
         long nowMs = System.currentTimeMillis();
-        eventBus.post(new AutomationEvent(AutomationEventType.TICK_INTERVAL, nowMs, clientTickCounter, buildTickAttributes(client)));
+        emit(new AutomationEvent(AutomationEventType.TICK_INTERVAL, nowMs, clientTickCounter, buildTickAttributes(client)));
         detectScreenChange(client, nowMs);
 
         LocalPlayer player = client.player;
@@ -245,12 +305,12 @@ public final class AutomationModule {
             Map<String, Object> attributes = new LinkedHashMap<>();
             attributes.put("dimension", currentDimension);
             attributes.put("playerName", player.getName().getString());
-            eventBus.post(new AutomationEvent(AutomationEventType.WORLD_JOIN, nowMs, clientTickCounter, attributes));
+            emit(new AutomationEvent(AutomationEventType.WORLD_JOIN, nowMs, clientTickCounter, attributes));
         } else if (lastDimensionId != null && !lastDimensionId.equals(currentDimension)) {
             Map<String, Object> attributes = new LinkedHashMap<>();
             attributes.put("fromDimension", lastDimensionId);
             attributes.put("toDimension", currentDimension);
-            eventBus.post(new AutomationEvent(AutomationEventType.DIMENSION_CHANGE, nowMs, clientTickCounter, attributes));
+            emit(new AutomationEvent(AutomationEventType.DIMENSION_CHANGE, nowMs, clientTickCounter, attributes));
         }
 
         Vec3 currentPos = currentPosition(player);
@@ -328,7 +388,7 @@ public final class AutomationModule {
         attributes.put("deltaY", to.y - from.y);
         attributes.put("deltaZ", to.z - from.z);
         attributes.put("distance", to.distanceTo(from));
-        eventBus.post(new AutomationEvent(AutomationEventType.PLAYER_MOVE, System.currentTimeMillis(), clientTickCounter, attributes));
+        emit(new AutomationEvent(AutomationEventType.PLAYER_MOVE, System.currentTimeMillis(), clientTickCounter, attributes));
     }
 
     private void detectScreenChange(@NotNull Minecraft client, long nowMs) {
@@ -340,7 +400,7 @@ public final class AutomationModule {
         if (Objects.equals(lastScreenName, currentScreen)) {
             return;
         }
-        eventBus.post(new AutomationEvent(
+        emit(new AutomationEvent(
                 AutomationEventType.SCREEN_CHANGED,
                 nowMs,
                 clientTickCounter,
@@ -353,7 +413,7 @@ public final class AutomationModule {
         Map<String, Object> attributes = new LinkedHashMap<>();
         attributes.put("fromSlot", fromSlot);
         attributes.put("toSlot", toSlot);
-        eventBus.post(new AutomationEvent(AutomationEventType.HOTBAR_SLOT_CHANGED, System.currentTimeMillis(), clientTickCounter, attributes));
+        emit(new AutomationEvent(AutomationEventType.HOTBAR_SLOT_CHANGED, System.currentTimeMillis(), clientTickCounter, attributes));
     }
 
     private void postHeldItemChangedEvent(@NotNull String fromItemId,
@@ -365,7 +425,7 @@ public final class AutomationModule {
         attributes.put("toItemId", toItemId);
         attributes.put("fromItemName", fromItemName);
         attributes.put("toItemName", toItemName);
-        eventBus.post(new AutomationEvent(AutomationEventType.HELD_ITEM_CHANGED, System.currentTimeMillis(), clientTickCounter, attributes));
+        emit(new AutomationEvent(AutomationEventType.HELD_ITEM_CHANGED, System.currentTimeMillis(), clientTickCounter, attributes));
     }
 
     private void postPlayerHealthChangedEvent(float fromHealth, float toHealth) {
@@ -373,7 +433,7 @@ public final class AutomationModule {
         attributes.put("fromHealth", fromHealth);
         attributes.put("toHealth", toHealth);
         attributes.put("deltaHealth", toHealth - fromHealth);
-        eventBus.post(new AutomationEvent(AutomationEventType.PLAYER_HEALTH_CHANGED, System.currentTimeMillis(), clientTickCounter, attributes));
+        emit(new AutomationEvent(AutomationEventType.PLAYER_HEALTH_CHANGED, System.currentTimeMillis(), clientTickCounter, attributes));
     }
 
     private void postPlayerFoodChangedEvent(int fromFood, int toFood) {
@@ -381,7 +441,7 @@ public final class AutomationModule {
         attributes.put("fromFood", fromFood);
         attributes.put("toFood", toFood);
         attributes.put("deltaFood", toFood - fromFood);
-        eventBus.post(new AutomationEvent(AutomationEventType.PLAYER_FOOD_CHANGED, System.currentTimeMillis(), clientTickCounter, attributes));
+        emit(new AutomationEvent(AutomationEventType.PLAYER_FOOD_CHANGED, System.currentTimeMillis(), clientTickCounter, attributes));
     }
 
     private void postWorldLeaveEvent() {
@@ -391,7 +451,7 @@ public final class AutomationModule {
         attributes.put("fromX", lastPlayerPos == null ? 0.0D : lastPlayerPos.x);
         attributes.put("fromY", lastPlayerPos == null ? 0.0D : lastPlayerPos.y);
         attributes.put("fromZ", lastPlayerPos == null ? 0.0D : lastPlayerPos.z);
-        eventBus.post(new AutomationEvent(AutomationEventType.WORLD_LEAVE, System.currentTimeMillis(), clientTickCounter, attributes));
+        emit(new AutomationEvent(AutomationEventType.WORLD_LEAVE, System.currentTimeMillis(), clientTickCounter, attributes));
     }
 
     private void postWeatherChangedEvent(boolean fromRaining, boolean toRaining, boolean fromThundering, boolean toThundering) {
@@ -404,7 +464,7 @@ public final class AutomationModule {
         attributes.put("stoppedRaining", fromRaining && !toRaining);
         attributes.put("startedThundering", !fromThundering && toThundering);
         attributes.put("stoppedThundering", fromThundering && !toThundering);
-        eventBus.post(new AutomationEvent(AutomationEventType.WEATHER_CHANGED, System.currentTimeMillis(), clientTickCounter, attributes));
+        emit(new AutomationEvent(AutomationEventType.WEATHER_CHANGED, System.currentTimeMillis(), clientTickCounter, attributes));
     }
 
     private void postPlayerLevelChangedEvent(int fromLevel, int toLevel, float fromProgress, float toProgress) {
@@ -415,7 +475,7 @@ public final class AutomationModule {
         attributes.put("fromProgress", fromProgress);
         attributes.put("toProgress", toProgress);
         attributes.put("deltaProgress", toProgress - fromProgress);
-        eventBus.post(new AutomationEvent(AutomationEventType.PLAYER_LEVEL_CHANGED, System.currentTimeMillis(), clientTickCounter, attributes));
+        emit(new AutomationEvent(AutomationEventType.PLAYER_LEVEL_CHANGED, System.currentTimeMillis(), clientTickCounter, attributes));
     }
 
     private void postPlayerDeathEvent(@NotNull LocalPlayer player, @NotNull ClientLevel world) {
@@ -426,7 +486,7 @@ public final class AutomationModule {
         attributes.put("x", player.getX());
         attributes.put("y", player.getY());
         attributes.put("z", player.getZ());
-        eventBus.post(new AutomationEvent(AutomationEventType.PLAYER_DEATH, System.currentTimeMillis(), clientTickCounter, attributes));
+        emit(new AutomationEvent(AutomationEventType.PLAYER_DEATH, System.currentTimeMillis(), clientTickCounter, attributes));
     }
 
     private Map<String, Object> buildTickAttributes(Minecraft client) {
@@ -634,15 +694,29 @@ public final class AutomationModule {
             if (!ScriptStorage.exists(scriptFile)) {
                 return ActionExecutor.ActionResult.error("Script '" + scriptFile + "' was not found in config/m0-dev-tools/scripts.");
             }
+            String script;
+            ScriptManager manager;
             try {
-                String script = ScriptStorage.readScript(scriptFile);
-                ScriptManager manager = managerForScript(scriptFile);
-                Object result = manager.runScript(script, context);
-                return ActionExecutor.ActionResult.ok("Script '" + scriptFile + "' result: " + result);
+                script = ScriptStorage.readScript(scriptFile);
+                manager = managerForScript(scriptFile);
             } catch (Exception e) {
-                M0DevTools.LOGGER.warn("Automation script '{}' failed: {}", scriptFile, e.getMessage());
-                return ActionExecutor.ActionResult.error("Script '" + scriptFile + "' failed: " + e.getMessage());
+                M0DevTools.LOGGER.warn("Automation script '{}' could not be loaded: {}", scriptFile, e.getMessage());
+                return ActionExecutor.ActionResult.error("Script '" + scriptFile + "' could not be loaded: " + e.getMessage());
             }
+
+            if (ScriptDirectives.isAsync(script)) {
+                ScriptRunner.run(scriptFile, manager, script, context, true, null);
+                return ActionExecutor.ActionResult.ok("Script '" + scriptFile + "' started in the background.");
+            }
+
+            ScriptRunner.Outcome[] holder = new ScriptRunner.Outcome[1];
+            ScriptRunner.run(scriptFile, manager, script, context, false, result -> holder[0] = result);
+            ScriptRunner.Outcome outcome = holder[0];
+            if (outcome != null && outcome.success()) {
+                return ActionExecutor.ActionResult.ok("Script '" + scriptFile + "' result: " + outcome.displayText());
+            }
+            String error = outcome == null ? "no result" : outcome.error();
+            return ActionExecutor.ActionResult.error("Script '" + scriptFile + "' failed: " + error);
         }
 
         @Override
@@ -660,6 +734,23 @@ public final class AutomationModule {
                 client.player.connection.sendCommand(raw.substring(1));
             } else {
                 client.player.connection.sendChat(raw);
+            }
+            return true;
+        }
+
+        @Override
+        public boolean showMessage(@NotNull String text, boolean actionbar, boolean ping) {
+            LocalPlayer player = Minecraft.getInstance().player;
+            if (player == null) {
+                return false;
+            }
+            if (actionbar) {
+                player.sendOverlayMessage(Component.literal(text));
+            } else {
+                player.sendSystemMessage(Component.literal(text));
+            }
+            if (ping) {
+                player.playSound(SoundEvents.EXPERIENCE_ORB_PICKUP, 0.6F, 1.4F);
             }
             return true;
         }

@@ -1,10 +1,15 @@
 package me.m0dii.modules.waypoints;
 
+import com.google.gson.JsonObject;
 import com.mojang.blaze3d.platform.InputConstants;
 import me.m0dii.modules.Module;
+import me.m0dii.modules.PersistentSettings;
 import me.m0dii.utils.KeybindCatalog;
 
-public class WaypointModule extends Module {
+import java.util.ArrayList;
+import java.util.List;
+
+public class WaypointModule extends Module implements PersistentSettings {
     public static final WaypointModule INSTANCE = new WaypointModule();
 
     protected WaypointModule() {
@@ -16,6 +21,7 @@ public class WaypointModule extends Module {
         WaypointCommands.register();
         WaypointHandler.register();
         WaypointRenderer.register();
+        WaypointHud.register();
 
         registerPressedKeybind(
                 KeybindCatalog.WAYPOINT_ADD.translationKey(),
@@ -58,5 +64,47 @@ public class WaypointModule extends Module {
                     }
                 })
         );
+    }
+
+    @Override
+    public List<String> getSettingsDisplay() {
+        List<String> settings = new ArrayList<>();
+        settings.add("Show waypoints: " + (WaypointRenderer.isEnabled() ? "ON" : "OFF"));
+        settings.add("Beams: " + (WaypointRenderer.isBeams() ? "ON" : "OFF"));
+        settings.add("Show other dimension (×8 / ÷8): " + (WaypointRenderer.isShowOtherDimension() ? "ON" : "OFF"));
+        settings.add("Track nearest waypoint");
+        settings.add("Stop tracking");
+        return settings;
+    }
+
+    @Override
+    public void onSettingSelected(int settingIndex) {
+        switch (settingIndex) {
+            case 0 -> WaypointRenderer.setEnabled(!WaypointRenderer.isEnabled());
+            case 1 -> WaypointRenderer.setBeams(!WaypointRenderer.isBeams());
+            case 2 -> WaypointRenderer.setShowOtherDimension(!WaypointRenderer.isShowOtherDimension());
+            case 3 -> WaypointHandler.track("nearest");
+            case 4 -> WaypointHandler.track("off");
+            default -> {
+                // nothing
+            }
+        }
+    }
+
+    @Override
+    public JsonObject saveSettings() {
+        JsonObject json = new JsonObject();
+        json.addProperty("render", WaypointRenderer.isEnabled());
+        json.addProperty("beams", WaypointRenderer.isBeams());
+        json.addProperty("showOtherDimension", WaypointRenderer.isShowOtherDimension());
+        return json;
+    }
+
+    @Override
+    public void loadSettings(JsonObject settings) {
+        WaypointRenderer.setEnabled(PersistentSettings.readBoolean(settings, "render", WaypointRenderer.isEnabled()));
+        WaypointRenderer.setBeams(PersistentSettings.readBoolean(settings, "beams", WaypointRenderer.isBeams()));
+        WaypointRenderer.setShowOtherDimension(PersistentSettings.readBoolean(settings, "showOtherDimension",
+                WaypointRenderer.isShowOtherDimension()));
     }
 }

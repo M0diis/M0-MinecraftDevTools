@@ -72,6 +72,12 @@ public class CameraEntity extends LocalPlayer {
 
             camera.updateLastTickPosition();
 
+            if (FreecamModule.INSTANCE.isControllingPlayer()) {
+                // The player is being moved; keep the camera still.
+                cameraMotion = Vec3.ZERO;
+                return;
+            }
+
             if (options.keySprint.isDown()) {
                 sprinting = true;
             } else if (!options.keyUp.isDown() && !options.keyDown.isDown()) {
@@ -141,7 +147,7 @@ public class CameraEntity extends LocalPlayer {
 
     private static double getMoveSpeed() {
         double base = 0.07;
-        return base * 10;
+        return base * 10 * FreecamModule.INSTANCE.speedMultiplier();
     }
 
     private void handleMotion(double forward, double up, double strafe) {
@@ -252,15 +258,25 @@ public class CameraEntity extends LocalPlayer {
     public static void setCameraState(boolean enabled) {
         Minecraft mc = Minecraft.getInstance();
 
-        if (mc.level != null && mc.player != null) {
-            if (enabled) {
-                createAndSetCamera(mc);
-            } else {
-                removeCamera(mc);
-            }
-
-//            mc.gameRenderer.setRenderHand(!enabled);
+        if (!enabled) {
+            // Always clear the static state, even when the world is already gone (disconnect),
+            // so a stale camera from the previous world is never reused.
+            removeCamera(mc);
+            return;
         }
+
+        if (mc.level != null && mc.player != null) {
+            createAndSetCamera(mc);
+        }
+    }
+
+    /**
+     * True when the active camera belongs to a world other than the one currently loaded
+     * (after a disconnect, dimension change or respawn into a new level).
+     */
+    public static boolean isStale() {
+        Minecraft mc = Minecraft.getInstance();
+        return camera == null || mc.level == null || mc.player == null || camera.level() != mc.level;
     }
 
     private static void createAndSetCamera(Minecraft mc) {
@@ -282,7 +298,10 @@ public class CameraEntity extends LocalPlayer {
     private static void removeCamera(Minecraft mc) {
         if (mc.level != null && camera != null) {
             // Re-fetch the player entity, in case the player died while in Free Camera mode and the instance changed
-            mc.setCameraEntity(originalCameraWasPlayer ? mc.player : originalCameraEntity);
+            boolean originalStillValid = originalCameraEntity != null
+                    && !originalCameraEntity.isRemoved()
+                    && originalCameraEntity.level() == mc.level;
+            mc.setCameraEntity(originalCameraWasPlayer || !originalStillValid ? mc.player : originalCameraEntity);
             mc.smartCull = cullChunksOriginal;
 
             final int chunkX = Mth.floor(camera.getX()) >> 4;

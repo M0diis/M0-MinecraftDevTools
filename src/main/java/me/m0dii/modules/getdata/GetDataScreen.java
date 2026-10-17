@@ -1,7 +1,6 @@
 package me.m0dii.modules.getdata;
 
 
-import me.m0dii.gui.theme.ThemedScreen;
 import com.mojang.blaze3d.platform.InputConstants;
 import com.mojang.brigadier.StringReader;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
@@ -9,7 +8,10 @@ import com.mojang.brigadier.exceptions.SimpleCommandExceptionType;
 import me.m0dii.gui.local.FormPanel;
 import me.m0dii.gui.local.ListPanel;
 import me.m0dii.gui.local.UiTheme;
+import me.m0dii.gui.theme.ThemedScreen;
+import me.m0dii.modules.itemdata.ItemDataDiff;
 import me.m0dii.utils.NbtEditorUtils;
+import me.m0dii.utils.SnbtText;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
@@ -23,8 +25,7 @@ import net.minecraft.nbt.Tag;
 import net.minecraft.nbt.TagParser;
 import net.minecraft.network.chat.Component;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 
 public class GetDataScreen extends Screen implements GetDataTargetView, ThemedScreen {
     private static final int BUTTON_BAR_HEIGHT = 34;
@@ -86,6 +87,20 @@ public class GetDataScreen extends Screen implements GetDataTargetView, ThemedSc
     private int suggestionPanelRows = 0;
     private boolean syncedPayloadApplied = false;
 
+    private record Snapshot(String text, int cursor) {
+    }
+
+    private static final int UNDO_LIMIT = 100;
+    private static final String INDENT = "  ";
+    private final Deque<Snapshot> undoStack = new ArrayDeque<>();
+    private final Deque<Snapshot> redoStack = new ArrayDeque<>();
+    private long lastTypingMs;
+    private boolean reviewing;
+    private List<String> reviewLines = List.of();
+    private Button saveButton;
+    /** What the target held when opened (or last synced from the server); reviews compare against it. */
+    private String baselineData;
+
     private GetDataScreen(Screen parent,
                           Component screenTitle,
                           String targetName,
@@ -105,6 +120,7 @@ public class GetDataScreen extends Screen implements GetDataTargetView, ThemedSc
         this.targetToken = targetToken;
         this.helperText = helperText;
         this.initialData = NbtEditorUtils.prettySnbt(initialData);
+        this.baselineData = this.initialData;
         this.supportsPathField = supportsPathField;
         this.requireCompoundRootWhenPathBlank = requireCompoundRootWhenPathBlank;
         this.closeAfterSave = closeAfterSave;
@@ -227,14 +243,26 @@ public class GetDataScreen extends Screen implements GetDataTargetView, ThemedSc
             updatePathSuggestionHint();
         }
 
-        this.addRenderableWidget(Button.builder(Component.literal("Save"), b -> saveChanges())
+        this.saveButton = this.addRenderableWidget(Button.builder(Component.literal("Save"), b -> saveChanges())
                 .bounds(12, this.height - BUTTON_BAR_HEIGHT, 60, 20)
                 .build());
         this.addRenderableWidget(Button.builder(Component.literal("Copy"), b -> {
                     if (this.minecraft != null) {
                         this.minecraft.keyboardHandler.setClipboard(this.editorText);
                     }
-                }).bounds(76, this.height - BUTTON_BAR_HEIGHT, 60, 20)
+                }).bounds(76, this.height - BUTTON_BAR_HEIGHT, 50, 20)
+                .build());
+        this.addRenderableWidget(Button.builder(Component.literal("Format"), b -> formatEditor(false))
+                .bounds(130, this.height - BUTTON_BAR_HEIGHT, 54, 20)
+                .build());
+        this.addRenderableWidget(Button.builder(Component.literal("Compact"), b -> formatEditor(true))
+                .bounds(188, this.height - BUTTON_BAR_HEIGHT, 60, 20)
+                .build());
+        this.addRenderableWidget(Button.builder(Component.literal("Undo"), b -> undo())
+                .bounds(252, this.height - BUTTON_BAR_HEIGHT, 44, 20)
+                .build());
+        this.addRenderableWidget(Button.builder(Component.literal("Redo"), b -> redo())
+                .bounds(300, this.height - BUTTON_BAR_HEIGHT, 44, 20)
                 .build());
         this.addRenderableWidget(Button.builder(Component.literal("Done"), b -> onClose())
                 .bounds(this.width - 72, this.height - BUTTON_BAR_HEIGHT, 60, 20)
@@ -250,6 +278,20 @@ public class GetDataScreen extends Screen implements GetDataTargetView, ThemedSc
         try {
             String path = this.pathField == null ? "" : this.pathField.getValue().trim();
             validateRawInput(raw, path);
+            if (!this.reviewing && this.supportsPathField && (path == null || path.isBlank())) {
+                List<String> changes = describeChanges();
+                if (changes != null) {
+                    if (changes.isEmpty()) {
+                        this.minecraft.player.sendSystemMessage(Component.literal("[GetData] Nothing changed."));
+                        return;
+                    }
+                    this.reviewing = true;
+                    this.reviewLines = changes;
+                    this.saveButton.setMessage(Component.literal("Confirm"));
+                    return;
+                }
+            }
+            endReview();
             this.saveAction.save(this, raw, path);
             if (this.closeAfterSave) {
                 onClose();
@@ -292,6 +334,10 @@ public class GetDataScreen extends Screen implements GetDataTargetView, ThemedSc
         int statusColor = this.parseError == null ? 0xFF70D070 : 0xFFFF7070;
         String statusPrefix = this.inputValidator == null ? "SNBT" : "Input";
         String status = this.parseError == null ? statusPrefix + " valid" : statusPrefix + " error: " + this.parseError;
+        if (this.parseError != null && this.parseErrorIndex >= 0) {
+            SnbtText.LineCol at = SnbtText.lineCol(this.editorText, this.parseErrorIndex);
+            status = status + "  (line " + (at.line() + 1) + ", col " + (at.column() + 1) + " · Ctrl+E jumps there)";
+        }
         if (this.syncedPayloadApplied && this.parseError == null) {
             status = status + " (server sync)";
         }
@@ -332,12 +378,179 @@ public class GetDataScreen extends Screen implements GetDataTargetView, ThemedSc
         context.fill(this.boxX + this.boxW - 1, this.boxY, this.boxX + this.boxW, this.boxY + this.boxH, borderColor);
 
         drawSelection(context);
+        drawBracketMatch(context);
         drawTextAndCursor(context);
+        drawReview(context);
+        String keys = "Ctrl+Z/Y undo/redo · Ctrl+Shift+F format · Ctrl+E go to error";
+        int keysW = this.font.width(keys);
+        if (12 + this.font.width("Target: " + this.targetName) + keysW + 24 < this.width) {
+            context.text(this.font, keys, this.width - 12 - keysW, 10, UiTheme.TEXT_MUTED);
+        }
         super.extractRenderState(context, mouseX, mouseY, delta);
     }
 
+    private int gutterWidth() {
+        int lines = 1;
+        for (int i = 0; i < this.editorText.length(); i++) {
+            if (this.editorText.charAt(i) == '\n') {
+                lines++;
+            }
+        }
+        return this.font.width(Integer.toString(lines)) + 8;
+    }
+
+    private int textX() {
+        return this.boxX + 6 + gutterWidth();
+    }
+
+    private void drawBracketMatch(GuiGraphicsExtractor context) {
+        int at = -1;
+        if (this.cursor < this.editorText.length() && "{}[]".indexOf(this.editorText.charAt(this.cursor)) >= 0) {
+            at = this.cursor;
+        } else if (this.cursor > 0 && "{}[]".indexOf(this.editorText.charAt(this.cursor - 1)) >= 0) {
+            at = this.cursor - 1;
+        }
+        if (at < 0 || SnbtText.insideString(this.editorText, at)) {
+            return;
+        }
+        int partner = SnbtText.matchingBracket(this.editorText, at);
+        int color = partner < 0 ? 0x80FF5050 : 0x6050A0FF;
+        highlightChar(context, at, color);
+        if (partner >= 0) {
+            highlightChar(context, partner, color);
+        }
+    }
+
+    private void highlightChar(GuiGraphicsExtractor context, int index, int color) {
+        SnbtText.LineCol pos = SnbtText.lineCol(this.editorText, index);
+        int row = pos.line() - this.scrollLine;
+        if (row < 0 || row >= visibleLineCapacity()) {
+            return;
+        }
+        int lineStart = index - pos.column();
+        int x = textX() + this.font.width(this.editorText.substring(lineStart, index));
+        int y = this.boxY + 6 + row * this.lineHeight;
+        int w = this.font.width(String.valueOf(this.editorText.charAt(index)));
+        context.fill(x - 1, y - 1, x + w + 1, y + this.lineHeight - 1, color);
+    }
+
+    private void drawReview(GuiGraphicsExtractor context) {
+        if (!this.reviewing) {
+            return;
+        }
+        int w = Math.min(this.boxW - 20, 420);
+        int x = this.boxX + this.boxW - w - 8;
+        int y = this.boxY + 8;
+        int rows = Math.min(this.reviewLines.size(), Math.max(1, (this.boxH - 50) / 10));
+        int h = 30 + rows * 10;
+        context.fill(x, y, x + w, y + h, 0xF0181820);
+        context.fill(x, y, x + w, y + 1, 0xFFFFD37A);
+        context.text(this.font, "Review: " + this.reviewLines.size() + " change(s). Press Confirm to save, Esc to keep editing.",
+                x + 6, y + 6, 0xFFFFD37A);
+        for (int i = 0; i < rows; i++) {
+            String line = this.reviewLines.get(i);
+            int color = line.startsWith("+") ? 0xFF7CE07C : line.startsWith("-") ? 0xFFFF8080 : 0xFFFFE08A;
+            context.text(this.font, this.font.plainSubstrByWidth(line, w - 12), x + 6, y + 20 + i * 10, color);
+        }
+        if (this.reviewLines.size() > rows) {
+            context.text(this.font, "… " + (this.reviewLines.size() - rows) + " more", x + w - 60, y + 6 + 10, UiTheme.TEXT_MUTED);
+        }
+    }
+
+    /** Changes between the opened and current data, or null when either side isn't a compound. */
+    private List<String> describeChanges() {
+        CompoundTag before = NbtEditorUtils.parseCompoundOrNull(this.baselineData);
+        CompoundTag after = NbtEditorUtils.parseCompoundOrNull(this.editorText);
+        if (before == null || after == null) {
+            return null;
+        }
+        return ItemDataDiff.diff(flatten(before), flatten(after));
+    }
+
+    private static Map<String, String> flatten(CompoundTag root) {
+        Map<String, String> out = new LinkedHashMap<>();
+        flattenInto(out, root, "", 0);
+        return out;
+    }
+
+    private static void flattenInto(Map<String, String> out, CompoundTag compound, String prefix, int depth) {
+        for (String key : compound.keySet()) {
+            Tag value = compound.get(key);
+            String path = prefix.isEmpty() ? key : prefix + "." + key;
+            if (value instanceof CompoundTag child && depth < 4 && !child.isEmpty()) {
+                flattenInto(out, child, path, depth + 1);
+            } else {
+                out.put(path, String.valueOf(value));
+            }
+        }
+    }
+
+    private void endReview() {
+        if (this.reviewing) {
+            this.reviewing = false;
+            this.reviewLines = List.of();
+            if (this.saveButton != null) {
+                this.saveButton.setMessage(Component.literal("Save"));
+            }
+        }
+    }
+
+    private void formatEditor(boolean compactOnly) {
+        String formatted = compactOnly ? SnbtText.compact(this.editorText) : SnbtText.format(this.editorText, INDENT, 60);
+        if (formatted.equals(this.editorText)) {
+            return;
+        }
+        pushUndo(false);
+        int line = SnbtText.lineCol(this.editorText, this.cursor).line();
+        this.editorText = formatted;
+        this.cursor = Math.min(indexAtLineStart(line), this.editorText.length());
+        this.selectionAnchor = -1;
+        onEditorTextChanged();
+        ensureCursorVisible();
+    }
+
+    /** Remembers the current text before an edit. Consecutive typing within a second is one undo step. */
+    private void pushUndo(boolean typing) {
+        long now = System.currentTimeMillis();
+        if (typing && now - this.lastTypingMs < 1000 && !this.undoStack.isEmpty()) {
+            this.lastTypingMs = now;
+            return;
+        }
+        this.lastTypingMs = typing ? now : 0;
+        Snapshot top = this.undoStack.peek();
+        if (top == null || !top.text().equals(this.editorText)) {
+            this.undoStack.push(new Snapshot(this.editorText, this.cursor));
+            while (this.undoStack.size() > UNDO_LIMIT) {
+                this.undoStack.removeLast();
+            }
+        }
+        this.redoStack.clear();
+    }
+
+    private void undo() {
+        restore(this.undoStack, this.redoStack);
+    }
+
+    private void redo() {
+        restore(this.redoStack, this.undoStack);
+    }
+
+    private void restore(Deque<Snapshot> from, Deque<Snapshot> to) {
+        Snapshot snapshot = from.poll();
+        if (snapshot == null) {
+            return;
+        }
+        to.push(new Snapshot(this.editorText, this.cursor));
+        this.editorText = snapshot.text();
+        this.cursor = Math.min(snapshot.cursor(), this.editorText.length());
+        this.selectionAnchor = -1;
+        this.lastTypingMs = 0;
+        onEditorTextChanged();
+        ensureCursorVisible();
+    }
+
     private void drawTextAndCursor(GuiGraphicsExtractor context) {
-        int x = this.boxX + 6;
+        int x = textX();
         int y = this.boxY + 6;
         int maxY = this.boxY + this.boxH - 12;
         int cursorX = x;
@@ -354,7 +567,12 @@ public class GetDataScreen extends Screen implements GetDataTargetView, ThemedSc
             }
             if (lineIndex == errorLine) {
                 context.fill(this.boxX + 2, y - 1, this.boxX + this.boxW - 2, y + this.lineHeight - 1, 0x40202070);
+                int column = Math.clamp(this.parseErrorIndex - i, 0, line.length());
+                int ex = x + this.font.width(line.substring(0, column));
+                context.fill(ex, y + this.lineHeight - 2, ex + 6, y + this.lineHeight - 1, 0xFFFF5050);
             }
+            String number = Integer.toString(lineIndex + 1);
+            context.text(this.font, number, x - 6 - this.font.width(number), y, lineIndex == lineFromIndex(this.cursor) ? 0xFFBBBBBB : 0xFF666666);
             drawHighlightedLine(context, line, x, y);
             int end = i + line.length();
             if (this.cursor >= i && this.cursor <= end) {
@@ -380,7 +598,7 @@ public class GetDataScreen extends Screen implements GetDataTargetView, ThemedSc
         }
         int selStart = Math.min(this.selectionAnchor, this.cursor);
         int selEnd = Math.max(this.selectionAnchor, this.cursor);
-        int x = this.boxX + 6;
+        int x = textX();
         int y = this.boxY + 6;
         int maxY = this.boxY + this.boxH - 12;
         String[] lines = this.editorText.split("\\n", -1);
@@ -462,6 +680,9 @@ public class GetDataScreen extends Screen implements GetDataTargetView, ThemedSc
         }
         int codepoint = input.codepoint();
         if (codepoint >= 32 && codepoint != 127) {
+            if (typeWithPairs((char) codepoint)) {
+                return true;
+            }
             replaceSelectionOrInsert(new String(Character.toChars(codepoint)));
             return true;
         }
@@ -471,6 +692,10 @@ public class GetDataScreen extends Screen implements GetDataTargetView, ThemedSc
     @Override
     public boolean keyPressed(KeyEvent input) {
         int keyCode = input.input();
+        if (this.reviewing && keyCode == InputConstants.KEY_ESCAPE) {
+            endReview();
+            return true;
+        }
         if (this.pathField != null && this.pathField.isFocused() && keyCode != InputConstants.KEY_TAB) {
             return super.keyPressed(input);
         }
@@ -490,6 +715,44 @@ public class GetDataScreen extends Screen implements GetDataTargetView, ThemedSc
             return super.keyPressed(input);
         }
         if (keyCode == InputConstants.KEY_TAB && applyInlineSuggestion(0)) {
+            return true;
+        }
+        if (keyCode == InputConstants.KEY_TAB && !shift) {
+            replaceSelectionOrInsert(INDENT);
+            return true;
+        }
+        if (ctrl && keyCode == InputConstants.KEY_Z) {
+            if (shift) {
+                redo();
+            } else {
+                undo();
+            }
+            return true;
+        }
+        if (ctrl && keyCode == InputConstants.KEY_Y) {
+            redo();
+            return true;
+        }
+        if (ctrl && shift && keyCode == InputConstants.KEY_F) {
+            formatEditor(false);
+            return true;
+        }
+        if (ctrl && keyCode == InputConstants.KEY_E && this.parseErrorIndex >= 0) {
+            this.cursor = Math.min(this.parseErrorIndex, this.editorText.length());
+            this.selectionAnchor = -1;
+            ensureCursorVisible();
+            return true;
+        }
+        if (ctrl && keyCode == InputConstants.KEY_BACKSPACE) {
+            if (!deleteSelection()) {
+                int start = SnbtText.wordLeft(this.editorText, this.cursor);
+                if (start < this.cursor) {
+                    pushUndo(false);
+                    this.editorText = this.editorText.substring(0, start) + this.editorText.substring(this.cursor);
+                    this.cursor = start;
+                    onEditorTextChanged();
+                }
+            }
             return true;
         }
 
@@ -514,11 +777,16 @@ public class GetDataScreen extends Screen implements GetDataTargetView, ThemedSc
             return true;
         }
         if (keyCode == InputConstants.KEY_RETURN || keyCode == InputConstants.KEY_NUMPADENTER) {
-            replaceSelectionOrInsert("\n");
+            deleteSelection();
+            String insert = SnbtText.newlineInsert(this.editorText, this.cursor, INDENT);
+            int caretOffset = insert.indexOf('\n', 1) > 0 ? insert.indexOf('\n', 1) : insert.length();
+            replaceSelectionOrInsert(insert);
+            this.cursor -= insert.length() - caretOffset;
             return true;
         }
         if (keyCode == InputConstants.KEY_BACKSPACE) {
             if (!deleteSelection() && this.cursor > 0) {
+                pushUndo(true);
                 this.editorText = this.editorText.substring(0, this.cursor - 1) + this.editorText.substring(this.cursor);
                 this.cursor--;
                 onEditorTextChanged();
@@ -527,6 +795,7 @@ public class GetDataScreen extends Screen implements GetDataTargetView, ThemedSc
         }
         if (keyCode == InputConstants.KEY_DELETE) {
             if (!deleteSelection() && this.cursor < this.editorText.length()) {
+                pushUndo(true);
                 this.editorText = this.editorText.substring(0, this.cursor) + this.editorText.substring(this.cursor + 1);
                 onEditorTextChanged();
             }
@@ -535,10 +804,10 @@ public class GetDataScreen extends Screen implements GetDataTargetView, ThemedSc
 
         int prev = this.cursor;
         if (keyCode == InputConstants.KEY_LEFT) {
-            this.cursor = Math.max(0, this.cursor - 1);
+            this.cursor = ctrl ? SnbtText.wordLeft(this.editorText, this.cursor) : Math.max(0, this.cursor - 1);
         }
         if (keyCode == InputConstants.KEY_RIGHT) {
-            this.cursor = Math.min(this.editorText.length(), this.cursor + 1);
+            this.cursor = ctrl ? SnbtText.wordRight(this.editorText, this.cursor) : Math.min(this.editorText.length(), this.cursor + 1);
         }
         if (keyCode == InputConstants.KEY_HOME) {
             this.cursor = lineStart(this.cursor);
@@ -569,10 +838,40 @@ public class GetDataScreen extends Screen implements GetDataTargetView, ThemedSc
         return super.keyPressed(input);
     }
 
+    /** Closes brackets and quotes as you type them and steps over a closer that is already there. */
+    private boolean typeWithPairs(char ch) {
+        boolean hasSelection = this.selectionAnchor >= 0 && this.selectionAnchor != this.cursor;
+        char next = this.cursor < this.editorText.length() ? this.editorText.charAt(this.cursor) : 0;
+        boolean inString = SnbtText.insideString(this.editorText, this.cursor);
+        if ((ch == '}' || ch == ']' || ch == '"') && next == ch && !hasSelection
+                && (ch != '"' || inString)) {
+            this.cursor++;
+            return true;
+        }
+        if (inString || hasSelection) {
+            return false;
+        }
+        boolean freeAfter = next == 0 || Character.isWhitespace(next) || ",}]".indexOf(next) >= 0;
+        String pair = switch (ch) {
+            case '{' -> "{}";
+            case '[' -> "[]";
+            case '"' -> "\"\"";
+            default -> null;
+        };
+        if (pair == null || !freeAfter) {
+            return false;
+        }
+        replaceSelectionOrInsert(pair);
+        this.cursor--;
+        return true;
+    }
+
     private void replaceSelectionOrInsert(String s) {
         if (s == null) {
             return;
         }
+        pushUndo(s.length() == 1);
+        endReview();
         if (deleteSelection()) {
             // deleted selection, cursor already at start
         }
@@ -588,6 +887,7 @@ public class GetDataScreen extends Screen implements GetDataTargetView, ThemedSc
         }
         int start = Math.min(this.selectionAnchor, this.cursor);
         int end = Math.max(this.selectionAnchor, this.cursor);
+        pushUndo(false);
         this.editorText = this.editorText.substring(0, start) + this.editorText.substring(end);
         this.cursor = start;
         this.selectionAnchor = -1;
@@ -614,7 +914,7 @@ public class GetDataScreen extends Screen implements GetDataTargetView, ThemedSc
             index += lines[i].length() + 1;
         }
         String line = lines[row];
-        int targetX = mouseX - (this.boxX + 6);
+        int targetX = mouseX - textX();
         int best = 0;
         for (int i = 0; i <= line.length(); i++) {
             if (this.font.width(line.substring(0, i)) >= targetX) {
@@ -636,7 +936,9 @@ public class GetDataScreen extends Screen implements GetDataTargetView, ThemedSc
         if (payload == null || payload.isBlank()) {
             return;
         }
+        pushUndo(false);
         this.editorText = NbtEditorUtils.prettySnbt(payload);
+        this.baselineData = this.editorText;
         this.cursor = Math.min(this.cursor, this.editorText.length());
         this.selectionAnchor = -1;
         this.syncedPayloadApplied = true;
@@ -644,6 +946,7 @@ public class GetDataScreen extends Screen implements GetDataTargetView, ThemedSc
     }
 
     private void onEditorTextChanged() {
+        endReview();
         validateEditorSnbt();
         if (this.supportsPathField) {
             rebuildPathSuggestions();
@@ -820,6 +1123,7 @@ public class GetDataScreen extends Screen implements GetDataTargetView, ThemedSc
             return false;
         }
         String suggestion = this.inlineSuggestions.suggestions().get(index);
+        pushUndo(false);
         int start = Math.clamp(this.inlineSuggestions.start(), 0, this.editorText.length());
         int end = Math.clamp(this.inlineSuggestions.end(), start, this.editorText.length());
         this.editorText = this.editorText.substring(0, start) + suggestion + this.editorText.substring(end);
@@ -877,49 +1181,9 @@ public class GetDataScreen extends Screen implements GetDataTargetView, ThemedSc
 
     private void drawHighlightedLine(GuiGraphicsExtractor context, String line, int x, int y) {
         int cursorX = x;
-        int i = 0;
-        while (i < line.length()) {
-            char ch = line.charAt(i);
-            if (ch == '"') {
-                int end = i + 1;
-                while (end < line.length()) {
-                    char c = line.charAt(end);
-                    if (c == '"' && line.charAt(end - 1) != '\\') {
-                        end++;
-                        break;
-                    }
-                    end++;
-                }
-                cursorX = drawToken(context, line.substring(i, Math.min(end, line.length())), cursorX, y, 0xFFFFD37A);
-                i = end;
-                continue;
-            }
-
-            if ("{}[]:,".indexOf(ch) >= 0) {
-                cursorX = drawToken(context, String.valueOf(ch), cursorX, y, 0xFF80D8FF);
-                i++;
-                continue;
-            }
-
-            if (Character.isWhitespace(ch)) {
-                int end = i + 1;
-                while (end < line.length() && Character.isWhitespace(line.charAt(end))) {
-                    end++;
-                }
-                cursorX = drawToken(context, line.substring(i, end), cursorX, y, 0xFFE8E8E8);
-                i = end;
-                continue;
-            }
-
-            int end = i + 1;
-            while (end < line.length() && !Character.isWhitespace(line.charAt(end)) && "{}[]:,\"".indexOf(line.charAt(end)) < 0) {
-                end++;
-            }
-
-            String token = line.substring(i, end);
-            int color = classifyTokenColor(line, i, end, token);
-            cursorX = drawToken(context, token, cursorX, y, color);
-            i = end;
+        for (SnbtText.Token token : SnbtText.tokenize(line)) {
+            String text = line.substring(token.start(), token.end());
+            cursorX = drawToken(context, text, cursorX, y, colorFor(token.kind()));
         }
     }
 
@@ -928,23 +1192,15 @@ public class GetDataScreen extends Screen implements GetDataTargetView, ThemedSc
         return x + this.font.width(token);
     }
 
-    private int classifyTokenColor(String line, int tokenStart, int tokenEnd, String token) {
-        if (token.matches("-?[0-9]+(?:\\.[0-9]+)?(?:[eE][+-]?[0-9]+)?[bBsSlLfFdD]?")) {
-            return 0xFF86E17E;
-        }
-        if ("true".equals(token) || "false".equals(token)) {
-            return 0xFFB18CFF;
-        }
-
-        int cursor = tokenEnd;
-        while (cursor < line.length() && Character.isWhitespace(line.charAt(cursor))) {
-            cursor++;
-        }
-        if (cursor < line.length() && line.charAt(cursor) == ':') {
-            return 0xFF79C8FF;
-        }
-
-        return 0xFFE8E8E8;
+    private static int colorFor(SnbtText.Kind kind) {
+        return switch (kind) {
+            case STRING -> 0xFFFFD37A;
+            case KEY -> 0xFF79C8FF;
+            case NUMBER -> 0xFF86E17E;
+            case BOOLEAN -> 0xFFB18CFF;
+            case PUNCTUATION -> 0xFF80D8FF;
+            default -> 0xFFE8E8E8;
+        };
     }
 
     private int lineStart(int pos) {
