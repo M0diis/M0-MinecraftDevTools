@@ -95,7 +95,7 @@ Unbound by default (bind them if you use them): Redstone / Light / Slime Chunk /
 - **Inventory move**, **Mouse Tweaks**-style controls, **bridging tweaks** (snapping, torch placement, slab assist, replaceable targets)
 - **Fullbright**, **held light** (dynamic light from held torches, lanterns, ...), **zoom**
 - **Freelook** - hold Left Alt to orbit the camera around your player while it keeps looking and walking the same way (hold or toggle)
-- **Chest finder** - remembers what's in every container you open (per world and dimension, shulker box contents included). `/find <item>` tells you where it is and highlights the containers through walls with an arrow to the nearest; `/find gui` or a keybind opens a searchable grid of everything you've stored
+- **Chest finder** - remembers what's in every container you open (per world and dimension, shulker box contents included). `/finditem <item>` tells you where it is and highlights the containers through walls with an arrow to the nearest; `/finditem gui` or a keybind opens a searchable grid of everything you've stored
 - **Tick controls** - keys for vanilla `/tick freeze`, `/tick step` and slower tick rates, with a HUD badge while frozen (needs `/tick` permission)
 - **Freecam** - move the camera away from your body
   - Your player stays visible ("Show Player Model")

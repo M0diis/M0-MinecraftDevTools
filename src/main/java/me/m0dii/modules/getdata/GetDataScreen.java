@@ -12,6 +12,7 @@ import me.m0dii.gui.theme.ThemedScreen;
 import me.m0dii.modules.itemdata.ItemDataDiff;
 import me.m0dii.utils.NbtEditorUtils;
 import me.m0dii.utils.SnbtText;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
@@ -96,6 +97,9 @@ public class GetDataScreen extends Screen implements GetDataTargetView, ThemedSc
     private final Deque<Snapshot> redoStack = new ArrayDeque<>();
     private long lastTypingMs;
     private boolean reviewing;
+
+    /** Guards the initial-content reset so window resizes don't wipe in-progress edits. */
+    private boolean appliedInitialContent;
     private List<String> reviewLines = List.of();
     private Button saveButton;
     /** What the target held when opened (or last synced from the server); reviews compare against it. */
@@ -223,9 +227,12 @@ public class GetDataScreen extends Screen implements GetDataTargetView, ThemedSc
         this.boxY = 34;
         this.boxW = this.width - 24;
         this.boxH = this.height - (this.supportsPathField ? PATH_BOTTOM_RESERVE : NO_PATH_BOTTOM_RESERVE);
-        this.editorText = this.initialData;
-        this.cursor = this.editorText.length();
-        this.selectionAnchor = -1;
+        if (!this.appliedInitialContent) {
+            this.editorText = this.initialData;
+            this.cursor = this.editorText.length();
+            this.selectionAnchor = -1;
+            this.appliedInitialContent = true;
+        }
         validateEditorSnbt();
         rebuildPathSuggestions();
         rebuildInlineSuggestions();
@@ -267,6 +274,32 @@ public class GetDataScreen extends Screen implements GetDataTargetView, ThemedSc
         this.addRenderableWidget(Button.builder(Component.literal("Done"), b -> onClose())
                 .bounds(this.width - 72, this.height - BUTTON_BAR_HEIGHT, 60, 20)
                 .build());
+        syncEditorTextInput();
+    }
+
+    /**
+     * 26.3 delivers CharacterEvents only while SDL text input is started. EditBox does this on focus,
+     * but the custom SNBT editor is not an EditBox, so it must enable text input itself.
+     */
+    private void syncEditorTextInput() {
+        Minecraft client = Minecraft.getInstance();
+        if (client == null) {
+            return;
+        }
+        if (this.pathField != null && this.pathField.isFocused()) {
+            return;
+        }
+        client.textInputManager().setTextInputArea(this.boxX, this.boxY, this.boxX + this.boxW, this.boxY + this.boxH);
+        client.onTextInputFocusChange(this, true);
+    }
+
+    @Override
+    protected void setInitialFocus() {
+        // The custom SNBT editor is the text target; the path field must not steal typing on open.
+        if (this.pathField != null) {
+            this.pathField.setFocused(false);
+        }
+        this.setFocused(null);
     }
 
     private void saveChanges() {
@@ -387,6 +420,7 @@ public class GetDataScreen extends Screen implements GetDataTargetView, ThemedSc
             context.text(this.font, keys, this.width - 12 - keysW, 10, UiTheme.TEXT_MUTED);
         }
         super.extractRenderState(context, mouseX, mouseY, delta);
+        syncEditorTextInput();
     }
 
     private int gutterWidth() {
@@ -638,6 +672,11 @@ public class GetDataScreen extends Screen implements GetDataTargetView, ThemedSc
         if (click.x() < this.boxX || click.x() > this.boxX + this.boxW || click.y() < this.boxY || click.y() > this.boxY + this.boxH) {
             return false;
         }
+        if (this.pathField != null && this.pathField.isFocused()) {
+            this.pathField.setFocused(false);
+            this.setFocused(null);
+        }
+        syncEditorTextInput();
         this.cursor = cursorFromMouse((int) click.x(), (int) click.y());
         this.selectionAnchor = -1;
         rebuildInlineSuggestions();

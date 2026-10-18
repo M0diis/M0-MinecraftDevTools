@@ -5,7 +5,7 @@ Version names follow `j<java>-mc<minecraft>-<version>`. Dates are when the versi
 ## Unreleased
 
 ### New tools
-- **Chest Finder** (Chest Tracker style): remembers what was in every chest, barrel, shulker box, hopper, furnace, ... you open, per world and dimension (items inside shulker boxes count too). `/find <item>` lists where it is with distances and highlights the containers through walls with a pointer to the nearest one; `/find gui` (or a keybind) opens a searchable item grid. `/find forget`, `/find clear`. Broken containers are forgotten automatically.
+- **Chest Finder** (Chest Tracker style): remembers what was in every chest, barrel, shulker box, hopper, furnace, ... you open, per world and dimension (items inside shulker boxes count too). `/finditem <item>` lists where it is with distances and highlights the containers through walls with a pointer to the nearest one; `/finditem gui` (or a keybind) opens a searchable item grid. `/finditem forget`, `/finditem clear`. Broken containers are forgotten automatically.
 - **Freelook**: hold Left Alt (or set it to toggle) to look around your player in third person while it keeps facing and walking the same way.
 - **Tick Controls**: keys for vanilla `/tick freeze`, `/tick step <n>` and slower tick rates, with a HUD badge while the game is frozen or slowed. Needs permission to run `/tick`.
 - **`/glow <type|hostile|passive|items|players|all> [color]`**: client-side glowing outlines for entities; only you see them.

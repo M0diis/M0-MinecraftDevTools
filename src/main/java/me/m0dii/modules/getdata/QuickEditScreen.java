@@ -94,6 +94,9 @@ public class QuickEditScreen extends Screen implements GetDataTargetView, Themed
         this.addRenderableWidget(Button.builder(Component.literal("Done"), b -> onClose())
                 .bounds(this.width - 72, bottom, 60, 20).build());
         recompute();
+        if (this.nameBox != null) {
+            this.setFocused(this.nameBox);
+        }
     }
 
     // ---- entity ------------------------------------------------------------------------------------------

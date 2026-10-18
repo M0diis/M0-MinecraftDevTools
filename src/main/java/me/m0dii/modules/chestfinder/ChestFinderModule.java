@@ -40,7 +40,7 @@ import java.util.Locale;
 
 /**
  * Chest finder: remembers what was in every container you open (per world and dimension, saved to disk),
- * so {@code /find <item>} or the search screen can tell you where you put things and highlight them.
+ * so {@code /finditem <item>} or the search screen can tell you where you put things and highlight them.
  * Items inside shulker boxes count too.
  */
 public class ChestFinderModule extends Module {
@@ -75,7 +75,7 @@ public class ChestFinderModule extends Module {
             memory = new ContainerMemory();
         });
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> dispatcher.register(
-                ClientCommands.literal("find")
+                ClientCommands.literal("finditem")
                         .executes(ctx -> reply(ctx.getSource(), stats()))
                         .then(ClientCommands.literal("clear").executes(ctx -> {
                             BlockHighlights.clear(HIGHLIGHT_KEY);
@@ -131,7 +131,7 @@ public class ChestFinderModule extends Module {
         ensureLoaded();
         int here = memory.entries(dimension()).size();
         return "Remembering " + memory.size() + " containers in this world (" + here + " in this dimension)."
-                + (isEnabled() ? "" : " Recording is off.") + " Use /find <item>, /find gui, /find clear, /find forget.";
+                + (isEnabled() ? "" : " Recording is off.") + " Use /finditem <item>, /finditem gui, /finditem clear, /finditem forget.";
     }
 
     /** Searches the current dimension, highlights the matches and returns chat lines. */
@@ -168,6 +168,18 @@ public class ChestFinderModule extends Module {
         }
         BlockHighlights.show(HIGHLIGHT_KEY, "\"" + query + "\"", GOLD, positions, null, 5 * 60_000L);
         return lines;
+    }
+
+    /** Highlights a single remembered container (and its double-chest partner) so you can walk to it. */
+    public void highlightContainer(long packedPos) {
+        BlockPos pos = BlockPos.of(packedPos);
+        List<BlockPos> positions = new ArrayList<>();
+        positions.add(pos);
+        BlockPos partner = partner(Minecraft.getInstance().level, pos);
+        if (partner != null) {
+            positions.add(partner);
+        }
+        BlockHighlights.show(HIGHLIGHT_KEY, "container", GOLD, positions, null, 5 * 60_000L);
     }
 
     private static String age(long timeMs) {

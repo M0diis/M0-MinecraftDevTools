@@ -24,7 +24,7 @@ import java.util.*;
 import java.util.function.BiPredicate;
 
 /**
- * Shared world highlights for search commands ({@code /scanblocks}, {@code /find}): outlined blocks seen
+ * Shared world highlights for search commands ({@code /scanblocks}, {@code /finditem}): outlined blocks seen
  * through walls, a line to the nearest one and a HUD pointer that says which way to turn.
  */
 public final class BlockHighlights {
