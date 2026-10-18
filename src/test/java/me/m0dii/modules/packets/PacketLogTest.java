@@ -50,4 +50,45 @@ class PacketLogTest {
         assertEquals("Map.Entry", PacketLog.nameOf(java.util.Map.Entry.class));
         assertTrue(PacketLog.describe("x".repeat(50), 10).endsWith("…"));
     }
+
+    @Test
+    void trafficBucketsPerSecond() {
+        PacketTraffic traffic = new PacketTraffic();
+        traffic.add(100, 10_000);
+        traffic.add(50, 10_900);
+        traffic.add(30, 12_000);
+        long[] h = traffic.history(12_500);
+        assertEquals(60, h.length);
+        assertEquals(30, h[59]);
+        assertEquals(0, h[58]);
+        assertEquals(150, h[57]);
+        assertEquals(180, traffic.total());
+        assertEquals(75.0, traffic.average(12_500, 2), 1e-9);
+        // a minute later the old seconds are gone
+        assertEquals(0, traffic.history(80_000)[59]);
+        assertEquals("1.5 KB", PacketTraffic.bytes(1536));
+    }
+
+    @Test
+    void sizesPinAndExport() {
+        PacketLog log = new PacketLog(10);
+        log.setRecording(true);
+        log.pin("Chat");
+        long a = log.add(PacketLog.Direction.IN, "Chat", "hi\tthere", 1_000, 120);
+        long b = log.add(PacketLog.Direction.OUT, "Move", "x", 1_000, -1);
+        log.add(PacketLog.Direction.IN, "Chat", "again", 1_200, -1);
+        assertEquals(120, log.sizeOf(a));
+        assertEquals(-1, log.sizeOf(b));
+        log.setSize(b, PacketLog.Direction.OUT, "Move", 30, 1_300);
+        assertEquals(30, log.sizeOf(b));
+        assertEquals(2, log.pinnedRate().history(1_500)[59]);
+        assertEquals(List.of("Chat", "Move"), log.knownNames());
+        assertEquals("IN Chat", log.topBytes(1).getFirst().getKey());
+        String tsv = log.export(new java.text.SimpleDateFormat("ss"));
+        assertTrue(tsv.contains("IN\tChat\t120\thi there"));
+        log.countBytes(PacketLog.Direction.IN, 500, 1_000);
+        assertEquals(500, log.bytesIn().total());
+        log.clear();
+        assertEquals(0, log.size());
+    }
 }

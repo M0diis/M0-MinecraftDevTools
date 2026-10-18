@@ -8,14 +8,24 @@ import java.util.Locale;
 
 public final class MathExpressionEvaluator {
     private final String input;
+    private final java.util.function.Function<String, Double> variables;
     private int index;
 
-    private MathExpressionEvaluator(String input) {
+    private MathExpressionEvaluator(String input, java.util.function.Function<String, Double> variables) {
         this.input = input == null ? "" : input;
+        this.variables = variables == null ? name -> null : variables;
     }
 
     public static double evaluate(String expression) {
-        MathExpressionEvaluator evaluator = new MathExpressionEvaluator(expression);
+        return evaluate(expression, null);
+    }
+
+    /**
+     * Evaluates with named values (variables, units). A name right after a value multiplies it, so
+     * {@code 3 stacks} means {@code 3 * stacks}.
+     */
+    public static double evaluate(String expression, java.util.function.Function<String, Double> variables) {
+        MathExpressionEvaluator evaluator = new MathExpressionEvaluator(expression, variables);
         double value = evaluator.parseExpression();
         evaluator.skipWhitespace();
         if (!evaluator.isAtEnd()) {
@@ -94,6 +104,16 @@ public final class MathExpressionEvaluator {
             skipWhitespace();
             if (consume('%')) {
                 value /= 100.0;
+            } else if (peekLetter()) {
+                int mark = index;
+                String name = parseIdentifier();
+                skipWhitespace();
+                Double named = isAtEnd() || currentChar() != '(' ? variables.apply(name) : null;
+                if (named == null) {
+                    index = mark;
+                    return value;
+                }
+                value *= named;
             } else {
                 return value;
             }
@@ -151,6 +171,10 @@ public final class MathExpressionEvaluator {
     }
 
     private double resolveConstant(String identifier) {
+        Double named = variables.apply(identifier);
+        if (named != null) {
+            return named;
+        }
         return switch (identifier.toLowerCase(Locale.ROOT)) {
             case "pi" -> Math.PI;
             case "e" -> Math.E;

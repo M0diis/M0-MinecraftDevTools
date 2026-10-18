@@ -123,6 +123,9 @@ public class M0DevToolsClient implements ClientModInitializer {
         me.m0dii.modules.ranges.RangeOverlaysModule.INSTANCE.register();
         me.m0dii.modules.debugviews.DebugViewsModule.INSTANCE.register();
         me.m0dii.modules.farmrate.FarmRateModule.INSTANCE.register();
+        me.m0dii.modules.freelook.FreelookModule.INSTANCE.register();
+        me.m0dii.modules.tickcontrol.TickControlModule.INSTANCE.register();
+        me.m0dii.modules.chestfinder.ChestFinderModule.INSTANCE.register();
 
         // Populate ModuleRegistry categories after modules have had a chance to create their singletons
         ModuleRegistry.initializeCategories();
@@ -158,6 +161,8 @@ public class M0DevToolsClient implements ClientModInitializer {
         CameraClientCommand.register();
         MathClientCommand.register();
         BlockScannerClientCommand.register();
+        me.m0dii.modules.highlights.BlockHighlights.register();
+        me.m0dii.modules.glow.GlowCommand.register();
         ConvenienceClientCommands.register();
         InGameScriptingKeybinds.register();
         DebugDrawManager.registerRenderer();

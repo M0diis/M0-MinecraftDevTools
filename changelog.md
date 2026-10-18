@@ -2,6 +2,28 @@
 
 Version names follow `j<java>-mc<minecraft>-<version>`. Dates are when the version was set in the project.
 
+## Unreleased
+
+### New tools
+- **Chest Finder** (Chest Tracker style): remembers what was in every chest, barrel, shulker box, hopper, furnace, ... you open, per world and dimension (items inside shulker boxes count too). `/find <item>` lists where it is with distances and highlights the containers through walls with a pointer to the nearest one; `/find gui` (or a keybind) opens a searchable item grid. `/find forget`, `/find clear`. Broken containers are forgotten automatically.
+- **Freelook**: hold Left Alt (or set it to toggle) to look around your player in third person while it keeps facing and walking the same way.
+- **Tick Controls**: keys for vanilla `/tick freeze`, `/tick step <n>` and slower tick rates, with a HUD badge while the game is frozen or slowed. Needs permission to run `/tick`.
+- **`/glow <type|hostile|passive|items|players|all> [color]`**: client-side glowing outlines for entities; only you see them.
+- **Status HUD canvas element**: armor or held-item durability (percent, remaining or both; vertical or horizontal), active effects with timers that blink before they run out, or a durability alert that only shows when gear is low.
+
+### Improvements
+- Redstone Timeline: Freeze / Step / "Freeze on change" buttons. "Freeze on change" freezes the game on the next signal change so you can step through it tick by tick.
+- `/scanblocks <radius> <block>` outlines every match in the world for 10 minutes (mined blocks disappear), with a line and HUD arrow to the nearest one; `/scanblocks clear`.
+- `/math`: variables (`/math x = 5*64`, `ans`, `px py pz`), Minecraft units (`3 stacks + 5`, `2.5 min`, `300 nether`) and conversions (`3000 in stacks`, `1200 ticks in s`, `px in nether`). `/math vars`, `/math clear`.
+- Command completion: SNBT keys and values in `/summon` and `/data merge` (picked by entity type or what you're looking at, using 26.x names like `equipment` and `active_effects`), NBT paths in `/data get`, and common values for item components (`/give @s diamond_sword[rarity=`).
+- Packet Inspector: packet sizes, in/out bandwidth and packets-per-second graphs, a pinned packet type graph, "Most bytes" list and `/packets stats`. `/packets pin`, `/packets unpin` and `/packets export` are back.
+- Module Browser: number settings are sliders; drag, scroll over them (Shift = ×10) or click the value to type one (radius, distance, reach, gamma, zoom FOV, GUI scale, flash alpha).
+- Script editor: restyled to match the mod's theme, Ctrl+E recent files (Ctrl+E, Enter flips back to the previous file), `m0` completions show what each helper does, completions use real parameter names.
+
+### Fixes
+- JavaScript scripts failed with a host access error on the shared engine. Scripts now run on the GraalJS Polyglot API with one shared engine.
+- `m0.print` (used by the docs and snippets) didn't exist; it now writes to the script console.
+
 ## 2.0.0-BETA - `j25-mc26.3-2.0.0-BETA` (2026-10-17)
 
 ### Minecraft 26.3
@@ -93,8 +115,6 @@ Defaults no longer clash with vanilla 26.3 keys or with each other. Your own sav
 - Structure Bounding Boxes never showed anything (servers don't send structure data). They now work in singleplayer, with structure pieces and name labels and settings for radius, pieces and labels. On servers the module says it isn't available.
 - Held Light caused big frame drops: every 2 blocks of movement it marked about 2.5 million block updates for rebuilding. It now rebuilds only the chunk sections the light reaches.
 
-### Known issues
-- Running a second JavaScript script in the same session can fail with "Found different host access configuration for a context with a shared engine".
 
 ## 1.3.0-BETA - `j21-mc1.21.11-1.3.0-BETA` (2026-06-22)
 - Secondary chat:

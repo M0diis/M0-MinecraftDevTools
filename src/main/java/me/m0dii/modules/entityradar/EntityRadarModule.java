@@ -19,7 +19,7 @@ import net.minecraft.world.phys.Vec3;
 import java.util.ArrayList;
 import java.util.List;
 
-public class EntityRadarModule extends Module {
+public class EntityRadarModule extends Module implements me.m0dii.modules.NumericSetting.Provider {
 
     public static final EntityRadarModule INSTANCE = new EntityRadarModule();
 
@@ -55,6 +55,12 @@ public class EntityRadarModule extends Module {
     @Override
     protected Identifier getRequiredServerOptInChannel() {
         return RestrictedModuleOptInNetworking.ENTITY_RADAR_CHANNEL_ID;
+    }
+
+    @Override
+    public List<me.m0dii.modules.NumericSetting> numericSettings() {
+        return List.of(me.m0dii.modules.NumericSetting.of(3, "Radius", 1, 256, 1, 0,
+                () -> RADIUS, v -> RADIUS = (int) Math.round(v), 4, 5));
     }
 
     @Override

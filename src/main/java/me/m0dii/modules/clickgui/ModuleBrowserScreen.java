@@ -5,18 +5,18 @@ import me.m0dii.gui.theme.Theme;
 import me.m0dii.gui.theme.ThemeDraw;
 import me.m0dii.gui.theme.ThemedScreen;
 import me.m0dii.modules.Module;
+import me.m0dii.modules.NumericSetting;
 import me.m0dii.modules.state.ModuleStateStore;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.CharacterEvent;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * Searchable list of every module with a mouse-friendly settings panel.
@@ -46,6 +46,15 @@ public class ModuleBrowserScreen extends Screen implements ThemedScreen {
     private @Nullable Module initialModule;
     private long flashUntil;
     private int flashSetting = -1;
+    /** Slider being dragged, and the number setting whose value is being typed. */
+    private @Nullable NumericSetting dragging;
+    private @Nullable NumericSetting editing;
+    private String editText = "";
+    private static final int VALUE_BOX_W = 46;
+
+    /** One visible settings row: its index in getSettingsDisplay() and, for number settings, the slider. */
+    private record SettingRow(int index, SettingLine line, @Nullable NumericSetting numeric) {
+    }
 
     public ModuleBrowserScreen(Screen parent) {
         this(parent, null);
@@ -146,7 +155,7 @@ public class ModuleBrowserScreen extends Screen implements ThemedScreen {
         }
 
         String help = split()
-                ? "Type to search · Enter / switch: toggle · ★: favourite · click a setting to change it · Esc: close"
+                ? "Type to search · Enter / switch: toggle · ★: favourite · click a setting · drag a slider or click its value to type · Esc: close"
                 : "Type to search · Enter / switch: toggle · ★: favourite · widen the window for settings · Esc: close";
         context.text(this.font, ThemeDraw.fit(this.font, help, this.width - 24), 12, this.height - 14, Theme.TEXT_DIM, false);
         super.extractRenderState(context, mouseX, mouseY, delta);
@@ -215,7 +224,7 @@ public class ModuleBrowserScreen extends Screen implements ThemedScreen {
         String state = module.isEnabled() ? "ON" : "OFF";
         context.text(this.font, state, right - 6 - this.font.width(state), TOP + 5, module.isEnabled() ? Theme.SUCCESS : Theme.TEXT_DIM, false);
 
-        List<String> settings = module.hasSettings() ? module.getSettingsDisplay() : List.of();
+        List<SettingRow> settings = settingRows(module);
         if (settings.isEmpty()) {
             context.text(this.font, "No settings.", left + 6, TOP + ROW_H + 5, Theme.TEXT_DIM, false);
             return;
@@ -223,14 +232,19 @@ public class ModuleBrowserScreen extends Screen implements ThemedScreen {
         int settingRows = rows - 1;
         settingsScroll = Math.clamp(settingsScroll, 0, Math.max(0, settings.size() - settingRows));
         for (int i = 0; i < settingRows && settingsScroll + i < settings.size(); i++) {
-            int index = settingsScroll + i;
+            SettingRow row = settings.get(settingsScroll + i);
+            int index = row.index();
             int y = TOP + (i + 1) * ROW_H;
-            SettingLine line = SettingLine.parse(settings.get(index));
+            SettingLine line = row.line();
             boolean hover = mouseX >= left && mouseX <= right && mouseY >= y && mouseY < y + ROW_H;
             if (index == flashSetting && System.currentTimeMillis() < flashUntil) {
                 context.fill(left, y, right, y + ROW_H, Theme.ACCENT_SOFT);
             } else if (hover) {
                 context.fill(left, y, right, y + ROW_H, Theme.SURFACE_HOVER);
+            }
+            if (row.numeric() != null) {
+                renderSlider(context, row.numeric(), left, right, y, mouseX, mouseY, hover);
+                continue;
             }
             int valueRight = right - 6;
             int valueW;
@@ -253,6 +267,91 @@ public class ModuleBrowserScreen extends Screen implements ThemedScreen {
         }
     }
 
+    /** Settings rows to show: number settings become sliders and their +/- rows are hidden. */
+    private List<SettingRow> settingRows(Module module) {
+        List<String> lines = module.hasSettings() ? module.getSettingsDisplay() : List.of();
+        Map<Integer, NumericSetting> numeric = new HashMap<>();
+        Set<Integer> hidden = new HashSet<>();
+        if (module instanceof NumericSetting.Provider provider) {
+            for (NumericSetting setting : provider.numericSettings()) {
+                numeric.put(setting.row(), setting);
+                hidden.addAll(setting.hiddenRows());
+            }
+        }
+        List<SettingRow> rows = new ArrayList<>();
+        for (int i = 0; i < lines.size(); i++) {
+            if (!hidden.contains(i)) {
+                rows.add(new SettingRow(i, SettingLine.parse(lines.get(i)), numeric.get(i)));
+            }
+        }
+        return rows;
+    }
+
+    private int trackLeft(int left, int right) {
+        return left + (right - left) * 2 / 5;
+    }
+
+    private int trackRight(int right) {
+        return right - 6 - VALUE_BOX_W - 8;
+    }
+
+    private void renderSlider(GuiGraphicsExtractor context, NumericSetting setting, int left, int right, int y,
+                              int mouseX, int mouseY, boolean hover) {
+        int trackL = trackLeft(left, right);
+        int trackR = trackRight(right);
+        context.text(this.font, ThemeDraw.fit(this.font, setting.label(), trackL - 8 - (left + 6)), left + 6, y + 5,
+                hover ? Theme.TEXT : Theme.TEXT_MUTED, false);
+        int mid = y + ROW_H / 2;
+        if (trackR > trackL + 10) {
+            int knob = trackL + (int) Math.round((trackR - trackL) * setting.fraction());
+            context.fill(trackL, mid - 1, trackR, mid + 1, Theme.BORDER_STRONG);
+            context.fill(trackL, mid - 1, knob, mid + 1, Theme.ACCENT);
+            boolean active = same(dragging, setting) || hover && mouseX >= trackL - 3 && mouseX <= trackR + 3;
+            context.fill(knob - 2, mid - 5, knob + 2, mid + 5, active ? Theme.ACCENT_TEXT : Theme.TEXT);
+        }
+        int boxX = right - 6 - VALUE_BOX_W;
+        boolean typing = same(editing, setting);
+        ThemeDraw.box(context, boxX, y + 2, VALUE_BOX_W, ROW_H - 4, typing ? Theme.INPUT : Theme.SURFACE_PRESSED);
+        String text = typing ? editText + ((System.currentTimeMillis() / 500) % 2 == 0 ? "_" : "") : setting.format(setting.value());
+        context.text(this.font, ThemeDraw.fit(this.font, text, VALUE_BOX_W - 6), boxX + 4, y + 5,
+                typing ? Theme.TEXT : Theme.ACCENT_TEXT, false);
+    }
+
+    /** Providers build new setting objects each call, so rows are compared by position. */
+    private static boolean same(@Nullable NumericSetting a, @Nullable NumericSetting b) {
+        return a != null && b != null && a.row() == b.row();
+    }
+
+    private void applyNumeric(Module module, NumericSetting setting, double value) {
+        setting.set(value);
+        ModuleStateStore.onSettingsChanged(module);
+    }
+
+    private void commitEdit() {
+        NumericSetting setting = editing;
+        Module module = selectedModule();
+        editing = null;
+        if (setting == null || module == null) {
+            return;
+        }
+        Double value = NumericSetting.parse(editText);
+        if (value != null) {
+            applyNumeric(module, setting, value);
+        }
+    }
+
+    /** The settings row under a mouse y position, or null. */
+    private @Nullable SettingRow settingRowAt(double y) {
+        Module module = selectedModule();
+        int row = (int) ((y - TOP) / ROW_H);
+        if (module == null || y < TOP || row < 1 || row >= visibleRows()) {
+            return null;
+        }
+        List<SettingRow> rows = settingRows(module);
+        int index = settingsScroll + row - 1;
+        return index < rows.size() ? rows.get(index) : null;
+    }
+
     /** Display name of the key that opens this screen, e.g. "N". */
     public static String openKeyName() {
         return openKey == null || openKey.isUnbound() ? "unbound" : openKey.getTranslatedKeyMessage().getString();
@@ -266,6 +365,16 @@ public class ModuleBrowserScreen extends Screen implements ThemedScreen {
     @Override
     public boolean keyPressed(KeyEvent input) {
         int key = input.input();
+        if (editing != null) {
+            if (key == InputConstants.KEY_RETURN || key == InputConstants.KEY_NUMPADENTER || key == InputConstants.KEY_TAB) {
+                commitEdit();
+            } else if (key == InputConstants.KEY_ESCAPE) {
+                editing = null;
+            } else if (key == InputConstants.KEY_BACKSPACE && !editText.isEmpty()) {
+                editText = editText.substring(0, editText.length() - 1);
+            }
+            return true;
+        }
         if (key == InputConstants.KEY_DOWN) {
             moveSelection(1);
             return true;
@@ -287,6 +396,18 @@ public class ModuleBrowserScreen extends Screen implements ThemedScreen {
             return true;
         }
         return super.keyPressed(input);
+    }
+
+    @Override
+    public boolean charTyped(CharacterEvent input) {
+        if (editing != null) {
+            int c = input.codepoint();
+            if ((Character.isDigit(c) || c == '.' || c == ',' || c == '-') && editText.length() < 12) {
+                editText += (char) c;
+            }
+            return true;
+        }
+        return super.charTyped(input);
     }
 
     private void moveSelection(int delta) {
@@ -312,6 +433,9 @@ public class ModuleBrowserScreen extends Screen implements ThemedScreen {
 
     @Override
     public boolean mouseClicked(MouseButtonEvent click, boolean doubled) {
+        if (editing != null) {
+            commitEdit();
+        }
         if (super.mouseClicked(click, doubled)) {
             return true;
         }
@@ -346,31 +470,80 @@ public class ModuleBrowserScreen extends Screen implements ThemedScreen {
 
         if (split() && x >= settingsLeft() && x <= settingsRight() && row >= 1) {
             Module module = selectedModule();
-            if (module == null || !module.hasSettings()) {
+            SettingRow settingRow = settingRowAt(y);
+            if (module == null || settingRow == null) {
                 return false;
             }
-            int index = settingsScroll + row - 1;
-            if (index < module.getSettingsDisplay().size()) {
-                module.onSettingSelected(index);
-                ModuleStateStore.onSettingsChanged(module);
-                flashSetting = index;
-                flashUntil = System.currentTimeMillis() + 300;
+            NumericSetting numeric = settingRow.numeric();
+            if (numeric != null) {
+                int right = settingsRight();
+                int trackL = trackLeft(settingsLeft(), right);
+                int trackR = trackRight(right);
+                if (x >= right - 6 - VALUE_BOX_W) {
+                    editing = numeric;
+                    editText = numeric.format(numeric.value());
+                } else if (x >= trackL - 4 && x <= trackR + 4 && trackR > trackL) {
+                    dragging = numeric;
+                    applyNumeric(module, numeric, numeric.valueAt((x - trackL) / (double) (trackR - trackL)));
+                }
                 return true;
             }
+            module.onSettingSelected(settingRow.index());
+            ModuleStateStore.onSettingsChanged(module);
+            flashSetting = settingRow.index();
+            flashUntil = System.currentTimeMillis() + 300;
+            return true;
         }
         return false;
+    }
+
+    @Override
+    public boolean mouseDragged(MouseButtonEvent click, double deltaX, double deltaY) {
+        Module module = selectedModule();
+        if (dragging != null && module != null) {
+            int trackL = trackLeft(settingsLeft(), settingsRight());
+            int trackR = trackRight(settingsRight());
+            if (trackR > trackL) {
+                applyNumeric(module, dragging, dragging.valueAt((click.x() - trackL) / (double) (trackR - trackL)));
+            }
+            return true;
+        }
+        return super.mouseDragged(click, deltaX, deltaY);
+    }
+
+    @Override
+    public boolean mouseReleased(MouseButtonEvent click) {
+        if (dragging != null) {
+            dragging = null;
+            return true;
+        }
+        return super.mouseReleased(click);
     }
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
         int step = (int) Math.signum(verticalAmount) * 3;
         if (split() && mouseX >= settingsLeft()) {
+            SettingRow settingRow = settingRowAt(mouseY);
+            Module module = selectedModule();
+            if (settingRow != null && settingRow.numeric() != null && module != null
+                    && mouseX >= trackLeft(settingsLeft(), settingsRight()) - 4) {
+                NumericSetting numeric = settingRow.numeric();
+                double amount = numeric.step() * Math.signum(verticalAmount) * (hasShiftDownCompat() ? 10 : 1);
+                applyNumeric(module, numeric, numeric.value() + amount);
+                return true;
+            }
             settingsScroll = Math.max(0, settingsScroll - step);
             return true;
         }
         int maxScroll = Math.max(0, shown.size() - visibleRows());
         scroll = Math.clamp(scroll - step, 0, maxScroll);
         return true;
+    }
+
+    private boolean hasShiftDownCompat() {
+        return this.minecraft != null && (InputConstants.isKeyDown(InputConstants.KEY_LSHIFT)
+                || InputConstants.isKeyDown(InputConstants.KEY_RSHIFT));
     }
 
     @Override

@@ -17,6 +17,7 @@ import java.util.function.Supplier;
 /**
  * The {@code m0} helper available to every script.
  * <pre>
+ * m0.print("hello")                   // line in the script editor's Console tab
  * m0.message("hello")                 // local chat line (only you see it)
  * m0.actionbar("hello")               // action bar text
  * m0.chat("hello everyone")           // sends a chat message
@@ -113,8 +114,38 @@ public final class ScriptApi {
         });
     }
 
+    /** A line in the script editor's Console tab (and the log). */
+    public void print(Object text) {
+        String value = String.valueOf(text);
+        ScriptConsole.add(ScriptConsole.Level.INFO, value);
+        M0DevTools.LOGGER.info("[script {}] {}", job.name(), value);
+    }
+
     public void log(Object text) {
         M0DevTools.LOGGER.info("[script {}] {}", job.name(), text);
+    }
+
+    /** One-line help for each helper, shown next to the editor's completion suggestions. */
+    public static String describe(String method) {
+        return switch (method) {
+            case "print" -> "line in the Console tab";
+            case "log" -> "write to the game log";
+            case "message" -> "chat line only you see";
+            case "actionbar" -> "action bar text";
+            case "chat" -> "send a chat message";
+            case "command" -> "send a command ('/' optional)";
+            case "placeholders" -> "expand {placeholders}";
+            case "macro" -> "run a saved macro by id";
+            case "sleep" -> "wait (async scripts only)";
+            case "sync" -> "run on the game thread";
+            case "call" -> "run on the game thread, return value";
+            case "checkCancelled" -> "stop here if cancelled";
+            case "isCancelled" -> "true after stop/timeout";
+            case "isAsync" -> "true in @async scripts";
+            case "scriptName" -> "this script's file name";
+            case "client", "player", "world" -> "Minecraft " + method;
+            default -> "";
+        };
     }
 
     // ---- macros -----------------------------------------------------------------------------------------------

@@ -37,6 +37,9 @@ public class RedstoneTimelineScreen extends Screen implements ThemedScreen {
     private Button recordButton;
     private Button followButton;
     private Button showButton;
+    private Button freezeButton;
+    private Button stepButton;
+    private Button armButton;
 
     private static int zoomIndex = 4;
     private static boolean showAll;
@@ -82,6 +85,18 @@ public class RedstoneTimelineScreen extends Screen implements ThemedScreen {
         button(x += 48, 44, this::copyToClipboard).setMessage(Component.literal("Copy"));
         button(x += 48, 20, () -> zoom(-1)).setMessage(Component.literal("-"));
         button(x + 24, 20, () -> zoom(1)).setMessage(Component.literal("+"));
+        // Vanilla /tick controls (needs permission): freeze, step and freeze-on-first-change.
+        me.m0dii.modules.tickcontrol.TickControlModule ticks = me.m0dii.modules.tickcontrol.TickControlModule.INSTANCE;
+        int right = this.width - 8;
+        armButton = button(right -= 86, 86, () -> ticks.setFreezeOnChange(!ticks.isFreezeOnChangeArmed()));
+        stepButton = button(right -= 58, 54, () -> ticks.step(ticks.stepSize()));
+        freezeButton = button(right - 66, 62, ticks::toggleFreeze);
+        if (right - 66 < x + 50) {
+            // Narrow window: the tick buttons would overlap the toolbar.
+            armButton.visible = false;
+            stepButton.visible = false;
+            freezeButton.visible = false;
+        }
         updateLabels();
     }
 
@@ -98,6 +113,12 @@ public class RedstoneTimelineScreen extends Screen implements ThemedScreen {
         recordButton.setMessage(Component.literal(RedstoneTimelineModule.INSTANCE.isEnabled() ? "● Recording" : "○ Record here"));
         followButton.setMessage(Component.literal(follow ? "Follow: on" : "Follow: off"));
         showButton.setMessage(Component.literal(showAll ? "Show: all" : "Show: changed"));
+        if (freezeButton != null) {
+            me.m0dii.modules.tickcontrol.TickControlModule ticks = me.m0dii.modules.tickcontrol.TickControlModule.INSTANCE;
+            freezeButton.setMessage(Component.literal(me.m0dii.modules.tickcontrol.TickControlModule.isFrozen() ? "▶ Unfreeze" : "❄ Freeze"));
+            stepButton.setMessage(Component.literal("Step " + ticks.stepSize()));
+            armButton.setMessage(Component.literal(ticks.isFreezeOnChangeArmed() ? "Armed: on" : "Freeze on chg"));
+        }
     }
 
     private int px() {

@@ -8,7 +8,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
-public class ReachModule extends Module {
+public class ReachModule extends Module implements me.m0dii.modules.NumericSetting.Provider {
 
     public static final ReachModule INSTANCE = new ReachModule();
 
@@ -81,6 +81,19 @@ public class ReachModule extends Module {
         }
 
         return Math.min(configured, vanilla + Math.clamp(multiplayerExtra, 0.0, MAX_MULTIPLAYER_EXTRA));
+    }
+
+    @Override
+    public List<me.m0dii.modules.NumericSetting> numericSettings() {
+        return List.of(
+                me.m0dii.modules.NumericSetting.of(1, "Block Reach", MIN_REACH, MAX_REACH, STEP, 2, this::getBlockReachDistance,
+                        v -> ModConfig.updateAndSave(() -> ModConfig.reachBlockDistance = v), 2, 3),
+                me.m0dii.modules.NumericSetting.of(4, "Entity Reach", MIN_REACH, MAX_REACH, STEP, 2, this::getEntityReachDistance,
+                        v -> ModConfig.updateAndSave(() -> ModConfig.reachEntityDistance = v), 5, 6),
+                me.m0dii.modules.NumericSetting.of(8, "MP Block Extra", 0.0, MAX_MULTIPLAYER_EXTRA, STEP, 2, this::getMultiplayerBlockExtra,
+                        v -> ModConfig.updateAndSave(() -> ModConfig.reachMultiplayerBlockExtra = v), 9, 10),
+                me.m0dii.modules.NumericSetting.of(11, "MP Entity Extra", 0.0, MAX_MULTIPLAYER_EXTRA, STEP, 2, this::getMultiplayerEntityExtra,
+                        v -> ModConfig.updateAndSave(() -> ModConfig.reachMultiplayerEntityExtra = v), 12, 13));
     }
 
     @Override

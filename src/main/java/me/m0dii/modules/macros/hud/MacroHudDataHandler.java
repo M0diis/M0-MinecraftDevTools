@@ -33,7 +33,8 @@ public final class MacroHudDataHandler {
         INVENTORY,
         SHAPE,
         STATE_BADGE,
-        REDSTONE_TIMELINE
+        REDSTONE_TIMELINE,
+        STATUS
     }
 
     public enum VisibilityMode {
@@ -190,6 +191,12 @@ public final class MacroHudDataHandler {
         // REDSTONE_TIMELINE behavior (rows use maxLines).
         public int timelineWindowTicks = 100;
         public boolean timelineShowLabels = true;
+
+        // STATUS behavior: armor / held / effects / alert (see StatusFormat).
+        public String statusKind = "ARMOR";
+        public String statusTextMode = "PERCENT";
+        public boolean statusHorizontal = false;
+        public int statusWarnPercent = 15;
     }
 
     public static final class HudConfig {
@@ -444,6 +451,21 @@ public final class MacroHudDataHandler {
             element.colorStart = 0xFFE5534B;
             element.textColor = 0xFFE7EAF0;
         }
+        if (type == ElementType.STATUS) {
+            element.label = "Status";
+            element.width = 110;
+            element.height = 76;
+            element.statusKind = "ARMOR";
+            element.statusTextMode = "PERCENT";
+            element.statusHorizontal = false;
+            element.statusWarnPercent = 15;
+            element.drawBackground = true;
+            element.drawBorder = false;
+            element.backgroundColor = 0x80101318;
+            element.borderColor = 0xFF2A303B;
+            element.colorWarn = 0xFFE5534B;
+            element.textColor = 0xFFE7EAF0;
+        }
         element.backgroundAlpha = (element.backgroundColor >>> 24) & 0xFF;
         return element;
     }
@@ -582,6 +604,10 @@ public final class MacroHudDataHandler {
             e.stateShowValue = raw.stateShowValue;
             e.timelineWindowTicks = Math.clamp(raw.timelineWindowTicks, 20, 1200);
             e.timelineShowLabels = raw.timelineShowLabels;
+            e.statusKind = StatusFormat.Kind.parse(raw.statusKind).name();
+            e.statusTextMode = StatusFormat.TextMode.parse(raw.statusTextMode).name();
+            e.statusHorizontal = raw.statusHorizontal;
+            e.statusWarnPercent = Math.clamp(raw.statusWarnPercent, 1, 100);
             if (e.type == ElementType.TEXT && "Open chat to click HUD buttons".equalsIgnoreCase(e.text)) {
                 continue;
             }
@@ -702,6 +728,10 @@ public final class MacroHudDataHandler {
         cloned.stateShowValue = e.stateShowValue;
         cloned.timelineWindowTicks = e.timelineWindowTicks;
         cloned.timelineShowLabels = e.timelineShowLabels;
+        cloned.statusKind = e.statusKind;
+        cloned.statusTextMode = e.statusTextMode;
+        cloned.statusHorizontal = e.statusHorizontal;
+        cloned.statusWarnPercent = e.statusWarnPercent;
         return cloned;
     }
 

@@ -1,24 +1,26 @@
 package me.m0dii.modules.scripting;
 
 import net.minecraft.client.Minecraft;
+import org.graalvm.polyglot.*;
 
-import javax.script.Bindings;
-import javax.script.ScriptEngine;
-import javax.script.ScriptEngineFactory;
-import javax.script.ScriptEngineManager;
-import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.function.Predicate;
 
 /**
- * JavaScript via GraalJS. Each run gets a fresh engine (scripts don't leak globals into each other); the engine
- * factory lookup is done once. A running script is stopped by closing its polyglot context, which works from any
- * thread, including for scripts running on the client thread.
+ * JavaScript via the GraalVM Polyglot API.
+ * <p>
+ * Every run gets its own {@link Context} (scripts don't leak globals into each other), all built from one shared
+ * {@link Engine} with exactly the same options. Building every context the same way is what keeps GraalJS from
+ * failing with "Found different host access configuration for a context with a shared engine", which the old
+ * JSR-223 setup (magic {@code polyglot.js.*} bindings plus a probe engine) ran into on the second script. The
+ * shared engine also keeps parsed code cached between runs.
+ * <p>
+ * A running script is stopped by closing its context, which works from any thread.
  */
 public class JavaScriptScriptManager implements ScriptManager {
-    private volatile ScriptEngineFactory factory;
-    private volatile boolean factoryResolved;
+    private static final String LANGUAGE = "js";
+    private volatile Engine engine;
+    private volatile String unavailableReason;
 
     @Override
     public String languageName() {
@@ -27,32 +29,27 @@ public class JavaScriptScriptManager implements ScriptManager {
 
     @Override
     public Object runScript(String script, Map<String, Object> context, ScriptJob job) {
-        ScriptEngine engine = createEngine();
-        if (engine == null) {
-            throw new ScriptExecutionException("JavaScript engine not found (GraalJS is missing from this install).");
-        }
-        if (context != null) {
-            for (Map.Entry<String, Object> entry : context.entrySet()) {
-                engine.put(entry.getKey(), entry.getValue());
-            }
-        }
-        Object polyglotContext = polyglotContext(engine);
-        if (polyglotContext != null) {
-            job.onCancel(() -> closeContext(polyglotContext, true));
-        }
+        Context jsContext = newContext();
+        job.onCancel(() -> close(jsContext, true));
         try {
-            Object result = engine.eval(script == null ? "" : script);
-            // JS objects are views into the polyglot context; turn them into text before the context is closed.
-            if (result == null || result instanceof String || result instanceof Number || result instanceof Boolean) {
-                return result;
+            Value bindings = jsContext.getBindings(LANGUAGE);
+            if (context != null) {
+                for (Map.Entry<String, Object> entry : context.entrySet()) {
+                    bindings.putMember(entry.getKey(), entry.getValue());
+                }
             }
-            return String.valueOf(result);
-        } catch (Exception e) {
+            Value result = jsContext.eval(LANGUAGE, script == null ? "" : script);
+            // Values are views into the context; turn them into plain Java values before it is closed.
+            return toJava(result);
+        } catch (PolyglotException e) {
+            if (e.isCancelled() || job.isCancelled()) {
+                throw new ScriptExecutionException("JavaScript script " + (job.cancelReason() == null ? "was stopped" : job.cancelReason()), e);
+            }
+            throw new ScriptExecutionException(describe(e), e);
+        } catch (RuntimeException e) {
             throw ScriptExecutionException.wrap(languageName(), e);
         } finally {
-            if (polyglotContext != null) {
-                closeContext(polyglotContext, false);
-            }
+            close(jsContext, false);
         }
     }
 
@@ -68,63 +65,79 @@ public class JavaScriptScriptManager implements ScriptManager {
         return runScript(script, context);
     }
 
-    private ScriptEngine createEngine() {
-        ScriptEngineFactory resolved = resolveFactory();
-        if (resolved == null) {
-            return null;
+    private Context newContext() {
+        try {
+            return Context.newBuilder(LANGUAGE)
+                    .engine(sharedEngine())
+                    .allowHostAccess(HostAccess.ALL)
+                    .allowHostClassLookup(className -> true)
+                    .build();
+        } catch (LinkageError | IllegalArgumentException | IllegalStateException e) {
+            unavailableReason = e.getClass().getSimpleName() + ": " + e.getMessage();
+            throw new ScriptExecutionException("JavaScript engine not available (" + unavailableReason + ").", e);
         }
-        ScriptEngine scriptEngine = resolved.getScriptEngine();
-        Bindings bindings = scriptEngine.getBindings(javax.script.ScriptContext.ENGINE_SCOPE);
-        if (bindings != null) {
-            bindings.put("polyglot.js.allowHostAccess", true);
-            bindings.put("polyglot.js.allowHostClassLookup", (Predicate<String>) name -> true);
-        }
-        return scriptEngine;
     }
 
-    private ScriptEngineFactory resolveFactory() {
-        if (factoryResolved) {
-            return factory;
-        }
-        synchronized (this) {
-            if (!factoryResolved) {
-                ScriptEngineManager manager = new ScriptEngineManager(JavaScriptScriptManager.class.getClassLoader());
-                ScriptEngine probe = manager.getEngineByExtension("js");
-                if (probe == null) {
-                    probe = manager.getEngineByName("js");
+    private Engine sharedEngine() {
+        Engine current = engine;
+        if (current == null) {
+            synchronized (this) {
+                current = engine;
+                if (current == null) {
+                    current = Engine.newBuilder(LANGUAGE)
+                            // Runs fine without the optimizing compiler; don't print a warning about it every launch.
+                            .option("engine.WarnInterpreterOnly", "false")
+                            .build();
+                    engine = current;
                 }
-                if (probe == null) {
-                    probe = manager.getEngineByName("JavaScript");
-                }
-                factory = probe == null ? null : probe.getFactory();
-                if (probe != null) {
-                    Object context = polyglotContext(probe);
-                    if (context != null) {
-                        closeContext(context, false);
-                    }
-                }
-                factoryResolved = true;
             }
         }
-        return factory;
+        return current;
     }
 
-    /** GraalJSScriptEngine#getPolyglotContext, looked up reflectively so this class loads without GraalJS. */
-    private static Object polyglotContext(ScriptEngine engine) {
-        try {
-            Method method = engine.getClass().getMethod("getPolyglotContext");
-            return method.invoke(engine);
-        } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
+    static Object toJava(Value value) {
+        if (value == null || value.isNull()) {
             return null;
         }
+        if (value.isBoolean()) {
+            return value.asBoolean();
+        }
+        if (value.isNumber()) {
+            return value.fitsInLong() ? (Object) value.asLong() : (Object) value.asDouble();
+        }
+        if (value.isString()) {
+            return value.asString();
+        }
+        if (value.isHostObject()) {
+            Object host = value.asHostObject();
+            return host instanceof String || host instanceof Number || host instanceof Boolean ? host : String.valueOf(host);
+        }
+        return value.toString();
     }
 
-    private static void closeContext(Object polyglotContext, boolean cancelIfExecuting) {
+    /** "JavaScript error: ReferenceError: foo is not defined (line 3)". */
+    private static String describe(PolyglotException e) {
+        String message = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage().strip();
+        int newline = message.indexOf('\n');
+        if (newline >= 0) {
+            message = message.substring(0, newline).strip();
+        }
+        String where = "";
         try {
-            Method close = polyglotContext.getClass().getMethod("close", boolean.class);
-            close.invoke(polyglotContext, cancelIfExecuting);
-        } catch (ReflectiveOperationException | RuntimeException | LinkageError ignored) {
-            // Best effort: a context that is already closed, or an engine without one.
+            if (e.getSourceLocation() != null) {
+                where = " (line " + e.getSourceLocation().getStartLine() + ")";
+            }
+        } catch (RuntimeException ignored) {
+            // no location
+        }
+        return "JavaScript error: " + message + where;
+    }
+
+    private static void close(Context context, boolean cancelIfExecuting) {
+        try {
+            context.close(cancelIfExecuting);
+        } catch (RuntimeException ignored) {
+            // Already closed, or closing a context that is still running on another thread without cancel.
         }
     }
 }

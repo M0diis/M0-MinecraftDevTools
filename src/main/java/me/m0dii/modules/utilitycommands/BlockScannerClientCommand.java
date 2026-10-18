@@ -3,6 +3,7 @@ package me.m0dii.modules.utilitycommands;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
+import me.m0dii.modules.highlights.BlockHighlights;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommands;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
@@ -20,6 +21,8 @@ import java.util.*;
 public final class BlockScannerClientCommand {
     private static final int MAX_RADIUS = 96;
     private static final int MAX_LINES = 12;
+    private static final int MAX_HIGHLIGHTS = 4096;
+    private static final String HIGHLIGHT_KEY = "scanblocks";
 
     private BlockScannerClientCommand() {
     }
@@ -33,6 +36,11 @@ public final class BlockScannerClientCommand {
 
     private static void registerLiteral(com.mojang.brigadier.CommandDispatcher<FabricClientCommandSource> dispatcher, String literal) {
         dispatcher.register(ClientCommands.literal(literal)
+                .then(ClientCommands.literal("clear").executes(context -> {
+                    boolean had = BlockHighlights.clear(HIGHLIGHT_KEY);
+                    context.getSource().sendFeedback(Component.literal(had ? "[ScanBlocks] Highlights cleared." : "[ScanBlocks] Nothing highlighted."));
+                    return 1;
+                }))
                 .then(ClientCommands.argument("radius", IntegerArgumentType.integer(1, MAX_RADIUS))
                         .executes(context -> scan(context, null))
                         .then(ClientCommands.argument("block", StringArgumentType.greedyString())
@@ -56,6 +64,7 @@ public final class BlockScannerClientCommand {
         }
 
         Map<Block, Integer> counts = new HashMap<>();
+        List<BlockPos> found = new ArrayList<>();
         int totalCounted = 0;
         int skippedUnloaded = 0;
 
@@ -87,6 +96,9 @@ public final class BlockScannerClientCommand {
                     }
 
                     counts.merge(state.getBlock(), 1, Integer::sum);
+                    if (filter != null && found.size() < MAX_HIGHLIGHTS) {
+                        found.add(pos);
+                    }
                     totalCounted++;
                 }
             }
@@ -100,6 +112,13 @@ public final class BlockScannerClientCommand {
                     + " (" + formatPercent(percent) + "% of matched non-air blocks)"));
             if (skippedUnloaded > 0) {
                 context.getSource().sendFeedback(Component.literal("[ScanBlocks] Skipped " + skippedUnloaded + " unloaded positions."));
+            }
+            Block wanted = filter;
+            BlockHighlights.show(HIGHLIGHT_KEY, blockName, 0x55FFAA, found,
+                    (level, pos) -> level.getBlockState(pos).getBlock() == wanted, 10 * 60_000L);
+            if (!found.isEmpty()) {
+                context.getSource().sendFeedback(Component.literal("[ScanBlocks] Highlighted " + found.size()
+                        + (found.size() >= MAX_HIGHLIGHTS ? "+" : "") + " blocks for 10 minutes; mined ones disappear. /" + "scanblocks clear to hide."));
             }
             return 1;
         }

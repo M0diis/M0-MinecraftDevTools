@@ -58,6 +58,11 @@ public final class KeybindCatalog {
     public static final KeybindSpec FREECAM_SAVE_SPOT = new KeybindSpec("key.m0-dev-tools.freecam_save_spot", InputConstants.UNKNOWN.getValue());
     public static final KeybindSpec FREECAM_NEXT_SPOT = new KeybindSpec("key.m0-dev-tools.freecam_next_spot", InputConstants.UNKNOWN.getValue());
     public static final KeybindSpec PLACEMENT_RESTRICTION_CYCLE = new KeybindSpec("key.m0-dev-tools.placement_restriction_cycle", InputConstants.UNKNOWN.getValue());
+    public static final KeybindSpec FREELOOK = new KeybindSpec("key.m0-dev-tools.freelook", InputConstants.KEY_LALT);
+    public static final KeybindSpec TICK_FREEZE = new KeybindSpec("key.m0-dev-tools.tick_freeze", InputConstants.UNKNOWN.getValue());
+    public static final KeybindSpec TICK_STEP = new KeybindSpec("key.m0-dev-tools.tick_step", InputConstants.UNKNOWN.getValue());
+    public static final KeybindSpec TICK_SLOWER = new KeybindSpec("key.m0-dev-tools.tick_slower", InputConstants.UNKNOWN.getValue());
+    public static final KeybindSpec CHEST_FINDER = new KeybindSpec("key.m0-dev-tools.chest_finder", InputConstants.UNKNOWN.getValue());
     public static final KeybindSpec CYCLE_PROFILE = new KeybindSpec("key.m0-dev-tools.cycle_profile", InputConstants.UNKNOWN.getValue());
 
     // Single place for quick overview and future validation tooling.
@@ -93,6 +98,11 @@ public final class KeybindCatalog {
                 RULER_MARK,
                 PACKET_INSPECTOR,
                 CYCLE_PROFILE,
+                FREELOOK,
+                TICK_FREEZE,
+                TICK_STEP,
+                TICK_SLOWER,
+                CHEST_FINDER,
                 FREECAM_CONTROL_PLAYER,
                 FREECAM_SAVE_SPOT,
                 FREECAM_NEXT_SPOT,

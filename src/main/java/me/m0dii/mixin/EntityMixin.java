@@ -26,6 +26,11 @@ public class EntityMixin {
     @Inject(method = "turn", at = @At("HEAD"), cancellable = true)
     private void overrideYaw(double cursorDeltaX, double cursorDeltaY, CallbackInfo ci) {
         if ((Object) this instanceof LocalPlayer) {
+            if (me.m0dii.modules.freelook.FreelookModule.isActive()) {
+                me.m0dii.modules.freelook.FreelookModule.turn(cursorDeltaX, cursorDeltaY);
+                ci.cancel();
+                return;
+            }
             if (CameraUtils.shouldPreventPlayerMovement()) {
                 CameraUtils.updateCameraRotations((float) cursorDeltaX, (float) cursorDeltaY);
             }

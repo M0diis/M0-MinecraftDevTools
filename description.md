@@ -42,13 +42,14 @@ All keys can be changed in Options → Controls → Key Binds (category "M0-Dev 
 | Open Entity Radar Screen       | `R`                     |
 | Toggle Freecam                 | `U`                     |
 | Zoom (hold)                    | `Z`                     |
+| Freelook (hold)                | Left Alt                |
 | Toggle Fullbright              | `J`                     |
 | Toggle Xray                    | `]`                     |
 | Open Xray Menu                 | `[`                     |
 | Toggle Block Inspector         | `F10`                   |
 | Toggle Watson CoreProtect      | `.` (period)            |
 
-Unbound by default (bind them if you use them): Redstone / Light / Slime Chunk / Biome Border / Command Block overlay toggles, Redstone BUD order, waypoint add/list/GUI/render toggle, quick teleport up/down/forward/left/right, Freecam control player / save spot / next spot, Ruler mark point, Packet Inspector, cycle placement restriction, next module profile, Macro Workbench (Keyboard tab), and Better Command Block UI area selection.
+Unbound by default (bind them if you use them): Redstone / Light / Slime Chunk / Biome Border / Command Block overlay toggles, Redstone BUD order, waypoint add/list/GUI/render toggle, quick teleport up/down/forward/left/right, Freecam control player / save spot / next spot, Ruler mark point, Packet Inspector, Tick freeze / step / slower, Chest finder search, cycle placement restriction, next module profile, Macro Workbench (Keyboard tab), and Better Command Block UI area selection.
 
 ## Feature overview
 
@@ -59,7 +60,7 @@ Unbound by default (bind them if you use them): Redstone / Light / Slime Chunk /
   - Arrows to move (hold to repeat), PgUp/PgDn/Home/End to jump, Right for settings, Enter to toggle or apply
   - Long lists scroll; each category remembers where you were
   - Right Shift stars a module; favourites get their own category
-- **Module Browser** (`N`) - search every module by name, id or category, toggle with a click, and change settings with the mouse. Opened from ClickHUD it starts on the highlighted module
+- **Module Browser** (`N`) - search every module by name, id or category, toggle with a click, and change settings with the mouse (number settings are sliders you can drag, scroll or type into). Opened from ClickHUD it starts on the highlighted module
 - **Saved state** - module on/off states and settings are remembered between launches and restored when you join a world. Modules that need server opt-in are never switched on automatically
 - **Profiles** - `/m0profile save|load|list <name>`, `/m0profile next` (also a keybind)
 
@@ -93,6 +94,9 @@ Unbound by default (bind them if you use them): Redstone / Light / Slime Chunk /
 - **Farm rate meter** - `/farmrate start [radius|selection]` counts items appearing in a zone, `/farmrate inventory` counts what you pick up; totals, items per hour, last 5 minutes, `/farmrate copy` for CSV
 - **Inventory move**, **Mouse Tweaks**-style controls, **bridging tweaks** (snapping, torch placement, slab assist, replaceable targets)
 - **Fullbright**, **held light** (dynamic light from held torches, lanterns, ...), **zoom**
+- **Freelook** - hold Left Alt to orbit the camera around your player while it keeps looking and walking the same way (hold or toggle)
+- **Chest finder** - remembers what's in every container you open (per world and dimension, shulker box contents included). `/find <item>` tells you where it is and highlights the containers through walls with an arrow to the nearest; `/find gui` or a keybind opens a searchable grid of everything you've stored
+- **Tick controls** - keys for vanilla `/tick freeze`, `/tick step` and slower tick rates, with a HUD badge while frozen (needs `/tick` permission)
 - **Freecam** - move the camera away from your body
   - Your player stays visible ("Show Player Model")
   - "Control player" moves your player while the camera stays put
@@ -112,7 +116,7 @@ Unbound by default (bind them if you use them): Redstone / Light / Slime Chunk /
 - **Message history** and longer chat history
 - **[Better Command Block UI](https://github.com/Tectato/BetterCommandBlockUI)** - improved command block editor
 - **UI utilities** - send/delay packets, save/restore GUI state, de-sync screens, close windows without packets, copy GUI title JSON, in-GUI command input
-- **Packet inspector** - `/packets` browses sent and received packets with filters; `/packets top` for counts, `/packets pin <name>` graphs one type per second, `/packets export` saves a log
+- **Packet inspector** - `/packets` browses sent and received packets with filters, sizes and in/out bandwidth graphs; `/packets top` for counts, `/packets stats` for bandwidth, `/packets pin <name>` graphs one type per second, `/packets export` saves a log
 
 ### Redstone Timeline
 
@@ -124,22 +128,24 @@ Unbound by default (bind them if you use them): Redstone / Light / Slime Chunk /
   - Drag or arrows to pan, Ctrl+scroll or +/- to zoom
 - **Copy** puts the whole recording on the clipboard as CSV
 - The recorded area and the watched components are outlined in the world while recording
+- **Freeze / Step / Freeze on change** buttons drive vanilla `/tick`: arm "Freeze on change" and the game freezes on the next signal change, then step through it tick by tick
 - Add a **Redstone Timeline** element to the HUD canvas to watch the busiest components live while you play
 - It reads what the client sees, so 0-tick pulses don't show
 
 ### Macros, HUD canvas, scripting & automation
 
 - **Macro manager / workbench** (`M`) - macros with key bindings, a keyboard layout view, a Scripts tab and automation rules
-- **HUD canvas** (`K`) - build your own HUD from buttons, text, macro lists, icons, bars, values, lists, inventory views, shapes, state badges and the redstone timeline, plus vanilla HUD elements you can move and scale. Supports layers, anchors, presets and live previews
+- **HUD canvas** (`K`) - build your own HUD from buttons, text, macro lists, icons, bars, values, lists, inventory views, shapes, state badges, the redstone timeline and status widgets (armor/held durability, effect timers, low-durability alert), plus vanilla HUD elements you can move and scale. Supports layers, anchors, presets and live previews
 - **Placeholders** - dynamic values (`{player.x}`, compass arrows, target info, ...) with provider extension points
 - **Scripts** in Groovy (`.groovy`), Kotlin (`.kts`) and JavaScript (`.js`)
   - Run with `/runscript <file>`, a keybind, a HUD button or an automation rule
   - Scripts run on the game thread with a 5 s limit; `// @async on` runs one in the background (2 min limit). `/runscript stop` and `/runscript running`
-  - Every script gets an `m0` helper: `message`, `actionbar`, `chat`, `command`, `placeholders`, `macro`, `sleep`, `sync`, `checkCancelled`
+  - Every script gets an `m0` helper: `print`, `message`, `actionbar`, `chat`, `command`, `placeholders`, `macro`, `sleep`, `sync`, `checkCancelled`
 - **Script editor** (`,`) - a small IDE
   - Tabs, find/replace, go to line or symbol, comment, duplicate and move lines
   - Auto-closing brackets, syntax highlighting with problem markers
   - Snippets (Ctrl+J), formatting (Ctrl+Shift+F), a console tab, F5 run / Shift+F5 stop
+  - Ctrl+E recent files; completions for `m0` and game objects with parameter names
 - **Automation engine** (`/automation`)
   - Event triggers (chat, death, health, weather, level, world join/leave, ...), conditions, and actions (commands, scripts, macros, module toggles, show-message)
   - Regex with capture groups (`{event.group1}`)
@@ -153,7 +159,11 @@ Unbound by default (bind them if you use them): Redstone / Light / Slime Chunk /
 - **`/getdata`** - block and entity NBT inspector and editor with a data browser. **Quick Edit** (`/getdata quick`) changes an entity's name, health and flags or a block's state properties, and shows the exact `/data` / `/setblock` commands first. The SNBT editor has undo/redo, formatting, bracket matching, line numbers and error locations
 - **`/itemdata`** - item component inspector and editor with metadata, type hints and templates; Save shows what changed before sending, with undo
 - **Watson / CoreProtect tracker** (`/watson`) - Watson-style visualisation of CoreProtect lookups with tracers, vectors, TTL, search and teleport helpers
-- **Block scanner** (`/scanblocks <radius> [block]`), **math evaluator** (`/math`), placeholder tester (`/parseplaceholder`)
+- **Block scanner** (`/scanblocks <radius> [block]`) - counts blocks; with a block it outlines every match and points to the nearest
+- **Math** (`/math`) - expressions, variables (`x = 5*64`, `ans`, `px py pz`) and Minecraft units: `/math 3000 in stacks`, `/math 1200 ticks in s`, `/math px in nether`
+- **`/glow <type|hostile|passive|items|players|all> [color]`** - client-side glowing outlines on entities
+- **Command completion** for SNBT in `/summon` and `/data` (keys and values), NBT paths, and item component values
+- Placeholder tester (`/parseplaceholder`)
 
 ### Tweaks module
 

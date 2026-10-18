@@ -13,7 +13,7 @@ import net.minecraft.resources.Identifier;
 import java.util.ArrayList;
 import java.util.List;
 
-public class ClickHudModule extends Module {
+public class ClickHudModule extends Module implements me.m0dii.modules.NumericSetting.Provider {
 
     public static final ClickHudModule INSTANCE = new ClickHudModule();
 
@@ -39,6 +39,12 @@ public class ClickHudModule extends Module {
                 KeybindCatalog.CLICKGUI_TOGGLE.defaultKey(),
                 client -> renderer.toggle()
         );
+    }
+
+    @Override
+    public List<me.m0dii.modules.NumericSetting> numericSettings() {
+        return List.of(me.m0dii.modules.NumericSetting.of(0, "GUI Scale", 0.5, 5.0, 0.05, 2, () -> ModConfig.clickGuiTextScale,
+                v -> ModConfig.updateAndSave(() -> ModConfig.clickGuiTextScale = v), 1, 2, 3, 4));
     }
 
     @Override

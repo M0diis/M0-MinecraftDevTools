@@ -72,10 +72,72 @@ public final class MacroWorkbenchCustomWidgetTypeClickHandler {
         if (selected.type == MacroHudDataHandler.ElementType.REDSTONE_TIMELINE) {
             return handleRedstoneTimelineClick(click, layout, forward, selected, ops);
         }
+        if (selected.type == MacroHudDataHandler.ElementType.STATUS) {
+            return handleStatusClick(click, layout, forward, selected, ops);
+        }
         if (selected.type == MacroHudDataHandler.ElementType.STATE_BADGE) {
             return handleStateBadgeClick(click, layout, forward, selected, stateSourcePresets, ops);
         }
         return false;
+    }
+
+    private static boolean handleStatusClick(MouseButtonEvent click,
+                                             CustomWidgetAdvancedLayout layout,
+                                             boolean forward,
+                                             MacroHudDataHandler.HudElement selected,
+                                             Ops ops) {
+        List<UiRect> row1 = layout.typeRow1();
+        List<UiRect> row2 = layout.typeRow2();
+        if (ops.contains(click, row1.get(0))) {
+            selected.statusKind = me.m0dii.modules.macros.hud.StatusFormat.Kind.parse(selected.statusKind).next(forward).name();
+            applyStatusDefaultSize(selected);
+            return true;
+        }
+        if (ops.contains(click, row1.get(1))) {
+            selected.statusTextMode = me.m0dii.modules.macros.hud.StatusFormat.TextMode.parse(selected.statusTextMode).next(forward).name();
+            return true;
+        }
+        if (ops.contains(click, row1.get(2))) {
+            selected.statusWarnPercent = Math.max(1, selected.statusWarnPercent - ops.stepInt(1));
+            return true;
+        }
+        if (ops.contains(click, row1.get(3))) {
+            selected.statusWarnPercent = Math.min(100, selected.statusWarnPercent + ops.stepInt(1));
+            return true;
+        }
+        if (ops.contains(click, row2.get(0))) {
+            selected.statusHorizontal = !selected.statusHorizontal;
+            applyStatusDefaultSize(selected);
+            return true;
+        }
+        if (ops.contains(click, row2.get(1))) {
+            selected.colorWarn = ops.cycleStyleColor(selected.colorWarn, forward);
+            return true;
+        }
+        return false;
+    }
+
+    /** Resizes a status widget to fit its kind and orientation (the user can still resize it on the canvas). */
+    static void applyStatusDefaultSize(MacroHudDataHandler.HudElement e) {
+        me.m0dii.modules.macros.hud.StatusFormat.Kind kind = me.m0dii.modules.macros.hud.StatusFormat.Kind.parse(e.statusKind);
+        switch (kind) {
+            case ARMOR -> {
+                e.width = e.statusHorizontal ? 96 : 110;
+                e.height = e.statusHorizontal ? 32 : 76;
+            }
+            case HELD -> {
+                e.width = e.statusHorizontal ? 52 : 110;
+                e.height = e.statusHorizontal ? 32 : 40;
+            }
+            case EFFECTS -> {
+                e.width = e.statusHorizontal ? 112 : 150;
+                e.height = e.statusHorizontal ? 32 : 40;
+            }
+            case ALERT -> {
+                e.width = 150;
+                e.height = 32;
+            }
+        }
     }
 
     private static boolean handleRedstoneTimelineClick(MouseButtonEvent click,

@@ -23,7 +23,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 
-public final class EntityHealthBarsModule extends Module {
+public final class EntityHealthBarsModule extends Module implements me.m0dii.modules.NumericSetting.Provider {
     public static final EntityHealthBarsModule INSTANCE = new EntityHealthBarsModule();
 
     private static final List<ColorPreset> COLOR_PRESETS = List.of(
@@ -227,6 +227,12 @@ public final class EntityHealthBarsModule extends Module {
             return Integer.toString((int) Math.round(value));
         }
         return String.format(Locale.ROOT, "%.1f", value);
+    }
+
+    @Override
+    public List<me.m0dii.modules.NumericSetting> numericSettings() {
+        return List.of(me.m0dii.modules.NumericSetting.of(4, "Distance", 4, 64, 1, 0,
+                () -> renderDistance, v -> renderDistance = (int) Math.round(v), 5, 6));
     }
 
     @Override

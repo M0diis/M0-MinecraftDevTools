@@ -2829,7 +2829,8 @@ public class MacroWorkbenchScreen extends Screen implements ThemedScreen {
                 || element.type == MacroHudDataHandler.ElementType.INVENTORY
                 || element.type == MacroHudDataHandler.ElementType.SHAPE
                 || element.type == MacroHudDataHandler.ElementType.STATE_BADGE
-                || element.type == MacroHudDataHandler.ElementType.REDSTONE_TIMELINE;
+                || element.type == MacroHudDataHandler.ElementType.REDSTONE_TIMELINE
+                || element.type == MacroHudDataHandler.ElementType.STATUS;
 
         if (customWidget) {
             drawCanvasSpecialWidget(context, element, x1, y1, x2, y2);
@@ -2885,6 +2886,7 @@ public class MacroWorkbenchScreen extends Screen implements ThemedScreen {
             case SHAPE -> drawCanvasShapePreview(context, e, x1, y1, x2, y2);
             case STATE_BADGE -> drawCanvasStateBadgePreview(context, e, x1, y1, x2, y2);
             case REDSTONE_TIMELINE -> drawCanvasRedstoneTimelinePreview(context, e, x1, y1, x2, y2);
+            case STATUS -> drawCanvasStatusPreview(context, e, x1, y1, x2, y2);
             default -> {
                 // no-op
             }
@@ -3099,6 +3101,16 @@ public class MacroWorkbenchScreen extends Screen implements ThemedScreen {
         if (e.drawBorder) {
             drawCanvasElementBorder(context, e, x1, y1, x2, y2);
         }
+    }
+
+    private void drawCanvasStatusPreview(GuiGraphicsExtractor context, MacroHudDataHandler.HudElement e, int x1, int y1, int x2, int y2) {
+        if (e.drawBackground) {
+            context.fill(x1, y1, x2, y2, canvasBackgroundColor(e));
+        }
+        if (e.drawBorder) {
+            drawCanvasElementBorder(context, e, x1, y1, x2, y2);
+        }
+        me.m0dii.modules.macros.hud.StatusHudWidget.render(context, this.font, x1, y1, x2 - x1, y2 - y1, e, true);
     }
 
     private void drawCanvasRedstoneTimelinePreview(GuiGraphicsExtractor context, MacroHudDataHandler.HudElement e, int x1, int y1, int x2, int y2) {
@@ -4730,7 +4742,8 @@ public class MacroWorkbenchScreen extends Screen implements ThemedScreen {
                 || element.type == MacroHudDataHandler.ElementType.INVENTORY
                 || element.type == MacroHudDataHandler.ElementType.SHAPE
                 || element.type == MacroHudDataHandler.ElementType.STATE_BADGE
-                || element.type == MacroHudDataHandler.ElementType.REDSTONE_TIMELINE;
+                || element.type == MacroHudDataHandler.ElementType.REDSTONE_TIMELINE
+                || element.type == MacroHudDataHandler.ElementType.STATUS;
     }
 
     private int stepInt(int base) {
@@ -5047,7 +5060,7 @@ public class MacroWorkbenchScreen extends Screen implements ThemedScreen {
         context.text(this.font, "Add Element", boxX + 12, boxY + 10, 0xFFFFFFFF);
         context.text(this.font, "Pick element type", boxX + 12, boxY + 22, 0xFFB0B0B0);
 
-        String[] labels = {"Button", "Text", "Macro List", "Icon", "Bar", "Value", "List", "Inventory", "Shape", "State Badge", "Redstone Timeline"};
+        String[] labels = {"Button", "Text", "Macro List", "Icon", "Bar", "Value", "List", "Inventory", "Shape", "State Badge", "Redstone Timeline", "Status"};
         for (int i = 0; i < labels.length; i++) {
             int row = i / 3;
             int col = i % 3;
@@ -5082,7 +5095,8 @@ public class MacroWorkbenchScreen extends Screen implements ThemedScreen {
                 MacroHudDataHandler.ElementType.INVENTORY,
                 MacroHudDataHandler.ElementType.SHAPE,
                 MacroHudDataHandler.ElementType.STATE_BADGE,
-                MacroHudDataHandler.ElementType.REDSTONE_TIMELINE
+                MacroHudDataHandler.ElementType.REDSTONE_TIMELINE,
+                MacroHudDataHandler.ElementType.STATUS
         };
 
         for (int i = 0; i < types.length; i++) {

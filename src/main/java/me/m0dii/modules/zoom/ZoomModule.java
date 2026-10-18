@@ -9,7 +9,7 @@ import net.minecraft.network.chat.Component;
 import java.util.ArrayList;
 import java.util.List;
 
-public class ZoomModule extends Module {
+public class ZoomModule extends Module implements me.m0dii.modules.NumericSetting.Provider {
 
     public static final ZoomModule INSTANCE = new ZoomModule();
 
@@ -32,6 +32,11 @@ public class ZoomModule extends Module {
                 client -> held = true,
                 client -> held = false
         );
+    }
+
+    @Override
+    public List<me.m0dii.modules.NumericSetting> numericSettings() {
+        return List.of(me.m0dii.modules.NumericSetting.of(0, "Zoom FOV", 5, 110, 1, 0, () -> zoomFov, v -> zoomFov = (float) v, 1, 2));
     }
 
     @Override

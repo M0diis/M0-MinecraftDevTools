@@ -4,6 +4,7 @@ package me.m0dii.modules.scripting.gui;
 import com.mojang.blaze3d.platform.InputConstants;
 import groovy.lang.GroovyShell;
 import me.m0dii.gui.GuiSystem;
+import me.m0dii.gui.theme.Theme;
 import me.m0dii.gui.theme.ThemedScreen;
 import me.m0dii.modules.macros.MacroPlaceholders;
 import me.m0dii.modules.scripting.*;
@@ -29,6 +30,12 @@ import java.lang.reflect.Modifier;
 import java.util.*;
 
 public class ScriptEditorScreen extends Screen implements ThemedScreen {
+    /** Editor-only colours derived from the theme accent (selection and the current line). */
+    private static final int SELECTION = 0x664C8BF5;
+    private static final int CURRENT_LINE = 0x144C8BF5;
+    /** Recently opened scripts for the Ctrl+E switcher. */
+    private static final me.m0dii.modules.scripting.ide.RecentFiles RECENT =
+            new me.m0dii.modules.scripting.ide.RecentFiles(java.nio.file.Paths.get("config/m0-dev-tools/script-recent.txt"));
 
     private static final String DEFAULT_SCRIPT_NAME = "untitled.kts";
     private static final String GROOVY_EXT = ScriptTypes.GROOVY_EXT;
@@ -171,6 +178,8 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
     private String outlineQuery = "";
     private int outlineSelected;
     private List<ScriptOutline.Symbol> outlineItems = List.of();
+    /** The outline popup lists recent files (Ctrl+E) instead of symbols (Ctrl+O). */
+    private boolean recentMode;
 
     private List<ScriptSyntax.State> cachedStates = List.of();
     private long cachedStatesVersion = -1;
@@ -269,6 +278,9 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
         }
         active = buffer;
         sessionActive = buffer;
+        if (buffer.savedText != null) {
+            RECENT.touch(buffer.name);
+        }
         editor = buffer.state;
         undo = buffer.undo;
         redo = buffer.redo;
@@ -918,7 +930,26 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
 
     // ---- outline (Ctrl+O) ------------------------------------------------------------------------------------
 
+    /** Ctrl+E: recently opened scripts, newest first; type to filter, Enter to open. */
+    private void openRecent() {
+        outlineVisible = true;
+        recentMode = true;
+        outlineQuery = "";
+        outlineSelected = 0;
+        findFocused = false;
+        hideSuggestions();
+        refreshOutline();
+        // The current file is first; preselect the previous one so Ctrl+E, Enter flips between two files.
+        if (outlineItems.size() > 1 && outlineItems.getFirst().name().equals(currentScriptName)) {
+            outlineSelected = 1;
+        }
+        if (outlineItems.isEmpty()) {
+            outputText = "No recent scripts yet.";
+        }
+    }
+
     private void openOutline() {
+        recentMode = false;
         outlineVisible = true;
         outlineQuery = "";
         outlineSelected = 0;
@@ -931,6 +962,19 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
     }
 
     private void refreshOutline() {
+        if (recentMode) {
+            String q = outlineQuery.toLowerCase(Locale.ROOT);
+            List<ScriptOutline.Symbol> files = new ArrayList<>();
+            for (String name : RECENT.list(name -> ScriptStorage.exists(name) || findBuffer(name) != null)) {
+                if (q.isEmpty() || name.toLowerCase(Locale.ROOT).contains(q)) {
+                    Buffer open = findBuffer(name);
+                    files.add(new ScriptOutline.Symbol(name, open != null && open.dirty() ? "●" : open != null ? "open" : "", -1, 0));
+                }
+            }
+            outlineItems = files;
+            outlineSelected = Math.clamp(outlineSelected, 0, Math.max(0, files.size() - 1));
+            return;
+        }
         String language = inferLanguage(currentScriptName).name();
         List<ScriptOutline.Symbol> all = ScriptOutline.symbols(editor.text, language);
         String q = outlineQuery.toLowerCase(Locale.ROOT);
@@ -970,6 +1014,10 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
         }
         ScriptOutline.Symbol symbol = outlineItems.get(index);
         outlineVisible = false;
+        if (recentMode) {
+            openScriptByName(symbol.name());
+            return;
+        }
         jumpToDiagnostic(new Diagnostic("INFO", currentScriptName, symbol.line() + 1, symbol.column() + 1, ""));
         // Put the symbol near the top of the view.
         editor.scrollLine = Math.max(0, symbol.line() - 3);
@@ -1017,6 +1065,10 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
             }
             if (ctrl && key == InputConstants.KEY_O) {
                 openOutline();
+                return true;
+            }
+            if (ctrl && key == InputConstants.KEY_E) {
+                openRecent();
                 return true;
             }
             if (ctrl && key == InputConstants.KEY_TAB) {
@@ -1268,7 +1320,7 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
 
     @Override
     public void extractRenderState(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
-        context.fill(0, 0, width, height, 0xD0101010);
+        context.fill(0, 0, width, height, Theme.SCRIM);
         drawTabs(context, mouseX, mouseY);
 
         if (tab == UiTab.DOCS) {
@@ -1326,20 +1378,20 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
             Rect r = fileTab.rect();
             boolean isActive = fileTab.buffer() == active;
             boolean hover = r.contains(mouseX, mouseY);
-            context.fill(r.x, r.y, r.x + r.w, r.y + r.h, isActive ? 0xFF1E2A3A : hover ? 0xFF252525 : 0xFF181818);
+            context.fill(r.x, r.y, r.x + r.w, r.y + r.h, isActive ? Theme.SURFACE_PRESSED : hover ? Theme.SURFACE_HOVER : Theme.SURFACE);
             if (isActive) {
-                context.fill(r.x, r.y + r.h - 1, r.x + r.w, r.y + r.h, 0xFF4A90E2);
+                context.fill(r.x, r.y + r.h - 1, r.x + r.w, r.y + r.h, Theme.ACCENT);
             }
             String label = fileTab.buffer().name + (fileTab.buffer().dirty() ? " ●" : "");
-            context.text(font, label, r.x + 5, r.y + 3, isActive ? 0xFFFFFFFF : 0xFFAAAAAA, false);
+            context.text(font, label, r.x + 5, r.y + 3, isActive ? Theme.TEXT : Theme.TEXT_MUTED, false);
             boolean closeHover = fileTab.close().contains(mouseX, mouseY);
-            context.text(font, "×", fileTab.close().x + 1, r.y + 3, closeHover ? 0xFFFF8080 : 0xFF777777, false);
+            context.text(font, "×", fileTab.close().x + 1, r.y + 3, closeHover ? Theme.DANGER : Theme.TEXT_DIM, false);
             shown++;
         }
         if (shown < SESSION.size()) {
             Rect panel = editorRect();
             String more = "+" + (SESSION.size() - shown) + " (Ctrl+Tab)";
-            context.text(font, more, panel.x + panel.w - font.width(more) - 2, panel.y - FILE_TAB_H + 3, 0xFF888888, false);
+            context.text(font, more, panel.x + panel.w - font.width(more) - 2, panel.y - FILE_TAB_H + 3, Theme.TEXT_DIM, false);
         }
     }
 
@@ -1357,12 +1409,12 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
         left.append("  ·  ").append(splitLines(editor.text).size()).append(" lines");
         left.append("  ·  ").append(active != null && active.dirty() ? "modified" : "saved");
         left.append("  ·  async ").append(scriptRunsAsync(editor.text) ? "on" : "off");
-        context.text(font, left.toString(), panel.x + 2, y, 0xFF9AA4B2, false);
+        context.text(font, left.toString(), panel.x + 2, y, Theme.TEXT_MUTED, false);
         int running = ScriptRunner.activeJobs().size();
         String right = (running > 0 ? "● " + running + " running (Shift+F5 stops)   " : "")
-                + "F5 run · Ctrl+F find · Ctrl+O outline · Ctrl+/ comment";
+                + "F5 run · Ctrl+F find · Ctrl+O outline · Ctrl+E recent · Ctrl+/ comment";
         context.text(font, trimToWidth(right, Math.max(40, panel.w / 2)), panel.x + panel.w - Math.min(font.width(right), panel.w / 2) - 2, y,
-                running > 0 ? 0xFF9DFFB0 : 0xFF6F7782, false);
+                running > 0 ? Theme.SUCCESS : Theme.TEXT_DIM, false);
     }
 
     private Rect findBarRect() {
@@ -1380,11 +1432,11 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
 
     private void renderFindBar(GuiGraphicsExtractor context, int mouseX, int mouseY) {
         Rect bar = findBarRect();
-        context.fill(bar.x - 1, bar.y - 1, bar.x + bar.w + 1, bar.y + bar.h + 1, 0xFF4A90E2);
-        context.fill(bar.x, bar.y, bar.x + bar.w, bar.y + bar.h, 0xF0161B22);
+        context.fill(bar.x - 1, bar.y - 1, bar.x + bar.w + 1, bar.y + bar.h + 1, Theme.BORDER_STRONG);
+        context.fill(bar.x, bar.y, bar.x + bar.w, bar.y + bar.h, Theme.SURFACE_RAISED);
         if (findMode == FindMode.GOTO) {
             String text = "Go to line: " + gotoText + (blinkOn() ? "_" : "");
-            context.text(font, text, bar.x + 4, bar.y + 4, 0xFFFFFFFF, false);
+            context.text(font, text, bar.x + 4, bar.y + 4, Theme.TEXT, false);
             return;
         }
         refreshFindMatches();
@@ -1392,9 +1444,9 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
                 : (findCurrent >= 0 ? (findCurrent + 1) + "/" : "") + findMatches.size();
         int fieldRight = findButton(4, 0).x - 4;
         String query = "Find: " + findQuery + (findFocused && !replaceFocused && blinkOn() ? "_" : "");
-        context.fill(bar.x + 2, bar.y + 2, fieldRight, bar.y + 14, !replaceFocused && findFocused ? 0xFF1E2A3A : 0xFF111111);
-        context.text(font, trimToWidth(query, fieldRight - bar.x - 50), bar.x + 4, bar.y + 4, 0xFFE0E0E0, false);
-        context.text(font, count, fieldRight - font.width(count) - 2, bar.y + 4, findMatches.isEmpty() && !findQuery.isEmpty() ? 0xFFFF8080 : 0xFF9AA4B2, false);
+        context.fill(bar.x + 2, bar.y + 2, fieldRight, bar.y + 14, !replaceFocused && findFocused ? Theme.SURFACE_PRESSED : Theme.INPUT);
+        context.text(font, trimToWidth(query, fieldRight - bar.x - 50), bar.x + 4, bar.y + 4, Theme.TEXT, false);
+        context.text(font, count, fieldRight - font.width(count) - 2, bar.y + 4, findMatches.isEmpty() && !findQuery.isEmpty() ? Theme.DANGER : Theme.TEXT_MUTED, false);
         drawFindToggle(context, findButton(4, 0), "Aa", sessionCaseSensitive, mouseX, mouseY);
         drawFindToggle(context, findButton(3, 0), "W", sessionWholeWord, mouseX, mouseY);
         drawFindToggle(context, findButton(2, 0), "↑", false, mouseX, mouseY);
@@ -1403,8 +1455,8 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
         if (findMode == FindMode.REPLACE) {
             int replaceRight = findButton(1, 1).x - 4;
             String replace = "Replace: " + replaceText + (findFocused && replaceFocused && blinkOn() ? "_" : "");
-            context.fill(bar.x + 2, bar.y + 16, replaceRight, bar.y + 28, replaceFocused ? 0xFF1E2A3A : 0xFF111111);
-            context.text(font, trimToWidth(replace, replaceRight - bar.x - 6), bar.x + 4, bar.y + 18, 0xFFE0E0E0, false);
+            context.fill(bar.x + 2, bar.y + 16, replaceRight, bar.y + 28, replaceFocused ? Theme.SURFACE_PRESSED : Theme.INPUT);
+            context.text(font, trimToWidth(replace, replaceRight - bar.x - 6), bar.x + 4, bar.y + 18, Theme.TEXT, false);
             drawFindToggle(context, findButton(1, 1), "1", false, mouseX, mouseY);
             drawFindToggle(context, findButton(0, 1), "All", false, mouseX, mouseY);
         }
@@ -1412,8 +1464,8 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
 
     private void drawFindToggle(GuiGraphicsExtractor context, Rect r, String label, boolean on, int mouseX, int mouseY) {
         boolean hover = r.contains(mouseX, mouseY);
-        context.fill(r.x, r.y, r.x + r.w, r.y + r.h, on ? 0xFF305084 : hover ? 0xFF2A2A2A : 0xFF1A1A1A);
-        context.text(font, label, r.x + (r.w - font.width(label)) / 2, r.y + 2, 0xFFFFFFFF, false);
+        context.fill(r.x, r.y, r.x + r.w, r.y + r.h, on ? Theme.ACCENT_PRESSED : hover ? Theme.SURFACE_HOVER : Theme.SURFACE_RAISED);
+        context.text(font, label, r.x + (r.w - font.width(label)) / 2, r.y + 2, Theme.TEXT, false);
     }
 
     private boolean handleFindBarClick(double mx, double my) {
@@ -1456,11 +1508,11 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
 
     private void renderOutline(GuiGraphicsExtractor context, int mouseX, int mouseY) {
         Rect r = outlineRect();
-        context.fill(r.x - 1, r.y - 1, r.x + r.w + 1, r.y + r.h + 1, 0xFF4A90E2);
-        context.fill(r.x, r.y, r.x + r.w, r.y + r.h, 0xF0161B22);
-        context.text(font, "Go to symbol: " + outlineQuery + (blinkOn() ? "_" : ""), r.x + 4, r.y + 4, 0xFFFFFFFF, false);
+        context.fill(r.x - 1, r.y - 1, r.x + r.w + 1, r.y + r.h + 1, Theme.BORDER_STRONG);
+        context.fill(r.x, r.y, r.x + r.w, r.y + r.h, Theme.SURFACE_RAISED);
+        context.text(font, (recentMode ? "Recent files: " : "Go to symbol: ") + outlineQuery + (blinkOn() ? "_" : ""), r.x + 4, r.y + 4, Theme.TEXT, false);
         if (outlineItems.isEmpty()) {
-            context.text(font, "Nothing found", r.x + 4, r.y + 18, 0xFF888888, false);
+            context.text(font, "Nothing found", r.x + 4, r.y + 18, Theme.TEXT_DIM, false);
             return;
         }
         int rows = Math.clamp(outlineItems.size(), 1, 12);
@@ -1471,12 +1523,17 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
             boolean selected = first + i == outlineSelected;
             boolean hover = mouseX >= r.x && mouseX < r.x + r.w && mouseY >= y && mouseY < y + SUGGESTION_ROW_H;
             if (selected || hover) {
-                context.fill(r.x + 1, y, r.x + r.w - 1, y + SUGGESTION_ROW_H, selected ? 0x804A7CC7 : 0x40FFFFFF);
+                context.fill(r.x + 1, y, r.x + r.w - 1, y + SUGGESTION_ROW_H, selected ? SELECTION : Theme.SURFACE_HOVER);
+            }
+            if (recentMode) {
+                context.text(font, symbol.name(), r.x + 4, y + 1, symbol.name().equals(currentScriptName) ? Theme.ACCENT_TEXT : Theme.TEXT, false);
+                context.text(font, symbol.kind(), r.x + r.w - font.width(symbol.kind()) - 4, y + 1, Theme.TEXT_DIM, false);
+                continue;
             }
             context.text(font, symbol.kind(), r.x + 4, y + 1, ScriptSyntax.color(ScriptSyntax.Kind.KEYWORD), false);
             context.text(font, symbol.name(), r.x + 8 + font.width("const val"), y + 1, ScriptSyntax.color(ScriptSyntax.Kind.FUNCTION), false);
             String line = ":" + (symbol.line() + 1);
-            context.text(font, line, r.x + r.w - font.width(line) - 4, y + 1, 0xFF888888, false);
+            context.text(font, line, r.x + r.w - font.width(line) - 4, y + 1, Theme.TEXT_DIM, false);
         }
     }
 
@@ -1497,62 +1554,67 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
 
     private void drawTabs(GuiGraphicsExtractor context, int mouseX, int mouseY) {
         Rect tabs = tabsArea();
-        context.fill(tabs.x, tabs.y, tabs.x + tabs.w, tabs.y + tabs.h, 0xA0000000);
+        context.fill(tabs.x, tabs.y, tabs.x + tabs.w, tabs.y + tabs.h, Theme.SIDEBAR);
+        context.fill(tabs.x, tabs.y + tabs.h - 1, tabs.x + tabs.w, tabs.y + tabs.h, Theme.DIVIDER);
         UiTab[] values = UiTab.values();
         for (int i = 0; i < values.length; i++) {
             int x = tabs.x + i * TAB_W;
             boolean active = values[i] == tab;
             boolean hover = mouseX >= x && mouseX < x + TAB_W && mouseY >= tabs.y && mouseY < tabs.y + tabs.h;
-            int bg = active ? 0xFF305084 : (hover ? 0xFF2A2A2A : 0xFF1A1A1A);
+            int bg = active ? Theme.SURFACE_PRESSED : (hover ? Theme.SURFACE_HOVER : Theme.SIDEBAR);
             context.fill(x + 1, tabs.y + 1, x + TAB_W - 1, tabs.y + tabs.h - 1, bg);
-            context.centeredText(font, Component.literal(values[i] == UiTab.MAIN ? "Main" : values[i] == UiTab.DOCS ? "Docs" : "Scripts"), x + TAB_W / 2, tabs.y + 7, 0xFFFFFFFF);
+            if (active) {
+                context.fill(x + 1, tabs.y + tabs.h - 2, x + TAB_W - 1, tabs.y + tabs.h, Theme.ACCENT);
+            }
+            context.centeredText(font, Component.literal(values[i] == UiTab.MAIN ? "Main" : values[i] == UiTab.DOCS ? "Docs" : "Scripts"),
+                    x + TAB_W / 2, tabs.y + 7, active ? Theme.TEXT : (hover ? Theme.TEXT : Theme.TEXT_MUTED));
         }
     }
 
     private void renderMainHeader(GuiGraphicsExtractor context, int mouseX, int mouseY) {
         Rect header = mainHeaderRect();
-        context.fill(header.x, header.y, header.x + header.w, header.y + header.h, 0xAA151515);
+        context.fill(header.x, header.y, header.x + header.w, header.y + header.h, Theme.SURFACE);
         context.text(font,
                 "File: " + currentScriptName + (active != null && active.dirty() ? " ●" : "") + " [" + inferLanguage(currentScriptName).name().toLowerCase(Locale.ROOT) + "]  Undo: " + undo.size() + "  Redo: " + redo.size(),
-                header.x + 8, header.y + 7, 0xFFE0E0E0);
+                header.x + 8, header.y + 7, Theme.TEXT);
         drawButton(context, mainBtnSave(), "Save", mouseX, mouseY);
-        drawButton(context, mainBtnRun(), "Run", mouseX, mouseY);
+        drawPrimaryButton(context, mainBtnRun(), "▶ Run", mouseX, mouseY);
         drawButton(context, mainBtnValidate(), "Validate", mouseX, mouseY);
         drawButton(context, mainBtnAsync(), "Async:" + (scriptRunsAsync(editor.text) ? "ON" : "OFF"), mouseX, mouseY);
     }
 
     private void renderScriptsPane(GuiGraphicsExtractor context, int mouseX, int mouseY) {
         Rect pane = scriptsPaneRect();
-        context.fill(pane.x, pane.y, pane.x + pane.w, pane.y + pane.h, 0xAA151515);
-        context.text(font, "Scripts", pane.x + 6, pane.y + 4, 0xFFFFFFFF);
+        context.fill(pane.x, pane.y, pane.x + pane.w, pane.y + pane.h, Theme.SURFACE);
+        context.text(font, "Scripts", pane.x + 6, pane.y + 4, Theme.TEXT);
 
         Rect search = scriptsSearchRect();
-        context.fill(search.x, search.y, search.x + search.w, search.y + search.h, scriptsSearchFocused ? 0xFF162030 : 0xFF111111);
+        context.fill(search.x, search.y, search.x + search.w, search.y + search.h, scriptsSearchFocused ? Theme.SURFACE_PRESSED : Theme.INPUT);
         String searchLine = "Search: " + scriptSearch;
-        context.text(font, searchLine, search.x + 4, search.y + 5, 0xFFDADADA, false);
+        context.text(font, searchLine, search.x + 4, search.y + 5, Theme.TEXT, false);
         if (scriptsSearchFocused && blinkOn()) {
             int cursorX = search.x + 4 + font.width(searchLine);
             if (cursorX < search.x + search.w - 2) {
-                context.fill(cursorX, search.y + 4, cursorX + 1, search.y + 13, 0xFFFFFFFF);
+                context.fill(cursorX, search.y + 4, cursorX + 1, search.y + 13, Theme.TEXT);
             }
         }
 
         Rect rename = scriptsRenameRect();
-        context.fill(rename.x, rename.y, rename.x + rename.w, rename.y + rename.h, renameFieldFocused ? 0xFF203018 : 0xFF111111);
+        context.fill(rename.x, rename.y, rename.x + rename.w, rename.y + rename.h, renameFieldFocused ? Theme.SURFACE_PRESSED : Theme.INPUT);
         String renameValue = renameDraft.isEmpty() ? "<new script name>" : renameDraft;
         String renameLine = "Name: " + renameValue;
-        int renameColor = renameDraft.isEmpty() ? 0xFF7F7F7F : 0xFFDADADA;
+        int renameColor = renameDraft.isEmpty() ? Theme.TEXT_DIM : Theme.TEXT;
         context.text(font, renameLine, rename.x + 4, rename.y + 5, renameColor, false);
         if (renameFieldFocused && blinkOn()) {
             int cursorX = rename.x + 4 + font.width("Name: " + renameDraft);
             if (cursorX < rename.x + rename.w - 2) {
-                context.fill(cursorX, rename.y + 4, cursorX + 1, rename.y + 13, 0xFFFFFFFF);
+                context.fill(cursorX, rename.y + 4, cursorX + 1, rename.y + 13, Theme.TEXT);
             }
         }
-        context.text(font, "Rename selected script. Press Enter or click Rename.", pane.x + 6, rename.y + rename.h + 4, 0xFF9EA7B3, false);
+        context.text(font, "Rename selected script. Press Enter or click Rename.", pane.x + 6, rename.y + rename.h + 4, Theme.TEXT_MUTED, false);
 
         Rect body = scriptsBodyRect();
-        context.fill(body.x, body.y, body.x + body.w, body.y + body.h, 0xFF111111);
+        context.fill(body.x, body.y, body.x + body.w, body.y + body.h, Theme.INPUT);
         int visible = Math.max(1, body.h / SCRIPT_ROW_H);
         int maxScroll = Math.max(0, visibleScripts.size() - visible);
         scriptsScroll = Math.clamp(scriptsScroll, 0, maxScroll);
@@ -1567,13 +1629,13 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
             boolean selected = idx == selectedScriptIndex;
             boolean hover = body.contains(mouseX, mouseY) && mouseY >= y && mouseY < y + SCRIPT_ROW_H;
             if (selected) {
-                context.fill(body.x + 1, y, body.x + body.w - 1, y + SCRIPT_ROW_H, 0xFF2E4F80);
+                context.fill(body.x + 1, y, body.x + body.w - 1, y + SCRIPT_ROW_H, Theme.SURFACE_PRESSED);
             } else if (hover) {
-                context.fill(body.x + 1, y, body.x + body.w - 1, y + SCRIPT_ROW_H, 0xFF2A2A2A);
+                context.fill(body.x + 1, y, body.x + body.w - 1, y + SCRIPT_ROW_H, Theme.SURFACE_HOVER);
             }
             Buffer open = findBuffer(name);
             String marker = open == null ? "" : open.dirty() ? " ●" : " ○";
-            context.text(font, name + marker, body.x + 6, y + 3, selected ? 0xFFFFFFFF : open != null ? 0xFFBFD8FF : 0xFFD0D0D0, false);
+            context.text(font, name + marker, body.x + 6, y + 3, selected ? Theme.TEXT : open != null ? Theme.ACCENT_TEXT : Theme.TEXT, false);
         }
 
         drawButton(context, scriptsBtnCreate(), "Create", mouseX, mouseY);
@@ -1591,9 +1653,9 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
         Rect panel = editorRect();
         Rect gutter = gutterRect(panel);
         Rect code = codeTextRect(panel, gutter);
-        context.fill(panel.x, panel.y, panel.x + panel.w, panel.y + panel.h, editor.focused ? 0xFF0F0F0F : 0xFF121212);
-        context.fill(gutter.x, gutter.y, gutter.x + gutter.w, gutter.y + gutter.h, 0xFF1A1A1A);
-        context.fill(gutter.x + gutter.w, panel.y, gutter.x + gutter.w + 1, panel.y + panel.h, 0x60FFFFFF);
+        context.fill(panel.x, panel.y, panel.x + panel.w, panel.y + panel.h, editor.focused ? Theme.INPUT : Theme.SIDEBAR);
+        context.fill(gutter.x, gutter.y, gutter.x + gutter.w, gutter.y + gutter.h, Theme.SIDEBAR);
+        context.fill(gutter.x + gutter.w, panel.y, gutter.x + gutter.w + 1, panel.y + panel.h, Theme.BORDER);
 
         List<String> lines = splitLines(editor.text);
         int visible = Math.max(1, (code.h - 6) / CODE_LINE_H);
@@ -1621,13 +1683,13 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
             String n = Integer.toString(lineIdx + 1);
             boolean error = errorLines.contains(lineIdx);
             if (error) {
-                context.fill(gutter.x + 1, y, gutter.x + 3, y + 9, 0xFFFF5555);
+                context.fill(gutter.x + 1, y, gutter.x + 3, y + 9, Theme.DANGER);
                 if (mouseX >= gutter.x && mouseX < gutter.x + gutter.w && mouseY >= y && mouseY < y + CODE_LINE_H) {
                     hoverMessage = diagnosticMessageForLine(lineIdx);
                 }
             }
             context.text(font, n, gutter.x + gutter.w - 4 - font.width(n), y,
-                    error ? 0xFFFF8080 : lineIdx == cursorLine ? 0xFFDDDDDD : 0xFF666666, false);
+                    error ? Theme.DANGER : lineIdx == cursorLine ? Theme.TEXT : Theme.TEXT_DIM, false);
             ScriptSyntax.State start = lineIdx < states.size() ? states.get(lineIdx) : ScriptSyntax.State.CODE;
             drawSyntaxLine(context, line, code.x + 4 - editor.viewLeft, y, ScriptSyntax.line(line, language, start));
             y += CODE_LINE_H;
@@ -1639,11 +1701,12 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
 
         if (editor.focused && blinkOn()) {
             int[] p = cursorPixel(code, editor.cursor);
-            context.fill(p[0], p[1], p[0] + 1, p[1] + 9, 0xFFFFFFFF);
+            context.fill(p[0], p[1], p[0] + 1, p[1] + 9, Theme.TEXT);
         }
         if (hoverMessage != null) {
             int w = Math.min(font.width(hoverMessage) + 8, width - mouseX - 12);
-            context.fill(mouseX + 8, mouseY + 4, mouseX + 8 + w, mouseY + 18, 0xF0301010);
+            context.fill(mouseX + 7, mouseY + 3, mouseX + 9 + w, mouseY + 19, Theme.DANGER);
+            context.fill(mouseX + 8, mouseY + 4, mouseX + 8 + w, mouseY + 18, Theme.SURFACE_RAISED);
             context.text(font, trimToWidth(hoverMessage, w - 6), mouseX + 11, mouseY + 7, 0xFFFFB0B0, false);
         }
     }
@@ -1776,7 +1839,7 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
         consoleScroll = Math.clamp(consoleScroll, 0, maxScroll);
         if (lines.isEmpty()) {
             context.text(font, "m0.print(...) output, run results and script errors appear here. Ctrl+Shift+R runs the selection.",
-                    panel.x + 6, panel.y + 18, 0xFF808080, false);
+                    panel.x + 6, panel.y + 18, Theme.TEXT_DIM, false);
             return;
         }
         java.text.SimpleDateFormat time = new java.text.SimpleDateFormat("HH:mm:ss");
@@ -1784,8 +1847,8 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
             ScriptConsole.Line line = lines.get(consoleScroll + i);
             int color = switch (line.level()) {
                 case ERROR -> 0xFFFF9D9D;
-                case RESULT -> 0xFF9DFFB0;
-                case INFO -> 0xFFE0E0E0;
+                case RESULT -> Theme.SUCCESS;
+                case INFO -> Theme.TEXT;
             };
             String text = time.format(new java.util.Date(line.timeMs())) + "  " + line.text();
             context.text(font, trimToWidth(text, Math.max(40, panel.w - 12)), panel.x + 6, panel.y + 16 + i * DIAG_ROW_H + 1, color, false);
@@ -1794,23 +1857,23 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
 
     private void renderDiagnostics(GuiGraphicsExtractor context, int mouseX, int mouseY) {
         Rect panel = diagnosticsRect();
-        context.fill(panel.x, panel.y, panel.x + panel.w, panel.y + panel.h, 0xAA151515);
+        context.fill(panel.x, panel.y, panel.x + panel.w, panel.y + panel.h, Theme.SURFACE);
         String problems = problemsLabel();
         String console = consoleLabel();
         int consoleX = panel.x + 6 + font.width(problems) + 12;
-        context.text(font, problems, panel.x + 6, panel.y + 4, consoleTab ? 0xFF808080 : 0xFFFFFFFF);
-        context.text(font, console, consoleX, panel.y + 4, consoleTab ? 0xFFFFFFFF : 0xFF808080);
+        context.text(font, problems, panel.x + 6, panel.y + 4, consoleTab ? Theme.TEXT_DIM : Theme.TEXT);
+        context.text(font, console, consoleX, panel.y + 4, consoleTab ? Theme.TEXT : Theme.TEXT_DIM);
         context.fill(consoleTab ? consoleX : panel.x + 6, panel.y + 13,
-                (consoleTab ? consoleX + font.width(console) : panel.x + 6 + font.width(problems)), panel.y + 14, 0xFF4A90E2);
+                (consoleTab ? consoleX + font.width(console) : panel.x + 6 + font.width(problems)), panel.y + 14, Theme.ACCENT);
         int outputX = consoleX + font.width(console) + 14;
         if (!outputText.isBlank()) {
-            context.text(font, trimToWidth(outputText, Math.max(40, panel.x + panel.w - outputX - 6)), outputX, panel.y + 4, 0xFFC6C6C6, false);
+            context.text(font, trimToWidth(outputText, Math.max(40, panel.x + panel.w - outputX - 6)), outputX, panel.y + 4, Theme.TEXT_MUTED, false);
         }
         if (consoleTab) {
             String clear = "Clear";
             int clearX = panel.x + panel.w - font.width(clear) - 6;
             boolean hoverClear = mouseX >= clearX && mouseY >= panel.y && mouseY < panel.y + 14;
-            context.text(font, clear, clearX, panel.y + 4, hoverClear ? 0xFFFFFFFF : 0xFF9AA4B2, false);
+            context.text(font, clear, clearX, panel.y + 4, hoverClear ? Theme.TEXT : Theme.TEXT_MUTED, false);
             renderConsole(context, panel);
             return;
         }
@@ -1827,7 +1890,7 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
             Diagnostic diagnostic = diagnostics.get(idx);
             boolean hover = panel.contains(mouseX, mouseY) && mouseY >= y && mouseY < y + DIAG_ROW_H;
             if (hover) {
-                context.fill(panel.x + 1, y, panel.x + panel.w - 1, y + DIAG_ROW_H, 0x402F5C8E);
+                context.fill(panel.x + 1, y, panel.x + panel.w - 1, y + DIAG_ROW_H, Theme.ACCENT_SOFT);
             }
             int color = "ERROR".equals(diagnostic.severity) ? 0xFFFF9D9D : 0xFFE8D49E;
             context.text(font, trimToWidth(diagnostic.rowText(), Math.max(40, panel.w - 12)), panel.x + 6, y + 1, color, false);
@@ -1836,7 +1899,7 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
 
     private void renderDocs(GuiGraphicsExtractor context) {
         Rect body = docsRect();
-        context.fill(body.x, body.y, body.x + body.w, body.y + body.h, 0xAA151515);
+        context.fill(body.x, body.y, body.x + body.w, body.y + body.h, Theme.SURFACE);
         int rows = Math.max(1, (body.h - 12) / CODE_LINE_H);
         int maxScroll = Math.max(0, docsLines.size() - rows);
         docsScroll = Math.clamp(docsScroll, 0, maxScroll);
@@ -1847,7 +1910,7 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
                 break;
             }
             String line = docsLines.get(i);
-            int color = line.startsWith("[") ? 0xFF9FC8FF : 0xFFE0E0E0;
+            int color = line.startsWith("[") ? Theme.ACCENT_TEXT : Theme.TEXT;
             context.text(font, line, body.x + 8, y, color, false);
             y += CODE_LINE_H;
         }
@@ -1859,9 +1922,9 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
         int visible = Math.clamp(visibleSuggestions.size(), 1, 8);
         int maxScroll = Math.max(0, visibleSuggestions.size() - visible);
         suggestionScroll = Math.clamp(suggestionScroll, 0, maxScroll);
-        context.fill(drop.x, drop.y, drop.x + drop.w, drop.y + breadcrumbH + visible * SUGGESTION_ROW_H, 0xE0101010);
+        context.fill(drop.x, drop.y, drop.x + drop.w, drop.y + breadcrumbH + visible * SUGGESTION_ROW_H, Theme.SURFACE_RAISED);
         String breadcrumb = suggestionBreadcrumb();
-        context.text(font, breadcrumb, drop.x + 4, drop.y + 1, 0xFF9FC8FF, false);
+        context.text(font, breadcrumb, drop.x + 4, drop.y + 1, Theme.ACCENT_TEXT, false);
 
         for (int i = 0; i < visible; i++) {
             int idx = suggestionScroll + i;
@@ -1870,7 +1933,7 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
             }
             int y = drop.y + breadcrumbH + i * SUGGESTION_ROW_H;
             if (idx == suggestionSelected) {
-                context.fill(drop.x + 1, y, drop.x + drop.w - 1, y + SUGGESTION_ROW_H, 0x804A7CC7);
+                context.fill(drop.x + 1, y, drop.x + drop.w - 1, y + SUGGESTION_ROW_H, SELECTION);
             }
             boolean hover = mouseX >= drop.x && mouseX < drop.x + drop.w && mouseY >= y && mouseY < y + SUGGESTION_ROW_H;
             DisplaySuggestion ds = visibleSuggestions.get(idx);
@@ -1885,7 +1948,7 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
             if (suggestion.detail() != null && !suggestion.detail().isBlank()) {
                 label += "  : " + suggestion.detail();
             }
-            int color = hover ? 0xFFFFFFFF : suggestionKindColor(suggestion.kind());
+            int color = hover ? Theme.TEXT : suggestionKindColor(suggestion.kind());
             context.text(font, label, drop.x + 4, y + 1, color, false);
         }
     }
@@ -1940,6 +2003,7 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
                 outputText = "Rename failed: target already exists.";
                 return true;
             }
+            RECENT.rename(current, renamed);
             Buffer open = findBuffer(current);
             if (open != null) {
                 open.name = renamed;
@@ -1982,6 +2046,7 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
         }
         try {
             ScriptStorage.deleteScript(current);
+            RECENT.remove(current);
             Buffer open = findBuffer(current);
             if (open != null) {
                 pendingClose = open; // deleting is the confirmation
@@ -2675,6 +2740,7 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
         docsLines.add("- Ctrl+F find, Ctrl+H replace, Enter/Shift+Enter (or F3/Shift+F3) next/previous,");
         docsLines.add("  Alt+C match case, Alt+W whole word, Tab switches to the replace field, Ctrl+Enter replaces all");
         docsLines.add("- Ctrl+G go to line (line or line:column), Ctrl+O go to a function/class/value");
+        docsLines.add("- Ctrl+E recent files (Ctrl+E, Enter switches back to the previous file)");
         docsLines.add("- Ctrl+Left/Right move by word, Home jumps to the first character, Ctrl+Home/End to the file start/end");
         docsLines.add("- Hover a red line number to see its problem");
         docsLines.add("");
@@ -3021,7 +3087,7 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
                 if (e > s) {
                     int sx = code.x + 4 + font.width(line.substring(0, s - lineStart)) - editor.viewLeft;
                     int ex = code.x + 4 + font.width(line.substring(0, e - lineStart)) - editor.viewLeft;
-                    context.fill(sx, y, ex, y + 9, 0x704A7CC7);
+                    context.fill(sx, y, ex, y + 9, SELECTION);
                 }
                 y += CODE_LINE_H;
             }
@@ -3033,7 +3099,7 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
         int line = lineNumberOfCursor();
         int y = code.y + 3 + (line - editor.scrollLine) * CODE_LINE_H;
         if (y >= code.y && y <= code.y + code.h - CODE_LINE_H) {
-            context.fill(code.x + 1, y, code.x + code.w - 1, y + CODE_LINE_H, 0x202A4A6A);
+            context.fill(code.x + 1, y, code.x + code.w - 1, y + CODE_LINE_H, CURRENT_LINE);
         }
     }
 
@@ -3503,7 +3569,10 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
             String nextType = toTypeKey(method.getReturnType());
             String display = methodName + methodDisplaySignature(method) + " : " + shortTypeName(method.getReturnType());
             String insert = methodName + methodInsertSignature(method);
-            items.add(new CompletionItem(display, insert, nextType, SuggestionKind.METHOD, shortTypeName(method.getReturnType())));
+            String help = clazz == me.m0dii.modules.scripting.ScriptApi.class
+                    ? me.m0dii.modules.scripting.ScriptApi.describe(methodName) : "";
+            items.add(new CompletionItem(display, insert, nextType, SuggestionKind.METHOD,
+                    help.isEmpty() ? shortTypeName(method.getReturnType()) : help));
             memberTypes.putIfAbsent(methodName, nextType);
 
             if (method.getParameterCount() == 0) {
@@ -3756,7 +3825,7 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
             case PROPERTY -> 0xFFBDE8FF;
             case METHOD -> 0xFFE8D49E;
             case VARIABLE -> 0xFFD8E8FF;
-            case KEYWORD -> 0xFF9FC8FF;
+            case KEYWORD -> Theme.ACCENT_TEXT;
             case SNIPPET -> 0xFFB9F7C0;
         };
     }
@@ -4069,6 +4138,12 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
         int x = Math.clamp(p[0], PAD, width - 360);
         int y = Math.min(height - 138, p[1] + 12);
         return new Rect(x, y, 350, 110);
+    }
+
+    private void drawPrimaryButton(GuiGraphicsExtractor context, Rect rect, String label, int mouseX, int mouseY) {
+        boolean hot = rect.contains(mouseX, mouseY);
+        me.m0dii.gui.theme.ThemeDraw.box(context, rect.x, rect.y, rect.w, rect.h, hot ? Theme.ACCENT_HOVER : Theme.ACCENT);
+        me.m0dii.gui.theme.ThemeDraw.textCentered(context, font, label, rect.x, rect.y, rect.w, rect.h, Theme.TEXT);
     }
 
     private void drawButton(GuiGraphicsExtractor context, Rect rect, String label, int mouseX, int mouseY) {

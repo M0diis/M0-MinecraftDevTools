@@ -73,6 +73,10 @@ public final class MacroWorkbenchCustomWidgetTypeRenderer {
             renderRedstoneTimeline(context, textRenderer, selected, layout, mouseX, mouseY);
             return;
         }
+        if (selected.type == MacroHudDataHandler.ElementType.STATUS) {
+            renderStatus(context, textRenderer, selected, layout, mouseX, mouseY);
+            return;
+        }
         if (selected.type == MacroHudDataHandler.ElementType.STATE_BADGE) {
             renderStateBadge(context, textRenderer, selected, layout, mouseX, mouseY,
                     advancedBgColor, advancedBgSelectionAnchor, advancedBgCursor, advancedBgColorFocused,
@@ -248,6 +252,34 @@ public final class MacroWorkbenchCustomWidgetTypeRenderer {
         drawModalButton(context, textRenderer, row1.get(2), "S-", mouseX, mouseY);
         drawModalButton(context, textRenderer, row1.get(3), "S+", mouseX, mouseY);
         context.text(textRenderer, "Max lines: " + selected.maxLines + "  Scroll: " + selected.listScroll, layout.typeInfo1().x(), layout.typeInfo1().y(), 0xFFEAEAEA);
+    }
+
+    private static void renderStatus(GuiGraphicsExtractor context,
+                                     Font textRenderer,
+                                     MacroHudDataHandler.HudElement selected,
+                                     CustomWidgetAdvancedLayout layout,
+                                     int mouseX,
+                                     int mouseY) {
+        me.m0dii.modules.macros.hud.StatusFormat.Kind kind = me.m0dii.modules.macros.hud.StatusFormat.Kind.parse(selected.statusKind);
+        me.m0dii.modules.macros.hud.StatusFormat.TextMode mode = me.m0dii.modules.macros.hud.StatusFormat.TextMode.parse(selected.statusTextMode);
+        List<UiRect> row1 = layout.typeRow1();
+        List<UiRect> row2 = layout.typeRow2();
+        drawModalButton(context, textRenderer, row1.get(0), kind.label, mouseX, mouseY);
+        drawModalButton(context, textRenderer, row1.get(1), mode.label, mouseX, mouseY);
+        drawModalButton(context, textRenderer, row1.get(2), "Warn-", mouseX, mouseY);
+        drawModalButton(context, textRenderer, row1.get(3), "Warn+", mouseX, mouseY);
+        drawModalButton(context, textRenderer, row2.get(0), selected.statusHorizontal ? "Horizontal" : "Vertical", mouseX, mouseY);
+        drawModalButton(context, textRenderer, row2.get(1), "Warn color", mouseX, mouseY);
+        context.fill(row2.get(1).right() - 10, row2.get(1).y() + 4, row2.get(1).right() - 4, row2.get(1).bottom() - 4, selected.colorWarn);
+        context.text(textRenderer, "Warn at <= " + selected.statusWarnPercent + "% durability (shift = x10)",
+                layout.typeInfo1().x(), layout.typeInfo1().y(), 0xFFEAEAEA);
+        String hint = switch (kind) {
+            case ARMOR -> "Armor pieces with durability; low pieces blink.";
+            case HELD -> "Main hand and off hand items.";
+            case EFFECTS -> "Active effects with timers; hidden when none.";
+            case ALERT -> "Only appears when gear is below the warn level.";
+        };
+        context.text(textRenderer, hint, layout.typeInfo2().x(), layout.typeInfo2().y(), 0xFF98A1B3);
     }
 
     private static void renderRedstoneTimeline(GuiGraphicsExtractor context,

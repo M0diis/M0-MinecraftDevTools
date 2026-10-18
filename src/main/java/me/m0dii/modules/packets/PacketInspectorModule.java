@@ -1,19 +1,23 @@
 package me.m0dii.modules.packets;
 
 import com.mojang.blaze3d.platform.InputConstants;
+import com.mojang.brigadier.arguments.StringArgumentType;
 import me.m0dii.modules.Module;
 import me.m0dii.utils.KeybindCatalog;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommands;
+import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.network.Connection;
 import net.minecraft.network.chat.Component;
 
+import java.io.IOException;
 import java.lang.reflect.Method;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.text.SimpleDateFormat;
+import java.util.*;
 
 /**
  * Packet inspector: while on, records every packet the client sends and receives (play phase) into a ring
@@ -23,6 +27,10 @@ public class PacketInspectorModule extends Module {
     public static final PacketInspectorModule INSTANCE = new PacketInspectorModule();
     public static final PacketLog LOG = new PacketLog(5000);
     private static final int DETAIL_CHARS = 600;
+    /** Size of the packet being decoded on this network thread, read by the next incoming record. */
+    private static final ThreadLocal<int[]> DECODED_SIZE = ThreadLocal.withInitial(() -> new int[]{-1});
+    /** Outgoing packets logged but not encoded yet: packet → entry id (encoding happens on the network thread). */
+    private static final Map<Object, Long> PENDING_OUT = new IdentityHashMap<>();
 
     private PacketInspectorModule() {
         super("packet_inspector", "Packet Inspector", false);
@@ -57,6 +65,42 @@ public class PacketInspectorModule extends Module {
                             ctx.getSource().sendFeedback(Component.literal("[Packets] Cleared."));
                             return 1;
                         }))
+                        .then(ClientCommands.literal("export").executes(ctx -> {
+                            ctx.getSource().sendFeedback(Component.literal("[Packets] " + export()));
+                            return 1;
+                        }))
+                        .then(ClientCommands.literal("unpin").executes(ctx -> {
+                            LOG.pin(null);
+                            ctx.getSource().sendFeedback(Component.literal("[Packets] Unpinned."));
+                            return 1;
+                        }))
+                        .then(ClientCommands.literal("pin")
+                                .then(ClientCommands.argument("packet", StringArgumentType.word())
+                                        .suggests((ctx, builder) -> {
+                                            String typed = builder.getRemaining().toLowerCase(java.util.Locale.ROOT);
+                                            for (String name : LOG.knownNames()) {
+                                                if (name.toLowerCase(java.util.Locale.ROOT).contains(typed)) {
+                                                    builder.suggest(name);
+                                                }
+                                            }
+                                            return builder.buildFuture();
+                                        })
+                                        .executes(ctx -> {
+                                            String name = StringArgumentType.getString(ctx, "packet");
+                                            LOG.pin(name);
+                                            if (!isEnabled()) {
+                                                setEnabled(true);
+                                            }
+                                            ctx.getSource().sendFeedback(Component.literal("[Packets] Graphing " + name
+                                                    + " per second; open /packets to see it."));
+                                            return 1;
+                                        })))
+                        .then(ClientCommands.literal("stats").executes(ctx -> {
+                            for (String line : statsLines()) {
+                                ctx.getSource().sendFeedback(Component.literal("[Packets] " + line));
+                            }
+                            return 1;
+                        }))
                         .then(ClientCommands.literal("top").executes(ctx -> {
                             List<Map.Entry<String, Long>> top = LOG.topCounts(10);
                             if (top.isEmpty()) {
@@ -67,6 +111,60 @@ public class PacketInspectorModule extends Module {
                             }
                             return 1;
                         }))));
+    }
+
+    /** Writes the log (oldest first, tab separated) to config/m0-dev-tools/packet-logs/. */
+    public static String export() {
+        if (LOG.size() == 0) {
+            return "Nothing to export. Start recording with /packets start.";
+        }
+        Path dir = FabricLoader.getInstance().getConfigDir().resolve("m0-dev-tools").resolve("packet-logs");
+        Path file = dir.resolve("packets-" + new SimpleDateFormat("yyyyMMdd-HHmmss").format(new Date()) + ".tsv");
+        try {
+            Files.createDirectories(dir);
+            Files.writeString(file, LOG.export(new SimpleDateFormat("HH:mm:ss.SSS")));
+            return "Saved " + LOG.size() + " packets to config/m0-dev-tools/packet-logs/" + file.getFileName();
+        } catch (IOException e) {
+            return "Export failed: " + e.getMessage();
+        }
+    }
+
+    public static List<String> statsLines() {
+        long now = System.currentTimeMillis();
+        List<String> lines = new ArrayList<>();
+        lines.add(String.format(java.util.Locale.ROOT, "In: %s/s, %.0f packets/s · Out: %s/s, %.0f packets/s (last 10 s)",
+                PacketTraffic.bytes(LOG.bytesIn().average(now, 10)), LOG.packetsIn().average(now, 10),
+                PacketTraffic.bytes(LOG.bytesOut().average(now, 10)), LOG.packetsOut().average(now, 10)));
+        lines.add("Total: in " + PacketTraffic.bytes(LOG.bytesIn().total()) + ", out " + PacketTraffic.bytes(LOG.bytesOut().total())
+                + (LOG.bytesIn().total() == 0 ? " (sizes are only known on servers, not in singleplayer)" : ""));
+        for (Map.Entry<String, Long> entry : LOG.topBytes(5)) {
+            lines.add("  " + PacketTraffic.bytes(entry.getValue()) + "  " + entry.getKey());
+        }
+        return lines;
+    }
+
+    /** Called by the decoder mixin with the size of the packet about to be read on this thread. */
+    public static void noteDecodedSize(int bytes) {
+        if (LOG.isRecording()) {
+            DECODED_SIZE.get()[0] = bytes;
+            LOG.countBytes(PacketLog.Direction.IN, bytes, System.currentTimeMillis());
+        }
+    }
+
+    /** Called by the encoder mixin after an outgoing packet was encoded. */
+    public static void noteEncodedSize(Object packet, int bytes) {
+        if (!LOG.isRecording() || !PacketLog.nameOf(packet.getClass()).startsWith("Serverbound")) {
+            return;
+        }
+        long now = System.currentTimeMillis();
+        LOG.countBytes(PacketLog.Direction.OUT, bytes, now);
+        Long id;
+        synchronized (PENDING_OUT) {
+            id = PENDING_OUT.remove(packet);
+        }
+        if (id != null) {
+            LOG.setSize(id, PacketLog.Direction.OUT, PacketLog.nameOf(packet.getClass()), bytes, now);
+        }
     }
 
     private static void openScreen(Minecraft client) {
@@ -94,8 +192,21 @@ public class PacketInspectorModule extends Module {
                 return;
             }
             long now = System.currentTimeMillis();
-            for (Object single : unbundle(packet)) {
-                LOG.add(direction, PacketLog.nameOf(single.getClass()), PacketLog.describe(single, DETAIL_CHARS), now);
+            List<Object> parts = unbundle(packet);
+            int decoded = DECODED_SIZE.get()[0];
+            DECODED_SIZE.get()[0] = -1;
+            for (Object single : parts) {
+                // Bundles are put together after decoding, so the size belongs to a part, not the bundle.
+                int bytes = direction == PacketLog.Direction.IN && parts.size() == 1 ? decoded : -1;
+                long id = LOG.add(direction, PacketLog.nameOf(single.getClass()), PacketLog.describe(single, DETAIL_CHARS), now, bytes);
+                if (direction == PacketLog.Direction.OUT && id >= 0) {
+                    synchronized (PENDING_OUT) {
+                        if (PENDING_OUT.size() > 512) {
+                            PENDING_OUT.clear();
+                        }
+                        PENDING_OUT.put(single, id);
+                    }
+                }
             }
         } catch (RuntimeException ignored) {
             // Never let the inspector disturb networking.

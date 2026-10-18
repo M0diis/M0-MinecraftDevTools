@@ -5,7 +5,7 @@ import me.m0dii.modules.Module;
 import java.util.ArrayList;
 import java.util.List;
 
-public class MobAiVisualizerModule extends Module {
+public class MobAiVisualizerModule extends Module implements me.m0dii.modules.NumericSetting.Provider {
 
     public static final MobAiVisualizerModule INSTANCE = new MobAiVisualizerModule();
 
@@ -58,6 +58,12 @@ public class MobAiVisualizerModule extends Module {
 
     public boolean shouldRequestServerDebugData() {
         return (isEnabled() && useDebugSubscriptions) || MobAiDebugClientState.requiresServerDebugSubscriptions();
+    }
+
+    @Override
+    public List<me.m0dii.modules.NumericSetting> numericSettings() {
+        return List.of(me.m0dii.modules.NumericSetting.of(6, "Radius", 8, 256, 8, 0,
+                () -> radius, v -> radius = (int) Math.round(v), 7, 8));
     }
 
     @Override

@@ -65,6 +65,8 @@ dependencies {
 
     implementation "org.graalvm.js:js-scriptengine:25.0.3"
     implementation "org.graalvm.js:js:25.0.3"
+    // JavaScriptScriptManager uses the Polyglot API directly (it comes with GraalJS; listed so the compile classpath is explicit).
+    implementation "org.graalvm.polyglot:polyglot:25.0.3"
 
     implementation("org.jetbrains.kotlin:kotlin-scripting-jsr223:2.4.21")
     implementation("eu.jrie.jetbrains:kotlin-shell-core:0.2.1") {
@@ -105,6 +107,8 @@ loom {
 
 tasks.withType(JavaCompile).configureEach {
     it.options.release = 25
+    // Real parameter names for the script editor's completion (m0.sleep(millis) instead of m0.sleep(num1)).
+    it.options.compilerArgs.add("-parameters")
 }
 
 tasks.withType(Test).configureEach {

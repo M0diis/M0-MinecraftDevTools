@@ -189,7 +189,10 @@ public class RedstoneTimelineModule extends Module implements PersistentSettings
                 timeline.record(pos.asLong(), labelOf(state, pos), gameTime, 0);
                 continue;
             }
-            timeline.record(pos.asLong(), labelOf(state, pos), gameTime, signal);
+            boolean known = timeline.isTracked(pos.asLong());
+            if (timeline.record(pos.asLong(), labelOf(state, pos), gameTime, signal) && known) {
+                me.m0dii.modules.tickcontrol.TickControlModule.INSTANCE.onSignalChange();
+            }
         }
     }
 

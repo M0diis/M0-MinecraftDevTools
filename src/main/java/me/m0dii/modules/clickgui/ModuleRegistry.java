@@ -118,6 +118,8 @@ public class ModuleRegistry {
         safeAdd(utilities, me.m0dii.modules.redstonetimeline.RedstoneTimelineModule.INSTANCE);
         safeAdd(utilities, me.m0dii.modules.placement.PlacementRestrictionModule.INSTANCE);
         safeAdd(utilities, me.m0dii.modules.farmrate.FarmRateModule.INSTANCE);
+        safeAdd(utilities, me.m0dii.modules.tickcontrol.TickControlModule.INSTANCE);
+        safeAdd(utilities, me.m0dii.modules.chestfinder.ChestFinderModule.INSTANCE);
         categories.add(utilities);
 
         ModuleCategory movement = new ModuleCategory("Movement");
@@ -125,6 +127,7 @@ public class ModuleRegistry {
         safeAdd(movement, ZoomModule.INSTANCE);
         safeAdd(movement, WaypointModule.INSTANCE);
         safeAdd(movement, FreecamModule.INSTANCE);
+        safeAdd(movement, me.m0dii.modules.freelook.FreelookModule.INSTANCE);
         categories.add(movement);
 
         ModuleCategory chat = new ModuleCategory("Chat");

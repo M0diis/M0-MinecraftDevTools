@@ -8,7 +8,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
-public class HungerTweaksModule extends Module {
+public class HungerTweaksModule extends Module implements me.m0dii.modules.NumericSetting.Provider {
     public static final HungerTweaksModule INSTANCE = new HungerTweaksModule();
 
     private static final float DEFAULT_MAX_FLASH_ALPHA = 0.65f;
@@ -82,6 +82,13 @@ public class HungerTweaksModule extends Module {
 
     public float getMaxHudOverlayFlashAlpha() {
         return clampFlashAlpha(ModConfig.hungerTweaksMaxHudOverlayFlashAlpha);
+    }
+
+    @Override
+    public List<me.m0dii.modules.NumericSetting> numericSettings() {
+        return List.of(me.m0dii.modules.NumericSetting.of(10, "Max Flash Alpha", 0.0, 1.0, 0.05, 2,
+                () -> ModConfig.hungerTweaksMaxHudOverlayFlashAlpha,
+                v -> ModConfig.updateAndSave(() -> ModConfig.hungerTweaksMaxHudOverlayFlashAlpha = (float) v), 11, 12));
     }
 
     @Override
