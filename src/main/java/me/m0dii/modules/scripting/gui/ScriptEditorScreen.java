@@ -8,8 +8,6 @@ import me.m0dii.gui.theme.ThemedScreen;
 import me.m0dii.modules.macros.MacroPlaceholders;
 import me.m0dii.modules.scripting.*;
 import me.m0dii.modules.scripting.ide.*;
-import me.m0dii.modules.scripting.ide.ScriptNames.*;
-import me.m0dii.modules.scripting.ide.ScriptValidation.*;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.CharacterEvent;
@@ -25,7 +23,9 @@ import java.io.IOException;
 import java.util.*;
 
 import static me.m0dii.modules.scripting.ide.ScriptCompletions.*;
+import static me.m0dii.modules.scripting.ide.ScriptNames.*;
 import static me.m0dii.modules.scripting.ide.ScriptText.*;
+import static me.m0dii.modules.scripting.ide.ScriptValidation.*;
 
 public class ScriptEditorScreen extends Screen implements ThemedScreen {
     /** Editor-only colours derived from the theme accent (selection and the current line). */
