@@ -23,13 +23,10 @@ import me.m0dii.modules.macros.gui.MacroWorkbenchAdvancedLayouts.CustomWidgetAdv
 import me.m0dii.modules.macros.gui.MacroWorkbenchAdvancedLayouts.ProxyAdvancedLayout;
 import me.m0dii.modules.macros.gui.MacroWorkbenchAdvancedLayouts.SecondaryAdvancedLayout;
 import me.m0dii.modules.macros.gui.MacroWorkbenchAdvancedLayouts.StandardAdvancedLayout;
-import me.m0dii.modules.macros.gui.MacroWorkbenchExternalProxies.ExternalProxyRenderState;
+import me.m0dii.modules.macros.gui.MacroWorkbenchExternalProxies.*;
 import me.m0dii.modules.macros.gui.MacroWorkbenchModels.*;
 import me.m0dii.modules.macros.gui.MacroWorkbenchScriptHighlighter.ScriptTokenSpan;
-import me.m0dii.modules.macros.gui.MacroWorkbenchVanillaHud.VanillaHudDescriptor;
-import me.m0dii.modules.macros.gui.MacroWorkbenchVanillaHud.VanillaPlayerListMetrics;
-import me.m0dii.modules.macros.gui.MacroWorkbenchVanillaHud.VanillaSidebarEntryMetrics;
-import me.m0dii.modules.macros.gui.MacroWorkbenchVanillaHud.VanillaSidebarMetrics;
+import me.m0dii.modules.macros.gui.MacroWorkbenchVanillaHud.*;
 import me.m0dii.modules.macros.hud.HudElementUtils;
 import me.m0dii.modules.macros.hud.MacroHudDataHandler;
 import me.m0dii.modules.macros.hud.MacroInventoryWidgetSupport;

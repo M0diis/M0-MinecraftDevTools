@@ -7,14 +7,9 @@ import me.m0dii.gui.theme.Theme;
 import me.m0dii.gui.theme.ThemedScreen;
 import me.m0dii.modules.macros.MacroPlaceholders;
 import me.m0dii.modules.scripting.*;
-import me.m0dii.modules.scripting.ide.LineOps;
-import me.m0dii.modules.scripting.ide.ScriptCompletions.*;
-import me.m0dii.modules.scripting.ide.ScriptNames.Language;
-import me.m0dii.modules.scripting.ide.ScriptOutline;
-import me.m0dii.modules.scripting.ide.ScriptSyntax;
-import me.m0dii.modules.scripting.ide.ScriptValidation.Diagnostic;
-import me.m0dii.modules.scripting.ide.ScriptValidation.KotlinValidationSource;
-import me.m0dii.modules.scripting.ide.TextSearch;
+import me.m0dii.modules.scripting.ide.*;
+import me.m0dii.modules.scripting.ide.ScriptNames.*;
+import me.m0dii.modules.scripting.ide.ScriptValidation.*;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.CharacterEvent;
@@ -29,6 +24,7 @@ import javax.script.ScriptException;
 import java.io.IOException;
 import java.util.*;
 
+import static me.m0dii.modules.scripting.ide.ScriptCompletions.*;
 import static me.m0dii.modules.scripting.ide.ScriptText.*;
 
 public class ScriptEditorScreen extends Screen implements ThemedScreen {
@@ -144,7 +140,7 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
     private Object cachedStatesBuffer;
 
     private UiTab tab = UiTab.SCRIPTS;
-    private String currentScriptName = DEFAULT_SCRIPT_NAME;
+    private String currentScriptName = ScriptNames.DEFAULT_SCRIPT_NAME;
     private EditorState editor = new EditorState();
 
     private final List<String> docsLines = new ArrayList<>();
