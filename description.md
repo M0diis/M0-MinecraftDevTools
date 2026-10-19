@@ -2,7 +2,7 @@
 
 M0-Dev Tools is a client-side Fabric toolbox for Minecraft modders, builders, and technical players. It bundles overlays, HUDs, movement helpers, macros, scripting, automation, and debugging tools into one mod.
 
-**Version 2.0.0-BETA for Minecraft 26.3 (Java 25, Fabric Loader, Fabric API).**
+**Version 2.1.0-BETA for Minecraft 26.3 (Java 25, Fabric Loader, Fabric API).**
 
 **Some modules (X-Ray, Freecam, Reach, Instant Break, Entity Radar) only work when the server also has the mod installed and opts in.**
 
@@ -11,6 +11,15 @@ M0-Dev Tools is a client-side Fabric toolbox for Minecraft modders, builders, an
 This started as a personal project and I decided to release it publicly. It may contain bugs and unfinished features, and some features may not work with certain servers or other mods. Use at your own risk.
 
 Things can change with any update, and I may not be able to provide support for every issue.
+
+## What's new in 2.1.0-BETA
+
+- **New tools**: Chest Finder (`/finditem`, with a contents preview in its GUI), Freelook, Tick Controls, `/glow`, and a Status HUD element (durability, effects, durability alert).
+- **Improvements**: Redstone Timeline freeze/step, `/scanblocks`, `/math` variables and units, SNBT/NBT/component command completion, Packet Inspector bandwidth graphs and `/packets stats`, slider settings in the Module Browser, restyled script editor with recent files and better completions.
+- **Safer**: slow chat highlight rules are skipped instead of freezing the game, and config files are written atomically.
+- **Fixes**: JavaScript scripts on the shared engine, `m0.print`, typing in the SNBT editor on 26.3.
+
+See version changelog for the full list.
 
 ## What's new in 2.0.0-BETA
 

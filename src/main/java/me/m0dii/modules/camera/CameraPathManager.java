@@ -10,6 +10,7 @@ import me.m0dii.modules.macros.MacroPlaceholderProvider;
 import me.m0dii.modules.macros.MacroPlaceholders;
 import me.m0dii.render.OverlayBufferSource;
 import me.m0dii.render.OverlayRenderEvents;
+import me.m0dii.utils.ConfigFileSafety;
 import me.m0dii.utils.CustomRenderLayers;
 import me.m0dii.utils.DrawUtil;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
@@ -932,7 +933,7 @@ public final class CameraPathManager {
 
         try {
             Files.createDirectories(SAVE_PATH.getParent());
-            Files.writeString(SAVE_PATH, GSON.toJson(root));
+            ConfigFileSafety.writeAtomically(SAVE_PATH, GSON.toJson(root));
         } catch (Exception ignored) {
         }
     }

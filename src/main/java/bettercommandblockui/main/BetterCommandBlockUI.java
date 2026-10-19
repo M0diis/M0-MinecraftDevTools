@@ -2,6 +2,7 @@ package bettercommandblockui.main;
 
 import bettercommandblockui.main.config.SimpleConfig;
 import com.mojang.blaze3d.platform.InputConstants;
+import me.m0dii.M0DevTools;
 import me.m0dii.utils.KeybindManager;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
@@ -187,11 +188,11 @@ public class BetterCommandBlockUI implements ClientModInitializer {
         });
 
         if (CONFIG.isBroken()) {
-            System.out.println("[BCBUI] Config found to be corrupted or outdated, resetting...");
+            M0DevTools.LOGGER.warn("[BCBUI] Config found to be corrupted or outdated, resetting...");
             CONFIG.reconstructFile();
         }
 
-        System.out.println("[BCBUI] Initialized.");
+        M0DevTools.LOGGER.info("[BCBUI] Initialized.");
     }
 
     public static void setConfig(String key, String value) {

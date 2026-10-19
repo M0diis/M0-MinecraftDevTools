@@ -7,6 +7,7 @@ import me.m0dii.modules.highlights.BlockHighlights;
 import me.m0dii.modules.nbttooltip.ShulkerTooltipModule;
 import me.m0dii.modules.utilitycommands.ScanPointer;
 import me.m0dii.modules.waypoints.WaypointHandler;
+import me.m0dii.utils.ConfigFileSafety;
 import me.m0dii.utils.KeybindCatalog;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommands;
@@ -326,7 +327,7 @@ public class ChestFinderModule extends Module {
         }
         try {
             Files.createDirectories(DIR);
-            Files.writeString(file(loadedWorld), memory.toJson());
+            ConfigFileSafety.writeAtomically(file(loadedWorld), memory.toJson());
             dirty = false;
             lastSaveMs = System.currentTimeMillis();
         } catch (IOException | RuntimeException ignored) {

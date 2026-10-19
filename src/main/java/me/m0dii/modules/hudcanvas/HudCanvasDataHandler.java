@@ -3,6 +3,7 @@ package me.m0dii.modules.hudcanvas;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import me.m0dii.M0DevTools;
+import me.m0dii.utils.ConfigFileSafety;
 import net.fabricmc.loader.api.FabricLoader;
 import org.jetbrains.annotations.NotNull;
 
@@ -99,7 +100,7 @@ public final class HudCanvasDataHandler {
     public static synchronized void save() {
         ensureLoaded();
         try {
-            Files.writeString(CONFIG_FILE, GSON.toJson(sanitize(config)));
+            ConfigFileSafety.writeAtomically(CONFIG_FILE, GSON.toJson(sanitize(config)));
         } catch (IOException e) {
             M0DevTools.LOGGER.error("Failed to save HUD canvas config: {}", e.getMessage());
         }

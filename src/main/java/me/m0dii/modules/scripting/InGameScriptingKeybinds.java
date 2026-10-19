@@ -6,6 +6,7 @@ import com.mojang.blaze3d.platform.InputConstants;
 import me.m0dii.M0DevTools;
 import me.m0dii.M0DevToolsClient;
 import me.m0dii.modules.scripting.gui.ScriptEditorScreen;
+import me.m0dii.utils.ConfigFileSafety;
 import me.m0dii.utils.KeybindCatalog;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
@@ -135,7 +136,7 @@ public class InGameScriptingKeybinds {
             JsonObject root = new JsonObject();
             root.addProperty("formatVersion", ScriptKeybindsFormat.FORMAT_VERSION);
             root.add("keybinds", GSON.toJsonTree(scriptKeybinds));
-            Files.writeString(KEYBINDS_FILE, GSON.toJson(root));
+            ConfigFileSafety.writeAtomically(KEYBINDS_FILE, GSON.toJson(root));
         } catch (IOException ignored) {
             // failed to save keybinds; ignore
         }

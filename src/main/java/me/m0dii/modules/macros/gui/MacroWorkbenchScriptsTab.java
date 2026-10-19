@@ -13,6 +13,7 @@ import me.m0dii.modules.automation.AutomationRule;
 import me.m0dii.modules.scripting.*;
 import me.m0dii.modules.scripting.gui.ScriptEditorScreen;
 import me.m0dii.modules.scripting.ide.ScriptInfo;
+import me.m0dii.modules.scripting.ide.ScriptNames;
 import me.m0dii.modules.scripting.ide.ScriptSyntax;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
@@ -258,7 +259,7 @@ final class MacroWorkbenchScriptsTab {
             name = base + "_" + i++ + ext;
         }
         try {
-            ScriptStorage.writeScript(name, ScriptEditorScreen.newScriptTemplate(name));
+            ScriptStorage.writeScript(name, ScriptNames.newScriptTemplate(name));
         } catch (IOException e) {
             this.status = "Could not create the script: " + e.getMessage();
             return;

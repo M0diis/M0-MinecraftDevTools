@@ -9,6 +9,7 @@ import com.mojang.brigadier.ParseResults;
 import com.mojang.brigadier.context.CommandContextBuilder;
 import com.mojang.brigadier.context.ParsedArgument;
 import lombok.Getter;
+import me.m0dii.M0DevTools;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
@@ -71,10 +72,7 @@ public class MultiLineCommandSuggestor extends CommandSuggestions {
                 window.setRect(area);
             }
         } catch (Exception e) {
-            System.out.println("[MLCS::refreshRenderPos] Error:");
-            for (StackTraceElement el : e.getStackTrace()) {
-                System.out.println(el);
-            }
+            M0DevTools.LOGGER.error("[MLCS::refreshRenderPos] Could not reposition the suggestion window", e);
         }
     }
 

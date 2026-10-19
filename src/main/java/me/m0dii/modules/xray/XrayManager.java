@@ -7,6 +7,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.reflect.TypeToken;
 import lombok.Getter;
 import me.m0dii.M0DevTools;
+import me.m0dii.utils.ConfigFileSafety;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.resources.Identifier;
 import java.io.IOException;
@@ -153,7 +154,7 @@ public final class XrayManager {
             JsonObject root = new JsonObject();
             root.addProperty("displayRange", displayRange);
             root.add("blocks", GSON.toJsonTree(xrayBlocks));
-            Files.writeString(CONFIG_FILE, GSON.toJson(root));
+            ConfigFileSafety.writeAtomically(CONFIG_FILE, GSON.toJson(root));
         } catch (IOException e) {
             M0DevTools.LOGGER.error("Failed to save xray blocks: {}", e.getMessage());
         }

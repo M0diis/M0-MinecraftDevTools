@@ -3,11 +3,12 @@ package me.m0dii.modules.debugdraw;
 import com.google.gson.*;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import me.m0dii.M0DevToolsClient;
+import me.m0dii.render.OverlayBufferSource;
+import me.m0dii.render.OverlayRenderEvents;
+import me.m0dii.utils.ConfigFileSafety;
 import me.m0dii.utils.CustomRenderLayers;
 import me.m0dii.utils.DrawUtil;
-import me.m0dii.render.OverlayRenderEvents;
 import net.minecraft.client.Minecraft;
-import me.m0dii.render.OverlayBufferSource;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -18,6 +19,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
+
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -410,7 +412,7 @@ public final class DebugDrawManager {
         }
         try {
             Files.createDirectories(SELECTION_SAVE_PATH.getParent());
-            Files.writeString(SELECTION_SAVE_PATH, GSON.toJson(json));
+            ConfigFileSafety.writeAtomically(SELECTION_SAVE_PATH, GSON.toJson(json));
             return true;
         } catch (Exception ignored) {
             return false;
@@ -690,7 +692,7 @@ public final class DebugDrawManager {
         }
         try {
             Files.createDirectories(SAVE_PATH.getParent());
-            Files.writeString(SAVE_PATH, GSON.toJson(array));
+            ConfigFileSafety.writeAtomically(SAVE_PATH, GSON.toJson(array));
             return array.size();
         } catch (Exception ignored) {
             return -1;

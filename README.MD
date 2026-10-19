@@ -41,7 +41,8 @@ M0-Dev Tools is a client-side Fabric toolbox for Minecraft modders, builders, an
 - Mixins:
   - `src/main/resources/m0dev.mixins.json`
   - `src/main/resources/bettercommandblockui.mixins.json`
-- Module packages are documented in `docs/module-catalog.md`.
+- Module packages are documented in `docs/module-catalog.md`
+
 ## Installation
 1. Download the latest release from GitHub Releases or build from source.
 2. Place the mod JAR in your Minecraft `mods` folder.

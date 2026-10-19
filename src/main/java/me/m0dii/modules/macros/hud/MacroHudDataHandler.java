@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import me.m0dii.M0DevTools;
 import me.m0dii.modules.macros.MacroPlaceholderCatalog;
+import me.m0dii.utils.ConfigFileSafety;
 import net.fabricmc.loader.api.FabricLoader;
 import org.jetbrains.annotations.NotNull;
 
@@ -224,7 +225,7 @@ public final class MacroHudDataHandler {
 
     public static void save() {
         try {
-            Files.writeString(CONFIG_FILE, GSON.toJson(sanitize(config)));
+            ConfigFileSafety.writeAtomically(CONFIG_FILE, GSON.toJson(sanitize(config)));
         } catch (IOException e) {
             M0DevTools.LOGGER.error("Failed to save macro HUD config: {}", e.getMessage());
         }

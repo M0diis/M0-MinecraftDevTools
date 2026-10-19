@@ -1,5 +1,6 @@
 package me.m0dii.modules.scripting;
 
+import me.m0dii.utils.ConfigFileSafety;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -58,7 +59,7 @@ public final class ScriptStorage {
     public static void writeScript(@NotNull String name, @Nullable String content) throws IOException {
         ensureDir();
         Path file = SCRIPTS_DIR.resolve(name);
-        Files.writeString(file, content);
+        ConfigFileSafety.writeAtomically(file, content);
     }
 
     public static boolean deleteScript(@NotNull String name) throws IOException {

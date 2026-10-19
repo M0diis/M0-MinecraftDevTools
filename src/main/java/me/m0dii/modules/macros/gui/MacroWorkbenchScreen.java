@@ -23,6 +23,13 @@ import me.m0dii.modules.macros.gui.MacroWorkbenchAdvancedLayouts.CustomWidgetAdv
 import me.m0dii.modules.macros.gui.MacroWorkbenchAdvancedLayouts.ProxyAdvancedLayout;
 import me.m0dii.modules.macros.gui.MacroWorkbenchAdvancedLayouts.SecondaryAdvancedLayout;
 import me.m0dii.modules.macros.gui.MacroWorkbenchAdvancedLayouts.StandardAdvancedLayout;
+import me.m0dii.modules.macros.gui.MacroWorkbenchExternalProxies.ExternalProxyRenderState;
+import me.m0dii.modules.macros.gui.MacroWorkbenchModels.*;
+import me.m0dii.modules.macros.gui.MacroWorkbenchScriptHighlighter.ScriptTokenSpan;
+import me.m0dii.modules.macros.gui.MacroWorkbenchVanillaHud.VanillaHudDescriptor;
+import me.m0dii.modules.macros.gui.MacroWorkbenchVanillaHud.VanillaPlayerListMetrics;
+import me.m0dii.modules.macros.gui.MacroWorkbenchVanillaHud.VanillaSidebarEntryMetrics;
+import me.m0dii.modules.macros.gui.MacroWorkbenchVanillaHud.VanillaSidebarMetrics;
 import me.m0dii.modules.macros.hud.HudElementUtils;
 import me.m0dii.modules.macros.hud.MacroHudDataHandler;
 import me.m0dii.modules.macros.hud.MacroInventoryWidgetSupport;
@@ -60,6 +67,8 @@ import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.IntConsumer;
 
+import static me.m0dii.modules.macros.gui.MacroWorkbenchScriptHighlighter.tokenizeButtonScriptLine;
+
 public class MacroWorkbenchScreen extends Screen implements ThemedScreen {
 
     public enum Tab {
@@ -92,24 +101,9 @@ public class MacroWorkbenchScreen extends Screen implements ThemedScreen {
     /** Height of the page header (title, subtitle and Save/Done) on non-canvas tabs. */
     static final int HEADER_H = 34;
 
-    private enum CanvasMode {
-        CUSTOM,
-        VANILLA
-    }
-
-    private enum VanillaPreviewMode {
-        VIRTUAL,
-        ACTUAL
-    }
-
     private static final int CANVAS_CONTENT_TOP = 0;
     private static final int MODAL_W = 620;
     private static final int MODAL_H = 420;
-    private static final String EXTERNAL_NBT_INSPECTOR_ID = "__ext_nbt_inspector";
-    private static final String EXTERNAL_SECONDARY_CHAT_ID = "__ext_secondary_chat";
-    private static final String EXTERNAL_MACRO_KEYBINDS_ID = "__ext_macro_keybinds";
-    private static final String EXTERNAL_PICKUP_NOTIFIER_ID = "__ext_pickup_notifier";
-    private static final String VANILLA_HUD_PROXY_PREFIX = "__vanilla_hud_";
     private static final Identifier HUD_HOTBAR_TEXTURE = Identifier.withDefaultNamespace("hud/hotbar");
     private static final Identifier HUD_HOTBAR_SELECTION_TEXTURE = Identifier.withDefaultNamespace("hud/hotbar_selection");
     private static final Identifier HUD_CROSSHAIR_TEXTURE = Identifier.withDefaultNamespace("hud/crosshair");
@@ -132,11 +126,6 @@ public class MacroWorkbenchScreen extends Screen implements ThemedScreen {
             0xCC2A2A2A, 0xCC4A2A2A, 0xCC2A4A2A, 0xCC2A2A4A, 0xCC808080,
             0xFFFFFFFF, 0xFFFFAA00, 0xFFFF5555, 0xFF55FF55, 0xFF55FFFF, 0xFF5555FF
     };
-    private static final Set<String> SCRIPT_HIGHLIGHT_KEYWORDS = Set.of(
-            "def", "class", "if", "else", "for", "while", "return", "import", "new",
-            "true", "false", "null", "fun", "val", "var", "object", "when",
-            "try", "catch", "finally", "throw", "in", "as", "is"
-    );
 
     private final Screen parent;
     private Tab tab;
@@ -324,26 +313,6 @@ public class MacroWorkbenchScreen extends Screen implements ThemedScreen {
     private int advancedModalDragOffsetY = 0;
     private Integer advancedModalPosX = null;
     private Integer advancedModalPosY = null;
-
-    private record KeyCell(int keyCode, String label, int x, int y, int w, int h) {
-    }
-
-    private record ElementSnapshot(String id, int x, int y, int width, int height) {
-    }
-
-    private enum ModalDragSelectionField {
-        NONE,
-        ADVANCED_TEXT,
-        ADVANCED_ACTION,
-        ADVANCED_BG,
-        ADVANCED_BORDER,
-        KB_COMMANDS
-    }
-
-    private enum ExternalProxyRenderState {
-        ACTIVE,
-        MODULE_DISABLED
-    }
 
     public MacroWorkbenchScreen(Screen parent, Tab initialTab) {
         super(Component.literal("Macro Workbench"));
@@ -959,19 +928,6 @@ public class MacroWorkbenchScreen extends Screen implements ThemedScreen {
         renderCanvasChrome(context, mouseX, mouseY);
     }
 
-    private record ToolbarLabel(String text, int x, int y, int width) {
-    }
-
-    private record ToolbarItem(AbstractWidget widget, int width, String label) {
-        static ToolbarItem of(AbstractWidget widget, int width) {
-            return new ToolbarItem(widget, width, null);
-        }
-
-        static ToolbarItem text(String label, int width) {
-            return new ToolbarItem(null, width, label);
-        }
-    }
-
     private static final int CANVAS_MARGIN = 6;
     private static final int CANVAS_BAR_PAD = 4;
 
@@ -1274,7 +1230,6 @@ public class MacroWorkbenchScreen extends Screen implements ThemedScreen {
         this.configurationTabController.initWidgets();
     }
 
-
     private void syncConfigurationControls() {
         if (this.configurationTabController != null) {
             this.configurationTabController.syncControls();
@@ -1298,7 +1253,6 @@ public class MacroWorkbenchScreen extends Screen implements ThemedScreen {
             this.automationTabController.extractRenderState(context, mouseX, mouseY);
         }
     }
-
 
     private int getHistoryVisibleLines() {
         return listVisibleRows();
@@ -1490,10 +1444,10 @@ public class MacroWorkbenchScreen extends Screen implements ThemedScreen {
         drawLegendChip(context, legendX, legendY, Theme.ACCENT, "Selected");
 
         for (KeyCell cell : cells) {
-            boolean macroBound = macroBindingIds.containsKey(cell.keyCode);
-            boolean gameBound = showGameKeybinds && gameBindingNames.containsKey(cell.keyCode);
-            boolean selectedCell = cell.keyCode == selectedKey;
-            boolean hovered = containsBox(mouseX, mouseY, cell.x, cell.y, cell.w, cell.h);
+            boolean macroBound = macroBindingIds.containsKey(cell.keyCode());
+            boolean gameBound = showGameKeybinds && gameBindingNames.containsKey(cell.keyCode());
+            boolean selectedCell = cell.keyCode() == selectedKey;
+            boolean hovered = containsBox(mouseX, mouseY, cell.x(), cell.y(), cell.w(), cell.h());
 
             int bg = hovered ? Theme.SURFACE_HOVER : Theme.SURFACE_RAISED;
             int border = Theme.BORDER;
@@ -1513,9 +1467,9 @@ public class MacroWorkbenchScreen extends Screen implements ThemedScreen {
                 border = Theme.ACCENT;
                 text = Theme.TEXT;
             }
-            ThemeDraw.box(context, cell.x, cell.y, cell.w, cell.h, bg);
-            ThemeDraw.outline(context, cell.x, cell.y, cell.w, cell.h, border);
-            ThemeDraw.textCenteredScaled(context, this.font, cell.label, cell.x, cell.y, cell.w, cell.h, text);
+            ThemeDraw.box(context, cell.x(), cell.y(), cell.w(), cell.h(), bg);
+            ThemeDraw.outline(context, cell.x(), cell.y(), cell.w(), cell.h(), border);
+            ThemeDraw.textCenteredScaled(context, this.font, cell.label(), cell.x(), cell.y(), cell.w(), cell.h(), text);
         }
 
         ThemeDraw.card(context, kb.cardX(), kb.cardY(), kb.cardW(), kb.cardH());
@@ -2026,14 +1980,14 @@ public class MacroWorkbenchScreen extends Screen implements ThemedScreen {
 
     private boolean onKeyboardClick(double x, double y) {
         for (KeyCell cell : cells) {
-            if (x >= cell.x && x <= cell.x + cell.w && y >= cell.y && y <= cell.y + cell.h) {
-                List<String> ids = macroBindingIds.getOrDefault(cell.keyCode, List.of());
-                if (cell.keyCode == selectedKey && !ids.isEmpty()) {
+            if (x >= cell.x() && x <= cell.x() + cell.w() && y >= cell.y() && y <= cell.y() + cell.h()) {
+                List<String> ids = macroBindingIds.getOrDefault(cell.keyCode(), List.of());
+                if (cell.keyCode() == selectedKey && !ids.isEmpty()) {
                     // Clicking the selected key again cycles through its macros.
                     int next = (ids.indexOf(selectedMacroId) + 1) % ids.size();
                     selectedMacroId = ids.get(next);
                 } else {
-                    selectedKey = cell.keyCode;
+                    selectedKey = cell.keyCode();
                     selectedMacroId = ids.isEmpty() ? null : ids.get(0);
                 }
                 syncKeyboardFields();
@@ -4226,7 +4180,6 @@ public class MacroWorkbenchScreen extends Screen implements ThemedScreen {
             context.fill(cx, layout.borderHex().y() + 4, cx + 1, layout.borderHex().y() + 13, 0xFFFFFFFF);
         }
 
-
         drawModalButton(context, layout.apply().x(), layout.apply().y(), layout.apply().width(), layout.apply().height(), "Apply", layout.apply().contains(mouseX, mouseY));
         drawModalButton(context, layout.cancel().x(), layout.cancel().y(), layout.cancel().width(), layout.cancel().height(), "Cancel", layout.cancel().contains(mouseX, mouseY));
     }
@@ -4330,7 +4283,6 @@ public class MacroWorkbenchScreen extends Screen implements ThemedScreen {
         }
         return row.get(index);
     }
-
 
     private void renderCustomWidgetAdvancedModal(GuiGraphicsExtractor context, int mouseX, int mouseY, int boxX, int boxY) {
         if (selected == null) {
@@ -4762,7 +4714,6 @@ public class MacroWorkbenchScreen extends Screen implements ThemedScreen {
     private double stepDouble(double base) {
         return base * (isShiftDown() ? 10.0 : 1.0);
     }
-
 
     private List<String> advancedActionSuggestions() {
         return MacroWorkbenchActionSuggestions.forAction(selected, advancedAction);
@@ -6236,13 +6187,6 @@ public class MacroWorkbenchScreen extends Screen implements ThemedScreen {
     private static final int KEY_GAME_BORDER = 0xFF4C7BD9;
     private static final int KEY_GAME_TEXT = 0xFF9CB8F0;
 
-    /** Geometry of the keyboard tab: keyboard area plus an inspector card (right when wide, below when narrow). */
-    private record KbLayout(boolean wide, int kbX, int kbY, int kbW, int kbH,
-                            int cardX, int cardY, int cardW, int cardH, int listTop, int listBottom,
-                            UiRect game, UiRect name, UiRect commands, UiRect edit, UiRect delay,
-                            UiRect save, UiRect add, UiRect delete) {
-    }
-
     private KbLayout keyboardLayout() {
         int left = contentLeft();
         int top = contentTop();
@@ -6474,25 +6418,25 @@ public class MacroWorkbenchScreen extends Screen implements ThemedScreen {
                 EXTERNAL_SECONDARY_CHAT_ID,
                 HudCanvasDataHandler.ELEMENT_SECONDARY_CHAT,
                 "Secondary Chat",
-                this::defaultSecondaryChatCanvas
+                MacroWorkbenchExternalProxies::defaultSecondaryChatCanvas
         );
         syncExternalProxy(
                 EXTERNAL_NBT_INSPECTOR_ID,
                 HudCanvasDataHandler.ELEMENT_NBT_INSPECTOR,
                 "NBT Inspector",
-                this::defaultNbtInspectorCanvas
+                MacroWorkbenchExternalProxies::defaultNbtInspectorCanvas
         );
         syncExternalProxy(
                 EXTERNAL_MACRO_KEYBINDS_ID,
                 HudCanvasDataHandler.ELEMENT_MACRO_KEYBINDS,
                 "Macro Keybinds",
-                this::defaultMacroKeybindsCanvas
+                MacroWorkbenchExternalProxies::defaultMacroKeybindsCanvas
         );
         syncExternalProxy(
                 EXTERNAL_PICKUP_NOTIFIER_ID,
                 HudCanvasDataHandler.ELEMENT_PICKUP_NOTIFIER,
                 "Pick-up Notifier",
-                this::defaultPickupNotifierCanvas
+                MacroWorkbenchExternalProxies::defaultPickupNotifierCanvas
         );
     }
 
@@ -6565,22 +6509,6 @@ public class MacroWorkbenchScreen extends Screen implements ThemedScreen {
         return null;
     }
 
-    private HudTweaksSettings.ElementType vanillaHudElementType(MacroHudDataHandler.HudElement element) {
-        if (element == null || element.id == null || !element.id.startsWith(VANILLA_HUD_PROXY_PREFIX)) {
-            return null;
-        }
-        String raw = element.id.substring(VANILLA_HUD_PROXY_PREFIX.length());
-        try {
-            return HudTweaksSettings.ElementType.valueOf(raw);
-        } catch (IllegalArgumentException ignored) {
-            return null;
-        }
-    }
-
-    private String vanillaHudProxyId(HudTweaksSettings.ElementType type) {
-        return VANILLA_HUD_PROXY_PREFIX + type.name();
-    }
-
     private MacroHudDataHandler.HudElement buildVanillaHudProxy(HudTweaksSettings.ElementType type,
                                                                 HudTweaksSettings.ElementConfig config) {
         MacroHudDataHandler.HudElement proxy = MacroHudDataHandler.createElement(MacroHudDataHandler.ElementType.TEXT);
@@ -6602,19 +6530,6 @@ public class MacroWorkbenchScreen extends Screen implements ThemedScreen {
         proxy.text = vanillaPreviewText(type, config);
         normalizeVanillaProxyForCanvas(type, proxy, config);
         return proxy;
-    }
-
-    private HudTweaksSettings.ElementConfig copyHudTweaksConfig(HudTweaksSettings.ElementConfig source) {
-        HudTweaksSettings.ElementConfig copy = new HudTweaksSettings.ElementConfig();
-        if (source == null) {
-            return copy;
-        }
-        copy.display = source.display;
-        copy.scale = Math.clamp(source.scale, HudTweaksSettings.MIN_SCALE, HudTweaksSettings.MAX_SCALE);
-        copy.opacity = Math.clamp(source.opacity, 0.0f, 1.0f);
-        copy.offsetX = Math.clamp(source.offsetX, -500, 500);
-        copy.offsetY = Math.clamp(source.offsetY, -500, 500);
-        return copy;
     }
 
     private void normalizeVanillaProxyForCanvas(HudTweaksSettings.ElementType type,
@@ -6661,38 +6576,6 @@ public class MacroWorkbenchScreen extends Screen implements ThemedScreen {
         proxy.text = vanillaPreviewText(type, config);
     }
 
-    private record VanillaHudDescriptor(String label,
-                                        int baseWidth,
-                                        int baseHeight,
-                                        int baseZ) {
-    }
-
-    private record VanillaPlayerListMetrics(int left, int top, int width, int height, int renderWidth) {
-    }
-
-    private record VanillaSidebarMetrics(int left, int top, int width, int height) {
-    }
-
-    private record VanillaSidebarEntryMetrics(Component name, int scoreWidth) {
-    }
-
-    private VanillaHudDescriptor vanillaHudDescriptor(HudTweaksSettings.ElementType type) {
-        return switch (type) {
-            case ACTION_BAR -> new VanillaHudDescriptor("Action Bar", 182, 20, 20);
-            case BOSS_BAR -> new VanillaHudDescriptor("Boss Bar", 182, 20, 30);
-            case CROSSHAIR -> new VanillaHudDescriptor("Crosshair", 15, 15, 50);
-            case DEBUG_SCREEN -> new VanillaHudDescriptor("Debug Screen", 220, 120, 60);
-            case HOTBAR_GROUP -> new VanillaHudDescriptor("Hotbar Group", 182, 39, 10);
-            case PLAYER_LIST -> new VanillaHudDescriptor("Player List", 240, 140, 40);
-            case SCOREBOARD -> new VanillaHudDescriptor("Scoreboard", 140, 90, 35);
-            case SCREEN_TITLE -> new VanillaHudDescriptor("Screen Title", 240, 68, 25);
-            case STATUS_EFFECT -> new VanillaHudDescriptor("Status Effect", 120, 72, 45);
-            case SUBTITLES -> new VanillaHudDescriptor("Subtitles", 180, 48, 15);
-            case TOAST -> new VanillaHudDescriptor("Toast", 160, 32, 55);
-            case TOOLTIP -> new VanillaHudDescriptor("Tooltip", 160, 40, 65);
-        };
-    }
-
     private String vanillaPreviewLabel(HudTweaksSettings.ElementType type) {
         return vanillaHudDescriptor(type).label();
     }
@@ -6726,10 +6609,6 @@ public class MacroWorkbenchScreen extends Screen implements ThemedScreen {
 
     private int vanillaScaledHeight(HudTweaksSettings.ElementType type, float scale) {
         return Math.max(12, Math.round(vanillaBaseHeight(type) * Math.clamp(scale, HudTweaksSettings.MIN_SCALE, HudTweaksSettings.MAX_SCALE)));
-    }
-
-    private int vanillaScaledOffset(int value, float scale) {
-        return Math.round(value * Math.clamp(scale, HudTweaksSettings.MIN_SCALE, HudTweaksSettings.MAX_SCALE));
     }
 
     private int defaultVanillaElementX(HudTweaksSettings.ElementType type, float scale) {
@@ -6894,15 +6773,6 @@ public class MacroWorkbenchScreen extends Screen implements ThemedScreen {
         refreshVanillaProxyPreview(proxy);
     }
 
-    private void applyVanillaProxyStyle(MacroHudDataHandler.HudElement proxy, HudTweaksSettings.ElementConfig config) {
-        if (proxy == null || config == null) {
-            return;
-        }
-        proxy.backgroundColor = config.display ? 0x5A101820 : 0x44303030;
-        proxy.borderColor = config.display ? 0xFFFFFFFF : 0xFF888888;
-        proxy.textColor = config.display ? 0xFFFFFFFF : 0xFFB8B8B8;
-    }
-
     private void persistExternalCanvasElements() {
         boolean changed = false;
         for (MacroHudDataHandler.HudElement element : this.working.elements) {
@@ -6920,99 +6790,6 @@ public class MacroWorkbenchScreen extends Screen implements ThemedScreen {
 
     private boolean isExternalCanvasProxy(MacroHudDataHandler.HudElement element) {
         return isSecondaryChatProxy(element) || isNbtInspectorProxy(element) || isMacroKeybindProxy(element) || isPickupNotifierProxy(element);
-    }
-
-    private boolean isSecondaryChatProxy(MacroHudDataHandler.HudElement element) {
-        return element != null && EXTERNAL_SECONDARY_CHAT_ID.equals(element.id);
-    }
-
-    private boolean isNbtInspectorProxy(MacroHudDataHandler.HudElement element) {
-        return element != null && EXTERNAL_NBT_INSPECTOR_ID.equals(element.id);
-    }
-
-    private boolean isMacroKeybindProxy(MacroHudDataHandler.HudElement element) {
-        return element != null && EXTERNAL_MACRO_KEYBINDS_ID.equals(element.id);
-    }
-
-    private boolean isPickupNotifierProxy(MacroHudDataHandler.HudElement element) {
-        return element != null && EXTERNAL_PICKUP_NOTIFIER_ID.equals(element.id);
-    }
-
-    private HudCanvasDataHandler.HudCanvasElement defaultSecondaryChatCanvas() {
-        HudCanvasDataHandler.HudCanvasElement e = new HudCanvasDataHandler.HudCanvasElement();
-        e.x = 8;
-        e.y = 40;
-        e.width = 260;
-        e.height = 120;
-        e.fontScale = 0.85f;
-        e.lineHeight = 9;
-        e.padding = 4;
-        e.backgroundColor = 0x88000000;
-        e.textColor = 0xFFE0E0E0;
-        e.borderColor = 0xFFFFFFFF;
-        e.drawBackground = true;
-        e.drawBorder = false;
-        e.visible = true;
-        return e;
-    }
-
-    private HudCanvasDataHandler.HudCanvasElement defaultNbtInspectorCanvas() {
-        HudCanvasDataHandler.HudCanvasElement e = new HudCanvasDataHandler.HudCanvasElement();
-        e.x = 8;
-        e.y = 8;
-        e.width = 260;
-        e.height = 120;
-        e.fontScale = 1.0f;
-        e.lineHeight = 9;
-        e.padding = 4;
-        e.backgroundColor = 0x88000000;
-        e.textColor = 0xFFE0E0E0;
-        e.borderColor = 0xFFFFFFFF;
-        e.drawBackground = true;
-        e.drawBorder = false;
-        e.visible = true;
-        e.anchor = HudCanvasDataHandler.HudCanvasElement.Anchor.TOP_LEFT;
-        return e;
-    }
-
-    private HudCanvasDataHandler.HudCanvasElement defaultMacroKeybindsCanvas() {
-        HudCanvasDataHandler.HudCanvasElement e = new HudCanvasDataHandler.HudCanvasElement();
-        e.x = 12;
-        e.y = 12;
-        e.width = 240;
-        e.height = 120;
-        e.fontScale = 0.85f;
-        e.lineHeight = 9;
-        e.padding = 4;
-        e.backgroundColor = 0x88000000;
-        e.textColor = 0xFFE0E0E0;
-        e.borderColor = 0xFFFFFFFF;
-        e.drawBackground = true;
-        e.drawBorder = false;
-        e.visible = true;
-        e.anchor = HudCanvasDataHandler.HudCanvasElement.Anchor.TOP_RIGHT;
-        return e;
-    }
-
-    private HudCanvasDataHandler.HudCanvasElement defaultPickupNotifierCanvas() {
-        HudCanvasDataHandler.HudCanvasElement e = new HudCanvasDataHandler.HudCanvasElement();
-        e.x = 12;
-        e.y = 12;
-        e.width = 220;
-        e.height = 110;
-        e.fontScale = 1.0f;
-        e.lineHeight = 18;
-        e.padding = 4;
-        e.backgroundColor = 0x88000000;
-        e.textColor = 0xFFFFFFFF;
-        e.borderColor = 0xFFFFFFFF;
-        e.drawBackground = true;
-        e.drawBorder = false;
-        e.visible = true;
-        e.anchor = HudCanvasDataHandler.HudCanvasElement.Anchor.BOTTOM_RIGHT;
-        e.horizontalAlign = HudCanvasDataHandler.HudCanvasElement.HorizontalAlign.LEFT;
-        e.verticalAlign = HudCanvasDataHandler.HudCanvasElement.VerticalAlign.BOTTOM;
-        return e;
     }
 
     private void syncExternalProxy(String proxyId,
@@ -7044,91 +6821,17 @@ public class MacroWorkbenchScreen extends Screen implements ThemedScreen {
         clampProxyToCanvas(proxy);
     }
 
-    private void applyExternalCanvasToProxy(HudCanvasDataHandler.HudCanvasElement external, MacroHudDataHandler.HudElement proxy) {
-        proxy.visible = external.visible;
-        proxy.x = external.x;
-        proxy.y = external.y;
-        proxy.width = external.width;
-        proxy.height = external.height;
-        proxy.lineHeight = external.lineHeight;
-        proxy.fontScale = external.fontScale;
-        proxy.zIndex = external.zIndex;
-        proxy.backgroundColor = external.backgroundColor;
-        proxy.textColor = external.textColor;
-        proxy.borderColor = external.borderColor;
-        proxy.drawBackground = external.drawBackground;
-        proxy.drawBorder = external.drawBorder;
-        proxy.anchor = switch (external.anchor) {
-            case TOP_CENTER -> MacroHudDataHandler.Anchor.TOP_CENTER;
-            case TOP_RIGHT -> MacroHudDataHandler.Anchor.TOP_RIGHT;
-            case MIDDLE_LEFT -> MacroHudDataHandler.Anchor.MIDDLE_LEFT;
-            case MIDDLE_CENTER -> MacroHudDataHandler.Anchor.MIDDLE_CENTER;
-            case MIDDLE_RIGHT -> MacroHudDataHandler.Anchor.MIDDLE_RIGHT;
-            case BOTTOM_LEFT -> MacroHudDataHandler.Anchor.BOTTOM_LEFT;
-            case BOTTOM_CENTER -> MacroHudDataHandler.Anchor.BOTTOM_CENTER;
-            case BOTTOM_RIGHT -> MacroHudDataHandler.Anchor.BOTTOM_RIGHT;
-            default -> MacroHudDataHandler.Anchor.TOP_LEFT;
-        };
-        proxy.horizontalAlign = switch (external.horizontalAlign) {
-            case CENTER -> MacroHudDataHandler.HorizontalAlign.CENTER;
-            case RIGHT -> MacroHudDataHandler.HorizontalAlign.RIGHT;
-            default -> MacroHudDataHandler.HorizontalAlign.LEFT;
-        };
-        proxy.verticalAlign = switch (external.verticalAlign) {
-            case CENTER -> MacroHudDataHandler.VerticalAlign.CENTER;
-            case BOTTOM -> MacroHudDataHandler.VerticalAlign.BOTTOM;
-            default -> MacroHudDataHandler.VerticalAlign.TOP;
-        };
-    }
-
-    private void applyProxyToExternalCanvas(MacroHudDataHandler.HudElement proxy, HudCanvasDataHandler.HudCanvasElement external) {
-        external.x = proxy.x;
-        external.y = proxy.y;
-        external.width = proxy.width;
-        external.height = proxy.height;
-        external.lineHeight = proxy.lineHeight;
-        external.fontScale = proxy.fontScale;
-        external.zIndex = proxy.zIndex;
-        external.backgroundColor = proxy.backgroundColor;
-        external.textColor = proxy.textColor;
-        external.borderColor = proxy.borderColor;
-        external.drawBackground = proxy.drawBackground;
-        external.drawBorder = proxy.drawBorder;
-        external.visible = proxy.visible;
-        external.anchor = switch (proxy.anchor) {
-            case TOP_CENTER -> HudCanvasDataHandler.HudCanvasElement.Anchor.TOP_CENTER;
-            case TOP_RIGHT -> HudCanvasDataHandler.HudCanvasElement.Anchor.TOP_RIGHT;
-            case MIDDLE_LEFT -> HudCanvasDataHandler.HudCanvasElement.Anchor.MIDDLE_LEFT;
-            case MIDDLE_CENTER, CENTER -> HudCanvasDataHandler.HudCanvasElement.Anchor.MIDDLE_CENTER;
-            case MIDDLE_RIGHT -> HudCanvasDataHandler.HudCanvasElement.Anchor.MIDDLE_RIGHT;
-            case BOTTOM_LEFT -> HudCanvasDataHandler.HudCanvasElement.Anchor.BOTTOM_LEFT;
-            case BOTTOM_CENTER -> HudCanvasDataHandler.HudCanvasElement.Anchor.BOTTOM_CENTER;
-            case BOTTOM_RIGHT -> HudCanvasDataHandler.HudCanvasElement.Anchor.BOTTOM_RIGHT;
-            default -> HudCanvasDataHandler.HudCanvasElement.Anchor.TOP_LEFT;
-        };
-        external.horizontalAlign = switch (proxy.horizontalAlign) {
-            case CENTER -> HudCanvasDataHandler.HudCanvasElement.HorizontalAlign.CENTER;
-            case RIGHT -> HudCanvasDataHandler.HudCanvasElement.HorizontalAlign.RIGHT;
-            default -> HudCanvasDataHandler.HudCanvasElement.HorizontalAlign.LEFT;
-        };
-        external.verticalAlign = switch (proxy.verticalAlign) {
-            case CENTER -> HudCanvasDataHandler.HudCanvasElement.VerticalAlign.CENTER;
-            case BOTTOM -> HudCanvasDataHandler.HudCanvasElement.VerticalAlign.BOTTOM;
-            default -> HudCanvasDataHandler.HudCanvasElement.VerticalAlign.TOP;
-        };
-    }
-
     private HudCanvasDataHandler.HudCanvasElement getMutableExternalCanvasElement(MacroHudDataHandler.HudElement proxy) {
         if (isSecondaryChatProxy(proxy)) {
-            return HudCanvasDataHandler.getMutableElement(HudCanvasDataHandler.ELEMENT_SECONDARY_CHAT, this::defaultSecondaryChatCanvas);
+            return HudCanvasDataHandler.getMutableElement(HudCanvasDataHandler.ELEMENT_SECONDARY_CHAT, MacroWorkbenchExternalProxies::defaultSecondaryChatCanvas);
         }
         if (isMacroKeybindProxy(proxy)) {
-            return HudCanvasDataHandler.getMutableElement(HudCanvasDataHandler.ELEMENT_MACRO_KEYBINDS, this::defaultMacroKeybindsCanvas);
+            return HudCanvasDataHandler.getMutableElement(HudCanvasDataHandler.ELEMENT_MACRO_KEYBINDS, MacroWorkbenchExternalProxies::defaultMacroKeybindsCanvas);
         }
         if (isPickupNotifierProxy(proxy)) {
-            return HudCanvasDataHandler.getMutableElement(HudCanvasDataHandler.ELEMENT_PICKUP_NOTIFIER, this::defaultPickupNotifierCanvas);
+            return HudCanvasDataHandler.getMutableElement(HudCanvasDataHandler.ELEMENT_PICKUP_NOTIFIER, MacroWorkbenchExternalProxies::defaultPickupNotifierCanvas);
         }
-        return HudCanvasDataHandler.getMutableElement(HudCanvasDataHandler.ELEMENT_NBT_INSPECTOR, this::defaultNbtInspectorCanvas);
+        return HudCanvasDataHandler.getMutableElement(HudCanvasDataHandler.ELEMENT_NBT_INSPECTOR, MacroWorkbenchExternalProxies::defaultNbtInspectorCanvas);
     }
 
     private List<String> buildExternalProxyPreviewLines(MacroHudDataHandler.HudElement element, String title) {
@@ -7390,7 +7093,6 @@ public class MacroWorkbenchScreen extends Screen implements ThemedScreen {
         int ey = resolveElementY(e);
         return isResizeHandleHit(ex, ey, e, mouseX, mouseY);
     }
-
 
     private int resolveElementX(MacroHudDataHandler.HudElement e) {
         return switch (e.anchor) {
@@ -7676,81 +7378,6 @@ public class MacroWorkbenchScreen extends Screen implements ThemedScreen {
         }
     }
 
-    private static List<ScriptTokenSpan> tokenizeButtonScriptLine(String line) {
-        List<ScriptTokenSpan> out = new ArrayList<>();
-        if (line == null || line.isEmpty()) {
-            return out;
-        }
-        int i = 0;
-        while (i < line.length()) {
-            char c = line.charAt(i);
-            if (i + 1 < line.length() && c == '/' && line.charAt(i + 1) == '/') {
-                out.add(new ScriptTokenSpan(i, line.length(), 0xFF6FA86F));
-                break;
-            }
-            if (c == '"' || c == '\'') {
-                int j = i + 1;
-                while (j < line.length()) {
-                    if (line.charAt(j) == c && line.charAt(j - 1) != '\\') {
-                        j++;
-                        break;
-                    }
-                    j++;
-                }
-                out.add(new ScriptTokenSpan(i, Math.min(j, line.length()), 0xFFE6C07B));
-                i = j;
-                continue;
-            }
-            if (c == '{') {
-                int close = line.indexOf('}', i + 1);
-                if (close > i + 1 && isScriptPlaceholderToken(line.substring(i + 1, close))) {
-                    out.add(new ScriptTokenSpan(i, close + 1, 0xFF56B6C2));
-                    i = close + 1;
-                    continue;
-                }
-            }
-            if (Character.isDigit(c)) {
-                int j = i + 1;
-                while (j < line.length() && (Character.isDigit(line.charAt(j)) || line.charAt(j) == '.')) {
-                    j++;
-                }
-                out.add(new ScriptTokenSpan(i, j, 0xFFD19A66));
-                i = j;
-                continue;
-            }
-            if (Character.isLetter(c) || c == '_') {
-                int j = i + 1;
-                while (j < line.length() && (Character.isLetterOrDigit(line.charAt(j)) || line.charAt(j) == '_')) {
-                    j++;
-                }
-                String token = line.substring(i, j);
-                int color = SCRIPT_HIGHLIGHT_KEYWORDS.contains(token) ? 0xFF61AFEF : 0xFFDCDCAA;
-                out.add(new ScriptTokenSpan(i, j, color));
-                i = j;
-                continue;
-            }
-            out.add(new ScriptTokenSpan(i, i + 1, 0xFFEAEAEA));
-            i++;
-        }
-        return out;
-    }
-
-    private static boolean isScriptPlaceholderToken(String token) {
-        if (token == null || token.isBlank()) {
-            return false;
-        }
-        for (int i = 0; i < token.length(); i++) {
-            char ch = token.charAt(i);
-            if (!(Character.isLetterOrDigit(ch) || ch == '_' || ch == '.' || ch == '-')) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    private record ScriptTokenSpan(int start, int end, int color) {
-    }
-
     private int cursorIndexFromPoint(String text, int localX, int localY, int lineHeight) {
         return GuiTextEditingUtils.cursorIndexFromPoint(this.font, text, localX, localY, lineHeight);
     }
@@ -7939,7 +7566,6 @@ public class MacroWorkbenchScreen extends Screen implements ThemedScreen {
         return MacroWorkbenchUiOps.cycleStyleColor(current, forward, STYLE_COLOR_PALETTE);
     }
 
-
     private int modalX() {
         int modalW = modalWidth();
         int defaultX = this.width / 2 - (modalW / 2);
@@ -8077,9 +7703,4 @@ public class MacroWorkbenchScreen extends Screen implements ThemedScreen {
         return false;
     }
 }
-
-
-
-
-
 

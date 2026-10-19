@@ -2,7 +2,7 @@
 
 Version names follow `j<java>-mc<minecraft>-<version>`. Dates are when the version was set in the project.
 
-## Unreleased
+## 2.1.0-BETA - `j25-mc26.3-2.1.0-BETA` (2026-10-19)
 
 ### New tools
 - **Chest Finder** (Chest Tracker style): remembers what was in every chest, barrel, shulker box, hopper, furnace, ... you open, per world and dimension (items inside shulker boxes count too). `/finditem <item>` lists where it is with distances and highlights the containers through walls with a pointer to the nearest one; `/finditem gui` (or a keybind) opens a searchable item grid. `/finditem forget`, `/finditem clear`. Broken containers are forgotten automatically.
@@ -18,11 +18,22 @@ Version names follow `j<java>-mc<minecraft>-<version>`. Dates are when the versi
 - Command completion: SNBT keys and values in `/summon` and `/data merge` (picked by entity type or what you're looking at, using 26.x names like `equipment` and `active_effects`), NBT paths in `/data get`, and common values for item components (`/give @s diamond_sword[rarity=`).
 - Packet Inspector: packet sizes, in/out bandwidth and packets-per-second graphs, a pinned packet type graph, "Most bytes" list and `/packets stats`. `/packets pin`, `/packets unpin` and `/packets export` are back.
 - Module Browser: number settings are sliders; drag, scroll over them (Shift = ×10) or click the value to type one (radius, distance, reach, gamma, zoom FOV, GUI scale, flash alpha).
+- Chest Finder: clicking an item in `/finditem gui` opens a preview of every remembered container holding it (with the whole remembered contents, expandable with +/−, scrollable, with "last seen" ages). Click a container to highlight it for five minutes, or press Enter to highlight them all.
+- Chat Highlights: every message is matched under a 50 ms budget. A rule that takes too long (catastrophic regex backtracking) is skipped and logged once instead of freezing the game.
+- Automation regex matching uses the same shared time limit helper.
+- Config and data files (automation, camera paths, secondary chat, highlights, held light, HUD canvas, HUD tweaks, macro panel/HUD, mob drops, pickup feed, scripting, X-Ray, recent files, ...) are written atomically, so a crash while saving can no longer leave a half-written file.
+- Script editor internals split into separate completion, validation, naming and text helpers; Macro Workbench (Automation tab, script highlighting, vanilla HUD preview) split into smaller classes. No behaviour change intended.
 - Script editor: restyled to match the mod's theme, Ctrl+E recent files (Ctrl+E, Enter flips back to the previous file), `m0` completions show what each helper does, completions use real parameter names.
 
 ### Fixes
 - JavaScript scripts failed with a host access error on the shared engine. Scripts now run on the GraalJS Polyglot API with one shared engine.
+- Get Data / Quick Edit SNBT editor: typing did nothing on 26.3 (text input was never started), and resizing the window wiped edits in progress. Both fixed; the path field no longer steals focus on open.
 - `m0.print` (used by the docs and snippets) didn't exist; it now writes to the script console.
+
+### Build and project
+- `docs/module-catalog.md`: a module list generated from the module registry by `scripts/generate-module-catalog.py`.
+- Gradle cleanup (duplicate and unused repositories, dead configurations, duplicate loom block) and `System.out` calls replaced by logger calls.
+- CI: current Gradle wrapper validation and setup actions with caching, runs on `ubuntu-latest`, builds only `main` and tags (no double builds for PRs), cancels superseded runs, uploads test reports on failure.
 
 ## 2.0.0-BETA - `j25-mc26.3-2.0.0-BETA` (2026-10-17)
 

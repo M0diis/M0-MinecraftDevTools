@@ -3,6 +3,7 @@ package me.m0dii.modules.automation;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import me.m0dii.M0DevTools;
+import me.m0dii.utils.ConfigFileSafety;
 import net.fabricmc.loader.api.FabricLoader;
 import org.jetbrains.annotations.NotNull;
 
@@ -58,7 +59,7 @@ public final class DataHandler {
     public static synchronized void save() {
         try {
             Files.createDirectories(configFile().getParent());
-            Files.writeString(configFile(), GSON.toJson(sanitize(config)));
+            ConfigFileSafety.writeAtomically(configFile(), GSON.toJson(sanitize(config)));
         } catch (IOException e) {
             M0DevTools.LOGGER.error("Failed to save automation config: {}", e.getMessage());
         }

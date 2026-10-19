@@ -1,5 +1,9 @@
 package me.m0dii.modules.chathighlight;
 
+import me.m0dii.utils.DeadlineCharSequence;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -13,6 +17,13 @@ import java.util.regex.PatternSyntaxException;
  * and whether a sound should play. {@code {me}} in a pattern stands for your own player name.
  */
 public final class HighlightRules {
+    private static final Logger LOGGER = LogManager.getLogger("m0-dev-tools");
+
+    /** Time budget for matching all rules against one message, so a pathological regex cannot freeze the client. */
+    static final long MATCH_TIME_LIMIT_NANOS = 50_000_000L; // 50 ms
+
+    private static final java.util.Set<String> WARNED_SLOW = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
     public static final class Rule {
         public String pattern = "";
         public String color = "gold";
@@ -89,6 +100,7 @@ public final class HighlightRules {
         }
         boolean ownLine = playerName != null && !playerName.isBlank() && text.startsWith("<" + playerName + ">");
         boolean[] taken = new boolean[text.length()];
+        CharSequence guarded = DeadlineCharSequence.within(text, MATCH_TIME_LIMIT_NANOS);
         for (Rule rule : rules) {
             if (rule == null || !rule.enabled) {
                 continue;
@@ -101,23 +113,32 @@ public final class HighlightRules {
             if (pattern == null || rgb < 0) {
                 continue;
             }
-            Matcher matcher = pattern.matcher(text);
-            while (matcher.find()) {
-                if (matcher.end() <= matcher.start()) {
-                    continue;
+            Matcher matcher = pattern.matcher(guarded);
+            try {
+                while (matcher.find()) {
+                    if (matcher.end() <= matcher.start()) {
+                        continue;
+                    }
+                    boolean overlap = false;
+                    for (int i = matcher.start(); i < matcher.end(); i++) {
+                        overlap |= taken[i];
+                    }
+                    if (overlap) {
+                        continue;
+                    }
+                    for (int i = matcher.start(); i < matcher.end(); i++) {
+                        taken[i] = true;
+                    }
+                    spans.add(new Span(matcher.start(), matcher.end(), rgb));
+                    sound |= rule.sound;
                 }
-                boolean overlap = false;
-                for (int i = matcher.start(); i < matcher.end(); i++) {
-                    overlap |= taken[i];
+            } catch (DeadlineCharSequence.TimeoutException e) {
+                // Out of time for this message: keep what was found so far and skip the remaining rules.
+                if (WARNED_SLOW.size() < 64 && WARNED_SLOW.add(String.valueOf(rule.pattern))) {
+                    LOGGER.warn("Chat highlight rule '{}' took too long to match and was skipped. "
+                            + "Simplify the regex (avoid nested repeats like (a+)+).", rule.pattern);
                 }
-                if (overlap) {
-                    continue;
-                }
-                for (int i = matcher.start(); i < matcher.end(); i++) {
-                    taken[i] = true;
-                }
-                spans.add(new Span(matcher.start(), matcher.end(), rgb));
-                sound |= rule.sound;
+                break;
             }
         }
         spans.sort((a, b) -> Integer.compare(a.start(), b.start()));

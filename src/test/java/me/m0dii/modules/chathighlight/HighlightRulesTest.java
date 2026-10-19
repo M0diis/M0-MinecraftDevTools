@@ -69,4 +69,17 @@ class HighlightRulesTest {
                 new HighlightRules.Segment<>("B", "rld", 0x123456),
                 new HighlightRules.Segment<>("B", "!", null)), segments);
     }
+
+    @Test
+    void catastrophicRegexIsAbortedInsteadOfFreezing() {
+        List<HighlightRules.Rule> rules = List.of(
+                rule("(.*a){20}", "red", true, false),
+                rule("steve", "gold", false, false));
+        String text = "a".repeat(60) + "!";
+        HighlightRules.Result result = assertTimeoutPreemptively(java.time.Duration.ofSeconds(5),
+                () -> HighlightRules.match(rules, text, "Alex"));
+        assertNotNull(result);
+        // The slow rule is abandoned; the message still comes back (nothing to highlight here).
+        assertFalse(result.matched());
+    }
 }

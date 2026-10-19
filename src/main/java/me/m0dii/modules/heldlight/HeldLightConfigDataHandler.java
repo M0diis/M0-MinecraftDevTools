@@ -3,6 +3,7 @@ package me.m0dii.modules.heldlight;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import me.m0dii.M0DevTools;
+import me.m0dii.utils.ConfigFileSafety;
 import net.fabricmc.loader.api.FabricLoader;
 
 import java.io.IOException;
@@ -66,7 +67,7 @@ public final class HeldLightConfigDataHandler {
     public static synchronized void save() {
         ensureLoaded();
         try {
-            Files.writeString(CONFIG_FILE, GSON.toJson(sanitize(config)));
+            ConfigFileSafety.writeAtomically(CONFIG_FILE, GSON.toJson(sanitize(config)));
         } catch (IOException e) {
             M0DevTools.LOGGER.error("Failed to save held-light config: {}", e.getMessage());
         }

@@ -6,6 +6,7 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.suggestion.Suggestions;
 import com.mojang.brigadier.suggestion.SuggestionsBuilder;
+import me.m0dii.utils.ConfigFileSafety;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
@@ -650,7 +651,7 @@ public final class MobDropTrackerServer {
         try {
             Path path = savePath(server);
             Files.createDirectories(path.getParent());
-            Files.writeString(path, GSON.toJson(root));
+            ConfigFileSafety.writeAtomically(path, GSON.toJson(root));
         } catch (Exception ignored) {
         }
     }

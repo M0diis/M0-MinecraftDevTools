@@ -1,5 +1,7 @@
 package me.m0dii.modules.scripting.ide;
 
+import me.m0dii.utils.ConfigFileSafety;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -85,8 +87,7 @@ public final class RecentFiles {
 
     private void save() {
         try {
-            Files.createDirectories(file.toAbsolutePath().getParent());
-            Files.write(file, names);
+            ConfigFileSafety.writeAtomically(file, String.join(System.lineSeparator(), names) + System.lineSeparator());
         } catch (IOException | RuntimeException ignored) {
             // Not worth interrupting the editor for.
         }

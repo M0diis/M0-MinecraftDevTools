@@ -1,6 +1,5 @@
 package me.m0dii.modules.scripting.gui;
 
-
 import com.mojang.blaze3d.platform.InputConstants;
 import groovy.lang.GroovyShell;
 import me.m0dii.gui.GuiSystem;
@@ -9,8 +8,12 @@ import me.m0dii.gui.theme.ThemedScreen;
 import me.m0dii.modules.macros.MacroPlaceholders;
 import me.m0dii.modules.scripting.*;
 import me.m0dii.modules.scripting.ide.LineOps;
+import me.m0dii.modules.scripting.ide.ScriptCompletions.*;
+import me.m0dii.modules.scripting.ide.ScriptNames.Language;
 import me.m0dii.modules.scripting.ide.ScriptOutline;
 import me.m0dii.modules.scripting.ide.ScriptSyntax;
+import me.m0dii.modules.scripting.ide.ScriptValidation.Diagnostic;
+import me.m0dii.modules.scripting.ide.ScriptValidation.KotlinValidationSource;
 import me.m0dii.modules.scripting.ide.TextSearch;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
@@ -24,10 +27,9 @@ import javax.script.ScriptEngine;
 import javax.script.ScriptEngineManager;
 import javax.script.ScriptException;
 import java.io.IOException;
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
 import java.util.*;
+
+import static me.m0dii.modules.scripting.ide.ScriptText.*;
 
 public class ScriptEditorScreen extends Screen implements ThemedScreen {
     /** Editor-only colours derived from the theme accent (selection and the current line). */
@@ -36,12 +38,6 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
     /** Recently opened scripts for the Ctrl+E switcher. */
     private static final me.m0dii.modules.scripting.ide.RecentFiles RECENT =
             new me.m0dii.modules.scripting.ide.RecentFiles(java.nio.file.Paths.get("config/m0-dev-tools/script-recent.txt"));
-
-    private static final String DEFAULT_SCRIPT_NAME = "untitled.kts";
-    private static final String GROOVY_EXT = ScriptTypes.GROOVY_EXT;
-    private static final String KOTLIN_EXT = ScriptTypes.KOTLIN_EXT;
-    private static final String JAVASCRIPT_EXT = ScriptTypes.JAVASCRIPT_EXT;
-    private static final String ASYNC_DIRECTIVE = "@async";
 
     private static final int PAD = 10;
     private static final int TAB_H = 22;
@@ -57,54 +53,16 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
     private static final int DIAG_ROW_H = 11;
     private static final int HISTORY_LIMIT = 180;
     private static final int SUGGESTION_ROW_H = 11;
-    private static final String GLOBAL_COMPLETION_KEY = "__global__";
-    private static final int MAX_COMPLETION_ITEMS_PER_TYPE = 4000;
-    private static final Map<String, String> ROOT_TYPE_KEYS = new LinkedHashMap<>();
-    private static final Map<String, Class<?>> KNOWN_TYPE_CLASSES = new LinkedHashMap<>();
-    private static final Map<String, List<CompletionItem>> TYPE_COMPLETIONS = new LinkedHashMap<>();
-    private static final Map<String, Map<String, String>> TYPE_MEMBER_TYPES = new LinkedHashMap<>();
-    private static boolean completionCacheReady = false;
     private enum UiTab {MAIN, DOCS, SCRIPTS}
-
-    private enum Language {GROOVY, KOTLIN, JAVASCRIPT}
 
     private enum SortMode {NAME_ASC, NAME_DESC, LANGUAGE}
 
     private enum FilterMode {ALL, GROOVY, KOTLIN, JAVASCRIPT}
 
-    private enum SuggestionKind {VARIABLE, PROPERTY, METHOD, KEYWORD, SNIPPET}
-
     private record Rect(int x, int y, int w, int h) {
         private boolean contains(double mx, double my) {
             return mx >= x && mx < x + w && my >= y && my < y + h;
         }
-    }
-
-    private record Suggestion(String category, String token, String insertText, SuggestionKind kind, String detail,
-                              int score) {
-    }
-
-    private record PlaceholderCtx(int replaceStart, String prefix) {
-    }
-
-    private record CodeCompletionContext(String qualifier, String prefix, int replaceStart, int replaceEnd) {
-    }
-
-    private record CompletionItem(String label, String insertText, String nextType, SuggestionKind kind,
-                                  String detail) {
-    }
-
-    private record DisplaySuggestion(Suggestion suggestion, boolean groupHeader, String groupKey, int hiddenOverloads) {
-    }
-
-    private record Diagnostic(String severity, String file, int line, int column, String message) {
-        private String rowText() {
-            String loc = file + ":" + Math.max(1, line) + ":" + Math.max(1, column);
-            return "[" + severity + "] " + loc + " " + message;
-        }
-    }
-
-    private record KotlinValidationSource(String source, int insertedAfterOriginalLine) {
     }
 
     private record Snapshot(String text, int cursor, int anchor, int scrollLine, int viewLeft) {
@@ -1028,7 +986,6 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
         return InputConstants.isKeyDown(InputConstants.KEY_LALT) || InputConstants.isKeyDown(InputConstants.KEY_RALT);
     }
 
-
     @Override
     public boolean keyPressed(KeyEvent input) {
         int key = input.input();
@@ -1669,7 +1626,7 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
         List<ScriptSyntax.State> states = syntaxStates(lines);
         Set<Integer> errorLines = new HashSet<>();
         for (Diagnostic d : diagnostics) {
-            errorLines.add(Math.max(1, d.line) - 1);
+            errorLines.add(Math.max(1, d.line()) - 1);
         }
         int cursorLine = lineNumberOfCursor();
         String language = inferLanguage(currentScriptName).name();
@@ -1713,8 +1670,8 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
 
     private String diagnosticMessageForLine(int zeroBasedLine) {
         for (Diagnostic d : diagnostics) {
-            if (Math.max(1, d.line) - 1 == zeroBasedLine) {
-                return d.message;
+            if (Math.max(1, d.line()) - 1 == zeroBasedLine) {
+                return d.message();
             }
         }
         return null;
@@ -1892,7 +1849,7 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
             if (hover) {
                 context.fill(panel.x + 1, y, panel.x + panel.w - 1, y + DIAG_ROW_H, Theme.ACCENT_SOFT);
             }
-            int color = "ERROR".equals(diagnostic.severity) ? 0xFFFF9D9D : 0xFFE8D49E;
+            int color = "ERROR".equals(diagnostic.severity()) ? 0xFFFF9D9D : 0xFFE8D49E;
             context.text(font, trimToWidth(diagnostic.rowText(), Math.max(40, panel.w - 12)), panel.x + 6, y + 1, color, false);
         }
     }
@@ -1941,7 +1898,7 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
             String marker = ds.groupHeader() && ds.hiddenOverloads() > 0
                     ? (Boolean.TRUE.equals(expandedMethodGroups.get(ds.groupKey())) ? "[-] " : "[+] ")
                     : "";
-            String label = marker + suggestionKindTag(suggestion.kind()) + " " + suggestion.token;
+            String label = marker + suggestionKindTag(suggestion.kind()) + " " + suggestion.token();
             if (ds.groupHeader() && ds.hiddenOverloads() > 0) {
                 label += "  (+" + ds.hiddenOverloads() + " overloads)";
             }
@@ -1966,18 +1923,6 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
         editor.focused = true;
         outputText = "Created " + name + " (not saved yet; rename it, then Ctrl+S)";
         return true;
-    }
-
-    /** Starter text for a new script in its language. */
-    public static String newScriptTemplate(String name) {
-        String lower = name.toLowerCase(Locale.ROOT);
-        if (lower.endsWith(GROOVY_EXT)) {
-            return "// @async off\n// Groovy script. m0 is the helper: m0.message(\"hi\"), m0.command(\"time set day\")\n\nm0.message(\"Hello from \" + player.name.string)\n";
-        }
-        if (lower.endsWith(JAVASCRIPT_EXT)) {
-            return "// @async off\n// JavaScript. m0 is the helper: m0.message('hi'), m0.command('time set day')\n\nm0.message('Hello from ' + player.getName().getString());\n";
-        }
-        return "// @async off\n// Kotlin script. m0 is the helper: m0.message(\"hi\"), m0.command(\"time set day\")\n\nm0.message(\"Hello from ${player.name.string}\")\n";
     }
 
     private boolean renameScript() {
@@ -2226,16 +2171,6 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
         return true;
     }
 
-    private static int countLines(String text) {
-        int count = 0;
-        for (int i = 0; i < text.length(); i++) {
-            if (text.charAt(i) == '\n') {
-                count++;
-            }
-        }
-        return count;
-    }
-
     /** Ctrl+Shift+R: runs only the selected code (handy for trying a line or two). */
     private boolean runSelection() {
         if (!hasSelection()) {
@@ -2338,230 +2273,9 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
         return out;
     }
 
-    private static List<Diagnostic> lightweightValidation(String source, Language language) {
-        String text = source == null ? "" : source;
-        List<Diagnostic> out = new ArrayList<>();
-        int line = 1;
-        int round = 0;
-        int curly = 0;
-        int square = 0;
-        boolean inString = false;
-        char quote = 0;
-        int stringLine = 1;
-
-        for (int i = 0; i < text.length(); i++) {
-            char c = text.charAt(i);
-            if (c == '\n') {
-                line++;
-            }
-            if (inString) {
-                if (quote == '"' && i + 1 < text.length() && c == '$' && text.charAt(i + 1) == '{'
-                        && (language == Language.KOTLIN || language == Language.GROOVY)) {
-                    InterpolationScan scan = scanInterpolationExpression(text, i + 2, line);
-                    line = scan.line();
-                    if (scan.unclosed()) {
-                        out.add(new Diagnostic("ERROR", "", line, 1, "Unclosed string interpolation expression."));
-                        break;
-                    }
-                    i = scan.endIndex();
-                    continue;
-                }
-                if (c == quote && (i == 0 || text.charAt(i - 1) != '\\')) {
-                    inString = false;
-                }
-                continue;
-            }
-            if (c == '"' || c == '\'') {
-                inString = true;
-                quote = c;
-                stringLine = line;
-                continue;
-            }
-            if (c == '(') {
-                round++;
-            } else if (c == ')') {
-                round--;
-            } else if (c == '{') {
-                curly++;
-            } else if (c == '}') {
-                curly--;
-            } else if (c == '[') {
-                square++;
-            } else if (c == ']') {
-                square--;
-            }
-
-            if (round < 0 || curly < 0 || square < 0) {
-                out.add(new Diagnostic("ERROR", "", line, 1, "Unexpected closing bracket."));
-                round = Math.max(0, round);
-                curly = Math.max(0, curly);
-                square = Math.max(0, square);
-            }
-        }
-        if (inString) {
-            out.add(new Diagnostic("ERROR", "", stringLine, 1, "Unclosed string literal."));
-        }
-        if (round > 0) {
-            out.add(new Diagnostic("ERROR", "", line, 1, "Unclosed '()' group."));
-        }
-        if (curly > 0) {
-            out.add(new Diagnostic("ERROR", "", line, 1, "Unclosed '{}' block."));
-        }
-        if (square > 0) {
-            out.add(new Diagnostic("ERROR", "", line, 1, "Unclosed '[]' group."));
-        }
-        return out;
-    }
-
-    private record InterpolationScan(int endIndex, int line, boolean unclosed) {
-    }
-
-    private static InterpolationScan scanInterpolationExpression(String text, int startIndex, int line) {
-        int depth = 1;
-        int i = startIndex;
-        while (i < text.length() && depth > 0) {
-            char c = text.charAt(i);
-            if (c == '\n') {
-                line++;
-            }
-            if (c == '"' || c == '\'') {
-                char q = c;
-                i++;
-                while (i < text.length()) {
-                    char qc = text.charAt(i);
-                    if (qc == '\n') {
-                        line++;
-                    }
-                    if (qc == q && text.charAt(i - 1) != '\\') {
-                        break;
-                    }
-                    i++;
-                }
-            } else if (c == '{') {
-                depth++;
-            } else if (c == '}') {
-                depth--;
-            }
-            i++;
-        }
-        if (depth > 0) {
-            return new InterpolationScan(Math.max(startIndex, text.length() - 1), line, true);
-        }
-        return new InterpolationScan(Math.max(startIndex, i - 1), line, false);
-    }
-
-    private static List<Diagnostic> dedupeDiagnostics(List<Diagnostic> input) {
-        LinkedHashMap<String, Diagnostic> uniq = new LinkedHashMap<>();
-        for (Diagnostic d : input) {
-            String key = d.severity + "|" + d.file + "|" + d.line + "|" + d.column + "|" + d.message;
-            uniq.put(key, d);
-        }
-        return new ArrayList<>(uniq.values());
-    }
-
-    private static int parseIntAfter(String key, String message, int fallback) {
-        if (message == null) {
-            return fallback;
-        }
-        String lower = message.toLowerCase(Locale.ROOT);
-        int idx = lower.indexOf(key.toLowerCase(Locale.ROOT));
-        if (idx < 0) {
-            return fallback;
-        }
-        int i = idx + key.length();
-        while (i < lower.length() && !Character.isDigit(lower.charAt(i))) i++;
-        int j = i;
-        while (j < lower.length() && Character.isDigit(lower.charAt(j))) j++;
-        try {
-            return Integer.parseInt(lower.substring(i, j));
-        } catch (Exception ignored) {
-            return fallback;
-        }
-    }
-
-    private static String safeMessage(String message, String fallback) {
-        return message == null || message.isBlank() ? fallback : message;
-    }
-
-    private static String cleanupCompilerMessage(String message) {
-        if (message == null || message.isBlank()) {
-            return "";
-        }
-        String cleaned = message
-                .replaceAll("\\(ScriptingHost[^)]*\\)", "")
-                .replaceAll("\\s+", " ")
-                .trim();
-        cleaned = cleaned.replace("ERROR ERROR", "ERROR");
-        return cleaned;
-    }
-
-    private static final String KOTLIN_VALIDATION_PREAMBLE = """
-            import net.minecraft.client.MinecraftClient
-            import net.minecraft.client.network.ClientPlayerEntity
-            import net.minecraft.client.option.GameOptions
-            import net.minecraft.client.world.ClientWorld
-            import net.minecraft.server.MinecraftServer
-
-            val client: MinecraftClient? = null
-            val source: ClientPlayerEntity? = null
-            val player: ClientPlayerEntity? = null
-            val world: ClientWorld? = null
-            val options: GameOptions? = null
-            val server: MinecraftServer? = null
-
-            """;
-
-    private static final int KOTLIN_VALIDATION_PREAMBLE_LINES = splitLines(KOTLIN_VALIDATION_PREAMBLE).size();
-
-    private static KotlinValidationSource wrapKotlinValidationSource(String source) {
-        String text = source == null ? "" : source;
-        List<String> lines = splitLines(text);
-        int insertAtIndex = 0;
-
-        while (insertAtIndex < lines.size()) {
-            String trimmed = lines.get(insertAtIndex).trim();
-            if (trimmed.startsWith("import ")) {
-                insertAtIndex++;
-                continue;
-            }
-            if (trimmed.isEmpty() && insertAtIndex > 0) {
-                insertAtIndex++;
-                continue;
-            }
-            break;
-        }
-
-        StringBuilder builder = new StringBuilder(text.length() + KOTLIN_VALIDATION_PREAMBLE.length() + 32);
-        for (int i = 0; i < lines.size(); i++) {
-            if (i == insertAtIndex) {
-                builder.append(KOTLIN_VALIDATION_PREAMBLE);
-            }
-            builder.append(lines.get(i));
-            if (i < lines.size() - 1) {
-                builder.append('\n');
-            }
-        }
-        if (lines.isEmpty() || insertAtIndex >= lines.size()) {
-            if (!builder.isEmpty() && builder.charAt(builder.length() - 1) != '\n') {
-                builder.append('\n');
-            }
-            builder.append(KOTLIN_VALIDATION_PREAMBLE);
-        }
-
-        return new KotlinValidationSource(builder.toString(), insertAtIndex);
-    }
-
-    private static int unwrapKotlinValidationLine(String source, int line) {
-        KotlinValidationSource wrapped = wrapKotlinValidationSource(source);
-        if (line > wrapped.insertedAfterOriginalLine()) {
-            return Math.max(1, line - KOTLIN_VALIDATION_PREAMBLE_LINES);
-        }
-        return Math.max(1, line);
-    }
-
     private void jumpToDiagnostic(Diagnostic d) {
-        int line = Math.max(1, d.line);
-        int col = Math.max(1, d.column);
+        int line = Math.max(1, d.line());
+        int col = Math.max(1, d.column());
         List<String> lines = splitLines(editor.text);
         int targetLine = Math.clamp(line - 1L, 0, Math.max(0, lines.size() - 1));
         int index = 0;
@@ -2680,50 +2394,6 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
         return visibleScripts.get(selectedScriptIndex);
     }
 
-    private static String nextName(String existing, String suffix, Collection<String> takenNames) {
-        int dot = existing.lastIndexOf('.');
-        String base = dot < 0 ? existing : existing.substring(0, dot);
-        String ext = dot < 0 ? "" : existing.substring(dot);
-        String candidate = base + suffix + ext;
-        int idx = 2;
-        while (containsIgnoreCase(takenNames, candidate)) {
-            candidate = base + suffix + "_" + idx + ext;
-            idx++;
-        }
-        return candidate;
-    }
-
-    private static boolean containsIgnoreCase(Collection<String> names, String target) {
-        if (target == null || target.isBlank() || names == null || names.isEmpty()) {
-            return false;
-        }
-        for (String name : names) {
-            if (name != null && name.equalsIgnoreCase(target)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static String normalizeScriptNameForRename(String raw, String current) {
-        String name = raw == null ? "" : raw.trim();
-        if (name.isEmpty()) {
-            return normalizeScriptName(current);
-        }
-        String lower = name.toLowerCase(Locale.ROOT);
-        if (lower.endsWith(GROOVY_EXT) || lower.endsWith(KOTLIN_EXT) || lower.endsWith(JAVASCRIPT_EXT)) {
-            return name;
-        }
-        String currentLower = current == null ? "" : current.toLowerCase(Locale.ROOT);
-        if (currentLower.endsWith(GROOVY_EXT)) {
-            return name + GROOVY_EXT;
-        }
-        if (currentLower.endsWith(JAVASCRIPT_EXT)) {
-            return name + JAVASCRIPT_EXT;
-        }
-        return name + KOTLIN_EXT;
-    }
-
     private void rebuildDocs() {
         docsLines.clear();
         docsLines.add("[Files]");
@@ -2770,28 +2440,6 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
         docsLines.addAll(MacroPlaceholders.getPlaceholderDocs());
     }
 
-    private static String normalizeScriptName(String raw) {
-        String name = raw == null ? "" : raw.trim();
-        if (name.isEmpty()) {
-            return DEFAULT_SCRIPT_NAME;
-        }
-        if (name.endsWith(GROOVY_EXT) || name.endsWith(KOTLIN_EXT) || name.endsWith(JAVASCRIPT_EXT)) {
-            return name;
-        }
-        return name + KOTLIN_EXT;
-    }
-
-    private static Language inferLanguage(String file) {
-        String lower = file == null ? "" : file.toLowerCase(Locale.ROOT);
-        if (lower.endsWith(GROOVY_EXT)) {
-            return Language.GROOVY;
-        }
-        if (lower.endsWith(JAVASCRIPT_EXT)) {
-            return Language.JAVASCRIPT;
-        }
-        return Language.KOTLIN;
-    }
-
     private void updateClickCount(int cursorIdx) {
         long now = System.currentTimeMillis();
         if (cursorIdx == editor.lastClickCursor && (now - editor.lastClickAt) < 320L) {
@@ -2821,10 +2469,6 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
         int end = lineEnd(index);
         editor.selectionAnchor = start;
         editor.cursor = end;
-    }
-
-    private static boolean isWord(char c) {
-        return Character.isLetterOrDigit(c) || c == '_' || c == '.' || c == ':';
     }
 
     private boolean hasSelection() {
@@ -3115,8 +2759,8 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
 
     private void highlightErrorSpans(GuiGraphicsExtractor context, Rect code) {
         for (Diagnostic d : diagnostics) {
-            int line = Math.max(1, d.line) - 1;
-            int col = Math.max(1, d.column) - 1;
+            int line = Math.max(1, d.line()) - 1;
+            int col = Math.max(1, d.column()) - 1;
             int y = code.y + 3 + (line - editor.scrollLine) * CODE_LINE_H;
             if (y < code.y || y > code.y + code.h - CODE_LINE_H) {
                 continue;
@@ -3237,9 +2881,9 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
             return;
         }
         suggestions.clear();
-        suggestionReplaceStart = ctx.replaceStart;
+        suggestionReplaceStart = ctx.replaceStart();
         suggestionReplaceEnd = editor.cursor;
-        suggestions.addAll(matchSuggestions(ctx.prefix));
+        suggestions.addAll(matchSuggestions(ctx.prefix()));
         rebuildVisibleSuggestions();
         suggestionsVisible = !suggestions.isEmpty();
         suggestionSelected = 0;
@@ -3269,9 +2913,9 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
         saveUndo();
         String before = editor.text.substring(0, start);
         String after = editor.text.substring(end);
-        String insert = s.insertText == null ? s.token : s.insertText;
+        String insert = s.insertText() == null ? s.token() : s.insertText();
         if (placeholderSuggestionsInScripts && !after.isEmpty() && !after.startsWith("}")
-                && insert.equals(s.token) && !insert.endsWith("}")) {
+                && insert.equals(s.token()) && !insert.endsWith("}")) {
             insert = insert + "}";
         }
         editor.text = before + insert + after;
@@ -3314,13 +2958,6 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
                 .thenComparing(d -> d.suggestion().token().toLowerCase(Locale.ROOT)));
     }
 
-    private static String methodGroupKey(Suggestion suggestion) {
-        String insert = suggestion.insertText();
-        int idx = insert.indexOf('(');
-        String base = idx > 0 ? insert.substring(0, idx) : insert;
-        return suggestion.category() + "|" + base;
-    }
-
     private void toggleMethodGroup(String key) {
         if (key == null || key.isBlank()) {
             return;
@@ -3348,512 +2985,6 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
         int lastDot = typeKey.lastIndexOf('.');
         String shortType = lastDot < 0 ? typeKey : typeKey.substring(lastDot + 1);
         return q + " => " + shortType;
-    }
-
-    private List<Suggestion> matchSuggestions(String prefix) {
-        String p = prefix == null ? "" : prefix.toLowerCase(Locale.ROOT);
-        LinkedHashMap<String, List<String>> grouped = new LinkedHashMap<>();
-        grouped.put("Player", new ArrayList<>());
-        grouped.put("Inventory", new ArrayList<>());
-        grouped.put("Armor", new ArrayList<>());
-        grouped.put("Container", new ArrayList<>());
-        grouped.put("World", new ArrayList<>());
-        grouped.put("Target", new ArrayList<>());
-        grouped.put("Script", new ArrayList<>());
-        grouped.put("Other", new ArrayList<>());
-
-        for (String token : MacroPlaceholders.getKnownPlaceholderTokens()) {
-            grouped.computeIfAbsent(suggestionCategory(token), ignored -> new ArrayList<>()).add(token);
-        }
-        grouped.get("Inventory").add("inventory.count:diamond");
-        grouped.get("Container").add("container.count:diamond");
-        grouped.get("Script").add("script.name");
-        grouped.get("Script").add("script.language");
-
-        List<Suggestion> out = new ArrayList<>();
-        for (Map.Entry<String, List<String>> e : grouped.entrySet()) {
-            LinkedHashSet<String> uniq = new LinkedHashSet<>(e.getValue());
-            for (String token : uniq) {
-                String lower = token.toLowerCase(Locale.ROOT);
-                int rank = rankMatch(p, lower, lower, SuggestionKind.VARIABLE);
-                if (rank >= 0) {
-                    out.add(new Suggestion(e.getKey(), token, token, SuggestionKind.VARIABLE, "placeholder", rank));
-                }
-            }
-        }
-
-        out.sort(Comparator.comparingInt(Suggestion::score)
-                .thenComparing(s -> s.category)
-                .thenComparing(s -> s.token));
-        return out;
-    }
-
-    private PlaceholderCtx placeholderContext(String source, int cursor) {
-        String text = normalize(source);
-        int c = Math.clamp(cursor, 0, text.length());
-        int start = c;
-        while (start > 0 && isWord(text.charAt(start - 1))) {
-            start--;
-        }
-        if (start <= 0 || text.charAt(start - 1) != '{') {
-            return null;
-        }
-        return new PlaceholderCtx(start, text.substring(start, c));
-    }
-
-    private CodeCompletionContext codeCompletionContext(String source, int cursor) {
-        String text = normalize(source);
-        int c = Math.clamp(cursor, 0, text.length());
-        int start = c;
-        while (start > 0 && isIdentifierChar(text.charAt(start - 1))) {
-            start--;
-        }
-        String prefix = text.substring(start, c);
-
-        if (start > 0 && text.charAt(start - 1) == '.') {
-            int qEnd = start - 1;
-            int qStart = qEnd;
-            while (qStart > 0 && isQualifierChar(text.charAt(qStart - 1))) {
-                qStart--;
-            }
-            if (qStart == qEnd) {
-                return null;
-            }
-            String qualifier = text.substring(qStart, qEnd);
-            return new CodeCompletionContext(qualifier, prefix, start, c);
-        }
-
-        if (!prefix.isBlank()) {
-            return new CodeCompletionContext("", prefix, start, c);
-        }
-        return null;
-    }
-
-    private List<Suggestion> resolveCodeSuggestions(CodeCompletionContext context) {
-        if (context == null) {
-            return List.of();
-        }
-        ensureCompletionCache();
-        String qualifierRaw = context.qualifier() == null ? "" : context.qualifier().trim();
-        String category = qualifierRaw.isBlank() ? "Global" : qualifierRaw;
-        String typeKey = qualifierRaw.isBlank() ? GLOBAL_COMPLETION_KEY : resolveQualifierType(qualifierRaw);
-        if (typeKey == null) {
-            return List.of();
-        }
-
-        ensureTypeBuilt(typeKey);
-        List<CompletionItem> tokens = TYPE_COMPLETIONS.getOrDefault(typeKey, List.of());
-        String prefix = context.prefix() == null ? "" : context.prefix().toLowerCase(Locale.ROOT);
-        List<Suggestion> out = new ArrayList<>();
-        for (CompletionItem item : tokens) {
-            String lower = item.label().toLowerCase(Locale.ROOT);
-            String lowerInsert = item.insertText().toLowerCase(Locale.ROOT);
-            int rank = rankMatch(prefix, lower, lowerInsert, item.kind());
-            if (rank >= 0) {
-                out.add(new Suggestion(category, item.label(), item.insertText(), item.kind(), item.detail(), rank));
-            }
-        }
-        out.sort(Comparator.comparingInt(Suggestion::score)
-                .thenComparing(s -> s.token().toLowerCase(Locale.ROOT)));
-        return out;
-    }
-
-    private static synchronized void ensureCompletionCache() {
-        if (completionCacheReady) {
-            return;
-        }
-        completionCacheReady = true;
-
-        registerRoot("client", net.minecraft.client.Minecraft.class.getName());
-        registerRoot("player", net.minecraft.client.player.LocalPlayer.class.getName());
-        registerRoot("world", net.minecraft.client.multiplayer.ClientLevel.class.getName());
-        registerRoot("options", net.minecraft.client.Options.class.getName());
-        registerRoot("server", net.minecraft.server.MinecraftServer.class.getName());
-        registerRoot("source", net.minecraft.client.player.LocalPlayer.class.getName());
-        registerRoot("m0", me.m0dii.modules.scripting.ScriptApi.class.getName());
-        registerRoot("event", "me.m0dii.modules.automation.AutomationEvent");
-
-        List<CompletionItem> global = new ArrayList<>();
-        for (Map.Entry<String, String> root : ROOT_TYPE_KEYS.entrySet()) {
-            global.add(new CompletionItem(root.getKey(), root.getKey(), root.getValue(), SuggestionKind.VARIABLE, "root"));
-        }
-
-        // Kotlin and Groovy useful built-ins/snippets.
-        global.add(new CompletionItem("println(msg)", "println(msg)", null, SuggestionKind.SNIPPET, "kotlin"));
-        global.add(new CompletionItem("print(msg)", "print(msg)", null, SuggestionKind.SNIPPET, "kotlin"));
-        global.add(new CompletionItem("listOf(item1, item2)", "listOf(item1, item2)", "java.util.List", SuggestionKind.SNIPPET, "kotlin"));
-        global.add(new CompletionItem("mutableListOf(item1, item2)", "mutableListOf(item1, item2)", "java.util.List", SuggestionKind.SNIPPET, "kotlin"));
-        global.add(new CompletionItem("setOf(item1, item2)", "setOf(item1, item2)", "java.util.Set", SuggestionKind.SNIPPET, "kotlin"));
-        global.add(new CompletionItem("mapOf(key to value)", "mapOf(key to value)", "java.util.Map", SuggestionKind.SNIPPET, "kotlin"));
-        global.add(new CompletionItem("mutableMapOf(key to value)", "mutableMapOf(key to value)", "java.util.Map", SuggestionKind.SNIPPET, "kotlin"));
-        global.add(new CompletionItem("arrayListOf(item1, item2)", "arrayListOf(item1, item2)", "java.util.ArrayList", SuggestionKind.SNIPPET, "kotlin"));
-        global.add(new CompletionItem("hashMapOf(key to value)", "hashMapOf(key to value)", "java.util.HashMap", SuggestionKind.SNIPPET, "kotlin"));
-        global.add(new CompletionItem("forEach { item -> }", "forEach { item -> }", null, SuggestionKind.SNIPPET, "kotlin"));
-        global.add(new CompletionItem("if", "if", null, SuggestionKind.KEYWORD, "keyword"));
-        global.add(new CompletionItem("else", "else", null, SuggestionKind.KEYWORD, "keyword"));
-        global.add(new CompletionItem("for", "for", null, SuggestionKind.KEYWORD, "keyword"));
-        global.add(new CompletionItem("while", "while", null, SuggestionKind.KEYWORD, "keyword"));
-        global.add(new CompletionItem("when", "when", null, SuggestionKind.KEYWORD, "keyword"));
-        global.add(new CompletionItem("return", "return", null, SuggestionKind.KEYWORD, "keyword"));
-        global.add(new CompletionItem("val", "val", null, SuggestionKind.KEYWORD, "keyword"));
-        global.add(new CompletionItem("var", "var", null, SuggestionKind.KEYWORD, "keyword"));
-        global.add(new CompletionItem("fun", "fun", null, SuggestionKind.KEYWORD, "keyword"));
-        global.add(new CompletionItem("def", "def", null, SuggestionKind.KEYWORD, "groovy"));
-
-        TYPE_COMPLETIONS.put(GLOBAL_COMPLETION_KEY, dedupeAndSort(global));
-        for (String typeKey : new ArrayList<>(ROOT_TYPE_KEYS.values())) {
-            ensureTypeBuilt(typeKey);
-        }
-    }
-
-    private static void registerRoot(String rootName, String className) {
-        Class<?> clazz = tryResolveClass(className);
-        if (clazz != null) {
-            String typeKey = clazz.getName();
-            ROOT_TYPE_KEYS.put(rootName, typeKey);
-            KNOWN_TYPE_CLASSES.put(typeKey, clazz);
-            return;
-        }
-
-        // Keep fallback root for suggestions even if class cannot be resolved in this runtime.
-        String fallbackTypeKey = "root:" + rootName;
-        ROOT_TYPE_KEYS.put(rootName, fallbackTypeKey);
-        TYPE_COMPLETIONS.putIfAbsent(fallbackTypeKey, List.of());
-        TYPE_MEMBER_TYPES.putIfAbsent(fallbackTypeKey, new LinkedHashMap<>());
-    }
-
-    private static Class<?> tryResolveClass(String className) {
-        try {
-            return Class.forName(className);
-        } catch (Throwable ignored) {
-            return null;
-        }
-    }
-
-    private static void ensureTypeBuilt(String typeKey) {
-        if (typeKey == null || TYPE_COMPLETIONS.containsKey(typeKey)) {
-            return;
-        }
-        Class<?> clazz = KNOWN_TYPE_CLASSES.get(typeKey);
-        if (clazz == null) {
-            TYPE_COMPLETIONS.put(typeKey, List.of());
-            TYPE_MEMBER_TYPES.put(typeKey, new LinkedHashMap<>());
-            return;
-        }
-        buildTypeCompletions(typeKey, clazz);
-    }
-
-    private static void buildTypeCompletions(String typeKey, Class<?> clazz) {
-        List<CompletionItem> items = new ArrayList<>();
-        Map<String, String> memberTypes = new LinkedHashMap<>();
-
-        for (Field field : clazz.getFields()) {
-            if (field.isSynthetic()) {
-                continue;
-            }
-            String name = field.getName();
-            String nextType = toTypeKey(field.getType());
-            items.add(new CompletionItem(name, name, nextType, SuggestionKind.PROPERTY, shortTypeName(field.getType())));
-            memberTypes.putIfAbsent(name, nextType);
-        }
-
-        for (Method method : clazz.getMethods()) {
-            if (method.isSynthetic() || Modifier.isPrivate(method.getModifiers())) {
-                continue;
-            }
-            if (method.getDeclaringClass() == Object.class) {
-                continue;
-            }
-
-            String methodName = method.getName();
-            String nextType = toTypeKey(method.getReturnType());
-            String display = methodName + methodDisplaySignature(method) + " : " + shortTypeName(method.getReturnType());
-            String insert = methodName + methodInsertSignature(method);
-            String help = clazz == me.m0dii.modules.scripting.ScriptApi.class
-                    ? me.m0dii.modules.scripting.ScriptApi.describe(methodName) : "";
-            items.add(new CompletionItem(display, insert, nextType, SuggestionKind.METHOD,
-                    help.isEmpty() ? shortTypeName(method.getReturnType()) : help));
-            memberTypes.putIfAbsent(methodName, nextType);
-
-            if (method.getParameterCount() == 0) {
-                String property = propertyAliasForMethod(methodName);
-                if (!property.isBlank()) {
-                    items.add(new CompletionItem(property, property, nextType, SuggestionKind.PROPERTY, shortTypeName(method.getReturnType())));
-                    memberTypes.putIfAbsent(property, nextType);
-                }
-            }
-
-            if (nextType != null && shouldCacheType(method.getReturnType())) {
-                KNOWN_TYPE_CLASSES.putIfAbsent(nextType, method.getReturnType());
-            }
-        }
-
-        TYPE_COMPLETIONS.put(typeKey, dedupeAndSort(items));
-        TYPE_MEMBER_TYPES.put(typeKey, memberTypes);
-    }
-
-    private static String methodDisplaySignature(Method method) {
-        Class<?>[] params = method.getParameterTypes();
-        if (params.length == 0) {
-            return "()";
-        }
-        StringBuilder out = new StringBuilder("(");
-        for (int i = 0; i < params.length; i++) {
-            if (i > 0) {
-                out.append(", ");
-            }
-            out.append(shortTypeName(params[i]));
-        }
-        out.append(')');
-        return out.toString();
-    }
-
-    private static String methodInsertSignature(Method method) {
-        int count = method.getParameterCount();
-        if (count == 0) {
-            return "()";
-        }
-        StringBuilder out = new StringBuilder("(");
-        for (int i = 0; i < count; i++) {
-            if (i > 0) {
-                out.append(", ");
-            }
-            out.append(parameterPlaceholder(method, i));
-        }
-        out.append(')');
-        return out.toString();
-    }
-
-    private static String parameterPlaceholder(Method method, int index) {
-        String realName = reflectedParameterName(method, index);
-        if (!realName.isBlank()) {
-            return realName;
-        }
-        Class<?> type = method.getParameterTypes()[index];
-        if (type == null) {
-            return "arg" + (index + 1);
-        }
-        if (type == int.class || type == Integer.class || type == long.class || type == Long.class
-                || type == float.class || type == Float.class || type == double.class || type == Double.class) {
-            return "num" + (index + 1);
-        }
-        if (type == boolean.class || type == Boolean.class) {
-            return "flag" + (index + 1);
-        }
-        if (type == String.class || CharSequence.class.isAssignableFrom(type)) {
-            return "text" + (index + 1);
-        }
-        String base = shortTypeName(type);
-        if (base.isBlank()) {
-            base = "arg";
-        }
-        base = Character.toLowerCase(base.charAt(0)) + base.substring(1);
-        return base + (index + 1);
-    }
-
-    private static String reflectedParameterName(Method method, int index) {
-        try {
-            String name = method.getParameters()[index].getName();
-            if (name == null || name.isBlank()) {
-                return "";
-            }
-            if (name.matches("arg\\d+")) {
-                return "";
-            }
-            if (!Character.isJavaIdentifierStart(name.charAt(0))) {
-                return "";
-            }
-            for (int i = 1; i < name.length(); i++) {
-                if (!Character.isJavaIdentifierPart(name.charAt(i))) {
-                    return "";
-                }
-            }
-            return name;
-        } catch (Exception ignored) {
-            return "";
-        }
-    }
-
-    private static String shortTypeName(Class<?> type) {
-        if (type == null) {
-            return "Any";
-        }
-        if (type.isArray()) {
-            return shortTypeName(type.getComponentType()) + "[]";
-        }
-        return type.getSimpleName();
-    }
-
-    private static String propertyAliasForMethod(String methodName) {
-        if (methodName == null || methodName.isBlank()) {
-            return "";
-        }
-        if (methodName.startsWith("get") && methodName.length() > 3) {
-            return decapitalize(methodName.substring(3));
-        }
-        if (methodName.startsWith("is") && methodName.length() > 2) {
-            return decapitalize(methodName.substring(2));
-        }
-        if (methodName.startsWith("has") && methodName.length() > 3) {
-            return decapitalize(methodName.substring(3));
-        }
-        return "";
-    }
-
-    private static String decapitalize(String value) {
-        if (value == null || value.isEmpty()) {
-            return "";
-        }
-        if (value.length() == 1) {
-            return value.toLowerCase(Locale.ROOT);
-        }
-        return Character.toLowerCase(value.charAt(0)) + value.substring(1);
-    }
-
-    private static boolean shouldCacheType(Class<?> type) {
-        if (type == null || type.isPrimitive() || type.isArray() || type == Void.TYPE) {
-            return false;
-        }
-        String name = type.getName();
-        return name.startsWith("net.minecraft")
-                || name.startsWith("java.util")
-                || name.startsWith("java.lang");
-    }
-
-    private static String toTypeKey(Class<?> type) {
-        if (!shouldCacheType(type)) {
-            return null;
-        }
-        return type.getName();
-    }
-
-    private static List<CompletionItem> dedupeAndSort(List<CompletionItem> items) {
-        LinkedHashMap<String, CompletionItem> uniq = new LinkedHashMap<>();
-        for (CompletionItem item : items) {
-            String key = item.label() + "|" + item.insertText();
-            uniq.putIfAbsent(key, item);
-        }
-        List<CompletionItem> out = new ArrayList<>(uniq.values());
-        out.sort(Comparator.comparing((CompletionItem i) -> i.label().toLowerCase(Locale.ROOT)));
-        if (out.size() > MAX_COMPLETION_ITEMS_PER_TYPE) {
-            return new ArrayList<>(out.subList(0, MAX_COMPLETION_ITEMS_PER_TYPE));
-        }
-        return out;
-    }
-
-    private static boolean isQualifierChar(char c) {
-        return Character.isLetterOrDigit(c) || c == '_' || c == '.' || c == '(' || c == ')';
-    }
-
-    private static boolean isIdentifierChar(char c) {
-        return Character.isLetterOrDigit(c) || c == '_';
-    }
-
-    private static String resolveQualifierType(String qualifierRaw) {
-        if (qualifierRaw == null || qualifierRaw.isBlank()) {
-            return null;
-        }
-        String[] segments = qualifierRaw.split("\\.");
-        if (segments.length == 0) {
-            return null;
-        }
-
-        String typeKey = ROOT_TYPE_KEYS.get(segments[0]);
-        if (typeKey == null) {
-            return null;
-        }
-        for (int i = 1; i < segments.length; i++) {
-            String rawMember = segments[i];
-            if (rawMember.isBlank()) {
-                break;
-            }
-            String member = rawMember.endsWith("()")
-                    ? rawMember.substring(0, rawMember.length() - 2)
-                    : rawMember;
-            ensureTypeBuilt(typeKey);
-            Map<String, String> memberTypes = TYPE_MEMBER_TYPES.get(typeKey);
-            if (memberTypes == null) {
-                return null;
-            }
-            String nextType = memberTypes.get(member);
-            if (nextType == null) {
-                return null;
-            }
-            typeKey = nextType;
-        }
-        return typeKey;
-    }
-
-    private static int rankMatch(String prefix, String labelLower, String insertLower, SuggestionKind kind) {
-        if (prefix == null || prefix.isBlank()) {
-            return kindPriority(kind) + 50;
-        }
-        if (labelLower.startsWith(prefix)) {
-            return kindPriority(kind);
-        }
-        if (insertLower.startsWith(prefix)) {
-            return kindPriority(kind) + 5;
-        }
-        if (labelLower.contains(prefix) || insertLower.contains(prefix)) {
-            return kindPriority(kind) + 20;
-        }
-        return -1;
-    }
-
-    private static int kindPriority(SuggestionKind kind) {
-        return switch (kind) {
-            case PROPERTY -> 0;
-            case METHOD -> 2;
-            case VARIABLE -> 4;
-            case KEYWORD -> 8;
-            case SNIPPET -> 10;
-        };
-    }
-
-    private static String suggestionKindTag(SuggestionKind kind) {
-        return switch (kind) {
-            case PROPERTY -> "[P]";
-            case METHOD -> "[M]";
-            case VARIABLE -> "[V]";
-            case KEYWORD -> "[K]";
-            case SNIPPET -> "[S]";
-        };
-    }
-
-    private static int suggestionKindColor(SuggestionKind kind) {
-        return switch (kind) {
-            case PROPERTY -> 0xFFBDE8FF;
-            case METHOD -> 0xFFE8D49E;
-            case VARIABLE -> 0xFFD8E8FF;
-            case KEYWORD -> Theme.ACCENT_TEXT;
-            case SNIPPET -> 0xFFB9F7C0;
-        };
-    }
-
-    private static String suggestionCategory(String token) {
-        String t = token == null ? "" : token.toLowerCase(Locale.ROOT);
-        if (t.startsWith("player") || t.equals("hp") || t.equals("food") || t.equals("xp") || t.equals("level")) {
-            return "Player";
-        }
-        if (t.startsWith("inventory") || t.startsWith("hand") || t.startsWith("offhand")) {
-            return "Inventory";
-        }
-        if (t.startsWith("armor")) {
-            return "Armor";
-        }
-        if (t.startsWith("container")) {
-            return "Container";
-        }
-        if (t.startsWith("world") || t.startsWith("pos") || t.startsWith("dim") || t.startsWith("dir")) {
-            return "World";
-        }
-        if (t.startsWith("look") || t.startsWith("entities") || t.startsWith("players") || t.startsWith("sel")) {
-            return "Target";
-        }
-        if (t.startsWith("script")) {
-            return "Script";
-        }
-        return "Other";
     }
 
     private void saveUndo() {
@@ -3914,39 +3045,6 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
         lastAutoValidatedEditVersion = editVersion;
     }
 
-    private static String normalize(String raw) {
-        if (raw == null || raw.isEmpty()) {
-            return "";
-        }
-        return raw.replace("\r\n", "\n").replace('\r', '\n');
-    }
-
-    private static boolean scriptRunsAsync(String source) {
-        return ScriptDirectives.isAsync(normalize(source));
-    }
-
-    private static String withAsyncDirective(String source, boolean enabled) {
-        List<String> lines = new ArrayList<>(splitLines(normalize(source)));
-        String directiveLine = "// @async " + (enabled ? "on" : "off");
-        for (int i = 0; i < lines.size(); i++) {
-            String t = lines.get(i) == null ? "" : lines.get(i).trim().toLowerCase(Locale.ROOT);
-            if (t.isEmpty()) {
-                continue;
-            }
-            if (t.startsWith("//") || t.startsWith("#") || t.startsWith("/*") || t.startsWith("*")) {
-                if (t.contains(ASYNC_DIRECTIVE)) {
-                    lines.set(i, directiveLine);
-                    return String.join("\n", lines);
-                }
-                continue;
-            }
-            lines.add(i, directiveLine);
-            return String.join("\n", lines);
-        }
-        lines.addFirst(directiveLine);
-        return String.join("\n", lines);
-    }
-
     private String trimToWidth(String raw, int maxWidth) {
         String text = raw == null ? "" : raw;
         if (maxWidth <= 0 || font.width(text) <= maxWidth) {
@@ -3958,16 +3056,6 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
             keep--;
         }
         return keep <= 0 ? ellipsis : text.substring(0, keep) + ellipsis;
-    }
-
-    private static List<String> splitLines(String source) {
-        String[] parts = normalize(source).split("\\n", -1);
-        List<String> out = new ArrayList<>(parts.length);
-        out.addAll(Arrays.asList(parts));
-        if (out.isEmpty()) {
-            out.add("");
-        }
-        return out;
     }
 
     private boolean blinkOn() {
@@ -4171,5 +3259,4 @@ public class ScriptEditorScreen extends Screen implements ThemedScreen {
     }
 
 }
-
 

@@ -6,6 +6,7 @@ import me.m0dii.gui.local.UiSelectionList;
 import me.m0dii.gui.theme.Theme;
 import me.m0dii.gui.theme.ThemedWidgets;
 import me.m0dii.modules.automation.*;
+import me.m0dii.modules.macros.gui.MacroWorkbenchAutomationModels.*;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractWidget;
@@ -19,6 +20,8 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+
+import static me.m0dii.modules.macros.gui.MacroWorkbenchAutomationSupport.*;
 
 final class MacroWorkbenchAutomationTab {
     /** Below this content width the rule list and the rule editor are shown one at a time. */
@@ -142,15 +145,6 @@ final class MacroWorkbenchAutomationTab {
         });
     }
 
-    private enum WidgetGroup {
-        LIST,
-        TABS,
-        DETAIL
-    }
-
-    private record Placed(AbstractWidget widget, WidgetGroup group, int baseX, int baseY) {
-    }
-
     private final List<Placed> placedWidgets = new ArrayList<>();
     private int detailScroll = 0;
     private boolean narrowShowDetail = false;
@@ -176,15 +170,15 @@ final class MacroWorkbenchAutomationTab {
         this.fieldPickerList.setRowHeight(18);
         this.fieldPickerList.setEmptyText("No fields");
 
-        int buttonY = layout.topY;
-        boolean twoRows = layout.leftW < 220;
+        int buttonY = layout.topY();
+        boolean twoRows = layout.leftW() < 220;
         int perRow = twoRows ? 2 : 4;
-        int listButtonW = (layout.leftW - Theme.GAP_S * (perRow - 1)) / perRow;
+        int listButtonW = (layout.leftW() - Theme.GAP_S * (perRow - 1)) / perRow;
         int[][] slots = new int[4][2];
         for (int i = 0; i < 4; i++) {
             int col = i % perRow;
             int row = i / perRow;
-            slots[i][0] = layout.leftX + col * (listButtonW + Theme.GAP_S);
+            slots[i][0] = layout.leftX() + col * (listButtonW + Theme.GAP_S);
             slots[i][1] = buttonY + row * (BUTTON_H + Theme.GAP_S);
         }
         this.newRuleButton = register(ThemedWidgets.primary(Button.builder(Component.literal("+ New"), b -> createRule())
@@ -200,9 +194,9 @@ final class MacroWorkbenchAutomationTab {
                 .bounds(slots[3][0], slots[3][1], listButtonW, BUTTON_H)
                 .build());
 
-        int tabsX = layout.rightX;
-        int tabsW = layout.rightW;
-        if (layout.narrow) {
+        int tabsX = layout.rightX();
+        int tabsW = layout.rightW();
+        if (layout.narrow()) {
             int backW = 52;
             this.backButton = register(ThemedWidgets.ghost(Button.builder(Component.literal("\u2190 Rules"), b -> this.narrowShowDetail = false)
                     .bounds(tabsX, buttonY, backW, BUTTON_H)
@@ -226,98 +220,98 @@ final class MacroWorkbenchAutomationTab {
                 .bounds(tabsX + (tabW + Theme.GAP_XS) * 3, buttonY, tabsW - (tabW + Theme.GAP_XS) * 3, BUTTON_H)
                 .build());
 
-        this.ruleIdField = register(textField(layout.rightX + 12, layout.headerY + 20, layout.fieldW, 128, "rule id"));
-        this.ruleNameField = register(textField(layout.rightX2 + 12, layout.headerY + 20, layout.fieldW, 128, "name"));
+        this.ruleIdField = register(textField(layout.rightX() + 12, layout.headerY() + 20, layout.fieldW(), 128, "rule id"));
+        this.ruleNameField = register(textField(layout.rightX2() + 12, layout.headerY() + 20, layout.fieldW(), 128, "name"));
         this.eventTypeButton = register(Button.builder(Component.literal("Event"), b -> cycleEventType())
-                .bounds(layout.rightX + 12, layout.headerY + 52, layout.fieldW, BUTTON_H)
+                .bounds(layout.rightX() + 12, layout.headerY() + 52, layout.fieldW(), BUTTON_H)
                 .build());
         this.enabledButton = register(Button.builder(Component.literal("Enabled"), b -> toggleRuleEnabled())
-                .bounds(layout.rightX2 + 12, layout.headerY + 52, layout.fieldW, BUTTON_H)
+                .bounds(layout.rightX2() + 12, layout.headerY() + 52, layout.fieldW(), BUTTON_H)
                 .build());
 
-        this.priorityField = register(signedNumberField(layout.rightX + 12, layout.numberRowY, layout.numericW, 8, "0"));
-        this.cooldownField = register(numberField(layout.rightX + 12 + (layout.numericW + PANEL_GAP), layout.numberRowY, layout.numericW, 10, "0"));
-        this.debounceField = register(numberField(layout.rightX + 12 + ((layout.numericW + PANEL_GAP) * 2), layout.numberRowY, layout.numericW, 10, "0"));
-        this.rateCountField = register(numberField(layout.rightX + 12 + ((layout.numericW + PANEL_GAP) * 3), layout.numberRowY, layout.numericW, 8, "0"));
-        this.rateWindowField = register(numberField(layout.rightX + 12 + ((layout.numericW + PANEL_GAP) * 4), layout.numberRowY, layout.numericW, 10, "0"));
+        this.priorityField = register(signedNumberField(layout.rightX() + 12, layout.numberRowY(), layout.numericW(), 8, "0"));
+        this.cooldownField = register(numberField(layout.rightX() + 12 + (layout.numericW() + PANEL_GAP), layout.numberRowY(), layout.numericW(), 10, "0"));
+        this.debounceField = register(numberField(layout.rightX() + 12 + ((layout.numericW() + PANEL_GAP) * 2), layout.numberRowY(), layout.numericW(), 10, "0"));
+        this.rateCountField = register(numberField(layout.rightX() + 12 + ((layout.numericW() + PANEL_GAP) * 3), layout.numberRowY(), layout.numericW(), 8, "0"));
+        this.rateWindowField = register(numberField(layout.rightX() + 12 + ((layout.numericW() + PANEL_GAP) * 4), layout.numberRowY(), layout.numericW(), 10, "0"));
 
-        this.filterList.setBounds(layout.rightX, layout.filterPanelY + 24, layout.columnW, FILTER_LIST_H);
-        this.conditionList.setBounds(layout.rightX, layout.conditionPanelY + 24, layout.columnW, CONDITION_LIST_H);
-        this.actionList.setBounds(layout.rightX2, layout.actionsY + 24, layout.columnW, ACTION_LIST_H);
+        this.filterList.setBounds(layout.rightX(), layout.filterPanelY() + 24, layout.columnW(), FILTER_LIST_H);
+        this.conditionList.setBounds(layout.rightX(), layout.conditionPanelY() + 24, layout.columnW(), CONDITION_LIST_H);
+        this.actionList.setBounds(layout.rightX2(), layout.actionsY() + 24, layout.columnW(), ACTION_LIST_H);
 
         this.filterPickButton = register(Button.builder(Component.literal("Pick"), b -> openFilterPicker())
-                .bounds(layout.rightX + layout.columnW - 106, layout.filterPanelY + 4, 44, 18)
+                .bounds(layout.rightX() + layout.columnW() - 106, layout.filterPanelY() + 4, 44, 18)
                 .build());
         this.filterAddButton = register(Button.builder(Component.literal("+"), b -> addFilter())
-                .bounds(layout.rightX + layout.columnW - 58, layout.filterPanelY + 4, 26, 18)
+                .bounds(layout.rightX() + layout.columnW() - 58, layout.filterPanelY() + 4, 26, 18)
                 .build());
         this.filterDeleteButton = register(Button.builder(Component.literal("-"), b -> deleteFilter())
-                .bounds(layout.rightX + layout.columnW - 30, layout.filterPanelY + 4, 26, 18)
+                .bounds(layout.rightX() + layout.columnW() - 30, layout.filterPanelY() + 4, 26, 18)
                 .build());
         this.filterFieldButton = register(Button.builder(Component.literal("Field"), b -> openFilterFieldPicker())
-                .bounds(layout.rightX + 8, layout.filterPanelY + FILTER_FIELD_Y, layout.columnW - 16, BUTTON_H)
+                .bounds(layout.rightX() + 8, layout.filterPanelY() + FILTER_FIELD_Y, layout.columnW() - 16, BUTTON_H)
                 .build());
         this.filterOperatorButton = register(Button.builder(Component.literal("Operator"), b -> cycleFilterOperator())
-                .bounds(layout.rightX + 8, layout.filterPanelY + FILTER_OPERATOR_Y, Math.max(116, (layout.columnW - 28) / 2), BUTTON_H)
+                .bounds(layout.rightX() + 8, layout.filterPanelY() + FILTER_OPERATOR_Y, Math.max(116, (layout.columnW() - 28) / 2), BUTTON_H)
                 .build());
         this.filterIgnoreCaseButton = register(Button.builder(Component.literal("Ignore Case"), b -> toggleFilterIgnoreCase())
-                .bounds(layout.rightX + 16 + Math.max(116, (layout.columnW - 28) / 2), layout.filterPanelY + FILTER_OPERATOR_Y, Math.max(116, (layout.columnW - 28) / 2), BUTTON_H)
+                .bounds(layout.rightX() + 16 + Math.max(116, (layout.columnW() - 28) / 2), layout.filterPanelY() + FILTER_OPERATOR_Y, Math.max(116, (layout.columnW() - 28) / 2), BUTTON_H)
                 .build());
-        this.filterValueField = register(textField(layout.rightX + 8, layout.filterPanelY + FILTER_VALUE_Y, layout.columnW - 16, 256, "value or regex"));
+        this.filterValueField = register(textField(layout.rightX() + 8, layout.filterPanelY() + FILTER_VALUE_Y, layout.columnW() - 16, 256, "value or regex"));
 
         this.conditionPickButton = register(Button.builder(Component.literal("Pick"), b -> openConditionPicker())
-                .bounds(layout.rightX + layout.columnW - 106, layout.conditionPanelY + 4, 44, 18)
+                .bounds(layout.rightX() + layout.columnW() - 106, layout.conditionPanelY() + 4, 44, 18)
                 .build());
         this.conditionAddButton = register(Button.builder(Component.literal("+"), b -> addCondition())
-                .bounds(layout.rightX + layout.columnW - 58, layout.conditionPanelY + 4, 26, 18)
+                .bounds(layout.rightX() + layout.columnW() - 58, layout.conditionPanelY() + 4, 26, 18)
                 .build());
         this.conditionDeleteButton = register(Button.builder(Component.literal("-"), b -> deleteCondition())
-                .bounds(layout.rightX + layout.columnW - 30, layout.conditionPanelY + 4, 26, 18)
+                .bounds(layout.rightX() + layout.columnW() - 30, layout.conditionPanelY() + 4, 26, 18)
                 .build());
         this.conditionSourceButton = register(Button.builder(Component.literal("Source"), b -> cycleConditionSource())
-                .bounds(layout.rightX + 8, layout.conditionPanelY + CONDITION_SOURCE_Y, layout.columnW - 16, BUTTON_H)
+                .bounds(layout.rightX() + 8, layout.conditionPanelY() + CONDITION_SOURCE_Y, layout.columnW() - 16, BUTTON_H)
                 .build());
         int conditionFieldModeButtonW = 84;
         this.conditionFieldButton = register(Button.builder(Component.literal("Field"), b -> openConditionFieldPicker())
-                .bounds(layout.rightX + 8, layout.conditionPanelY + CONDITION_FIELD_Y, layout.columnW - 24 - conditionFieldModeButtonW, BUTTON_H)
+                .bounds(layout.rightX() + 8, layout.conditionPanelY() + CONDITION_FIELD_Y, layout.columnW() - 24 - conditionFieldModeButtonW, BUTTON_H)
                 .build());
         this.conditionFieldModeButton = register(Button.builder(Component.literal("Pick"), b -> togglePlaceholderConditionFieldMode())
-                .bounds(layout.rightX + layout.columnW - 8 - conditionFieldModeButtonW, layout.conditionPanelY + CONDITION_FIELD_Y, conditionFieldModeButtonW, BUTTON_H)
+                .bounds(layout.rightX() + layout.columnW() - 8 - conditionFieldModeButtonW, layout.conditionPanelY() + CONDITION_FIELD_Y, conditionFieldModeButtonW, BUTTON_H)
                 .build());
-        this.conditionFieldManualField = register(textField(layout.rightX + 8, layout.conditionPanelY + CONDITION_FIELD_Y, layout.columnW - 16, 256, "placeholder token (e.g. player.name)"));
+        this.conditionFieldManualField = register(textField(layout.rightX() + 8, layout.conditionPanelY() + CONDITION_FIELD_Y, layout.columnW() - 16, 256, "placeholder token (e.g. player.name)"));
         this.conditionOperatorButton = register(Button.builder(Component.literal("Operator"), b -> cycleConditionOperator())
-                .bounds(layout.rightX + 8, layout.conditionPanelY + CONDITION_OPERATOR_Y, Math.max(116, (layout.columnW - 28) / 2), BUTTON_H)
+                .bounds(layout.rightX() + 8, layout.conditionPanelY() + CONDITION_OPERATOR_Y, Math.max(116, (layout.columnW() - 28) / 2), BUTTON_H)
                 .build());
         this.conditionIgnoreCaseButton = register(Button.builder(Component.literal("Ignore Case"), b -> toggleConditionIgnoreCase())
-                .bounds(layout.rightX + 16 + Math.max(116, (layout.columnW - 28) / 2), layout.conditionPanelY + CONDITION_OPERATOR_Y, Math.max(116, (layout.columnW - 28) / 2), BUTTON_H)
+                .bounds(layout.rightX() + 16 + Math.max(116, (layout.columnW() - 28) / 2), layout.conditionPanelY() + CONDITION_OPERATOR_Y, Math.max(116, (layout.columnW() - 28) / 2), BUTTON_H)
                 .build());
-        this.conditionValueField = register(textField(layout.rightX + 8, layout.conditionPanelY + CONDITION_VALUE_Y, layout.columnW - 16, 256, "expected value"));
+        this.conditionValueField = register(textField(layout.rightX() + 8, layout.conditionPanelY() + CONDITION_VALUE_Y, layout.columnW() - 16, 256, "expected value"));
 
         this.actionAddButton = register(Button.builder(Component.literal("+ Action"), b -> addAction())
-                .bounds(layout.rightX2 + layout.columnW - 218, layout.actionsY + 4, 64, 18)
+                .bounds(layout.rightX2() + layout.columnW() - 218, layout.actionsY() + 4, 64, 18)
                 .build());
         this.actionDeleteButton = register(Button.builder(Component.literal("Delete"), b -> deleteAction())
-                .bounds(layout.rightX2 + layout.columnW - 150, layout.actionsY + 4, 60, 18)
+                .bounds(layout.rightX2() + layout.columnW() - 150, layout.actionsY() + 4, 60, 18)
                 .build());
         this.actionUpButton = register(Button.builder(Component.literal("Up"), b -> moveAction(-1))
-                .bounds(layout.rightX2 + layout.columnW - 86, layout.actionsY + 4, 36, 18)
+                .bounds(layout.rightX2() + layout.columnW() - 86, layout.actionsY() + 4, 36, 18)
                 .build());
         this.actionDownButton = register(Button.builder(Component.literal("Down"), b -> moveAction(1))
-                .bounds(layout.rightX2 + layout.columnW - 58, layout.actionsY + 4, 48, 18)
+                .bounds(layout.rightX2() + layout.columnW() - 58, layout.actionsY() + 4, 48, 18)
                 .build());
         this.actionTypeButton = register(Button.builder(Component.literal("Type"), b -> cycleActionType())
-                .bounds(layout.rightX2 + 8, layout.actionsY + 128, layout.columnW - 16, BUTTON_H)
+                .bounds(layout.rightX2() + 8, layout.actionsY() + 128, layout.columnW() - 16, BUTTON_H)
                 .build());
-        this.actionTargetField = register(textField(layout.rightX2 + 8, layout.actionsY + 160, layout.columnW - 16, 256, "target"));
-        this.actionArgumentField = register(textField(layout.rightX2 + 8, layout.actionsY + 208, layout.columnW - 16, 256, "argument"));
+        this.actionTargetField = register(textField(layout.rightX2() + 8, layout.actionsY() + 160, layout.columnW() - 16, 256, "target"));
+        this.actionArgumentField = register(textField(layout.rightX2() + 8, layout.actionsY() + 208, layout.columnW() - 16, 256, "argument"));
         this.actionEnabledButton = register(Button.builder(Component.literal("Enabled"), b -> toggleActionEnabled())
-                .bounds(layout.rightX2 + 8, layout.actionsY + 232, 140, BUTTON_H)
+                .bounds(layout.rightX2() + 8, layout.actionsY() + 232, 140, BUTTON_H)
                 .build());
         this.saveButton = register(ThemedWidgets.primary(Button.builder(Component.literal("Save Rules"), b -> commitAll())
-                .bounds(layout.rightX2 + 8, layout.actionsY + layout.actionsH - 24, 90, BUTTON_H)
+                .bounds(layout.rightX2() + 8, layout.actionsY() + layout.actionsH() - 24, 90, BUTTON_H)
                 .build()));
         this.testButton = register(Button.builder(Component.literal("Fire Test"), b -> testSelectedRule())
-                .bounds(layout.rightX2 + 102, layout.actionsY + layout.actionsH - 24, 90, BUTTON_H)
+                .bounds(layout.rightX2() + 102, layout.actionsY() + layout.actionsH() - 24, 90, BUTTON_H)
                 .build());
 
         classifyWidgets(layout);
@@ -360,14 +354,14 @@ final class MacroWorkbenchAutomationTab {
         int renderMouseY = hasOverlayOpen() ? HOVER_SUPPRESS_MOUSE : mouseY;
 
         applyWidgetPlacement(layout);
-        boolean showList = !layout.narrow || !this.narrowShowDetail;
-        boolean showDetail = !layout.narrow || this.narrowShowDetail;
+        boolean showList = !layout.narrow() || !this.narrowShowDetail;
+        boolean showDetail = !layout.narrow() || this.narrowShowDetail;
         Font font = this.owner.workbenchTextRenderer();
         if (showList) {
-            int listBottom = layout.bottom - 12;
-            this.ruleList.setBounds(layout.leftX, layout.listY, layout.leftW, Math.max(20, listBottom - layout.listY));
+            int listBottom = layout.bottom() - 12;
+            this.ruleList.setBounds(layout.leftX(), layout.listY(), layout.leftW(), Math.max(20, listBottom - layout.listY()));
             this.ruleList.extractRenderState(context, font, renderMouseX, renderMouseY);
-            context.text(font, trimToWidth(this.statusMessage, layout.leftW), layout.leftX, layout.bottom - 9, this.statusColor, false);
+            context.text(font, trimToWidth(this.statusMessage, layout.leftW()), layout.leftX(), layout.bottom() - 9, this.statusColor, false);
         } else {
             this.ruleList.setBounds(PARKED, PARKED, 1, 1);
         }
@@ -377,37 +371,37 @@ final class MacroWorkbenchAutomationTab {
             this.actionList.setBounds(PARKED, PARKED, 1, 1);
             return;
         }
-        this.filterList.setBounds(layout.rightX, layout.filterPanelY + 24, layout.columnW, FILTER_LIST_H);
-        this.conditionList.setBounds(layout.rightX, layout.conditionPanelY + 24, layout.columnW, CONDITION_LIST_H);
-        this.actionList.setBounds(layout.rightX2, layout.actionsY + 24, layout.columnW, ACTION_LIST_H);
+        this.filterList.setBounds(layout.rightX(), layout.filterPanelY() + 24, layout.columnW(), FILTER_LIST_H);
+        this.conditionList.setBounds(layout.rightX(), layout.conditionPanelY() + 24, layout.columnW(), CONDITION_LIST_H);
+        this.actionList.setBounds(layout.rightX2(), layout.actionsY() + 24, layout.columnW(), ACTION_LIST_H);
 
-        context.enableScissor(layout.rightX, layout.detailTop, layout.rightX + layout.rightW, layout.bottom);
-        UiForms.drawPanel(context, layout.rightX, layout.headerY, layout.rightW, layout.headerH);
+        context.enableScissor(layout.rightX(), layout.detailTop(), layout.rightX() + layout.rightW(), layout.bottom());
+        UiForms.drawPanel(context, layout.rightX(), layout.headerY(), layout.rightW(), layout.headerH());
         syncSectionButtons();
 
-        context.text(this.owner.workbenchTextRenderer(), "Id", layout.rightX + 12, layout.headerY + PANEL_TITLE_Y, 0xFFB8B8B8);
-        context.text(this.owner.workbenchTextRenderer(), "Name", layout.rightX2 + 12, layout.headerY + PANEL_TITLE_Y, 0xFFB8B8B8);
-        context.text(this.owner.workbenchTextRenderer(), "Priority", layout.rightX + 12, layout.headerY + 78, 0xFFB8B8B8);
-        context.text(this.owner.workbenchTextRenderer(), "Cooldown", layout.rightX + 12 + (layout.numericW + PANEL_GAP), layout.headerY + 78, 0xFFB8B8B8);
-        context.text(this.owner.workbenchTextRenderer(), "Debounce", layout.rightX + 12 + ((layout.numericW + PANEL_GAP) * 2), layout.headerY + 78, 0xFFB8B8B8);
-        context.text(this.owner.workbenchTextRenderer(), "Rate", layout.rightX + 12 + ((layout.numericW + PANEL_GAP) * 3), layout.headerY + 78, 0xFFB8B8B8);
-        context.text(this.owner.workbenchTextRenderer(), "Window", layout.rightX + 12 + ((layout.numericW + PANEL_GAP) * 4), layout.headerY + 78, 0xFFB8B8B8);
+        context.text(this.owner.workbenchTextRenderer(), "Id", layout.rightX() + 12, layout.headerY() + PANEL_TITLE_Y, 0xFFB8B8B8);
+        context.text(this.owner.workbenchTextRenderer(), "Name", layout.rightX2() + 12, layout.headerY() + PANEL_TITLE_Y, 0xFFB8B8B8);
+        context.text(this.owner.workbenchTextRenderer(), "Priority", layout.rightX() + 12, layout.headerY() + 78, 0xFFB8B8B8);
+        context.text(this.owner.workbenchTextRenderer(), "Cooldown", layout.rightX() + 12 + (layout.numericW() + PANEL_GAP), layout.headerY() + 78, 0xFFB8B8B8);
+        context.text(this.owner.workbenchTextRenderer(), "Debounce", layout.rightX() + 12 + ((layout.numericW() + PANEL_GAP) * 2), layout.headerY() + 78, 0xFFB8B8B8);
+        context.text(this.owner.workbenchTextRenderer(), "Rate", layout.rightX() + 12 + ((layout.numericW() + PANEL_GAP) * 3), layout.headerY() + 78, 0xFFB8B8B8);
+        context.text(this.owner.workbenchTextRenderer(), "Window", layout.rightX() + 12 + ((layout.numericW() + PANEL_GAP) * 4), layout.headerY() + 78, 0xFFB8B8B8);
 
         AutomationRule rule = selectedRule();
         AutomationEngine.RuleRuntimeSnapshot runtime = rule == null
                 ? new AutomationEngine.RuleRuntimeSnapshot(null, false, 0L)
                 : AutomationModule.INSTANCE.engine().getRuntimeSnapshot(rule.id);
         renderActiveSection(context, layout, rule, runtime, renderMouseX, renderMouseY);
-        context.text(font, trimToWidth(this.dirty ? "Unsaved changes" : "Saved", Math.max(0, layout.columnW - 204)), layout.rightX2 + 204, layout.actionsY + layout.actionsH - 18, this.dirty ? Theme.WARNING : Theme.SUCCESS, false);
+        context.text(font, trimToWidth(this.dirty ? "Unsaved changes" : "Saved", Math.max(0, layout.columnW() - 204)), layout.rightX2() + 204, layout.actionsY() + layout.actionsH() - 18, this.dirty ? Theme.WARNING : Theme.SUCCESS, false);
         context.disableScissor();
 
         int maxScroll = maxDetailScroll(layout);
         if (maxScroll > 0) {
-            int trackX = layout.rightX + layout.rightW + 3;
-            int trackH = layout.bottom - layout.detailTop;
+            int trackX = layout.rightX() + layout.rightW() + 3;
+            int trackH = layout.bottom() - layout.detailTop();
             int thumbH = Math.max(12, trackH * trackH / (trackH + maxScroll));
-            int thumbY = layout.detailTop + (trackH - thumbH) * this.detailScroll / maxScroll;
-            context.fill(trackX, layout.detailTop, trackX + 2, layout.bottom, Theme.DIVIDER);
+            int thumbY = layout.detailTop() + (trackH - thumbH) * this.detailScroll / maxScroll;
+            context.fill(trackX, layout.detailTop(), trackX + 2, layout.bottom(), Theme.DIVIDER);
             context.fill(trackX, thumbY, trackX + 2, thumbY + thumbH, Theme.BORDER_STRONG);
         }
 
@@ -453,12 +447,12 @@ final class MacroWorkbenchAutomationTab {
                                        Layout layout,
                                        AutomationRule rule,
                                        AutomationEngine.RuleRuntimeSnapshot runtime) {
-        UiForms.drawPanel(context, layout.diagnosticsX, layout.diagnosticsY, layout.columnW, layout.diagnosticsH);
-        UiForms.drawPanel(context, layout.actionsX, layout.actionsY, layout.columnW, layout.actionsH);
-        context.text(this.owner.workbenchTextRenderer(), "Recent Diagnostics", layout.diagnosticsX + 8, layout.diagnosticsY + PANEL_TITLE_Y, 0xFFFFFFFF);
-        context.text(this.owner.workbenchTextRenderer(), "Summary", layout.actionsX + 8, layout.actionsY + PANEL_TITLE_Y, 0xFFFFFFFF);
-        renderDiagnostics(context, layout.diagnosticsX + 8, layout.diagnosticsY + 28, layout.columnW - 16, layout.diagnosticsH - 36);
-        renderOverviewSummary(context, layout.actionsX + 8, layout.actionsY + 28, layout.columnW - 16, layout.actionsH - 44, rule, runtime);
+        UiForms.drawPanel(context, layout.diagnosticsX(), layout.diagnosticsY(), layout.columnW(), layout.diagnosticsH());
+        UiForms.drawPanel(context, layout.actionsX(), layout.actionsY(), layout.columnW(), layout.actionsH());
+        context.text(this.owner.workbenchTextRenderer(), "Recent Diagnostics", layout.diagnosticsX() + 8, layout.diagnosticsY() + PANEL_TITLE_Y, 0xFFFFFFFF);
+        context.text(this.owner.workbenchTextRenderer(), "Summary", layout.actionsX() + 8, layout.actionsY() + PANEL_TITLE_Y, 0xFFFFFFFF);
+        renderDiagnostics(context, layout.diagnosticsX() + 8, layout.diagnosticsY() + 28, layout.columnW() - 16, layout.diagnosticsH() - 36);
+        renderOverviewSummary(context, layout.actionsX() + 8, layout.actionsY() + 28, layout.columnW() - 16, layout.actionsH() - 44, rule, runtime);
     }
 
     private void renderFiltersSection(GuiGraphicsExtractor context,
@@ -466,17 +460,17 @@ final class MacroWorkbenchAutomationTab {
                                       AutomationRule rule,
                                       int mouseX,
                                       int mouseY) {
-        UiForms.drawPanel(context, layout.filterPanelX, layout.filterPanelY, layout.columnW, layout.filterPanelH);
-        UiForms.drawPanel(context, layout.actionsX, layout.actionsY, layout.columnW, layout.actionsH);
-        context.text(this.owner.workbenchTextRenderer(), "Filters", layout.filterPanelX + 8, layout.filterPanelY + PANEL_TITLE_Y, 0xFFFFFFFF);
-        context.text(this.owner.workbenchTextRenderer(), "Available Event Fields", layout.actionsX + 8, layout.actionsY + PANEL_TITLE_Y, 0xFFFFFFFF);
+        UiForms.drawPanel(context, layout.filterPanelX(), layout.filterPanelY(), layout.columnW(), layout.filterPanelH());
+        UiForms.drawPanel(context, layout.actionsX(), layout.actionsY(), layout.columnW(), layout.actionsH());
+        context.text(this.owner.workbenchTextRenderer(), "Filters", layout.filterPanelX() + 8, layout.filterPanelY() + PANEL_TITLE_Y, 0xFFFFFFFF);
+        context.text(this.owner.workbenchTextRenderer(), "Available Event Fields", layout.actionsX() + 8, layout.actionsY() + PANEL_TITLE_Y, 0xFFFFFFFF);
         this.filterList.extractRenderState(context, this.owner.workbenchTextRenderer(), mouseX, mouseY);
         renderFilterEditorLabels(context, layout);
         renderFieldCatalog(context,
-                layout.actionsX + 8,
-                layout.actionsY + 28,
-                layout.columnW - 16,
-                layout.actionsH - 64,
+                layout.actionsX() + 8,
+                layout.actionsY() + 28,
+                layout.columnW() - 16,
+                layout.actionsH() - 64,
                 rule == null ? List.of() : AutomationFieldCatalog.eventFilterFields(rule.eventType),
                 selectedFilter() == null ? "" : safe(selectedFilter().field));
     }
@@ -486,19 +480,19 @@ final class MacroWorkbenchAutomationTab {
                                          AutomationRule rule,
                                          int mouseX,
                                          int mouseY) {
-        UiForms.drawPanel(context, layout.conditionPanelX, layout.conditionPanelY, layout.columnW, layout.conditionPanelH);
-        UiForms.drawPanel(context, layout.actionsX, layout.actionsY, layout.columnW, layout.actionsH);
-        context.text(this.owner.workbenchTextRenderer(), "Conditions", layout.conditionPanelX + 8, layout.conditionPanelY + PANEL_TITLE_Y, 0xFFFFFFFF);
-        context.text(this.owner.workbenchTextRenderer(), "Available Source Fields", layout.actionsX + 8, layout.actionsY + PANEL_TITLE_Y, 0xFFFFFFFF);
+        UiForms.drawPanel(context, layout.conditionPanelX(), layout.conditionPanelY(), layout.columnW(), layout.conditionPanelH());
+        UiForms.drawPanel(context, layout.actionsX(), layout.actionsY(), layout.columnW(), layout.actionsH());
+        context.text(this.owner.workbenchTextRenderer(), "Conditions", layout.conditionPanelX() + 8, layout.conditionPanelY() + PANEL_TITLE_Y, 0xFFFFFFFF);
+        context.text(this.owner.workbenchTextRenderer(), "Available Source Fields", layout.actionsX() + 8, layout.actionsY() + PANEL_TITLE_Y, 0xFFFFFFFF);
         this.conditionList.extractRenderState(context, this.owner.workbenchTextRenderer(), mouseX, mouseY);
         renderConditionEditorLabels(context, layout);
         AutomationRule.Condition condition = selectedCondition();
         AutomationRule.ConditionSource source = condition == null ? AutomationRule.ConditionSource.EVENT : condition.source;
         renderFieldCatalog(context,
-                layout.actionsX + 8,
-                layout.actionsY + 28,
-                layout.columnW - 16,
-                layout.actionsH - 64,
+                layout.actionsX() + 8,
+                layout.actionsY() + 28,
+                layout.columnW() - 16,
+                layout.actionsH() - 64,
                 rule == null ? List.of() : AutomationFieldCatalog.conditionFields(source, rule.eventType),
                 condition == null ? "" : safe(condition.field));
     }
@@ -509,13 +503,13 @@ final class MacroWorkbenchAutomationTab {
                                       AutomationEngine.RuleRuntimeSnapshot runtime,
                                       int mouseX,
                                       int mouseY) {
-        UiForms.drawPanel(context, layout.diagnosticsX, layout.diagnosticsY, layout.columnW, layout.diagnosticsH);
-        UiForms.drawPanel(context, layout.actionsX, layout.actionsY, layout.columnW, layout.actionsH);
-        context.text(this.owner.workbenchTextRenderer(), "Action Notes", layout.diagnosticsX + 8, layout.diagnosticsY + PANEL_TITLE_Y, 0xFFFFFFFF);
-        context.text(this.owner.workbenchTextRenderer(), "Actions", layout.actionsX + 8, layout.actionsY + PANEL_TITLE_Y, 0xFFFFFFFF);
+        UiForms.drawPanel(context, layout.diagnosticsX(), layout.diagnosticsY(), layout.columnW(), layout.diagnosticsH());
+        UiForms.drawPanel(context, layout.actionsX(), layout.actionsY(), layout.columnW(), layout.actionsH());
+        context.text(this.owner.workbenchTextRenderer(), "Action Notes", layout.diagnosticsX() + 8, layout.diagnosticsY() + PANEL_TITLE_Y, 0xFFFFFFFF);
+        context.text(this.owner.workbenchTextRenderer(), "Actions", layout.actionsX() + 8, layout.actionsY() + PANEL_TITLE_Y, 0xFFFFFFFF);
         this.actionList.extractRenderState(context, this.owner.workbenchTextRenderer(), mouseX, mouseY);
         renderActionEditorLabels(context, layout);
-        renderActionsHelp(context, layout.diagnosticsX + 8, layout.diagnosticsY + 28, layout.columnW - 16, layout.diagnosticsH - 36, rule, runtime);
+        renderActionsHelp(context, layout.diagnosticsX() + 8, layout.diagnosticsY() + 28, layout.columnW() - 16, layout.diagnosticsH() - 36, rule, runtime);
     }
 
     private void renderFilterEditorLabels(GuiGraphicsExtractor context, Layout layout) {
@@ -524,15 +518,15 @@ final class MacroWorkbenchAutomationTab {
             context.text(this.owner.workbenchTextRenderer(), "Op / Case", this.filterOperatorButton.getX(), this.filterOperatorButton.getY() - 12, 0xFFB8B8B8);
             context.text(
                     this.owner.workbenchTextRenderer(),
-                    trimToWidth(filterFieldHelpText(), layout.columnW - 16),
+                    trimToWidth(filterFieldHelpText(), layout.columnW() - 16),
                     this.filterFieldButton.getX(),
                     this.filterFieldButton.getY() + BUTTON_H + 6,
                     0xFF909090
             );
             context.text(this.owner.workbenchTextRenderer(), "Value", this.filterValueField.getX(), this.filterValueField.getY() - 12, 0xFFB8B8B8);
         } else {
-            context.text(this.owner.workbenchTextRenderer(), "Select a filter or click + to add one.", layout.filterPanelX + 8, layout.filterPanelY + 78, 0xFF909090);
-            context.text(this.owner.workbenchTextRenderer(), "Field choices are tied to the selected event type.", layout.filterPanelX + 8, layout.filterPanelY + 94, 0xFF909090);
+            context.text(this.owner.workbenchTextRenderer(), "Select a filter or click + to add one.", layout.filterPanelX() + 8, layout.filterPanelY() + 78, 0xFF909090);
+            context.text(this.owner.workbenchTextRenderer(), "Field choices are tied to the selected event type.", layout.filterPanelX() + 8, layout.filterPanelY() + 94, 0xFF909090);
         }
     }
 
@@ -542,15 +536,15 @@ final class MacroWorkbenchAutomationTab {
             context.text(this.owner.workbenchTextRenderer(), "Op / Case", this.conditionOperatorButton.getX(), this.conditionOperatorButton.getY() - 12, 0xFFB8B8B8);
             context.text(
                     this.owner.workbenchTextRenderer(),
-                    trimToWidth(conditionFieldHelpText(), layout.columnW - 16),
+                    trimToWidth(conditionFieldHelpText(), layout.columnW() - 16),
                     this.conditionFieldButton.getX(),
                     this.conditionFieldButton.getY() + BUTTON_H + 6,
                     0xFF909090
             );
             context.text(this.owner.workbenchTextRenderer(), "Value", this.conditionValueField.getX(), this.conditionValueField.getY() - 12, 0xFFB8B8B8);
         } else {
-            context.text(this.owner.workbenchTextRenderer(), "No condition selected. Click + to add one.", layout.conditionPanelX + 8, layout.conditionPanelY + 72, 0xFF909090);
-            context.text(this.owner.workbenchTextRenderer(), "Conditions can read event, client, player, or world fields.", layout.conditionPanelX + 8, layout.conditionPanelY + 94, 0xFF909090);
+            context.text(this.owner.workbenchTextRenderer(), "No condition selected. Click + to add one.", layout.conditionPanelX() + 8, layout.conditionPanelY() + 72, 0xFF909090);
+            context.text(this.owner.workbenchTextRenderer(), "Conditions can read event, client, player, or world fields.", layout.conditionPanelX() + 8, layout.conditionPanelY() + 94, 0xFF909090);
         }
     }
 
@@ -558,10 +552,10 @@ final class MacroWorkbenchAutomationTab {
         if (selectedAction() != null) {
             context.text(this.owner.workbenchTextRenderer(), "Target", this.actionTargetField.getX(), this.actionTargetField.getY() - 12, 0xFFB8B8B8);
             context.text(this.owner.workbenchTextRenderer(), actionArgumentLabel(), this.actionArgumentField.getX(), this.actionArgumentField.getY() - 12, 0xFFB8B8B8);
-            context.text(this.owner.workbenchTextRenderer(), trimToWidth(actionTargetHint(), layout.columnW - 16), layout.actionsX + 8, layout.actionsY + 264, 0xFF9FCFCF);
-            context.text(this.owner.workbenchTextRenderer(), "Target and argument expand {event.*}, {client.*}, {player.*}, {world.*}.", layout.actionsX + 8, layout.actionsY + 278, 0xFF9FCFCF);
+            context.text(this.owner.workbenchTextRenderer(), trimToWidth(actionTargetHint(), layout.columnW() - 16), layout.actionsX() + 8, layout.actionsY() + 264, 0xFF9FCFCF);
+            context.text(this.owner.workbenchTextRenderer(), "Target and argument expand {event.*}, {client.*}, {player.*}, {world.*}.", layout.actionsX() + 8, layout.actionsY() + 278, 0xFF9FCFCF);
         } else {
-            context.text(this.owner.workbenchTextRenderer(), "Select an action or click + Action to add one.", layout.actionsX + 8, layout.actionsY + 150, 0xFF909090);
+            context.text(this.owner.workbenchTextRenderer(), "Select an action or click + Action to add one.", layout.actionsX() + 8, layout.actionsY() + 150, 0xFF909090);
         }
     }
 
@@ -638,7 +632,7 @@ final class MacroWorkbenchAutomationTab {
             return true;
         }
         Layout clickLayout = layout();
-        if (mouseY < clickLayout.detailTop || mouseY > clickLayout.bottom) {
+        if (mouseY < clickLayout.detailTop() || mouseY > clickLayout.bottom()) {
             return false;
         }
         if (this.activeSection == EditorSection.FILTERS && this.filterList.handleMouseClick(mouseX, mouseY)) {
@@ -682,8 +676,8 @@ final class MacroWorkbenchAutomationTab {
             return true;
         }
         Layout layout = layout();
-        boolean overDetail = mouseX >= layout.rightX && mouseX <= layout.rightX + layout.rightW
-                && mouseY >= layout.detailTop && mouseY <= layout.bottom;
+        boolean overDetail = mouseX >= layout.rightX() && mouseX <= layout.rightX() + layout.rightW()
+                && mouseY >= layout.detailTop() && mouseY <= layout.bottom();
         int maxScroll = maxDetailScroll(layout);
         if (!overDetail || maxScroll <= 0) {
             return false;
@@ -1503,10 +1497,6 @@ final class MacroWorkbenchAutomationTab {
         return y + 14;
     }
 
-    private static int sizeOf(List<?> values) {
-        return values == null ? 0 : values.size();
-    }
-
     private void renderDiagnostics(GuiGraphicsExtractor context, int x, int y, int width, int height) {
         List<AutomationEngine.LogEntry> logs = AutomationModule.INSTANCE.engine().getDiagnostics(DIAGNOSTIC_ROWS);
         if (logs.isEmpty()) {
@@ -1643,175 +1633,6 @@ final class MacroWorkbenchAutomationTab {
         return rule.actions.get(this.selectedActionIndex);
     }
 
-    private static int clampIndex(int current, int size) {
-        if (size <= 0) {
-            return -1;
-        }
-        return Math.clamp(Math.max(current, 0), 0, size - 1);
-    }
-
-    private static String displayRuleName(AutomationRule rule) {
-        String name = safe(rule.name);
-        String label = name.isBlank() ? safe(rule.id) : name;
-        String folder = safe(rule.group);
-        return folder.isBlank() ? label : "[" + folder + "] " + label;
-    }
-
-    private static String filterSummary(AutomationRule.EventFilter filter) {
-        if (filter == null) {
-            return "(none)";
-        }
-        return safe(filter.field) + " " + filter.operator.name() + " " + safe(filter.value);
-    }
-
-    private static String conditionSummary(AutomationRule.Condition condition) {
-        if (condition == null) {
-            return "(none)";
-        }
-        return condition.source.name() + "." + displayConditionField(condition.source, condition.field) + " " + condition.operator.name() + " " + safe(condition.value);
-    }
-
-    private static String actionSummary(AutomationRule.Action action) {
-        if (action == null) {
-            return "(none)";
-        }
-        String prefix = action.enabled ? "" : "[off] ";
-        String target = safe(action.target);
-        return prefix + action.type.name() + " -> " + (target.isBlank() ? "(unset)" : target);
-    }
-
-    private static String actionHint(AutomationRule rule) {
-        if (rule == null) {
-            return "Select a rule to edit triggers, conditions, and actions.";
-        }
-        return switch (rule.eventType) {
-            case TICK_INTERVAL -> "Tick rules use an event filter like field=intervalTicks value=20.";
-            case PLAYER_MOVE -> "Move rules can filter on distance or destination coordinates.";
-            case WORLD_JOIN -> "Join rules usually need no filters.";
-            case WORLD_LEAVE -> "Leave rules trigger when unloading/disconnecting from a world.";
-            case DIMENSION_CHANGE -> "Dimension rules often use toDimension or fromDimension.";
-            case CHAT_RECEIVED_REGEX -> "Chat rules usually use field=message with REGEX.";
-            case SCREEN_CHANGED -> "Screen rules can match fromScreen, toScreen, or screen presence changes.";
-            case WEATHER_CHANGED -> "Weather rules can detect rain/thunder starts and stops.";
-            case HOTBAR_SLOT_CHANGED -> "Hotbar rules can match fromSlot or toSlot.";
-            case HELD_ITEM_CHANGED -> "Held-item rules can match item ids or display names.";
-            case PLAYER_LEVEL_CHANGED -> "Level rules can react to level-ups or XP progress changes.";
-            case PLAYER_HEALTH_CHANGED -> "Health rules can match toHealth or deltaHealth.";
-            case PLAYER_FOOD_CHANGED -> "Food rules can match toFood or deltaFood.";
-            case PLAYER_DEATH -> "Death rules run once when the client player dies.";
-        };
-    }
-
-    private static AutomationRule.EventFilter defaultFilterFor(AutomationEventType eventType) {
-        AutomationRule.EventFilter filter = new AutomationRule.EventFilter();
-        filter.ignoreCase = true;
-        switch (eventType) {
-            case TICK_INTERVAL -> {
-                filter.field = "intervalTicks";
-                filter.operator = AutomationRule.Operator.EQUALS;
-                filter.value = "20";
-            }
-            case PLAYER_MOVE -> {
-                filter.field = "distance";
-                filter.operator = AutomationRule.Operator.GREATER_THAN;
-                filter.value = "1.0";
-            }
-            case WORLD_JOIN -> {
-                filter.field = "dimension";
-                filter.operator = AutomationRule.Operator.EXISTS;
-                filter.value = "";
-            }
-            case WORLD_LEAVE -> {
-                filter.field = "fromDimension";
-                filter.operator = AutomationRule.Operator.EXISTS;
-                filter.value = "";
-            }
-            case DIMENSION_CHANGE -> {
-                filter.field = "toDimension";
-                filter.operator = AutomationRule.Operator.EQUALS;
-                filter.value = "minecraft:the_nether";
-            }
-            case CHAT_RECEIVED_REGEX -> {
-                filter.field = "message";
-                filter.operator = AutomationRule.Operator.REGEX;
-                filter.value = ".*";
-            }
-            case SCREEN_CHANGED -> {
-                filter.field = "toScreen";
-                filter.operator = AutomationRule.Operator.EQUALS;
-                filter.value = "InventoryScreen";
-            }
-            case WEATHER_CHANGED -> {
-                filter.field = "startedRaining";
-                filter.operator = AutomationRule.Operator.EQUALS;
-                filter.value = "true";
-            }
-            case HOTBAR_SLOT_CHANGED -> {
-                filter.field = "toSlot";
-                filter.operator = AutomationRule.Operator.EQUALS;
-                filter.value = "1";
-            }
-            case HELD_ITEM_CHANGED -> {
-                filter.field = "toItemId";
-                filter.operator = AutomationRule.Operator.EQUALS;
-                filter.value = "minecraft:diamond_sword";
-            }
-            case PLAYER_LEVEL_CHANGED -> {
-                filter.field = "deltaLevel";
-                filter.operator = AutomationRule.Operator.GREATER_THAN;
-                filter.value = "0";
-            }
-            case PLAYER_HEALTH_CHANGED -> {
-                filter.field = "deltaHealth";
-                filter.operator = AutomationRule.Operator.LESS_THAN;
-                filter.value = "0";
-            }
-            case PLAYER_FOOD_CHANGED -> {
-                filter.field = "deltaFood";
-                filter.operator = AutomationRule.Operator.LESS_THAN;
-                filter.value = "0";
-            }
-            case PLAYER_DEATH -> {
-                filter.field = "health";
-                filter.operator = AutomationRule.Operator.LESS_OR_EQUAL;
-                filter.value = "0";
-            }
-        }
-        return filter;
-    }
-
-    private static AutomationRule.Condition defaultConditionFor(AutomationEventType eventType) {
-        AutomationRule.Condition condition = new AutomationRule.Condition();
-        condition.source = AutomationRule.ConditionSource.EVENT;
-        condition.operator = AutomationRule.Operator.EQUALS;
-        condition.ignoreCase = true;
-        switch (eventType) {
-            case TICK_INTERVAL -> condition.field = "worldLoaded";
-            case PLAYER_MOVE -> condition.field = "distance";
-            case WORLD_JOIN -> condition.field = "dimension";
-            case WORLD_LEAVE -> condition.field = "fromDimension";
-            case DIMENSION_CHANGE -> condition.field = "toDimension";
-            case CHAT_RECEIVED_REGEX -> {
-                condition.field = "message";
-                condition.operator = AutomationRule.Operator.CONTAINS;
-            }
-            case SCREEN_CHANGED -> condition.field = "toScreen";
-            case WEATHER_CHANGED -> condition.field = "startedRaining";
-            case HOTBAR_SLOT_CHANGED -> condition.field = "toSlot";
-            case HELD_ITEM_CHANGED -> condition.field = "toItemId";
-            case PLAYER_LEVEL_CHANGED -> condition.field = "toLevel";
-            case PLAYER_HEALTH_CHANGED -> condition.field = "toHealth";
-            case PLAYER_FOOD_CHANGED -> condition.field = "toFood";
-            case PLAYER_DEATH -> condition.field = "health";
-        }
-        condition.value = "";
-        return condition;
-    }
-
-    private static AutomationRule.Action defaultActionFor(AutomationEventType eventType) {
-        return AutomationRule.Action.script("heartbeat.kts");
-    }
-
     private String filterFieldButtonLabel(AutomationRule.EventFilter filter) {
         AutomationFieldCatalog.FieldOption option = AutomationFieldCatalog.findEventFilterField(selectedRule() == null ? null : selectedRule().eventType, filter.field);
         return option == null ? "Field: " + safe(filter.field) : "Field: " + option.key();
@@ -1902,10 +1723,6 @@ final class MacroWorkbenchAutomationTab {
         }
     }
 
-    private static String safe(String value) {
-        return value == null ? "" : value;
-    }
-
     private String sanitizeFieldValue(EditBox widget, String value) {
         String sanitized = sanitizeInlineText(value);
         if (!safe(value).equals(sanitized)) {
@@ -1926,15 +1743,6 @@ final class MacroWorkbenchAutomationTab {
             this.syncing = false;
         }
         return sanitized;
-    }
-
-    private static String sanitizeInlineText(String value) {
-        return safe(value).replace('\n', ' ').replace('\r', ' ');
-    }
-
-    private static <E extends Enum<E>> E nextEnum(E current) {
-        E[] values = current.getDeclaringClass().getEnumConstants();
-        return values[(current.ordinal() + 1) % values.length];
     }
 
     private me.m0dii.gui.local.ValidatedEditBox textField(int x, int y, int width, int maxLength, String placeholder) {
@@ -2305,27 +2113,6 @@ final class MacroWorkbenchAutomationTab {
         this.fieldPickerSearchField.setFocused(false);
     }
 
-    private static String normalizePlaceholderField(String field) {
-        String value = safe(field).trim();
-        if (value.startsWith("{") && value.endsWith("}") && value.length() > 2) {
-            return value.substring(1, value.length() - 1).trim();
-        }
-        return value;
-    }
-
-    private static String displayConditionField(AutomationRule.ConditionSource source, String field) {
-        String normalized = normalizePlaceholderField(field);
-        if (source == AutomationRule.ConditionSource.PLACEHOLDER) {
-            return formatPlaceholderKey(normalized);
-        }
-        return normalized;
-    }
-
-    private static String formatPlaceholderKey(String key) {
-        String normalized = normalizePlaceholderField(key);
-        return normalized.isBlank() ? "{}" : "{" + normalized + "}";
-    }
-
     private void applyFieldPickerSelection(int index) {
         if (index < 0 || index >= this.fieldPickerOptions.size()) {
             return;
@@ -2409,44 +2196,6 @@ final class MacroWorkbenchAutomationTab {
         return mouseX >= x && mouseX <= x + width && mouseY >= y && mouseY <= y + height;
     }
 
-    private static boolean shouldResetFilters(AutomationRule rule, AutomationEventType previousType) {
-        if (rule.eventFilters == null || rule.eventFilters.isEmpty()) {
-            return true;
-        }
-        if (rule.eventFilters.size() != 1) {
-            return false;
-        }
-        return sameFilter(rule.eventFilters.getFirst(), defaultFilterFor(previousType));
-    }
-
-    private static boolean shouldResetActions(AutomationRule rule, AutomationEventType previousType) {
-        if (rule.actions == null || rule.actions.isEmpty()) {
-            return true;
-        }
-        if (rule.actions.size() != 1) {
-            return false;
-        }
-        return sameAction(rule.actions.getFirst(), defaultActionFor(previousType));
-    }
-
-    private static boolean sameFilter(AutomationRule.EventFilter left, AutomationRule.EventFilter right) {
-        return left != null
-                && right != null
-                && safe(left.field).equals(safe(right.field))
-                && left.operator == right.operator
-                && safe(left.value).equals(safe(right.value))
-                && left.ignoreCase == right.ignoreCase;
-    }
-
-    private static boolean sameAction(AutomationRule.Action left, AutomationRule.Action right) {
-        return left != null
-                && right != null
-                && left.type == right.type
-                && safe(left.target).equals(safe(right.target))
-                && safe(left.argument).equals(safe(right.argument))
-                && left.enabled == right.enabled;
-    }
-
     private String actionArgumentLabel() {
         AutomationRule.Action action = selectedAction();
         if (action == null) {
@@ -2509,7 +2258,7 @@ final class MacroWorkbenchAutomationTab {
 
     private int maxDetailScroll(Layout layout) {
         int unscrolledBottom = layout.actionsY() + this.detailScroll + layout.actionsH();
-        return Math.max(0, unscrolledBottom - layout.bottom);
+        return Math.max(0, unscrolledBottom - layout.bottom());
     }
 
     /** Records each widget's group and unscrolled position; called once after all widgets are created. */
@@ -2519,7 +2268,7 @@ final class MacroWorkbenchAutomationTab {
             if (widget == this.newRuleButton || widget == this.duplicateRuleButton
                     || widget == this.deleteRuleButton || widget == this.reloadButton) {
                 group = WidgetGroup.LIST;
-            } else if (widget.getY() < layout.detailTop) {
+            } else if (widget.getY() < layout.detailTop()) {
                 group = WidgetGroup.TABS;
             } else {
                 group = WidgetGroup.DETAIL;
@@ -2534,14 +2283,14 @@ final class MacroWorkbenchAutomationTab {
      */
     private void applyWidgetPlacement(Layout layout) {
         this.detailScroll = Math.clamp(this.detailScroll, 0, maxDetailScroll(layout));
-        boolean showList = !layout.narrow || !this.narrowShowDetail;
-        boolean showDetail = !layout.narrow || this.narrowShowDetail;
+        boolean showList = !layout.narrow() || !this.narrowShowDetail;
+        boolean showDetail = !layout.narrow() || this.narrowShowDetail;
         for (Placed placed : this.placedWidgets) {
             AbstractWidget widget = placed.widget();
             boolean shown = placed.group() == WidgetGroup.LIST ? showList : showDetail;
             int y = placed.group() == WidgetGroup.DETAIL ? placed.baseY() - this.detailScroll : placed.baseY();
             boolean inView = placed.group() != WidgetGroup.DETAIL
-                    || (y >= layout.detailTop && y + widget.getHeight() <= layout.bottom);
+                    || (y >= layout.detailTop() && y + widget.getHeight() <= layout.bottom());
             if (shown && inView) {
                 widget.setX(placed.baseX());
                 widget.setY(y);
@@ -2550,93 +2299,5 @@ final class MacroWorkbenchAutomationTab {
                 widget.setY(PARKED);
             }
         }
-    }
-
-    private record Layout(boolean narrow,
-                          int leftX,
-                          int topY,
-                          int leftW,
-                          int listY,
-                          int rightX,
-                          int rightW,
-                          int detailTop,
-                          int bottom,
-                          int headerY,
-                          int headerH,
-                          int columnW,
-                          int rightX2,
-                          int fieldW,
-                          int numericW,
-                          int numberRowY,
-                          int filterPanelX,
-                          int filterPanelY,
-                          int filterPanelH,
-                          int conditionPanelX,
-                          int conditionPanelY,
-                          int conditionPanelH,
-                          int diagnosticsX,
-                          int diagnosticsY,
-                          int diagnosticsH,
-                          int actionsX,
-                          int actionsY,
-                          int actionsH) {
-    }
-
-    private record FilterPickerLayout(int x,
-                                      int y,
-                                      int width,
-                                      int height,
-                                      int listX,
-                                      int listY,
-                                      int listW,
-                                      int listH,
-                                      int closeX) {
-    }
-
-    private record ConditionPickerLayout(int x,
-                                         int y,
-                                         int width,
-                                         int height,
-                                         int listX,
-                                         int listY,
-                                         int listW,
-                                         int listH,
-                                         int closeX) {
-    }
-
-    private record FieldPickerLayout(int x,
-                                     int y,
-                                     int width,
-                                     int height,
-                                     int listX,
-                                     int listY,
-                                     int listW,
-                                     int listH,
-                                     int footerY,
-                                     int closeX) {
-    }
-
-    private enum RuleIntField {
-        PRIORITY,
-        RATE_COUNT
-    }
-
-    private enum RuleLongField {
-        COOLDOWN,
-        DEBOUNCE,
-        RATE_WINDOW
-    }
-
-    private enum EditorSection {
-        OVERVIEW,
-        FILTERS,
-        CONDITIONS,
-        ACTIONS
-    }
-
-    private enum FieldPickerMode {
-        NONE,
-        FILTER_FIELD,
-        CONDITION_FIELD
     }
 }
