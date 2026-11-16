@@ -40,3 +40,5 @@ replay_*.log
 *.jfr
 
 /ref/
+src/main/java/graphify-out/
+logs/
