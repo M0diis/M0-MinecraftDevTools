@@ -76,6 +76,7 @@ public final class ItemDataScreen extends Screen implements ThemedScreen {
     private static final int UNDO_LIMIT = 50;
     /** Set after the first Save click: the detail panel shows the changes and Save must be pressed again. */
     private boolean reviewingSave;
+    private boolean saving;
     private Button saveButton;
     private Button undoButton;
 
@@ -602,6 +603,9 @@ public final class ItemDataScreen extends Screen implements ThemedScreen {
 
     /** First click shows what will change; the second click sends it. */
     private void saveToServer() {
+        if (saving) {
+            return;
+        }
         List<String> changes = pendingChanges();
         if (changes.isEmpty()) {
             reviewingSave = false;
@@ -616,13 +620,27 @@ public final class ItemDataScreen extends Screen implements ThemedScreen {
             return;
         }
         reviewingSave = false;
-        boolean sent = ItemDataSyncClient.saveItemData(this.reference.slotIndex(), this.itemData);
-        if (sent) {
-            this.savedData = this.itemData.copy();
+        saving = true;
+        CompoundTag submitted = this.itemData.copy();
+        boolean sent = ItemDataSyncClient.saveItemData(this.reference.slotIndex(), this.savedData, submitted, result -> {
+            saving = false;
+            if (result.success()) {
+                this.savedData = result.itemData().copy();
+                if (this.itemData.equals(submitted)) {
+                    this.itemData = this.savedData.copy();
+                    refreshFieldsFromData();
+                    refreshSelection();
+                }
+            }
+            updateButtons();
+            setStatus(result.message(), result.success() ? 0xFF70D070 : 0xFFFF9090);
+        });
+        if (!sent) {
+            saving = false;
         }
         updateButtons();
         setStatus(
-                sent ? "Sent the updated item data to the server for " + this.reference.slotLabel() + "." : "Unable to send the item data to the server.",
+                sent ? "Waiting for save confirmation..." : "Unable to send item data to the server.",
                 sent ? 0xFF70D070 : 0xFFFF9090
         );
     }
@@ -800,6 +818,7 @@ public final class ItemDataScreen extends Screen implements ThemedScreen {
             this.undoButton.active = !undoStack.isEmpty();
         }
         if (this.saveButton != null) {
+            this.saveButton.active = !saving;
             this.saveButton.setMessage(Component.literal(reviewingSave ? "Confirm" : "Save"));
         }
     }

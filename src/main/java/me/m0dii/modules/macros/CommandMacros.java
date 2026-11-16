@@ -1,12 +1,14 @@
 package me.m0dii.modules.macros;
 
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import com.mojang.blaze3d.platform.InputConstants;
 import java.util.*;
+import java.util.function.BiConsumer;
 
 public class CommandMacros {
 
@@ -18,9 +20,9 @@ public class CommandMacros {
     private static final Map<Integer, Boolean> keyPrevPressed = new HashMap<>();
     private static final List<PendingRun> pendingRuns = new ArrayList<>();
 
-    private record PendingRun(@NotNull String name, @NotNull List<String> commands, int ticksRemaining) {
+    private record PendingRun(@NotNull String name, @NotNull List<String> commands, int ticksRemaining, Object connection) {
         PendingRun tick() {
-            return new PendingRun(name, commands, Math.max(0, ticksRemaining - 1));
+            return new PendingRun(name, commands, Math.max(0, ticksRemaining - 1), connection);
         }
 
         boolean due() {
@@ -34,6 +36,10 @@ public class CommandMacros {
         refreshKeybindings();
 
         ClientTickEvents.END_CLIENT_TICK.register(getEndTick());
+        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
+            clearPendingRuns();
+            keyPrevPressed.clear();
+        });
     }
 
     private static ClientTickEvents.@NotNull EndTick getEndTick() {
@@ -42,18 +48,7 @@ public class CommandMacros {
                 return;
             }
 
-            // Process delayed runs first (non-blocking countdown per tick)
-            if (!pendingRuns.isEmpty()) {
-                for (int i = pendingRuns.size() - 1; i >= 0; i--) {
-                    PendingRun pr = pendingRuns.get(i).tick();
-                    if (pr.due()) {
-                        executeMacro(pr.name(), pr.commands());
-                        pendingRuns.remove(i);
-                    } else {
-                        pendingRuns.set(i, pr);
-                    }
-                }
-            }
+            tickPendingRuns(client.getConnection(), CommandMacros::executeMacro);
 
             if (client.gui.screen() != null) {
                 return;
@@ -85,7 +80,7 @@ public class CommandMacros {
                     if (macro != null) {
                         int delay = macro.delayTicks;
                         if (delay > 0) {
-                            pendingRuns.add(new PendingRun(macro.name, new ArrayList<>(macro.commands), delay));
+                            queuePendingRun(macro.name, macro.commands, delay, client.getConnection());
                         } else {
                             executeMacro(macro.name, macro.commands);
                         }
@@ -108,6 +103,30 @@ public class CommandMacros {
             macroModifierKeycodes.put(macroId, toKeyCodeFromTranslation(macro.modifierKey));
         }
         keyPrevPressed.keySet().removeIf(key -> !macroKeycodes.containsValue(key));
+    }
+
+    static boolean queuePendingRun(String name, List<String> commands, int delay, Object connection) {
+        if (connection == null) return false;
+        pendingRuns.add(new PendingRun(name, new ArrayList<>(commands), delay, connection));
+        return true;
+    }
+
+    static void clearPendingRuns() {
+        pendingRuns.clear();
+    }
+
+    static void tickPendingRuns(Object connection, BiConsumer<String, List<String>> execute) {
+        for (int i = pendingRuns.size() - 1; i >= 0; i--) {
+            PendingRun run = pendingRuns.get(i).tick();
+            if (run.connection() != connection) {
+                pendingRuns.remove(i);
+            } else if (run.due()) {
+                pendingRuns.remove(i);
+                execute.accept(run.name(), run.commands());
+            } else {
+                pendingRuns.set(i, run);
+            }
+        }
     }
 
     private static int toKeyCodeFromTranslation(String translationKey) {
@@ -178,8 +197,7 @@ public class CommandMacros {
         int delay = Math.max(0, macro.delayTicks);
         List<String> commands = macro.commands == null ? List.of() : new ArrayList<>(macro.commands);
         if (delay > 0) {
-            pendingRuns.add(new PendingRun(macro.name, commands, delay));
-            return true;
+            return queuePendingRun(macro.name, commands, delay, Minecraft.getInstance().getConnection());
         }
 
         executeMacro(macro.name, commands);

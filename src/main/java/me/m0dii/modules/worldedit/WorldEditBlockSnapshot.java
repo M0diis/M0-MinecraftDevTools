@@ -44,6 +44,10 @@ final class WorldEditBlockSnapshot implements WorldEditBlockTarget {
         return this.state.isAir();
     }
 
+    long estimatedBytes() {
+        return 128L + (blockEntityNbt == null ? 0 : blockEntityNbt.sizeInBytes());
+    }
+
     @Override
     public boolean apply(ServerLevel world, BlockPos pos) {
         BlockState oldState = world.getBlockState(pos);

@@ -44,14 +44,16 @@ public record WorldEditSelection(BlockPos min, BlockPos max) {
     }
 
     public WorldEditSelection shift(int dx, int dy, int dz) {
-        return new WorldEditSelection(this.min.offset(dx, dy, dz), this.max.offset(dx, dy, dz));
+        return new WorldEditSelection(
+                new BlockPos(Math.addExact(min.getX(), dx), Math.addExact(min.getY(), dy), Math.addExact(min.getZ(), dz)),
+                new BlockPos(Math.addExact(max.getX(), dx), Math.addExact(max.getY(), dy), Math.addExact(max.getZ(), dz)));
     }
 
     public WorldEditSelection shift(Direction direction, int amount) {
         return shift(
-                direction.getStepX() * amount,
-                direction.getStepY() * amount,
-                direction.getStepZ() * amount
+                Math.multiplyExact(direction.getStepX(), amount),
+                Math.multiplyExact(direction.getStepY(), amount),
+                Math.multiplyExact(direction.getStepZ(), amount)
         );
     }
 

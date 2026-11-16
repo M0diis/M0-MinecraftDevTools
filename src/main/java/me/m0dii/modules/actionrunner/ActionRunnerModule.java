@@ -5,9 +5,11 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.MultiPlayerGameMode;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.chat.Component;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.network.protocol.game.ServerboundPlayerActionPacket;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
-import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import java.util.ArrayList;
@@ -127,17 +129,8 @@ public class ActionRunnerModule {
                 player.sendSystemMessage(Component.literal("[ActionRunner] Executed COMMAND: /" + action.command + " at tick " + tick));
             }
             case SWAP_OFFHAND -> {
-                int mainSlot = player.getInventory().getSelectedSlot();
-                int offhandSlot = 40;
-
-                ItemStack main = player.getInventory().getItem(mainSlot);
-                ItemStack off = player.getInventory().getItem(offhandSlot);
-
-                player.getInventory().setItem(mainSlot, off);
-                player.getInventory().setItem(offhandSlot, main);
-
-                mc.player.getInventory().tick();
-                player.inventoryMenu.broadcastChanges();
+                player.connection.send(new ServerboundPlayerActionPacket(
+                        ServerboundPlayerActionPacket.Action.SWAP_ITEM_WITH_OFFHAND, BlockPos.ZERO, Direction.DOWN));
                 player.sendSystemMessage(Component.literal("[ActionRunner] Executed SWAP_OFFHAND at tick " + tick));
             }
             case SELECT_HOTBAR_SLOT -> {

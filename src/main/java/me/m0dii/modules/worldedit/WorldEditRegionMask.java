@@ -48,6 +48,9 @@ final class WorldEditRegionMask {
     }
 
     static WorldEditRegionMask cylinder(BlockPos anchor, double radiusX, double radiusZ, int height) {
+        validateRadius(radiusX);
+        validateRadius(radiusZ);
+        if (height < 1) throw new IllegalArgumentException("Cylinder height must be positive.");
         double centerX = anchor.getX() + 0.5;
         double centerZ = anchor.getZ() + 0.5;
         double clampedRadiusX = Math.max(0.5, radiusX);
@@ -57,13 +60,16 @@ final class WorldEditRegionMask {
         int minZ = (int) Math.floor(centerZ - clampedRadiusZ);
         int maxZ = (int) Math.ceil(centerZ + clampedRadiusZ) - 1;
         int minY = anchor.getY();
-        int maxY = anchor.getY() + Math.max(1, height) - 1;
+        int maxY = Math.addExact(anchor.getY(), height - 1);
         WorldEditSelection bounds = new WorldEditSelection(new BlockPos(minX, minY, minZ), new BlockPos(maxX, maxY, maxZ));
         return new WorldEditRegionMask(bounds, WorldEditRegionShape.CYLINDER, null, centerX, center(bounds.min().getY(), bounds.max().getY()), centerZ,
                 clampedRadiusX, axisRadius(bounds.sizeY()), clampedRadiusZ);
     }
 
     static WorldEditRegionMask sphere(BlockPos centerPos, double radiusX, double radiusY, double radiusZ) {
+        validateRadius(radiusX);
+        validateRadius(radiusY);
+        validateRadius(radiusZ);
         double centerX = centerPos.getX() + 0.5;
         double centerY = centerPos.getY() + 0.5;
         double centerZ = centerPos.getZ() + 0.5;
@@ -85,6 +91,12 @@ final class WorldEditRegionMask {
         return this.bounds;
     }
 
+    private static void validateRadius(double radius) {
+        if (!Double.isFinite(radius) || radius < 0 || radius > WorldEditLimits.MAX_VOLUME) {
+            throw new IllegalArgumentException("Radius must be finite and between 0 and " + WorldEditLimits.MAX_VOLUME + ".");
+        }
+    }
+
     WorldEditRegionShape shape() {
         return this.shape;
     }
@@ -104,7 +116,8 @@ final class WorldEditRegionMask {
     }
 
     WorldEditRegionMask shifted(Direction direction, int amount) {
-        return shifted(direction.getStepX() * amount, direction.getStepY() * amount, direction.getStepZ() * amount);
+        return shifted(Math.multiplyExact(direction.getStepX(), amount), Math.multiplyExact(direction.getStepY(), amount),
+                Math.multiplyExact(direction.getStepZ(), amount));
     }
 
     void forEach(Consumer<BlockPos> consumer) {

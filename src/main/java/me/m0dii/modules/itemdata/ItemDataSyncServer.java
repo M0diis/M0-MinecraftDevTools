@@ -2,7 +2,6 @@ package me.m0dii.modules.itemdata;
 
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
@@ -22,7 +21,7 @@ public final class ItemDataSyncServer {
         ServerPlayNetworking.registerGlobalReceiver(ItemDataPayloads.ItemStackRequestPayload.ID, (payload, context) ->
                 context.server().execute(() -> handleRequest(context.player(), payload.requestId(), payload.slotIndex())));
         ServerPlayNetworking.registerGlobalReceiver(ItemDataPayloads.ItemStackSavePayload.ID, (payload, context) ->
-                context.server().execute(() -> handleSave(context.player(), payload.slotIndex(), payload.itemData())));
+                context.server().execute(() -> handleSave(context.player(), payload)));
     }
 
     private static void handleRequest(ServerPlayer player, long requestId, int slotIndex) {
@@ -41,25 +40,33 @@ public final class ItemDataSyncServer {
         ServerPlayNetworking.send(player, new ItemDataPayloads.ItemStackResponsePayload(requestId, slotIndex, true, itemData));
     }
 
-    private static void handleSave(ServerPlayer player, int slotIndex, CompoundTag itemData) {
+    private static void handleSave(ServerPlayer player, ItemDataPayloads.ItemStackSavePayload payload) {
+        int slotIndex = payload.slotIndex();
+        CompoundTag itemData = payload.itemData();
         if (!isValidInventorySlot(slotIndex)) {
-            player.sendSystemMessage(Component.literal("[ItemData] Invalid inventory slot."));
+            saveResult(player, payload, false, "Invalid inventory slot.", new CompoundTag());
             return;
         }
         if (itemData == null || itemData.isEmpty()) {
-            player.sendSystemMessage(Component.literal("[ItemData] Item data cannot be empty."));
+            saveResult(player, payload, false, "Item data cannot be empty.", new CompoundTag());
             return;
         }
 
         ItemStack current = player.getInventory().getItem(slotIndex);
         if (current == null || current.isEmpty()) {
-            player.sendSystemMessage(Component.literal("[ItemData] The target slot is empty."));
+            saveResult(player, payload, false, "The target slot is empty. Reopen the editor.", new CompoundTag());
+            return;
+        }
+
+        CompoundTag currentData = ItemDataCodec.encodeOrEmpty(current, player.level().registryAccess());
+        if (!matchesExpected(payload.expectedData(), currentData)) {
+            saveResult(player, payload, false, "The item changed while editing. Reopen the editor before saving.", currentData);
             return;
         }
 
         ItemStack decoded = ItemDataCodec.decode(itemData, player.level().registryAccess()).orElse(ItemStack.EMPTY);
         if (decoded.isEmpty()) {
-            player.sendSystemMessage(Component.literal("[ItemData] Invalid item data."));
+            saveResult(player, payload, false, "Invalid item data.", currentData);
             return;
         }
 
@@ -68,7 +75,17 @@ public final class ItemDataSyncServer {
         if (player.containerMenu != player.inventoryMenu) {
             player.containerMenu.broadcastChanges();
         }
-        player.sendSystemMessage(Component.literal("[ItemData] Saved item data for " + describeSlot(slotIndex) + "."));
+        saveResult(player, payload, true, "Saved item data for " + describeSlot(slotIndex) + ".",
+                ItemDataCodec.encodeOrEmpty(decoded, player.level().registryAccess()));
+    }
+
+    static boolean matchesExpected(CompoundTag expected, CompoundTag current) {
+        return expected != null && !expected.isEmpty() && expected.equals(current);
+    }
+
+    private static void saveResult(ServerPlayer player, ItemDataPayloads.ItemStackSavePayload payload,
+                                   boolean success, String message, CompoundTag data) {
+        ServerPlayNetworking.send(player, new ItemDataPayloads.ItemStackSaveResultPayload(payload.requestId(), success, message, data));
     }
 
     private static boolean isValidInventorySlot(int slotIndex) {

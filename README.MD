@@ -165,6 +165,15 @@ Build outputs are written to `build/libs/`.
 ### Waypoints
 - Waypoints are saved per server (by address) or per singleplayer world. Waypoints from older versions show as
   `[any world]` until you run `/waypoint claim` in the world they belong to.
+- Singleplayer locations use the save directory, so saves with the same display name stay separate.
+### Edit safety
+- WorldEdit edits and undo/redo run over multiple ticks (up to 512 work steps or 5 ms per tick), with one
+  operation at a time per server. Regions must fit within build height and the 262,144-block work limit.
+  Source and undo snapshots are limited to 16 MiB each; retained undo/redo history is limited to 64 MiB per server.
+  Failed or disconnected edits roll back before another edit starts. History is cleared when the server stops.
+- Item saves check that the inventory slot still contains the item you opened. If it changed, reopen the editor
+  to merge your changes. A save is marked complete only after the server confirms it.
+- Delayed macros are discarded on disconnect, and stopping a script also prevents its queued client actions.
 ## Testing
 Run unit tests:
 ```powershell

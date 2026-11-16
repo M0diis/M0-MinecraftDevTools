@@ -12,7 +12,7 @@ import net.minecraft.network.chat.*;
 import net.minecraft.world.phys.Vec3;
 
 import java.io.IOException;
-import java.lang.reflect.Method;
+import net.minecraft.world.level.storage.LevelResource;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
@@ -28,7 +28,7 @@ public class WaypointHandler {
         public String dimension;
         public long createdTime;
         /**
-         * The world/server this waypoint belongs to ({@code mp:<address>} or {@code sp:<world name>}).
+         * The world/server this waypoint belongs to ({@code mp:<address>} or {@code sp-save:<save URI>}).
          * {@code null} for waypoints saved by older versions; those are shown everywhere until claimed
          * with {@code /waypoint claim}.
          */
@@ -116,7 +116,7 @@ public class WaypointHandler {
     }
 
     /**
-     * Identifies the current world: the server address in multiplayer, the world name in singleplayer.
+     * Identifies the current world: the server address in multiplayer, the save directory in singleplayer.
      * Returns {@code null} when not in a world.
      */
     public static String currentWorldKey() {
@@ -138,8 +138,7 @@ public class WaypointHandler {
 
     private static String computeWorldKey(Minecraft client) {
         if (client.getSingleplayerServer() != null) {
-            String levelName = singleplayerLevelName(client);
-            return "sp:" + (levelName == null || levelName.isBlank() ? "world" : levelName);
+            return WorldKeys.singleplayer(client.getSingleplayerServer().getWorldPath(LevelResource.ROOT));
         }
         Object serverData = client.getCurrentServer();
         String address = serverData == null ? null : readStringField(serverData, "ip");
@@ -147,18 +146,6 @@ public class WaypointHandler {
             return "mp:unknown";
         }
         return "mp:" + address.trim().toLowerCase(Locale.ROOT);
-    }
-
-    private static String singleplayerLevelName(Minecraft client) {
-        try {
-            Object server = client.getSingleplayerServer();
-            Method getWorldData = server.getClass().getMethod("getWorldData");
-            Object worldData = getWorldData.invoke(server);
-            Method getLevelName = worldData.getClass().getMethod("getLevelName");
-            return String.valueOf(getLevelName.invoke(worldData));
-        } catch (ReflectiveOperationException | RuntimeException e) {
-            return null;
-        }
     }
 
     private static String readStringField(Object target, String fieldName) {

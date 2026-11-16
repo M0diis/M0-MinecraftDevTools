@@ -2,6 +2,16 @@
 
 Version names follow `j<java>-mc<minecraft>-<version>`. Dates are when the version was set in the project.
 
+## 2.1.1-BETA - `j25-mc26.3-2.1.1-BETA` (2026-11-16)
+
+### Fixes
+- Scope WorldEdit history to each server instance and bound edit and history memory usage.
+- Process WorldEdit edits, undo, redo and rollback incrementally; reject oversized and out-of-height regions.
+- Prevent stopped scripts from executing queued client actions and discard delayed macros on disconnect.
+- Reject stale item edits and wait for server confirmation before marking an item saved.
+- Send Action Runner offhand swaps to the server.
+- Identify singleplayer locations by save directory so worlds with identical display names stay separate.
+
 ## 2.1.0-BETA - `j25-mc26.3-2.1.0-BETA` (2026-10-19)
 
 ### New tools

@@ -16,6 +16,7 @@ public final class ItemDataPayloads {
         PayloadTypeRegistry.serverboundPlay().register(ItemStackRequestPayload.ID, ItemStackRequestPayload.CODEC);
         PayloadTypeRegistry.serverboundPlay().register(ItemStackSavePayload.ID, ItemStackSavePayload.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(ItemStackResponsePayload.ID, ItemStackResponsePayload.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(ItemStackSaveResultPayload.ID, ItemStackSaveResultPayload.CODEC);
     }
 
     public record ItemStackRequestPayload(long requestId, int slotIndex) implements CustomPacketPayload {
@@ -54,15 +55,36 @@ public final class ItemDataPayloads {
         }
     }
 
-    public record ItemStackSavePayload(int slotIndex, CompoundTag itemData) implements CustomPacketPayload {
+    public record ItemStackSavePayload(long requestId, int slotIndex, CompoundTag expectedData, CompoundTag itemData) implements CustomPacketPayload {
         public static final CustomPacketPayload.Type<ItemStackSavePayload> ID = new CustomPacketPayload.Type<>(
                 Identifier.fromNamespaceAndPath(M0DevToolsClient.MOD_ID, "itemdata/save"));
         public static final StreamCodec<RegistryFriendlyByteBuf, ItemStackSavePayload> CODEC = StreamCodec.ofMember(
                 (value, buf) -> {
+                    buf.writeLong(value.requestId);
                     buf.writeInt(value.slotIndex);
+                    buf.writeNbt(value.expectedData);
                     buf.writeNbt(value.itemData);
                 },
-                buf -> new ItemStackSavePayload(buf.readInt(), buf.readNbt())
+                buf -> new ItemStackSavePayload(buf.readLong(), buf.readInt(), buf.readNbt(), buf.readNbt())
+        );
+
+        @Override
+        public Type<? extends CustomPacketPayload> type() {
+            return ID;
+        }
+    }
+
+    public record ItemStackSaveResultPayload(long requestId, boolean success, String message, CompoundTag itemData) implements CustomPacketPayload {
+        public static final CustomPacketPayload.Type<ItemStackSaveResultPayload> ID = new CustomPacketPayload.Type<>(
+                Identifier.fromNamespaceAndPath(M0DevToolsClient.MOD_ID, "itemdata/save_result"));
+        public static final StreamCodec<RegistryFriendlyByteBuf, ItemStackSaveResultPayload> CODEC = StreamCodec.ofMember(
+                (value, buf) -> {
+                    buf.writeLong(value.requestId);
+                    buf.writeBoolean(value.success);
+                    buf.writeUtf(value.message);
+                    buf.writeNbt(value.itemData);
+                },
+                buf -> new ItemStackSaveResultPayload(buf.readLong(), buf.readBoolean(), buf.readUtf(), buf.readNbt())
         );
 
         @Override

@@ -201,12 +201,14 @@ public final class ScriptApi {
 
     /** Runs {@code action} on the client thread and returns its value. Runs directly when already on it. */
     public <T> T call(Supplier<T> action) {
+        job.checkCancelled();
         if (ScriptRunner.isOnMainThread()) {
             return action.get();
         }
         CompletableFuture<T> future = new CompletableFuture<>();
         ScriptRunner.runOnMainThread(() -> {
             try {
+                job.checkCancelled();
                 future.complete(action.get());
             } catch (Throwable t) {
                 future.completeExceptionally(t);

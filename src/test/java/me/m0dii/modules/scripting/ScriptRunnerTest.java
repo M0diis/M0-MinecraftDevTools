@@ -8,6 +8,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -91,5 +93,42 @@ class ScriptRunnerTest {
         assertTrue(ScriptDirectives.isAsync("// @async on\nprintln 1"));
         assertFalse(ScriptDirectives.isAsync("// @async off\nprintln 1"));
         assertFalse(ScriptDirectives.isAsync("println 1\n// @async on"));
+    }
+
+    @Test
+    void stoppedScriptCannotExecuteItsQueuedClientAction() throws Exception {
+        LinkedBlockingQueue<Runnable> queued = new LinkedBlockingQueue<>();
+        AtomicInteger effects = new AtomicInteger();
+        CompletableFuture<ScriptRunner.Outcome> finished = new CompletableFuture<>();
+        ScriptRunner.useMainThreadForTests(queued::add, () -> false);
+        try {
+            ScriptManager manager = new ScriptManager() {
+                public String languageName() { return "test"; }
+                public Object runScript(String source, Map<String, Object> bindings, ScriptJob job) {
+                    ((ScriptApi) bindings.get("m0")).sync(effects::incrementAndGet);
+                    return null;
+                }
+            };
+            ScriptRunner.run("queued", manager, "", Map.of(), true, finished::complete);
+            Runnable action = queued.poll(5, TimeUnit.SECONDS);
+            assertNotNull(action);
+            ScriptRunner.cancelAll();
+            action.run();
+            Runnable callback = queued.poll(5, TimeUnit.SECONDS);
+            assertNotNull(callback);
+            callback.run();
+            assertFalse(finished.get(5, TimeUnit.SECONDS).success());
+            assertEquals(0, effects.get());
+        } finally {
+            ScriptRunner.cancelAll();
+            useTestThreadAsClientThread();
+        }
+    }
+
+    @Test
+    void cancelledDirectClientCallIsAlsoRefused() {
+        ScriptJob job = new ScriptJob("stopped", false, 5000);
+        job.cancel("was stopped");
+        assertThrows(ScriptExecutionException.class, () -> new ScriptApi(job).call(() -> "unexpected"));
     }
 }
